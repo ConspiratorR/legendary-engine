@@ -57,6 +57,46 @@ impl AppBuilder {
     pub fn resources_mut(&mut self) -> &mut ResourceRegistry {
         &mut self.resources
     }
+
+    pub fn build(self) -> App {
+        App::from(self)
+    }
+}
+
+pub struct App {
+    world: World,
+    schedule: Schedule,
+    resources: ResourceRegistry,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl App {
+    pub fn new() -> Self {
+        Self {
+            world: World::new(),
+            schedule: Schedule::new(),
+            resources: ResourceRegistry::new(),
+        }
+    }
+
+    pub fn run(&mut self) {
+        self.schedule.run(&mut self.world);
+    }
+}
+
+impl From<AppBuilder> for App {
+    fn from(builder: AppBuilder) -> Self {
+        Self {
+            world: builder.world,
+            schedule: builder.schedule,
+            resources: builder.resources,
+        }
+    }
 }
 
 #[cfg(test)]
