@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RustEngine Editor Mockup</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg-darker: #1a1a1a;
+  --bg-dark: #252525;
+  --bg-medium: #2d2d2d;
+  --bg-light: #383838;
+  --border: #3a3a3a;
+  --text: #cccccc;
+  --text-dim: #888888;
+  --text-bright: #ffffff;
+  --accent: #4a8bf5;
+  --accent-hover: #5a9bff;
+  --toolbar-bg: #202020;
+  --panel-header: #2a2a2a;
+  --selected: #3d5467;
+  --hover: #3a3a3a;
+  --red: #e74c3c;
+  --green: #2ecc71;
+  --orange: #f39c12;
+}
+html, body { height: 100%; font-family: 'Segoe UI', -apple-system, sans-serif; font-size: 13px; color: var(--text); background: var(--bg-darker); overflow: hidden; user-select: none; }
+
+/* ===== Layout ===== */
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* ===== Menu Bar ===== */
+#menubar {
+  display: flex; align-items: center; height: 28px; background: var(--bg-darker);
+  border-bottom: 1px solid var(--border); padding: 0 8px; flex-shrink: 0;
+}
+#menubar .menu-item {
+  padding: 2px 10px; cursor: pointer; color: var(--text); font-size: 12px;
+  border-radius: 3px;
+}
+#menubar .menu-item:hover { background: var(--bg-light); color: var(--text-bright); }
+#menubar .logo { color: var(--accent); font-weight: 700; margin-right: 12px; font-size: 13px; letter-spacing: 0.5px; }
+#menubar .logo span { color: var(--text-dim); font-weight: 400; }
+
+/* ===== Toolbar ===== */
+#toolbar {
+  display: flex; align-items: center; height: 38px; background: var(--toolbar-bg);
+  border-bottom: 1px solid var(--border); padding: 0 8px; gap: 0; flex-shrink: 0;
+}
+#toolbar .sep {
+  width: 1px; height: 22px; background: var(--border); margin: 0 5px; flex-shrink: 0;
+}
+#toolbar .tool-group { display: flex; align-items: center; gap: 1px; padding: 0 2px; }
+#toolbar .tool-btn {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; cursor: pointer; color: #999; font-size: 13px;
+  background: transparent; border: none; position: relative; transition: all 0.1s;
+}
+#toolbar .tool-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#toolbar .tool-btn:hover { background: #343434; color: #ddd; }
+#toolbar .tool-btn.active { background: #3a3a3a; color: #6a9cf5; }
+#toolbar .tool-btn.active::after {
+  content: ''; position: absolute; bottom: -1px; left: 4px; right: 4px;
+  height: 2px; background: #6a9cf5; border-radius: 1px;
+}
+#toolbar .tool-btn .kbd {
+  position: absolute; right: 2px; bottom: 1px; font-size: 8px; color: #555;
+  font-family: 'Segoe UI', sans-serif;
+}
+#toolbar .tool-label {
+  font-size: 11px; color: #777; padding: 0 4px;
+}
+/* Transform toggle pills */
+#toolbar .transform-mode {
+  display: flex; background: #1a1a1a; border-radius: 4px; border: 1px solid #2a2a2a; overflow: hidden;
+}
+#toolbar .transform-mode .pill {
+  padding: 2px 8px; font-size: 10px; color: #777; cursor: pointer;
+  transition: all 0.1s; letter-spacing: 0.3px;
+}
+#toolbar .transform-mode .pill:hover { color: #ccc; }
+#toolbar .transform-mode .pill.active { background: #383838; color: #ccc; }
+#toolbar .transform-mode .pill + .pill { border-left: 1px solid #2a2a2a; }
+
+/* Pivot / Center toggle */
+#toolbar .pivot-toggle {
+  display: flex; background: #1a1a1a; border-radius: 4px; border: 1px solid #2a2a2a; overflow: hidden;
+}
+#toolbar .pivot-toggle .pill {
+  padding: 2px 6px; font-size: 10px; color: #777; cursor: pointer;
+  transition: all 0.1s;
+}
+#toolbar .pivot-toggle .pill:hover { color: #ccc; }
+#toolbar .pivot-toggle .pill.active { background: #383838; color: #ccc; }
+#toolbar .pivot-toggle .pill + .pill { border-left: 1px solid #2a2a2a; }
+
+/* Play controls */
+#toolbar .play-group { display: flex; align-items: center; gap: 0; }
+#toolbar .play-group .play-btn {
+  width: 28px; height: 26px; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: none; cursor: pointer; border-radius: 3px;
+  transition: all 0.15s;
+}
+#toolbar .play-group .play-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#toolbar .play-group .play-btn:hover { background: #343434; }
+#toolbar .play-group .play-btn.play-btn { color: #888; }
+#toolbar .play-group .play-btn.play-btn:hover { color: #4caf50; }
+#toolbar .play-group .play-btn.pause-btn { color: #888; }
+#toolbar .play-group .play-btn.pause-btn:hover { color: #ff9800; }
+#toolbar .play-group .play-btn.stop-btn { color: #888; }
+#toolbar .play-group .play-btn.stop-btn:hover { color: #f44336; }
+
+/* Right side controls */
+#toolbar .right-section { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+#toolbar .right-section select {
+  background: #1a1a1a; color: #999; border: 1px solid #2a2a2a;
+  padding: 2px 6px; border-radius: 3px; font-size: 10px; outline: none; cursor: pointer;
+}
+#toolbar .right-section select:hover { border-color: #444; }
+#toolbar .right-section .layout-label { font-size: 10px; color: #666; }
+
+/* ===== Main Content ===== */
+#main {
+  display: flex; flex: 1; min-height: 0;
+}
+
+/* ===== Left Panel: Hierarchy ===== */
+#hierarchy {
+  width: 240px; min-width: 180px; background: var(--bg-dark);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+}
+.panel-header {
+  display: flex; align-items: center; height: 30px; padding: 0 10px;
+  background: var(--panel-header); border-bottom: 1px solid var(--border);
+  font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.panel-header .actions { margin-left: auto; display: flex; gap: 4px; }
+.panel-header .actions span { cursor: pointer; padding: 0 4px; color: var(--text-dim); font-size: 14px; }
+.panel-header .actions span:hover { color: var(--text-bright); }
+#hierarchy .search-box {
+  margin: 6px 8px; padding: 4px 8px; background: var(--bg-dark);
+  border: 1px solid var(--border); border-radius: 3px; color: var(--text); font-size: 12px; outline: none; flex-shrink: 0;
+}
+#hierarchy .search-box:focus { border-color: var(--accent); }
+#hierarchy .tree { flex: 1; overflow-y: auto; padding: 4px 0; }
+#hierarchy .tree-item {
+  display: flex; align-items: center; padding: 3px 8px 3px 16px; cursor: pointer;
+  font-size: 12px; gap: 6px;
+}
+#hierarchy .tree-item:hover { background: var(--hover); }
+#hierarchy .tree-item.selected { background: var(--selected); color: var(--text-bright); }
+#hierarchy .tree-item .icon { font-size: 10px; width: 16px; text-align: center; color: var(--text-dim); }
+#hierarchy .tree-item .toggle { width: 12px; font-size: 9px; color: var(--text-dim); }
+#hierarchy .tree-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== Center: Viewport ===== */
+#viewport {
+  flex: 1; display: flex; flex-direction: column; background: var(--bg-darker); min-width: 0;
+}
+#viewport .tabs {
+  display: flex; height: 28px; background: var(--bg-dark);
+  border-bottom: 1px solid var(--border); flex-shrink: 0; padding: 0 8px; gap: 2px;
+}
+#viewport .tabs .tab {
+  padding: 4px 14px; font-size: 11px; color: var(--text-dim); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+#viewport .tabs .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+#viewport .tabs .tab:hover:not(.active) { color: var(--text); }
+#viewport .scene-canvas {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #1a1a2e 0%, #1a1a2e 55%, #141428 100%);
+  position: relative; overflow: hidden;
+}
+
+/* ===== 3D Perspective Floor Grid ===== */
+#viewport .scene-canvas .grid-3d {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 70%;
+  perspective: 600px; perspective-origin: center top;
+}
+#viewport .scene-canvas .grid-3d .floor {
+  position: absolute; left: 0; right: 0; bottom: -40%; height: 140%;
+  transform-origin: center top;
+  transform: rotateX(55deg);
+  background-image:
+    linear-gradient(rgba(100,140,255,0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100,140,255,0.06) 1px, transparent 1px);
+  background-size: 80px 80px;
+  background-position: center center;
+}
+#viewport .scene-canvas .grid-3d .horizon {
+  position: absolute; top: 0; left: -20%; right: -20%; height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(100,140,255,0.15) 20%, rgba(100,140,255,0.15) 80%, transparent 100%);
+}
+/* Fog gradient near horizon */
+#viewport .scene-canvas .grid-3d .fog {
+  position: absolute; top: 0; left: 0; right: 0; height: 40%;
+  background: linear-gradient(180deg, #1a1a2e 0%, transparent 100%);
+}
+
+/* ===== Gizmo 3D Perspective ===== */
+#viewport .gizmo-3d {
+  position: absolute; top: 50%; left: 50%;
+  width: 80px; height: 80px;
+  transform: translate(-50%, -40%);
+}
+#viewport .gizmo-3d .axis {
+  position: absolute; width: 36px; height: 3px; border-radius: 2px;
+  transform-origin: 0 center;
+  top: 50%; left: 50%;
+}
+#viewport .gizmo-3d .axis.x {
+  background: #e74c3c; margin-top: -1.5px;
+  box-shadow: 0 0 6px rgba(231,76,60,0.4);
+}
+#viewport .gizmo-3d .axis.y {
+  background: #2ecc71;
+  width: 28px; margin-top: -1.5px;
+  transform: rotate(80deg);
+  box-shadow: 0 0 6px rgba(46,204,113,0.4);
+}
+#viewport .gizmo-3d .axis.z {
+  background: #3498db;
+  width: 22px; margin-top: -1.5px;
+  transform: rotate(-30deg);
+  box-shadow: 0 0 6px rgba(52,152,219,0.4);
+}
+#viewport .gizmo-3d .axis .arrow {
+  position: absolute; right: -5px; top: -4px;
+  width: 0; height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 9px solid;
+}
+#viewport .gizmo-3d .axis.x .arrow { border-bottom-color: #e74c3c; }
+#viewport .gizmo-3d .axis.y .arrow { border-bottom-color: #2ecc71; }
+#viewport .gizmo-3d .axis.z .arrow { border-bottom-color: #3498db; }
+#viewport .gizmo-3d .axis .label {
+  position: absolute; left: 40px; top: -7px;
+  font-size: 12px; font-weight: 700; font-family: 'Segoe UI', sans-serif;
+  text-shadow: 0 0 6px rgba(0,0,0,0.8);
+}
+#viewport .gizmo-3d .axis.x .label { color: #e74c3c; }
+#viewport .gizmo-3d .axis.y .label { color: #2ecc71; left: 32px; top: -12px; }
+#viewport .gizmo-3d .axis.z .label { color: #3498db; left: 26px; }
+#viewport .gizmo-3d .center {
+  position: absolute; top: 50%; left: 50%;
+  width: 6px; height: 6px; margin: -3px 0 0 -3px;
+  background: rgba(255,255,255,0.5); border-radius: 50%;
+}
+
+/* ===== 3D objects in scene (decorative) ===== */
+#viewport .scene-canvas .scene-object {
+  position: absolute; bottom: 18%; border-radius: 4px;
+  transform-style: preserve-3d;
+  perspective: 400px;
+}
+#viewport .scene-canvas .scene-object .cube {
+  width: 40px; height: 40px; border: 1.5px solid rgba(100,180,255,0.3);
+  background: rgba(60,120,200,0.08);
+  transform: rotateX(25deg) rotateY(35deg);
+}
+#viewport .scene-canvas .scene-object.player {
+  left: 40%; bottom: 18%;
+}
+#viewport .scene-canvas .scene-object.player .cube {
+  width: 36px; height: 48px;
+  background: rgba(255,200,60,0.08);
+  border-color: rgba(255,200,60,0.4);
+}
+#viewport .scene-canvas .scene-object.ground-plane {
+  left: 20%; bottom: 8%; width: 60%;
+}
+#viewport .scene-canvas .scene-object.ground-plane .cube {
+  width: 100%; height: 6px; border-radius: 2px;
+  background: rgba(100,160,255,0.04);
+  border-color: rgba(100,160,255,0.12);
+  transform: rotateX(60deg);
+}
+#viewport .scene-canvas .scene-object.enemy {
+  left: 56%; bottom: 15%;
+}
+#viewport .scene-canvas .scene-object.enemy .cube {
+  background: rgba(255,80,80,0.06);
+  border-color: rgba(255,80,80,0.3);
+  transform: rotateX(20deg) rotateY(45deg);
+}
+
+#viewport .scene-canvas .scene-label {
+  position: absolute; bottom: 12px; left: 12px;
+  font-size: 11px; color: rgba(255,255,255,0.3);
+  display: flex; align-items: center; gap: 8px;
+  z-index: 2;
+}
+#viewport .scene-canvas .scene-label .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+#viewport .scene-canvas .scene-label .dot.green { background: var(--green); }
+
+
+/* ===== Right Panel: Inspector ===== */
+#inspector {
+  width: 280px; min-width: 200px; background: var(--bg-dark);
+  border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden;
+}
+#inspector .content { flex: 1; overflow-y: auto; padding: 0; }
+#inspector .object-name {
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+#inspector .object-name input {
+  width: 100%; background: var(--bg-dark); border: 1px solid var(--border);
+  padding: 4px 8px; border-radius: 3px; color: var(--text-bright); font-size: 14px; font-weight: 600; outline: none;
+}
+#inspector .object-name input:focus { border-color: var(--accent); }
+#inspector .object-name .tag {
+  margin-top: 4px; display: flex; gap: 4px;
+}
+#inspector .object-name .tag span {
+  font-size: 10px; padding: 1px 6px; border-radius: 3px; background: var(--bg-light); color: var(--text-dim);
+}
+#inspector .component {
+  border-bottom: 1px solid var(--border);
+}
+#inspector .component-header {
+  display: flex; align-items: center; height: 28px; padding: 0 10px;
+  background: var(--panel-header); cursor: pointer; gap: 6px;
+}
+#inspector .component-header:hover { background: var(--bg-light); }
+#inspector .component-header .chevron { font-size: 10px; color: var(--text-dim); }
+#inspector .component-header .name { font-size: 12px; font-weight: 600; color: var(--text-bright); }
+#inspector .component-header .gear { margin-left: auto; color: var(--text-dim); cursor: pointer; font-size: 12px; }
+#inspector .component-header .gear:hover { color: var(--text-bright); }
+#inspector .component-body { padding: 8px 12px; }
+#inspector .field {
+  display: flex; align-items: center; margin-bottom: 4px; min-height: 24px;
+}
+#inspector .field .label { width: 80px; font-size: 11px; color: var(--text-dim); flex-shrink: 0; }
+#inspector .field .value { flex: 1; display: flex; gap: 2px; }
+#inspector .field input {
+  width: 100%; background: var(--bg-darker); border: 1px solid var(--border);
+  padding: 2px 6px; border-radius: 3px; color: var(--text); font-size: 12px; outline: none;
+}
+#inspector .field input:focus { border-color: var(--accent); }
+#inspector .field .vec-input { display: flex; gap: 2px; flex: 1; }
+#inspector .field .vec-input .comp { flex: 1; display: flex; align-items: center; gap: 2px; }
+#inspector .field .vec-input .comp .lbl { font-size: 9px; font-weight: 700; width: 10px; text-align: center; }
+#inspector .field .vec-input .comp .lbl.x { color: #e74c3c; }
+#inspector .field .vec-input .comp .lbl.y { color: #2ecc71; }
+#inspector .field .vec-input .comp .lbl.z { color: #3498db; }
+#inspector .field .vec-input .comp input { width: 100%; min-width: 0; }
+#inspector .add-component {
+  padding: 10px 12px; display: flex; justify-content: center;
+}
+#inspector .add-component button {
+  width: 100%; padding: 5px; background: var(--bg-light); border: 1px dashed var(--border);
+  border-radius: 3px; color: var(--text-dim); cursor: pointer; font-size: 12px;
+}
+#inspector .add-component button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ===== Bottom Panel ===== */
+#bottom {
+  height: 160px; background: var(--bg-dark);
+  border-top: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0;
+}
+#bottom .tabs {
+  display: flex; height: 28px; background: var(--panel-header);
+  border-bottom: 1px solid var(--border); flex-shrink: 0; padding: 0 8px; gap: 0;
+}
+#bottom .tabs .tab {
+  padding: 4px 14px; font-size: 11px; color: var(--text-dim); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+#bottom .tabs .tab.active { color: var(--text-bright); border-bottom-color: var(--accent); background: var(--bg-dark); }
+#bottom .tabs .tab:hover:not(.active) { color: var(--text); }
+#bottom .content { flex: 1; overflow: hidden; display: flex; }
+#bottom .content .panel { display: none; flex: 1; overflow-y: auto; padding: 4px 0; }
+#bottom .content .panel.active { display: block; }
+
+/* Project Browser */
+#bottom .project-browser .item {
+  display: flex; align-items: center; padding: 3px 12px; font-size: 12px;
+  cursor: pointer; gap: 6px;
+}
+#bottom .project-browser .item:hover { background: var(--hover); }
+#bottom .project-browser .item .icon { width: 18px; text-align: center; font-size: 14px; }
+#bottom .project-browser .item.folder .icon { color: #f1c40f; }
+#bottom .project-browser .item.file .icon { color: var(--accent); }
+#bottom .project-browser .breadcrumb {
+  display: flex; align-items: center; padding: 4px 12px; gap: 4px;
+  border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-dim);
+}
+#bottom .project-browser .breadcrumb span:hover { color: var(--text-bright); cursor: pointer; }
+
+/* Console */
+#bottom .console .entry {
+  padding: 3px 12px; font-size: 12px; font-family: 'Consolas', monospace; display: flex; gap: 8px;
+}
+#bottom .console .entry:hover { background: var(--hover); }
+#bottom .console .entry .level { font-weight: 600; }
+#bottom .console .entry .level.log { color: var(--text-dim); }
+#bottom .console .entry .level.warn { color: var(--orange); }
+#bottom .console .entry .level.error { color: var(--red); }
+
+/* ===== Status Bar ===== */
+#statusbar {
+  display: flex; align-items: center; height: 24px; background: var(--bg-darker);
+  border-top: 1px solid var(--border); padding: 0 12px; font-size: 11px; color: var(--text-dim); flex-shrink: 0;
+  gap: 16px;
+}
+#statusbar .right { margin-left: auto; display: flex; gap: 16px; }
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border); }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Menu Bar -->
+  <div id="menubar">
+    <div class="logo">Rust<span>Engine</span></div>
+    <div class="menu-item">File</div>
+    <div class="menu-item">Edit</div>
+    <div class="menu-item">Assets</div>
+    <div class="menu-item">GameObject</div>
+    <div class="menu-item">Component</div>
+    <div class="menu-item">Window</div>
+    <div class="menu-item">Help</div>
+  </div>
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <!-- Transform Tools -->
+    <div class="tool-group">
+      <button class="tool-btn active" title="Pan (Q)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+        <span class="kbd">Q</span>
+      </button>
+      <button class="tool-btn" title="Move (W)">
+        <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><polyline points="12,7 14,10 10,10"/><polyline points="17,12 14,14 14,10"/><polyline points="12,17 10,14 14,14"/><polyline points="7,12 10,10 10,14"/></svg>
+        <span class="kbd">W</span>
+      </button>
+      <button class="tool-btn" title="Rotate (E)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none"/><path d="M12 5a7 7 0 0 1 6.6 4.5M19 5v4h-4"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
+        <span class="kbd">E</span>
+      </button>
+      <button class="tool-btn" title="Scale (R)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><line x1="10" y1="10" x2="14" y2="14"/></svg>
+        <span class="kbd">R</span>
+      </button>
+      <button class="tool-btn" title="Rect (T)">
+        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="4" cy="4" r="1.5" fill="currentColor"/><circle cx="20" cy="4" r="1.5" fill="currentColor"/><circle cx="4" cy="20" r="1.5" fill="currentColor"/><circle cx="20" cy="20" r="1.5" fill="currentColor"/></svg>
+        <span class="kbd">T</span>
+      </button>
+    </div>
+
+    <div class="sep"></div>
+
+    <!-- Transform Mode (Global/Local) -->
+    <div class="tool-group">
+      <div class="transform-mode">
+        <span class="pill active">Global</span>
+        <span class="pill">Local</span>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <!-- Pivot / Center -->
+    <div class="tool-group">
+      <div class="pivot-toggle">
+        <span class="pill active">Pivot</span>
+        <span class="pill">Center</span>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <!-- Play Controls -->
+    <div class="tool-group play-group">
+      <button class="play-btn" title="Play">
+        <svg viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="play-btn pause-btn" title="Pause">
+        <svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="play-btn stop-btn" title="Stop">
+        <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/></svg>
+      </button>
+    </div>
+
+    <div class="sep"></div>
+
+    <!-- Right Section -->
+    <div class="right-section">
+      <span class="layout-label">Layout</span>
+      <select>
+        <option>Default</option>
+        <option>2 by 3</option>
+        <option>Tall</option>
+        <option>Wide</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="main">
+    <!-- Hierarchy -->
+    <div id="hierarchy">
+      <div class="panel-header">
+        Hierarchy
+        <div class="actions">
+          <span title="Create">+</span>
+          <span title="Search">&#128269;</span>
+        </div>
+      </div>
+      <input class="search-box" type="text" placeholder="Search...">
+      <div class="tree">
+        <div class="tree-item"><span class="toggle">&#9660;</span><span class="icon">&#9723;</span><span class="name">SampleScene</span></div>
+        <div class="tree-item" style="padding-left:32px"><span class="toggle">&#9654;</span><span class="icon">&#9788;</span><span class="name">Directional Light</span></div>
+        <div class="tree-item" style="padding-left:32px"><span class="toggle">&nbsp;</span><span class="icon">&#9723;</span><span class="name">Main Camera</span></div>
+        <div class="tree-item selected" style="padding-left:32px"><span class="toggle">&#9660;</span><span class="icon">&#9723;</span><span class="name">Player</span></div>
+        <div class="tree-item" style="padding-left:48px"><span class="toggle">&nbsp;</span><span class="icon">&#9935;</span><span class="name">Renderer</span></div>
+        <div class="tree-item" style="padding-left:32px"><span class="toggle">&nbsp;</span><span class="icon">&#9723;</span><span class="name">Ground</span></div>
+        <div class="tree-item" style="padding-left:32px"><span class="toggle">&nbsp;</span><span class="icon">&#9723;</span><span class="name">Enemy</span></div>
+        <div class="tree-item" style="padding-left:48px"><span class="toggle">&nbsp;</span><span class="icon">&#9935;</span><span class="name">Mesh</span></div>
+      </div>
+    </div>
+
+    <!-- Viewport -->
+    <div id="viewport">
+      <div class="tabs">
+        <div class="tab active">Scene</div>
+        <div class="tab">Game</div>
+        <div class="tab">Anim</div>
+      </div>
+      <div class="scene-canvas">
+        <div class="grid-3d">
+          <div class="floor"></div>
+          <div class="horizon"></div>
+          <div class="fog"></div>
+        </div>
+        <div class="scene-object ground-plane">
+          <div class="cube"></div>
+        </div>
+        <div class="scene-object player">
+          <div class="cube"></div>
+        </div>
+        <div class="scene-object enemy">
+          <div class="cube"></div>
+        </div>
+        <div class="gizmo-3d">
+          <div class="axis x"><div class="arrow"></div><span class="label">X</span></div>
+          <div class="axis y"><div class="arrow"></div><span class="label">Y</span></div>
+          <div class="axis z"><div class="arrow"></div><span class="label">Z</span></div>
+          <div class="center"></div>
+        </div>
+        <div class="scene-label">
+          <span class="dot green"></span> Play Mode
+          <span style="opacity:0.5">|</span>
+          <span>60 FPS</span>
+          <span style="opacity:0.5">|</span>
+          <span>1234 tris</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspector -->
+    <div id="inspector">
+      <div class="panel-header">
+        Inspector
+        <div class="actions"><span>&#8942;</span></div>
+      </div>
+      <div class="content">
+        <div class="object-name">
+          <input type="text" value="Player">
+          <div class="tag"><span>Tag: Player</span><span>Layer: Default</span></div>
+        </div>
+
+        <!-- Transform Component -->
+        <div class="component">
+          <div class="component-header">
+            <span class="chevron">&#9660;</span>
+            <span class="name">Transform</span>
+            <span class="gear">&#9881;</span>
+          </div>
+          <div class="component-body">
+            <div class="field">
+              <span class="label">Position</span>
+              <div class="vec-input">
+                <div class="comp"><span class="lbl x">X</span><input type="text" value="0.0"></div>
+                <div class="comp"><span class="lbl y">Y</span><input type="text" value="2.5"></div>
+                <div class="comp"><span class="lbl z">Z</span><input type="text" value="0.0"></div>
+              </div>
+            </div>
+            <div class="field">
+              <span class="label">Rotation</span>
+              <div class="vec-input">
+                <div class="comp"><span class="lbl x">X</span><input type="text" value="0.0"></div>
+                <div class="comp"><span class="lbl y">Y</span><input type="text" value="45.0"></div>
+                <div class="comp"><span class="lbl z">Z</span><input type="text" value="0.0"></div>
+              </div>
+            </div>
+            <div class="field">
+              <span class="label">Scale</span>
+              <div class="vec-input">
+                <div class="comp"><span class="lbl x">X</span><input type="text" value="1.0"></div>
+                <div class="comp"><span class="lbl y">Y</span><input type="text" value="1.0"></div>
+                <div class="comp"><span class="lbl z">Z</span><input type="text" value="1.0"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mesh Renderer Component -->
+        <div class="component">
+          <div class="component-header">
+            <span class="chevron">&#9660;</span>
+            <span class="name">Mesh Renderer</span>
+            <span class="gear">&#9881;</span>
+          </div>
+          <div class="component-body">
+            <div class="field">
+              <span class="label">Mesh</span>
+              <div class="value"><input type="text" value="Cube" readonly style="cursor:pointer"></div>
+            </div>
+            <div class="field">
+              <span class="label">Material</span>
+              <div class="value"><input type="text" value="Default-Mat" readonly style="cursor:pointer"></div>
+            </div>
+            <div class="field">
+              <span class="label">Cast Shadows</span>
+              <div class="value"><input type="checkbox" checked style="width:auto"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Player Script Component -->
+        <div class="component">
+          <div class="component-header">
+            <span class="chevron">&#9660;</span>
+            <span class="name">PlayerController (Script)</span>
+            <span class="gear">&#9881;</span>
+          </div>
+          <div class="component-body">
+            <div class="field">
+              <span class="label">Move Speed</span>
+              <div class="value"><input type="text" value="5.0"></div>
+            </div>
+            <div class="field">
+              <span class="label">Jump Force</span>
+              <div class="value"><input type="text" value="8.0"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="add-component">
+          <button>Add Component</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Panel -->
+  <div id="bottom">
+    <div class="tabs">
+      <div class="tab active" data-panel="project">Project</div>
+      <div class="tab" data-panel="console">Console</div>
+    </div>
+    <div class="content">
+      <div class="panel project-browser active">
+        <div class="breadcrumb">
+          <span>Assets</span> <span style="color:var(--text-dim)">/</span> <span>Models</span>
+        </div>
+        <div class="item folder"><span class="icon">&#128193;</span> Characters</div>
+        <div class="item folder"><span class="icon">&#128193;</span> Environments</div>
+        <div class="item folder"><span class="icon">&#128193;</span> Materials</div>
+        <div class="item folder"><span class="icon">&#128193;</span> Textures</div>
+        <div class="item folder"><span class="icon">&#128193;</span> Scripts</div>
+        <div class="item folder"><span class="icon">&#128193;</span> Audio</div>
+        <div class="item file"><span class="icon">&#9641;</span> Player.glb</div>
+        <div class="item file"><span class="icon">&#9641;</span> Enemy.glb</div>
+        <div class="item file"><span class="icon">&#128247;</span> ground_diffuse.png</div>
+      </div>
+      <div class="panel console">
+        <div class="entry"><span class="level log">[Log]</span> Scene initialized: SampleScene</div>
+        <div class="entry"><span class="level log">[Log]</span> Loaded 3 meshes (1234 triangles)</div>
+        <div class="entry"><span class="level warn">[Warn]</span> Material 'GroundMat': normal map missing</div>
+        <div class="entry"><span class="level log">[Log]</span> Building shader cache...</div>
+        <div class="entry"><span class="level log">[Log]</span> Audio device: Speakers (Realtek)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Bar -->
+  <div id="statusbar">
+    <span>SampleScene*</span>
+    <span>Platform: Windows</span>
+    <span class="right">
+      <span>Vulkan</span>
+      <span>VSync: On</span>
+      <span>Mem: 256 MB</span>
+    </span>
+  </div>
+</div>
+
+<script>
+// Tab switching
+document.querySelectorAll('#bottom .tabs .tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('#bottom .tabs .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelectorAll('#bottom .content .panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(tab.dataset.panel).classList.add('active');
+  });
+});
+
+// Inspector add-component button
+document.querySelector('.add-component button')?.addEventListener('click', () => {
+  alert('Component picker would open here');
+});
+</script>
+</body>
+</html>
