@@ -12,4 +12,5 @@ wgpu = { version = "22", features = ["wgsl"] }
 winit = "0.30"
 thiserror = "2"
 bytemuck = { version = "1", features = ["derive"] }
+image = "0.25"
 pollster = "0.4"
