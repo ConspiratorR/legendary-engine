@@ -1,0 +1,1 @@
+//! GLTF model loading (placeholder).
