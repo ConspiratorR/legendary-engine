@@ -87,6 +87,14 @@ impl App {
     pub fn run(&mut self) {
         self.schedule.run(&mut self.world);
     }
+
+    pub fn world_mut(&mut self) -> &mut World {
+        &mut self.world
+    }
+
+    pub fn schedule(&self) -> &Schedule {
+        &self.schedule
+    }
 }
 
 impl From<AppBuilder> for App {
