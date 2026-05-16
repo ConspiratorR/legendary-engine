@@ -6,3 +6,4 @@ license.workspace = true
 
 [dependencies]
 engine-core = { path = "../../crates/engine-core" }
+engine-ecs = { path = "../../crates/engine-ecs" }
