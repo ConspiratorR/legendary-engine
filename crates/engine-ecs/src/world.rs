@@ -71,6 +71,21 @@ impl World {
         let storage = self.components.try_get_storage_mut::<T>()?;
         storage.remove(entity.index())
     }
+
+    pub fn component_entities<T: 'static>(&self) -> Vec<u32> {
+        self.components
+            .try_get_storage::<T>()
+            .map(|s| s.entities().to_vec())
+            .unwrap_or_default()
+    }
+
+    pub fn get_by_index<T: 'static>(&self, index: u32) -> Option<&T> {
+        self.components.try_get_storage::<T>()?.get(index)
+    }
+
+    pub fn get_by_index_mut<T: 'static>(&mut self, index: u32) -> Option<&mut T> {
+        self.components.try_get_storage_mut::<T>()?.get_mut(index)
+    }
 }
 
 #[cfg(test)]
