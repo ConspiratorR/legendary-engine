@@ -5,6 +5,12 @@ pub struct AudioManager {
     _stream_handle: OutputStreamHandle,
 }
 
+impl Default for AudioManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioManager {
     pub fn new() -> Self {
         let (_stream, _stream_handle) = OutputStream::try_default()

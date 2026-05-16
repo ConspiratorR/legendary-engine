@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 pub struct Engine;
 
+#[allow(clippy::new_ret_no_self)]
 impl Engine {
     pub fn new() -> AppBuilder {
         AppBuilder::new()
