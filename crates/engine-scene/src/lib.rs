@@ -2,4 +2,5 @@
 
 pub mod hierarchy;
 pub mod node;
+pub mod scene_manager;
 pub mod transform;
