@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/engine-math",
+    "crates/engine-ecs",
+    "crates/engine-window",
+    "crates/engine-asset",
+    "crates/engine-core",
+    "crates/engine-scene",
+    "crates/engine-render",
+    "crates/engine-input",
+    "crates/engine-audio",
+    "examples/basic",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["ConspiratorR"]

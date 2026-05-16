@@ -1,0 +1,12 @@
+[package]
+name = "engine-asset"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+engine-math = { path = "../engine-math" }
+gltf = "1.4"
+image = "0.25"
+rodio = "0.19"
+thiserror = "2"
