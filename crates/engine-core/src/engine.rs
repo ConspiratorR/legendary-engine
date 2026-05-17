@@ -16,30 +16,74 @@ pub fn run_default(app_builder: AppBuilder) {
     let mut app = app_builder.build();
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
     let window = Arc::new(create_window(&WindowConfig::default(), &event_loop));
-    let mut renderer = engine_render::renderer::Renderer::new(window.clone());
+    let renderer = engine_render::renderer::Renderer::new(window.clone());
+    app.set_renderer(renderer);
+
+    use winit::event::{ElementState, Event, MouseButton, WindowEvent};
+    use winit::event_loop::ControlFlow;
 
     event_loop
         .run(move |event, elwt| {
-            elwt.set_control_flow(winit::event_loop::ControlFlow::Poll);
+            elwt.set_control_flow(ControlFlow::Poll);
 
-            match event {
-                winit::event::Event::WindowEvent {
-                    event: winit::event::WindowEvent::CloseRequested,
+            match &event {
+                Event::WindowEvent {
+                    event: WindowEvent::CloseRequested,
+                    ..
+                } => elwt.exit(),
+                Event::WindowEvent {
+                    event: WindowEvent::Resized(size),
                     ..
                 } => {
-                    elwt.exit();
+                    if let Some(r) = app.renderer_mut() {
+                        r.resize(size.width, size.height);
+                    }
                 }
-                winit::event::Event::WindowEvent {
-                    event: winit::event::WindowEvent::Resized(size),
+                Event::WindowEvent {
+                    event: WindowEvent::KeyboardInput { event: ke, .. },
                     ..
                 } => {
-                    renderer.resize(size.width, size.height);
+                    let input = app.input_mut();
+                    use winit::keyboard::PhysicalKey;
+                    if let PhysicalKey::Code(key) = ke.physical_key {
+                        if ke.state == ElementState::Pressed {
+                            input.press(key);
+                        } else {
+                            input.release(key);
+                        }
+                    }
                 }
-                winit::event::Event::AboutToWait => {
-                    app.run();
-                    let _ = renderer.present();
+                Event::WindowEvent {
+                    event: WindowEvent::CursorMoved { position, .. },
+                    ..
+                } => {
+                    app.input_mut().mouse_mut().position = (position.x, position.y);
+                }
+                Event::WindowEvent {
+                    event: WindowEvent::MouseInput { state, button, .. },
+                    ..
+                } => {
+                    let input = app.input_mut();
+                    let pressed = *state == ElementState::Pressed;
+                    match button {
+                        MouseButton::Left => input.mouse_mut().left_button = pressed,
+                        MouseButton::Right => input.mouse_mut().right_button = pressed,
+                        _ => {}
+                    }
                 }
                 _ => {}
+            }
+            if let Event::AboutToWait = event {
+                app.run();
+                if !app.post_render_hooks.is_empty() {
+                    let mut hooks = std::mem::take(&mut app.post_render_hooks);
+                    for hook in &mut hooks {
+                        hook(&mut app);
+                    }
+                    app.post_render_hooks = hooks;
+                } else if let Some(r) = app.renderer_mut() {
+                    let _ = r.present();
+                }
             }
         })
         .unwrap();

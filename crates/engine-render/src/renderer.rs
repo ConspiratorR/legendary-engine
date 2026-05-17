@@ -1,8 +1,30 @@
+use std::ops::Deref;
+use std::sync::Arc;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 
+#[derive(Clone)]
+pub struct GpuDevice(pub Arc<Device>);
+
+impl Deref for GpuDevice {
+    type Target = Device;
+    fn deref(&self) -> &Device {
+        &self.0
+    }
+}
+
+#[derive(Clone)]
+pub struct GpuQueue(pub Arc<Queue>);
+
+impl Deref for GpuQueue {
+    type Target = Queue;
+    fn deref(&self) -> &Queue {
+        &self.0
+    }
+}
+
 pub struct Renderer {
-    pub device: Device,
-    pub queue: Queue,
+    pub device: GpuDevice,
+    pub queue: GpuQueue,
     pub surface: Surface<'static>,
     pub config: SurfaceConfiguration,
 }
@@ -20,25 +42,24 @@ impl Renderer {
             force_fallback_adapter: false,
         }))
         .unwrap();
-        let (device, queue) =
-            pollster::block_on(adapter.request_device(
-                &wgpu::DeviceDescriptor {
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
-                    label: None,
-                    memory_hints: wgpu::MemoryHints::Performance,
-                },
-                None,
-            ))
-            .unwrap();
+        let (device, queue) = pollster::block_on(adapter.request_device(
+            &wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                label: None,
+                memory_hints: wgpu::MemoryHints::Performance,
+            },
+            None,
+        ))
+        .unwrap();
         let size = window.inner_size();
         let config = surface
             .get_default_config(&adapter, size.width, size.height)
             .unwrap();
         surface.configure(&device, &config);
         Self {
-            device,
-            queue,
+            device: GpuDevice(Arc::new(device)),
+            queue: GpuQueue(Arc::new(queue)),
             surface,
             config,
         }
@@ -55,11 +76,7 @@ impl Renderer {
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder =
-            self.device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("main_encoder"),
-                });
+        let mut encoder = Renderer::cmd_buf(&self.device);
         let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("main_pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -77,5 +94,11 @@ impl Renderer {
         self.queue.submit([encoder.finish()]);
         output.present();
         Ok(())
+    }
+
+    fn cmd_buf(device: &Device) -> wgpu::CommandEncoder {
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("main_encoder"),
+        })
     }
 }

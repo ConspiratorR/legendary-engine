@@ -12,6 +12,7 @@ members = [
     "crates/engine-audio",
     "examples/basic",
     "crates/engine-framework",
+    "crates/engine-ui",
 ]
 
 [workspace.package]

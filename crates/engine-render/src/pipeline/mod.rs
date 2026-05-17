@@ -1,2 +1,2 @@
-pub mod sprite;
 pub mod pbr;
+pub mod sprite;

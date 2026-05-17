@@ -13,9 +13,12 @@ impl Default for AudioManager {
 
 impl AudioManager {
     pub fn new() -> Self {
-        let (_stream, _stream_handle) = OutputStream::try_default()
-            .expect("Failed to initialize audio output");
-        Self { _stream, _stream_handle }
+        let (_stream, _stream_handle) =
+            OutputStream::try_default().expect("Failed to initialize audio output");
+        Self {
+            _stream,
+            _stream_handle,
+        }
     }
 
     pub fn play(&self, path: &str) -> Result<(), String> {

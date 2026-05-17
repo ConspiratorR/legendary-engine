@@ -1,0 +1,13 @@
+[package]
+name = "engine-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+engine-core = { path = "../engine-core" }
+engine-input = { path = "../engine-input" }
+engine-render = { path = "../engine-render" }
+egui = "=0.30.0"
+egui-wgpu = "=0.30.0"
+wgpu = "23"

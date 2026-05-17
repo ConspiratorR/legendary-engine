@@ -1,4 +1,4 @@
-use engine_math::{Mat4};
+use engine_math::Mat4;
 
 pub struct Camera {
     pub projection: Projection,
@@ -6,8 +6,19 @@ pub struct Camera {
 }
 
 pub enum Projection {
-    Perspective { fov_y: f32, near: f32, far: f32 },
-    Orthographic { left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32 },
+    Perspective {
+        fov_y: f32,
+        near: f32,
+        far: f32,
+    },
+    Orthographic {
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        near: f32,
+        far: f32,
+    },
 }
 
 impl Camera {
@@ -23,9 +34,14 @@ impl Camera {
             Projection::Perspective { fov_y, near, far } => {
                 Mat4::perspective_rh(fov_y, aspect, near, far)
             }
-            Projection::Orthographic { left, right, bottom, top, near, far } => {
-                Mat4::orthographic_rh(left, right, bottom, top, near, far)
-            }
+            Projection::Orthographic {
+                left,
+                right,
+                bottom,
+                top,
+                near,
+                far,
+            } => Mat4::orthographic_rh(left, right, bottom, top, near, far),
         };
         proj_matrix * self.view
     }
@@ -38,7 +54,10 @@ pub struct View {
 
 impl View {
     pub fn new(camera: Camera, width: u32, height: u32) -> Self {
-        Self { camera, viewport: (width, height) }
+        Self {
+            camera,
+            viewport: (width, height),
+        }
     }
 
     pub fn aspect(&self) -> f32 {
