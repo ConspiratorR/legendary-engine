@@ -21,6 +21,7 @@ impl EguiState {
         scale_factor: f32,
     ) -> Self {
         let ctx = Context::default();
+        ctx.set_fonts(Self::load_fonts());
         let renderer = Renderer::new(device, config.format, None, 1, false);
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [config.width, config.height],
@@ -38,6 +39,33 @@ impl EguiState {
             just_pressed: false,
             just_released: false,
         }
+    }
+
+    fn load_fonts() -> egui::FontDefinitions {
+        let mut fonts = egui::FontDefinitions::default();
+        let cjk_candidates = [
+            "C:\\Windows\\Fonts\\msyh.ttc",
+            "C:\\Windows\\Fonts\\msyhbd.ttc",
+            "C:\\Windows\\Fonts\\simsun.ttc",
+        ];
+        for path in &cjk_candidates {
+            if let Ok(data) = std::fs::read(path) {
+                let name = format!("cjk_{}", path.rsplit('\\').next().unwrap_or("font"));
+                fonts.font_data.insert(name.clone(), std::sync::Arc::new(egui::FontData::from_owned(data)));
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Proportional)
+                    .or_default()
+                    .insert(0, name.clone());
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Monospace)
+                    .or_default()
+                    .insert(0, name);
+                break;
+            }
+        }
+        fonts
     }
 
     #[allow(deprecated)]
