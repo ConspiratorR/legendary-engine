@@ -831,6 +831,7 @@ dependencies = [
  "egui",
  "engine-core",
  "engine-framework",
+ "engine-input",
  "engine-math",
  "engine-ui",
 ]
