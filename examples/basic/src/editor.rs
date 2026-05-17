@@ -331,10 +331,215 @@ impl EditorLayout {
         }
     }
 
-    #[allow(dead_code)]
-    fn draw_inspector(&mut self, _gui: &mut Gui, _rect: Rect) {}
-    #[allow(dead_code)]
-    fn draw_bottom_panel(&mut self, _ui: &egui::Ui, _rect: Rect, _skin: &GuiSkin) {}
-    #[allow(dead_code)]
-    fn draw_status_bar(&mut self, _gui: &mut Gui, _rect: Rect) {}
+    fn draw_inspector(&mut self, gui: &mut Gui, rect: Rect) {
+        let painter = gui.ui.painter_at(rect);
+        painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+
+        // Search bar
+        let search_rect = Rect::from_min_size(
+            Pos2::new(rect.left(), rect.top() + 8.0),
+            vec2(rect.width() - 16.0, 28.0),
+        );
+        painter.add(Shape::rect_filled(
+            Rect::from_min_size(Pos2::new(rect.left() + 8.0, search_rect.top()), vec2(rect.width() - 16.0, 28.0)),
+            Rounding::same(6.0),
+            Color32::from_rgb(30, 30, 34),
+        ));
+        painter.text(
+            egui::pos2(rect.left() + 16.0, search_rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            "🔍 搜索属性...",
+            egui::FontId::proportional(12.0),
+            Color32::from_gray(90),
+        );
+
+        // Content
+        let content_top = search_rect.bottom() + 16.0;
+        let row_h = 22.0;
+        let left = rect.left() + 12.0;
+        let content_w = rect.width() - 24.0;
+
+        // Transform section
+        painter.text(
+            egui::pos2(left, content_top),
+            egui::Align2::LEFT_CENTER,
+            "变换",
+            egui::FontId::proportional(11.0),
+            Color32::from_gray(90),
+        );
+        let sep_y = content_top + 18.0;
+        painter.add(Shape::line(
+            vec![Pos2::new(left, sep_y), Pos2::new(rect.right() - 12.0, sep_y)],
+            Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        ));
+
+        let mut y = sep_y + 12.0;
+
+        // Position
+        let pos_rect = Rect::from_min_size(Pos2::new(left, y), vec2(content_w, row_h));
+        gui.vec3_input(pos_rect, "位置", &mut self.pos[0], &mut self.pos[1], &mut self.pos[2]);
+        y += row_h + 6.0;
+
+        // Rotation
+        let rot_rect = Rect::from_min_size(Pos2::new(left, y), vec2(content_w, row_h));
+        gui.vec3_input(rot_rect, "旋转", &mut self.rot[0], &mut self.rot[1], &mut self.rot[2]);
+        y += row_h + 6.0;
+
+        // Scale
+        let scale_rect = Rect::from_min_size(Pos2::new(left, y), vec2(content_w, row_h));
+        gui.vec3_input(scale_rect, "缩放", &mut self.scale[0], &mut self.scale[1], &mut self.scale[2]);
+        y += row_h + 12.0;
+
+        // Render section
+        painter.text(
+            egui::pos2(left, y),
+            egui::Align2::LEFT_CENTER,
+            "渲染",
+            egui::FontId::proportional(11.0),
+            Color32::from_gray(90),
+        );
+        let sep2_y = y + 18.0;
+        painter.add(Shape::line(
+            vec![Pos2::new(left, sep2_y), Pos2::new(rect.right() - 12.0, sep2_y)],
+            Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        ));
+        y = sep2_y + 12.0;
+
+        // Material
+        let mat_rect = Rect::from_min_size(Pos2::new(left, y), vec2(content_w, row_h));
+        gui.input_labeled(mat_rect, "材质", &self.material_name);
+        y += row_h + 6.0;
+
+        // Mesh
+        let mesh_rect = Rect::from_min_size(Pos2::new(left, y), vec2(content_w, row_h));
+        gui.input_labeled(mesh_rect, "网格", &self.mesh_name);
+        y += row_h + 6.0;
+
+        // Cast shadow checkbox
+        let shadow_rect = Rect::from_min_size(Pos2::new(left, y), vec2(content_w, row_h));
+        gui.checkbox(shadow_rect, "投射阴影", &mut self.cast_shadow);
+    }
+
+    fn draw_bottom_panel(&mut self, ui: &egui::Ui, rect: Rect, skin: &GuiSkin) {
+        let painter = ui.painter_at(rect);
+        painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+
+        // Tab bar
+        let tab_bar_rect = Rect::from_min_size(rect.left_top(), vec2(rect.width(), 32.0));
+        let tab_labels = &["日志", "性能", "音频", "网络"];
+        let tab_w = 60.0;
+
+        {
+            let mut gui = Gui::new(ui, skin);
+            for (i, tab_label) in tab_labels.iter().enumerate() {
+                let tab_rect = Rect::from_min_size(
+                    Pos2::new(rect.left() + 8.0 + i as f32 * tab_w, rect.top()),
+                    vec2(tab_w, 32.0),
+                );
+                if gui.tab(tab_rect, tab_label, self.active_bottom_tab == i) {
+                    self.active_bottom_tab = i;
+                }
+            }
+        }
+
+        // Content area
+        let content_rect = Rect::from_min_size(
+            Pos2::new(rect.left() + 12.0, tab_bar_rect.bottom() + 8.0),
+            vec2(rect.width() - 24.0, rect.bottom() - tab_bar_rect.bottom() - 16.0),
+        );
+
+        match self.active_bottom_tab {
+            0 => {
+                // Log content
+                let logs = [
+                    ("10:23:15", "info", "编辑器已启动"),
+                    ("10:23:16", "info", "项目已加载: MyGame"),
+                    ("10:23:18", "info", "着色器编译完成 (12个)"),
+                    ("10:23:20", "warn", "缺少法线贴图: Materials/Wood"),
+                    ("10:23:22", "info", "场景保存成功"),
+                ];
+                let mut y = content_rect.top();
+                for (time, level, msg) in &logs {
+                    let level_color = match *level {
+                        "info" => Color32::from_gray(152),
+                        "warn" => Color32::from_rgb(255, 184, 0),
+                        _ => Color32::from_rgb(255, 71, 87),
+                    };
+                    painter.text(
+                        egui::pos2(content_rect.left(), y + 10.0),
+                        egui::Align2::LEFT_CENTER,
+                        &format!("{}  {}  {}", time, level, msg),
+                        egui::FontId::proportional(11.0),
+                        level_color,
+                    );
+                    y += 18.0;
+                }
+            }
+            1 => {
+                // Performance
+                let perf_data = [
+                    "Draw Calls: 128",
+                    "Triangles: 45.2K",
+                    "Vertices: 22.8K",
+                    "GPU: 32ms",
+                    "Memory: 256MB / 2GB",
+                ];
+                let mut y = content_rect.top();
+                for line in &perf_data {
+                    painter.text(
+                        egui::pos2(content_rect.left(), y + 10.0),
+                        egui::Align2::LEFT_CENTER,
+                        *line,
+                        egui::FontId::proportional(11.0),
+                        Color32::from_rgb(232, 232, 236),
+                    );
+                    y += 18.0;
+                }
+            }
+            _ => {
+                painter.text(
+                    content_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "-- 面板内容 --",
+                    egui::FontId::proportional(11.0),
+                    Color32::from_gray(90),
+                );
+            }
+        }
+    }
+
+    fn draw_status_bar(&mut self, gui: &mut Gui, rect: Rect) {
+        let painter = gui.ui.painter_at(rect);
+        painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(30, 30, 34)));
+
+        gui.status_item(
+            Rect::from_min_size(Pos2::new(rect.left() + 12.0, rect.top()), vec2(60.0, rect.height())),
+            "就绪",
+            Color32::from_rgb(46, 213, 115),
+        );
+
+        painter.text(
+            egui::pos2(rect.left() + 80.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            &format!("对象: {}", self.scene_tree.iter().map(|n| 1 + n.children.len()).sum::<usize>()),
+            egui::FontId::proportional(11.0),
+            Color32::from_gray(90),
+        );
+
+        painter.text(
+            egui::pos2(rect.left() + 150.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            "三角形: 45K",
+            egui::FontId::proportional(11.0),
+            Color32::from_gray(90),
+        );
+
+        painter.text(
+            egui::pos2(rect.right() - 80.0, rect.center().y),
+            egui::Align2::RIGHT_CENTER,
+            "perspective",
+            egui::FontId::proportional(11.0),
+            Color32::from_gray(90),
+        );
+    }
 }
