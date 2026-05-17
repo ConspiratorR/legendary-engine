@@ -5,6 +5,7 @@ pub mod layout;
 pub mod plugin;
 pub mod skin;
 
+pub use gui::Gui;
 pub use imgui_plugin::ImGuiPlugin;
 pub use integration::EguiState;
 pub use layout::GuiLayout;
