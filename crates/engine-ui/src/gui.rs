@@ -236,6 +236,106 @@ impl<'a> Gui<'a> {
             Color32::WHITE,
         );
     }
+    pub fn toolbar(&mut self, rect: Rect, selected: &mut usize, texts: &[&str]) {
+        let painter = self.ui.painter_at(rect);
+        let n = texts.len();
+        if n == 0 {
+            return;
+        }
+        let btn_w = rect.width() / n as f32;
+
+        for (i, text) in texts.iter().enumerate() {
+            let btn_rect = Rect::from_min_size(
+                egui::pos2(rect.left() + i as f32 * btn_w, rect.top()),
+                egui::vec2(btn_w, rect.height()),
+            );
+
+            let id = egui::Id::new("gui_tb")
+                .with(i as u64)
+                .with(rect.min.y as u64);
+            let response = self.ui.interact(btn_rect, id, egui::Sense::click());
+
+            let block = if *selected == i {
+                &self.skin.toolbar.active
+            } else if response.hovered() {
+                &self.skin.toolbar.hover
+            } else {
+                &self.skin.toolbar.normal
+            };
+
+            Self::draw_background(&painter, block, btn_rect, self.skin.toolbar.border);
+            painter.text(
+                btn_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                *text,
+                self.skin.font.clone(),
+                block.text,
+            );
+
+            if response.clicked() {
+                *selected = i;
+            }
+        }
+    }
+
+    pub fn selection_grid(
+        &mut self,
+        rect: Rect,
+        selected: &mut usize,
+        texts: &[&str],
+        cols: usize,
+    ) {
+        let n = texts.len();
+        if n == 0 {
+            return;
+        }
+        let cols = cols.max(1);
+        let rows = n.div_ceil(cols);
+        let cell_w = rect.width() / cols as f32;
+        let cell_h = rect.height() / rows as f32;
+
+        for (i, text) in texts.iter().enumerate() {
+            let row = i / cols;
+            let col = i % cols;
+            let cell_rect = Rect::from_min_size(
+                egui::pos2(
+                    rect.left() + col as f32 * cell_w,
+                    rect.top() + row as f32 * cell_h,
+                ),
+                egui::vec2(cell_w, cell_h),
+            );
+
+            let id = egui::Id::new("gui_sg").with(i as u64);
+            let response = self.ui.interact(cell_rect, id, egui::Sense::click());
+
+            let block = if *selected == i {
+                &self.skin.selection_grid.active
+            } else if response.hovered() {
+                &self.skin.selection_grid.hover
+            } else {
+                &self.skin.selection_grid.normal
+            };
+
+            let painter = self.ui.painter_at(cell_rect);
+            Self::draw_background(
+                &painter,
+                block,
+                cell_rect,
+                self.skin.selection_grid.border,
+            );
+            painter.text(
+                cell_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                *text,
+                self.skin.font.clone(),
+                block.text,
+            );
+
+            if response.clicked() {
+                *selected = i;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -338,6 +438,46 @@ mod tests {
                 (val - 0.5).abs() < f32::EPSILON,
                 "slider value should remain unchanged without drag"
             );
+        });
+    }
+
+    #[test]
+    fn test_toolbar_empty_no_panic() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 280.0), egui::vec2(300.0, 24.0));
+            let mut sel = 0;
+            gui.toolbar(rect, &mut sel, &[]);
+            assert_eq!(sel, 0);
+        });
+    }
+
+    #[test]
+    fn test_toolbar_initial_selection() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 310.0), egui::vec2(300.0, 24.0));
+            let mut sel = 1;
+            gui.toolbar(rect, &mut sel, &["A", "B", "C"]);
+            assert_eq!(sel, 1, "selection unchanged without click");
+        });
+    }
+
+    #[test]
+    fn test_selection_grid_empty_no_panic() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 340.0), egui::vec2(200.0, 100.0));
+            let mut sel = 0;
+            gui.selection_grid(rect, &mut sel, &[], 2);
+            assert_eq!(sel, 0);
+        });
+    }
+
+    #[test]
+    fn test_selection_grid_single_row() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 450.0), egui::vec2(200.0, 30.0));
+            let mut sel = 0;
+            gui.selection_grid(rect, &mut sel, &["X", "Y", "Z"], 3);
+            assert_eq!(sel, 0);
         });
     }
 }
