@@ -17,7 +17,6 @@ impl Plugin for EguiPlugin {
                     resources.insert(EguiState::new(&r.device, &r.config, 1.0));
                 }
                 resources.get_mut::<EguiInitFlag>().unwrap().0 = true;
-                return;
             }
 
             let (mouse_x, mouse_y, left_down) = {
@@ -46,6 +45,15 @@ impl Plugin for EguiPlugin {
                 let egui_state = app.resources.get_mut::<EguiState>().unwrap();
                 egui_state.begin_frame(time);
             }
+
+            {
+                let (renderer, resources) = app.split_renderer_ref();
+                if let Some(r) = renderer
+                    && let Some(egui_state) = resources.get_mut::<EguiState>()
+                {
+                    egui_state.resize(r.config.width, r.config.height, 1.0);
+                }
+            }
         }));
         app.add_post_render_hook(Box::new(|app: &mut App| {
             let (renderer, resources) = app.split_renderer_mut();
@@ -61,8 +69,28 @@ impl Plugin for EguiPlugin {
             let device = resources.get::<GpuDevice>().unwrap().clone();
             let queue = resources.get::<GpuQueue>().unwrap().clone();
 
-            let renderer = renderer.unwrap();
-            let output = renderer.surface.get_current_texture().unwrap();
+            let renderer_ref = match renderer {
+                Some(r) => r,
+                None => return,
+            };
+
+            let output = match renderer_ref.surface.get_current_texture() {
+                Ok(o) => o,
+                Err(wgpu::SurfaceError::Timeout) => return,
+                Err(wgpu::SurfaceError::Outdated) => {
+                    renderer_ref
+                        .surface
+                        .configure(&device, &renderer_ref.config);
+                    return;
+                }
+                Err(wgpu::SurfaceError::Lost) => {
+                    renderer_ref
+                        .surface
+                        .configure(&device, &renderer_ref.config);
+                    return;
+                }
+                Err(wgpu::SurfaceError::OutOfMemory) => return,
+            };
 
             resources.get_mut::<EguiState>().unwrap().paint(
                 &device,

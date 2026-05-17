@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>动画编辑器 - RustEngine</title>
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-primary: #0d0d0f;
+      --bg-secondary: #161619;
+      --bg-tertiary: #1e1e22;
+      --bg-elevated: #252529;
+      --surface: #2a2a30;
+      --border: #3a3a42;
+      --border-subtle: #2d2d35;
+      --text-primary: #e8e8ec;
+      --text-secondary: #9898a0;
+      --text-muted: #5a5a66;
+      --accent-primary: #00d4aa;
+      --accent-secondary: #ff6b35;
+      --accent-tertiary: #7c5cff;
+    }
+    body {
+      font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      height: 100vh;
+      overflow: hidden;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    .anim-editor {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    /* Header */
+    .ae-header {
+      height: 48px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 16px;
+    }
+    .ae-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .ae-title span {
+      color: var(--accent-primary);
+    }
+    .ae-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+    .btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+    }
+    .btn-primary { background: var(--accent-primary); color: var(--bg-primary); }
+    .btn-secondary { background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); }
+    .tool-btn {
+      width: 32px;
+      height: 32px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .tool-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .tool-btn.active { background: var(--accent-primary); color: var(--bg-primary); }
+
+    /* Main */
+    .ae-main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Left - Tracks */
+    .ae-left {
+      width: 240px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+    }
+    .ae-panel-header {
+      height: 36px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .ae-tracks {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .track-group {
+      margin-bottom: 8px;
+    }
+    .track-group-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .track-group-header:hover { background: var(--bg-tertiary); }
+    .track-expand { font-size: 10px; }
+    .track-group-header.active { color: var(--accent-primary); }
+    .track-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px 8px 28px;
+      font-size: 12px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .track-item:hover { color: var(--text-secondary); }
+    .track-item.selected { color: var(--accent-primary); }
+    .track-icon { font-size: 14px; }
+
+    /* Center - Viewport */
+    .ae-center {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .ae-viewport {
+      flex: 1;
+      background: var(--bg-primary);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .character-preview {
+      width: 200px;
+      height: 300px;
+      background: linear-gradient(180deg, #1a1a20 0%, #0d0d10 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 80px;
+      position: relative;
+    }
+    .bone-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding-top: 40px;
+    }
+    .bone {
+      width: 4px;
+      background: var(--accent-primary);
+      border-radius: 2px;
+    }
+    .bone-head { height: 30px; }
+    .bone-torso { height: 60px; }
+    .bone-arm { width: 30px; height: 4px; }
+
+    /* Timeline */
+    .ae-timeline {
+      height: 160px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+    }
+    .timeline-header {
+      height: 28px;
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .timeline-time {
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-secondary);
+    }
+    .timeline-ruler {
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      height: 20px;
+      padding-left: 240px;
+      border-bottom: 1px solid var(--border-subtle);
+      position: relative;
+    }
+    .ruler-mark {
+      position: absolute;
+      bottom: 0;
+      font-size: 10px;
+      color: var(--text-muted);
+      transform: translateX(-50%);
+    }
+    .ruler-mark.major { font-weight: 600; }
+    .timeline-body {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+    .timeline-labels {
+      width: 240px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-subtle);
+      padding: 8px 0;
+    }
+    .timeline-label {
+      height: 24px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .timeline-tracks {
+      flex: 1;
+      overflow: auto;
+      position: relative;
+    }
+    .timeline-track {
+      height: 24px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .keyframe-track {
+      position: relative;
+      height: 20px;
+      margin: 2px 0;
+    }
+    .keyframe {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: var(--accent-primary);
+      border-radius: 2px;
+      transform: rotate(45deg);
+      cursor: pointer;
+    }
+    .keyframe:hover { background: var(--accent-secondary); }
+    .animation-bar {
+      position: absolute;
+      height: 16px;
+      background: rgba(0,212,170,0.3);
+      border: 1px solid var(--accent-primary);
+      border-radius: 3px;
+      top: 2px;
+    }
+    .playhead {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--accent-secondary);
+      z-index: 10;
+    }
+
+    /* Right - Properties */
+    .ae-right {
+      width: 260px;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--border-subtle);
+    }
+    .ae-properties {
+      padding: 16px;
+    }
+    .prop-section { margin-bottom: 20px; }
+    .prop-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .prop-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .prop-label {
+      width: 60px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .prop-input {
+      flex: 1;
+      padding: 6px 8px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 4px;
+      color: var(--text-primary);
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .prop-input:focus { outline: none; border-color: var(--accent-primary); }
+
+    /* Bottom */
+    .ae-bottom {
+      height: 28px;
+      background: var(--bg-tertiary);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+      gap: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="anim-editor">
+      <!-- Header -->
+      <div class="ae-header">
+        <div class="ae-title">动画编辑器 - <span>Walk_Cycle</span></div>
+        <div class="ae-controls">
+          <button class="tool-btn" :class="{ active: playState === 'play' }" @click="togglePlay">▶</button>
+          <button class="tool-btn" @click="stop">⏹</button>
+          <button class="tool-btn">⏮</button>
+          <button class="tool-btn">⏭</button>
+          <span class="timeline-time">{{ currentTime }} / {{ totalTime }}</span>
+          <button class="btn btn-secondary">添加关键帧</button>
+          <button class="btn btn-primary">保存</button>
+        </div>
+      </div>
+
+      <!-- Main -->
+      <div class="ae-main">
+        <!-- Left - Tracks -->
+        <div class="ae-left">
+          <div class="ae-panel-header">轨道</div>
+          <div class="ae-tracks">
+            <div class="track-group" v-for="group in trackGroups" :key="group.name">
+              <div class="track-group-header" :class="{ active: group.expanded }" @click="group.expanded = !group.expanded">
+                <span class="track-expand">▶</span>
+                <span>{{ group.name }}</span>
+              </div>
+              <div v-show="group.expanded">
+                <div 
+                  class="track-item" 
+                  v-for="track in group.tracks" 
+                  :key="track.name"
+                  :class="{ selected: selectedTrack === track.name }"
+                  @click="selectedTrack = track.name"
+                >
+                  <span class="track-icon">{{ track.icon }}</span>
+                  <span>{{ track.name }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center -->
+        <div class="ae-center">
+          <div class="ae-viewport">
+            <div class="character-preview">
+              🧍
+              <div class="bone-overlay">
+                <div class="bone bone-head"></div>
+                <div style="display:flex;gap:60px;">
+                  <div class="bone bone-arm"></div>
+                  <div class="bone bone-arm"></div>
+                </div>
+                <div class="bone bone-torso"></div>
+                <div style="display:flex;gap:30px;">
+                  <div style="width:4px;height:50px;background:var(--accent-primary);border-radius:2px;"></div>
+                  <div style="width:4px;height:50px;background:var(--accent-primary);border-radius:2px;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Timeline -->
+          <div class="ae-timeline">
+            <div class="timeline-header">
+              <span class="timeline-time">00:{{ currentFrame.toString().padStart(2,'0') }}</span>
+            </div>
+            <div class="timeline-ruler">
+              <div class="ruler-mark major" style="left: 0px">0</div>
+              <div class="ruler-mark" style="left: 50px">10</div>
+              <div class="ruler-mark major" style="left: 100px">20</div>
+              <div class="ruler-mark" style="left: 150px">30</div>
+              <div class="ruler-mark major" style="left: 200px">40</div>
+              <div class="playhead" :style="{ left: (240 + currentFrame * 5) + 'px' }"></div>
+            </div>
+            <div class="timeline-body">
+              <div class="timeline-labels">
+                <div class="timeline-label">Root</div>
+                <div class="timeline-label">Hips.Position</div>
+                <div class="timeline-label">Hips.Rotation</div>
+                <div class="timeline-label">Spine</div>
+                <div class="timeline-label">Head</div>
+                <div class="timeline-label">Arm.L</div>
+                <div class="timeline-label">Arm.R</div>
+                <div class="timeline-label">Leg.L</div>
+                <div class="timeline-label">Leg.R</div>
+              </div>
+              <div class="timeline-tracks">
+                <div class="timeline-track">
+                  <div class="keyframe-track">
+                    <div class="animation-bar" style="left:0;width:200px;"></div>
+                  </div>
+                </div>
+                <div class="timeline-track">
+                  <div class="keyframe-track">
+                    <div class="keyframe" style="left:50px;"></div>
+                    <div class="keyframe" style="left:100px;"></div>
+                    <div class="keyframe" style="left:150px;"></div>
+                  </div>
+                </div>
+                <div class="timeline-track">
+                  <div class="keyframe-track">
+                    <div class="keyframe" style="left:0px;"></div>
+                    <div class="keyframe" style="left:100px;"></div>
+                    <div class="keyframe" style="left:200px;"></div>
+                  </div>
+                </div>
+                <div class="timeline-track">
+                  <div class="keyframe-track">
+                    <div class="animation-bar" style="left:0;width:200px;"></div>
+                  </div>
+                </div>
+                <div class="timeline-track">
+                  <div class="keyframe-track">
+                    <div class="keyframe" style="left:50px;"></div>
+                  </div>
+                </div>
+                <div class="timeline-track">
+                  <div class="keyframe-track">
+                    <div class="keyframe" style="left:0px;"></div>
+                    <div class="keyframe" style="left:80px;"></div>
+                    <div class="keyframe" style="left:160px;"></div>
+                  </div>
+                </div>
+                <div class="timeline-track">
+                  <div class="keyframe-track">
+                    <div class="keyframe" style="left:40px;"></div>
+                    <div class="keyframe" style="left:120px;"></div>
+                    <div class="keyframe" style="left:200px;"></div>
+                  </div>
+                </div>
+                <div class="timeline-track">
+                  <div class="keyframe-track">
+                    <div class="keyframe" style="left:20px;"></div>
+                    <div class="keyframe" style="left:100px;"></div>
+                    <div class="keyframe" style="left:180px;"></div>
+                  </div>
+                </div>
+                <div class="timeline-track">
+                  <div class="keyframe-track">
+                    <div class="keyframe" style="left:60px;"></div>
+                    <div class="keyframe" style="left:140px;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right - Properties -->
+        <div class="ae-right">
+          <div class="ae-panel-header">属性</div>
+          <div class="ae-properties">
+            <div class="prop-section">
+              <div class="prop-title">关键帧</div>
+              <div class="prop-row">
+                <span class="prop-label">时间</span>
+                <input type="text" class="prop-input" v-model="keyframeTime">
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">值</span>
+                <input type="text" class="prop-input" v-model="keyframeValue">
+              </div>
+            </div>
+
+            <div class="prop-section">
+              <div class="prop-title">插值</div>
+              <div class="prop-row">
+                <span class="prop-label">类型</span>
+                <select class="prop-input" v-model="interpolation">
+                  <option>线性</option>
+                  <option>平滑</option>
+                  <option>阶跃</option>
+                  <option>贝塞尔</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="prop-section">
+              <div class="prop-title">变换</div>
+              <div class="prop-row">
+                <span class="prop-label">位置 X</span>
+                <input type="number" class="prop-input" value="0" step="0.1">
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">位置 Y</span>
+                <input type="number" class="prop-input" value="0" step="0.1">
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">位置 Z</span>
+                <input type="number" class="prop-input" value="0" step="0.1">
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">旋转 X</span>
+                <input type="number" class="prop-input" value="0">
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">旋转 Y</span>
+                <input type="number" class="prop-input" value="0">
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">旋转 Z</span>
+                <input type="number" class="prop-input" value="0">
+              </div>
+            </div>
+
+            <div class="prop-section">
+              <div class="prop-title">动画设置</div>
+              <div class="prop-row">
+                <span class="prop-label">帧率</span>
+                <select class="prop-input" v-model="fps">
+                  <option>24 fps</option>
+                  <option>30 fps</option>
+                  <option>60 fps</option>
+                </select>
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">长度</span>
+                <input type="text" class="prop-input" value="40 帧">
+              </div>
+              <div class="prop-row">
+                <span class="prop-label">循环</span>
+                <input type="checkbox" checked>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom -->
+      <div class="ae-bottom">
+        <span>轨道: 9</span>
+        <span>关键帧: 18</span>
+        <span>时长: 1.67s</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive } = Vue;
+    
+    createApp({
+      setup() {
+        const playState = ref('stop');
+        const currentFrame = ref(15);
+        const totalFrames = ref(40);
+        const selectedTrack = ref('Hips.Position');
+        const keyframeTime = ref('00:00:15');
+        const keyframeValue = ref('(0, 5.2, 0)');
+        const interpolation = ref('平滑');
+        const fps = ref('30 fps');
+
+        const currentTime = computed(() => Math.floor(currentFrame.value / 30 * 60).toString().padStart(2,'0'));
+        const totalTime = computed(() => Math.floor(totalFrames.value / 30 * 60).toString().padStart(2,'0'));
+
+        const trackGroups = reactive([
+          {
+            name: 'Root',
+            expanded: true,
+            tracks: [{ name: 'Root', icon: '📍' }]
+          },
+          {
+            name: '身体',
+            expanded: true,
+            tracks: [
+              { name: 'Hips.Position', icon: '📍' },
+              { name: 'Hips.Rotation', icon: '🔄' },
+              { name: 'Spine', icon: '⬆️' },
+              { name: 'Head', icon: '👤' }
+            ]
+          },
+          {
+            name: '手臂',
+            expanded: true,
+            tracks: [
+              { name: 'Arm.L', icon: '💪' },
+              { name: 'Arm.R', icon: '💪' }
+            ]
+          },
+          {
+            name: '腿部',
+            expanded: true,
+            tracks: [
+              { name: 'Leg.L', icon: '🦵' },
+              { name: 'Leg.R', icon: '🦵' }
+            ]
+          }
+        ]);
+
+        const togglePlay = () => {
+          playState.value = playState.value === 'play' ? 'pause' : 'play';
+          if (playState.value === 'play') {
+            startPlayback();
+          }
+        };
+
+        const stop = () => {
+          playState.value = 'stop';
+          currentFrame.value = 0;
+        };
+
+        let playInterval = null;
+        const startPlayback = () => {
+          playInterval = setInterval(() => {
+            currentFrame.value++;
+            if (currentFrame.value >= totalFrames.value) {
+              currentFrame.value = 0;
+            }
+          }, 1000 / 30);
+        };
+
+        return {
+          playState,
+          currentFrame,
+          totalFrames,
+          currentTime,
+          totalTime,
+          selectedTrack,
+          keyframeTime,
+          keyframeValue,
+          interpolation,
+          fps,
+          trackGroups,
+          togglePlay,
+          stop
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

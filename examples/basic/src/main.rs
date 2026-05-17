@@ -1,4 +1,5 @@
 use engine_core::app::{App, AppBuilder};
+use engine_core::debug::DebugPlugin;
 use engine_core::engine::run_default;
 use engine_core::plugin::Plugin;
 use engine_framework::{FrameworkPlugin, GameState, StateCtx, StateStack};
@@ -68,6 +69,7 @@ fn main() {
     let mut builder = AppBuilder::new();
     builder
         .add_plugin(FrameworkPlugin)
+        .add_plugin(DebugPlugin)
         .add_plugin(EguiPlugin)
         .add_plugin(ImGuiPlugin)
         .add_plugin(GamePlugin);

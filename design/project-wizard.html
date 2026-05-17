@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新建项目 - RustEngine</title>
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-primary: #0d0d0f;
+      --bg-secondary: #161619;
+      --bg-tertiary: #1e1e22;
+      --bg-elevated: #252529;
+      --surface: #2a2a30;
+      --border: #3a3a42;
+      --border-subtle: #2d2d35;
+      --text-primary: #e8e8ec;
+      --text-secondary: #9898a0;
+      --text-muted: #5a5a66;
+      --accent-primary: #00d4aa;
+      --accent-secondary: #ff6b35;
+      --accent-tertiary: #7c5cff;
+      --accent-warning: #ffb800;
+      --accent-error: #ff4757;
+      --shadow-glow: 0 0 20px rgba(0,212,170,0.2);
+    }
+    body {
+      font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Layout */
+    .wizard-container {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Left Sidebar */
+    .sidebar {
+      width: 280px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-subtle);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .logo-text {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .steps {
+      flex: 1;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 4px;
+    }
+    .step-item:hover {
+      background: var(--bg-tertiary);
+    }
+    .step-item.active {
+      background: rgba(0,212,170,0.1);
+    }
+    .step-number {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--bg-tertiary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .step-item.active .step-number {
+      background: var(--accent-primary);
+      color: var(--bg-primary);
+    }
+    .step-item.completed .step-number {
+      background: var(--accent-success);
+      color: var(--bg-primary);
+    }
+    .step-label {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    .step-item.active .step-label {
+      color: var(--text-primary);
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      font-family: inherit;
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover { border-color: var(--accent-primary); }
+    .btn-primary {
+      background: var(--accent-primary);
+      color: var(--bg-primary);
+    }
+    .btn-primary:hover {
+      box-shadow: var(--shadow-glow);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Content Area */
+    .content {
+      flex: 1;
+      padding: 32px;
+      overflow-y: auto;
+    }
+
+    /* Step 1: Template Selection */
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .template-card {
+      background: var(--bg-secondary);
+      border: 2px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .template-card:hover {
+      border-color: var(--border);
+      transform: translateY(-2px);
+    }
+    .template-card.selected {
+      border-color: var(--accent-primary);
+      background: rgba(0,212,170,0.05);
+    }
+    .template-icon {
+      width: 56px;
+      height: 56px;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 16px;
+    }
+    .template-card.selected .template-icon {
+      background: var(--accent-primary);
+    }
+    .template-card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .template-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+    .template-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      font-size: 11px;
+      padding: 4px 8px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+
+    /* Step 2: Project Info */
+    .form-section {
+      max-width: 600px;
+    }
+    .form-group {
+      margin-bottom: 24px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px rgba(0,212,170,0.1);
+    }
+    .form-group input::placeholder {
+      color: var(--text-muted);
+    }
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+    .form-error {
+      font-size: 12px;
+      color: var(--accent-error);
+      margin-top: 8px;
+    }
+    .location-input {
+      display: flex;
+      gap: 12px;
+    }
+    .location-input input {
+      flex: 1;
+    }
+    .browse-btn {
+      padding: 12px 20px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .browse-btn:hover {
+      border-color: var(--accent-primary);
+    }
+
+    /* Step 3: Settings */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+    .settings-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .settings-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .settings-card h3 span {
+      font-size: 18px;
+    }
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .setting-item:last-child {
+      border-bottom: none;
+    }
+    .setting-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .toggle {
+      width: 44px;
+      height: 24px;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+    }
+    .toggle.active {
+      background: var(--accent-primary);
+    }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: all 0.2s;
+    }
+    .toggle.active::after {
+      left: 22px;
+    }
+    .select-input {
+      padding: 8px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 13px;
+      min-width: 140px;
+    }
+
+    /* Summary */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+    .summary-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .summary-card h3 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .summary-item:last-child {
+      border-bottom: none;
+    }
+    .summary-key {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .summary-value {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* Footer */
+    .footer {
+      padding: 20px 32px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer-left {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .footer-right {
+      display: flex;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="wizard-container">
+      <!-- Left Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <div class="logo-icon">⚡</div>
+          <span class="logo-text">RustEngine</span>
+        </div>
+        <div class="steps">
+          <div 
+            class="step-item" 
+            :class="{ active: currentStep === 0, completed: currentStep > 0 }"
+            @click="currentStep > 0 && goToStep(0)"
+          >
+            <div class="step-number">{{ currentStep > 0 ? '✓' : '1' }}</div>
+            <span class="step-label">选择模板</span>
+          </div>
+          <div 
+            class="step-item" 
+            :class="{ active: currentStep === 1, completed: currentStep > 1 }"
+            @click="currentStep > 1 && goToStep(1)"
+          >
+            <div class="step-number">{{ currentStep > 1 ? '✓' : '2' }}</div>
+            <span class="step-label">项目信息</span>
+          </div>
+          <div 
+            class="step-item" 
+            :class="{ active: currentStep === 2, completed: currentStep > 2 }"
+            @click="currentStep > 2 && goToStep(2)"
+          >
+            <div class="step-number">{{ currentStep > 2 ? '✓' : '3' }}</div>
+            <span class="step-label">项目设置</span>
+          </div>
+          <div 
+            class="step-item" 
+            :class="{ active: currentStep === 3 }"
+          >
+            <div class="step-number">4</div>
+            <span class="step-label">确认创建</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="main-content">
+        <!-- Header -->
+        <div class="header">
+          <h1>{{ stepTitles[currentStep] }}</h1>
+          <div class="header-actions">
+            <button class="btn btn-secondary" @click="goBack">取消</button>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+          <!-- Step 1: Template -->
+          <div v-if="currentStep === 0">
+            <div class="template-grid">
+              <div 
+                class="template-card" 
+                :class="{ selected: projectData.template === '3d-game' }"
+                @click="projectData.template = '3d-game'"
+              >
+                <div class="template-icon">🎮</div>
+                <h3>3D 游戏</h3>
+                <p>完整的3D游戏项目模板，包含物理、动画、UI系统</p>
+                <div class="template-tags">
+                  <span class="tag">3D</span>
+                  <span class="tag">物理</span>
+                  <span class="tag">多人</span>
+                </div>
+              </div>
+              <div 
+                class="template-card" 
+                :class="{ selected: projectData.template === '2d-game' }"
+                @click="projectData.template = '2d-game'"
+              >
+                <div class="template-icon">🕹️</div>
+                <h3>2D 游戏</h3>
+                <p>2D游戏专用模板，精灵动画、碰撞检测、平台支持</p>
+                <div class="template-tags">
+                  <span class="tag">2D</span>
+                  <span class="tag">像素</span>
+                </div>
+              </div>
+              <div 
+                class="template-card" 
+                :class="{ selected: projectData.template === 'vr-app' }"
+                @click="projectData.template = 'vr-app'"
+              >
+                <div class="template-icon">🥽</div>
+                <h3>VR 应用</h3>
+                <p>虚拟现实应用模板，支持主流VR设备</p>
+                <div class="template-tags">
+                  <span class="tag">VR</span>
+                  <span class="tag">XR</span>
+                </div>
+              </div>
+              <div 
+                class="template-card" 
+                :class="{ selected: projectData.template === 'simulation' }"
+                @click="projectData.template = 'simulation'"
+              >
+                <div class="template-icon">🔬</div>
+                <h3>模拟/仿真</h3>
+                <p>科学模拟、可视化项目模板</p>
+                <div class="template-tags">
+                  <span class="tag">科学</span>
+                  <span class="tag">数据</span>
+                </div>
+              </div>
+              <div 
+                class="template-card" 
+                :class="{ selected: projectData.template === 'interactive' }"
+                @click="projectData.template = 'interactive'"
+              >
+                <div class="template-icon">🎨</div>
+                <h3>交互体验</h3>
+                <p>展览、装置、艺术项目的交互体验模板</p>
+                <div class="template-tags">
+                  <span class="tag">交互</span>
+                  <span class="tag">艺术</span>
+                </div>
+              </div>
+              <div 
+                class="template-card" 
+                :class="{ selected: projectData.template === 'empty' }"
+                @click="projectData.template = 'empty'"
+              >
+                <div class="template-icon">📄</div>
+                <h3>空白项目</h3>
+                <p>从零开始，完全自定义的项目结构</p>
+                <div class="template-tags">
+                  <span class="tag">空白</span>
+                  <span class="tag">自定义</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 2: Project Info -->
+          <div v-if="currentStep === 1">
+            <div class="form-section">
+              <div class="form-group">
+                <label>项目名称</label>
+                <input 
+                  type="text" 
+                  v-model="projectData.name"
+                  placeholder="my-awesome-game"
+                  @input="validateProjectName"
+                >
+                <div class="form-hint" v-if="!projectData.nameError">使用字母、数字、中划线，不能以数字开头</div>
+                <div class="form-error" v-else>{{ projectData.nameError }}</div>
+              </div>
+              <div class="form-group">
+                <label>显示名称</label>
+                <input 
+                  type="text" 
+                  v-model="projectData.displayName"
+                  placeholder="我的游戏"
+                >
+              </div>
+              <div class="form-group">
+                <label>项目路径</label>
+                <div class="location-input">
+                  <input 
+                    type="text" 
+                    v-model="projectData.location"
+                    placeholder="C:\Projects\my-game"
+                  >
+                  <button class="browse-btn">浏览...</button>
+                </div>
+                <div class="form-hint">项目将创建在此文件夹内</div>
+              </div>
+              <div class="form-group">
+                <label>描述 (可选)</label>
+                <input 
+                  type="text" 
+                  v-model="projectData.description"
+                  placeholder="一个很棒的游戏项目"
+                >
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: Settings -->
+          <div v-if="currentStep === 2">
+            <div class="settings-grid">
+              <div class="settings-card">
+                <h3><span>🎨</span> 渲染设置</h3>
+                <div class="setting-item">
+                  <span class="setting-label">渲染器</span>
+                  <select class="select-input" v-model="projectData.renderer">
+                    <option value="vulkan">Vulkan</option>
+                    <option value="opengl">OpenGL</option>
+                    <option value="directx">DirectX 12</option>
+                  </select>
+                </div>
+                <div class="setting-item">
+                  <span class="setting-label">抗锯齿</span>
+                  <select class="select-input" v-model="projectData.aa">
+                    <option value="fxaa">FXAA</option>
+                    <option value="msaa">MSAA 4x</option>
+                    <option value="none">关闭</option>
+                  </select>
+                </div>
+                <div class="setting-item">
+                  <span class="setting-label">光影</span>
+                  <div 
+                    class="toggle" 
+                    :class="{ active: projectData.lighting }"
+                    @click="projectData.lighting = !projectData.lighting"
+                  ></div>
+                </div>
+              </div>
+              <div class="settings-card">
+                <h3><span>📦</span> 构建设置</h3>
+                <div class="setting-item">
+                  <span class="setting-label">优化级别</span>
+                  <select class="select-input" v-model="projectData.optimization">
+                    <option value="debug">调试</option>
+                    <option value="release">发布</option>
+                  </select>
+                </div>
+                <div class="setting-item">
+                  <span class="setting-label">热重载</span>
+                  <div 
+                    class="toggle" 
+                    :class="{ active: projectData.hotReload }"
+                    @click="projectData.hotReload = !projectData.hotReload"
+                  ></div>
+                </div>
+                <div class="setting-item">
+                  <span class="setting-label">自动保存</span>
+                  <div 
+                    class="toggle" 
+                    :class="{ active: projectData.autoSave }"
+                    @click="projectData.autoSave = !projectData.autoSave"
+                  ></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 4: Summary -->
+          <div v-if="currentStep === 3">
+            <div class="summary-grid">
+              <div class="summary-card">
+                <h3>项目信息</h3>
+                <div class="summary-item">
+                  <span class="summary-key">项目名称</span>
+                  <span class="summary-value">{{ projectData.name || '-' }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="summary-key">显示名称</span>
+                  <span class="summary-value">{{ projectData.displayName || '-' }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="summary-key">项目路径</span>
+                  <span class="summary-value font-mono" style="font-size:11px;">{{ projectData.location || '-' }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="summary-key">模板</span>
+                  <span class="summary-value">{{ templateNames[projectData.template] }}</span>
+                </div>
+              </div>
+              <div class="summary-card">
+                <h3>项目设置</h3>
+                <div class="summary-item">
+                  <span class="summary-key">渲染器</span>
+                  <span class="summary-value">{{ projectData.renderer.toUpperCase() }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="summary-key">抗锯齿</span>
+                  <span class="summary-value">{{ projectData.aa.toUpperCase() }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="summary-key">光影</span>
+                  <span class="summary-value">{{ projectData.lighting ? '开启' : '关闭' }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="summary-key">热重载</span>
+                  <span class="summary-value">{{ projectData.hotReload ? '开启' : '关闭' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+          <div class="footer-left">
+            步骤 {{ currentStep + 1 }} / {{ stepTitles.length }}
+          </div>
+          <div class="footer-right">
+            <button 
+              class="btn btn-secondary" 
+              @click="prevStep"
+              v-if="currentStep > 0"
+            >
+              上一步
+            </button>
+            <button 
+              class="btn btn-primary"
+              @click="nextStep"
+              :disabled="!canProceed"
+            >
+              {{ currentStep === 3 ? '创建项目' : '下一步' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed } = Vue;
+    
+    createApp({
+      setup() {
+        const currentStep = ref(0);
+        const stepTitles = ['选择模板', '项目信息', '项目设置', '确认创建'];
+        
+        const templateNames = {
+          '3d-game': '3D 游戏',
+          '2d-game': '2D 游戏',
+          'vr-app': 'VR 应用',
+          'simulation': '模拟/仿真',
+          'interactive': '交互体验',
+          'empty': '空白项目'
+        };
+
+        const projectData = ref({
+          template: '3d-game',
+          name: '',
+          displayName: '',
+          location: 'C:\\Projects',
+          description: '',
+          nameError: '',
+          renderer: 'vulkan',
+          aa: 'fxaa',
+          lighting: true,
+          optimization: 'debug',
+          hotReload: true,
+          autoSave: true
+        });
+
+        const validateProjectName = () => {
+          const name = projectData.value.name;
+          if (!name) {
+            projectData.value.nameError = '';
+            return;
+          }
+          if (!/^[a-zA-Z][a-zA-Z0-9-]*$/.test(name)) {
+            projectData.value.nameError = '名称必须以字母开头，只能包含字母、数字和中划线';
+          } else {
+            projectData.value.nameError = '';
+          }
+        };
+
+        const canProceed = computed(() => {
+          if (currentStep.value === 0) return true;
+          if (currentStep.value === 1) {
+            return projectData.value.name && !projectData.value.nameError && projectData.value.location;
+          }
+          return true;
+        });
+
+        const goToStep = (step) => {
+          currentStep.value = step;
+        };
+
+        const prevStep = () => {
+          if (currentStep.value > 0) {
+            currentStep.value--;
+          }
+        };
+
+        const nextStep = () => {
+          if (currentStep.value === 3) {
+            alert('创建项目: ' + projectData.value.name);
+            window.location.href = 'editor.html';
+            return;
+          }
+          currentStep.value++;
+        };
+
+        const goBack = () => {
+          window.location.href = 'index.html';
+        };
+
+        return {
+          currentStep,
+          stepTitles,
+          projectData,
+          canProceed,
+          templateNames,
+          validateProjectName,
+          goToStep,
+          prevStep,
+          nextStep,
+          goBack
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

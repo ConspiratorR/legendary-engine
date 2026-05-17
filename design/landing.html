@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RustEngine - 专业游戏引擎</title>
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-primary: #0d0d0f;
+      --bg-secondary: #161619;
+      --bg-tertiary: #1e1e22;
+      --bg-elevated: #252529;
+      --surface: #2a2a30;
+      --border: #3a3a42;
+      --border-subtle: #2d2d35;
+      --text-primary: #e8e8ec;
+      --text-secondary: #9898a0;
+      --text-muted: #5a5a66;
+      --accent-primary: #00d4aa;
+      --accent-secondary: #ff6b35;
+      --accent-tertiary: #7c5cff;
+      --accent-warning: #ffb800;
+      --accent-error: #ff4757;
+      --accent-success: #2ed573;
+      --shadow-glow: 0 0 30px rgba(0,212,170,0.25);
+      --shadow-glow-orange: 0 0 30px rgba(255,107,53,0.25);
+    }
+    body {
+      font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Navigation */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(13,13,15,0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-left { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 20px;
+    }
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .nav-links { display: flex; gap: 32px; margin-left: 48px; }
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent-primary); }
+    .nav-right { display: flex; align-items: center; gap: 16px; }
+    .btn {
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      font-family: inherit;
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .btn-primary {
+      background: var(--accent-primary);
+      color: var(--bg-primary);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-glow);
+    }
+
+    /* Hero Section */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 120px 32px 80px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,212,170,0.15) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 80% 60%, rgba(124,92,255,0.1) 0%, transparent 40%),
+        radial-gradient(ellipse 50% 30% at 20% 80%, rgba(255,107,53,0.1) 0%, transparent 40%);
+      pointer-events: none;
+    }
+    .hero-content {
+      max-width: 900px;
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 999px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+    .hero-badge span {
+      color: var(--accent-primary);
+      font-weight: 600;
+    }
+    .hero h1 {
+      font-size: clamp(40px, 8vw, 72px);
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-primary) 50%, var(--accent-tertiary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 18px;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-large {
+      padding: 16px 32px;
+      font-size: 16px;
+      border-radius: 8px;
+    }
+    .btn-outline {
+      background: transparent;
+      border: 2px solid var(--border);
+      color: var(--text-primary);
+    }
+    .btn-outline:hover {
+      border-color: var(--accent-tertiary);
+      color: var(--accent-tertiary);
+    }
+
+    /* Terminal Preview */
+    .terminal-wrapper {
+      margin-top: 80px;
+      position: relative;
+    }
+    .terminal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .dot-red { background: #ff5f57; }
+    .dot-yellow { background: #ffbd2e; }
+    .dot-green { background: #28ca41; }
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .terminal-body {
+      padding: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      line-height: 1.8;
+      min-height: 200px;
+    }
+    .terminal-line { display: flex; gap: 8px; margin-bottom: 8px; }
+    .prompt { color: var(--accent-primary); }
+    .command { color: var(--text-primary); }
+    .output { color: var(--text-secondary); }
+    .output-accent { color: var(--accent-secondary); }
+    .output-purple { color: var(--accent-tertiary); }
+
+    /* Features Section */
+    .features {
+      padding: 120px 32px;
+      background: var(--bg-secondary);
+    }
+    .section-header {
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto 64px;
+    }
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-primary);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .section-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .feature-card {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 32px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-tertiary));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--border);
+    }
+    .feature-card:hover::before { opacity: 1; }
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    .feature-card h3 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .feature-tags {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      font-size: 11px;
+      padding: 4px 10px;
+      background: var(--bg-elevated);
+      border-radius: 4px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Code Section */
+    .code-section {
+      padding: 120px 32px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      max-width: 1400px;
+      margin: 0 auto;
+      align-items: center;
+    }
+    .code-content h2 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    .code-content p {
+      color: var(--text-secondary);
+      font-size: 16px;
+      margin-bottom: 24px;
+    }
+    .code-list { list-style: none; }
+    .code-list li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .code-list li:last-child { border-bottom: none; }
+    .check-icon {
+      width: 24px;
+      height: 24px;
+      background: var(--accent-success);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--bg-primary);
+      font-size: 14px;
+    }
+    .code-preview {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .code-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .code-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .code-body {
+      padding: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .code-keyword { color: var(--accent-tertiary); }
+    .code-string { color: var(--accent-secondary); }
+    .code-fn { color: var(--accent-primary); }
+    .code-comment { color: var(--text-muted); }
+
+    /* CTA Section */
+    .cta {
+      padding: 120px 32px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(0,212,170,0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cta h2 {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+    .cta p {
+      font-size: 18px;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+    }
+
+    /* Footer */
+    footer {
+      padding: 64px 32px;
+      border-top: 1px solid var(--border-subtle);
+      background: var(--bg-secondary);
+    }
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+    .footer-left { display: flex; align-items: center; gap: 12px; }
+    .footer-links {
+      display: flex;
+      gap: 32px;
+    }
+    .footer-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+    .footer-links a:hover { color: var(--accent-primary); }
+    .footer-right {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .animate-in {
+      animation: fadeInUp 0.6s ease forwards;
+    }
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .hero h1 { font-size: 36px; }
+      .code-section { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- Navigation -->
+    <nav>
+      <div class="nav-left">
+        <div class="logo">
+          <div class="logo-icon">⚡</div>
+          <span>RustEngine</span>
+        </div>
+        <div class="nav-links">
+          <a href="#">功能</a>
+          <a href="#">文档</a>
+          <a href="#">社区</a>
+          <a href="#">下载</a>
+        </div>
+      </div>
+      <div class="nav-right">
+        <button class="btn btn-secondary">登录</button>
+        <button class="btn btn-primary" @click="goToEditor">开始创建</button>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-content">
+        <div class="hero-badge animate-in">
+          <span>v2.0</span>现已发布 · 性能提升300%
+        </div>
+        <h1 class="animate-in delay-1">释放你的游戏<br>创作潜能</h1>
+        <p class="animate-in delay-2">专业级游戏引擎，实时渲染，强大工具链，多平台发布支持。专为独立开发者和团队打造。</p>
+        <div class="hero-actions animate-in delay-3">
+          <button class="btn btn-primary btn-large" @click="goToEditor">
+            立即开始 →
+          </button>
+          <button class="btn btn-outline btn-large">观看演示</button>
+        </div>
+
+        <!-- Terminal Preview -->
+        <div class="terminal-wrapper animate-in delay-4">
+          <div class="terminal">
+            <div class="terminal-header">
+              <div class="terminal-dot dot-red"></div>
+              <div class="terminal-dot dot-yellow"></div>
+              <div class="terminal-dot dot-green"></div>
+              <span class="terminal-title">RustEngine Editor</span>
+            </div>
+            <div class="terminal-body">
+              <div class="terminal-line">
+                <span class="prompt">❯</span>
+                <span class="command">rustengine new my-game</span>
+              </div>
+              <div class="terminal-line output">
+                Creating project <span class="output-accent">"my-game"</span>...
+              </div>
+              <div class="terminal-line output">
+                ✓ Project initialized in <span class="output-purple">2.3s</span>
+              </div>
+              <div class="terminal-line output">
+                ✓ Dependencies resolved
+              </div>
+              <div class="terminal-line">
+                <span class="prompt">❯</span>
+                <span class="command">rustengine run</span>
+              </div>
+              <div class="terminal-line output">
+                Compiling shaders... <span class="output-accent">Done</span>
+              </div>
+              <div class="terminal-line output">
+                Building assets... <span class="output-purple">Done</span>
+              </div>
+              <div class="terminal-line output">
+                Starting server at <span class="output-accent">localhost:8080</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features">
+      <div class="section-header">
+        <div class="section-label">核心功能</div>
+        <h2 class="section-title">一切你需要创作的工具</h2>
+        <p class="section-desc">从原型到发布，一个引擎满足所有需求</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card" v-for="(feature, index) in features" :key="index">
+          <div class="feature-icon">{{ feature.icon }}</div>
+          <h3>{{ feature.title }}</h3>
+          <p>{{ feature.desc }}</p>
+          <div class="feature-tags">
+            <span class="tag" v-for="tag in feature.tags">{{ tag }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Code Section -->
+    <section class="code-section">
+      <div class="code-content">
+        <h2>用代码创造世界</h2>
+        <p>强大的脚本系统，Rust语言原生支持，类型安全的编辑器体验。</p>
+        <ul class="code-list">
+          <li v-for="(item, index) in codeFeatures" :key="index">
+            <span class="check-icon">✓</span>
+            <span>{{ item }}</span>
+          </li>
+        </ul>
+      </div>
+      <div class="code-preview">
+        <div class="code-header">
+          <div class="terminal-dot dot-red"></div>
+          <div class="terminal-dot dot-yellow"></div>
+          <div class="terminal-dot dot-green"></div>
+          <span class="code-title">main.rs</span>
+        </div>
+        <div class="code-body">
+          <span class="code-comment">// 游戏组件定义</span><br>
+          <span class="code-keyword">use</span> rustengine::prelude::*;<br><br>
+          <span class="code-keyword">struct</span> <span class="code-fn">Player</span> {<br>
+          &nbsp;&nbsp;health: <span class="code-keyword">f32</span>,<br>
+          &nbsp;&nbsp;speed: <span class="code-keyword">f32</span>,<br>
+          &nbsp;&nbsp;position: <span class="code-fn">Vec3</span>,<br>
+          }<br><br>
+          <span class="code-keyword">impl</span> <span class="code-fn">Component</span> <span class="code-keyword">for</span> <span class="code-fn">Player</span> {<br>
+          &nbsp;&nbsp;<span class="code-keyword">fn</span> <span class="code-fn">update</span>(&<span class="code-keyword">mut</span> self, dt: <span class="code-keyword">f32</span>) {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-comment">// 移动逻辑</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;self.position += self.velocity * dt;<br>
+          &nbsp;&nbsp;}<br>
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+      <h2>准备好开始了吗？</h2>
+      <p>下载RustEngine，开始你的游戏开发之旅</p>
+      <button class="btn btn-primary btn-large" @click="goToEditor">
+        创建新项目 →
+      </button>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div class="footer-content">
+        <div class="footer-left">
+          <div class="logo-icon" style="width:28px;height:28px;font-size:14px;">⚡</div>
+          <span style="font-weight:600;">RustEngine</span>
+        </div>
+        <div class="footer-links">
+          <a href="#">关于</a>
+          <a href="#">文档</a>
+          <a href="#">社区</a>
+          <a href="#">GitHub</a>
+        </div>
+        <div class="footer-right">
+          © 2024 RustEngine. All rights reserved.
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    const { createApp, ref } = Vue;
+    
+    createApp({
+      setup() {
+        const features = ref([
+          {
+            icon: '🎮',
+            title: '实时渲染',
+            desc: '基于Vulkan的高性能渲染器，支持PBR、光线追踪、全局光照',
+            tags: ['PBR', 'Ray Tracing', 'GI']
+          },
+          {
+            icon: '⚙️',
+            title: '可视化编辑器',
+            desc: '完整的IDE集成，场景编辑、资产管理、调试工具一应俱全',
+            tags: ['Scene', 'Asset', 'Debug']
+          },
+          {
+            icon: '🔧',
+            title: '强大工具链',
+            desc: '自动化构建、热重载、性能分析，让开发更高效',
+            tags: ['Build', 'Profiler', 'CLI']
+          },
+          {
+            icon: '🌐',
+            title: '多平台发布',
+            desc: '一键发布到Windows、macOS、Linux、iOS、Android主流平台',
+            tags: ['Win', 'Mac', 'Mobile']
+          },
+          {
+            icon: '📦',
+            title: '资产管线',
+            desc: '模型、纹理、动画的导入、处理、版本管理全流程支持',
+            tags: ['FBX', 'GLTF', 'Atlas']
+          },
+          {
+            icon: '👥',
+            title: '协作工具',
+            desc: '内置版本控制、项目分享、团队协作功能',
+            tags: ['Git', 'Cloud', 'Teams']
+          }
+        ]);
+
+        const codeFeatures = ref([
+          'Rust原生脚本系统，零成本抽象',
+          '热重载，修改代码无需重启',
+          '智能代码补全和类型检查',
+          '内置性能分析器和调试器'
+        ]);
+
+        const goToEditor = () => {
+          window.location.href = 'project-wizard.html';
+        };
+
+        return { features, codeFeatures, goToEditor };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

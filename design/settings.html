@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设置 - RustEngine</title>
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-primary: #0d0d0f;
+      --bg-secondary: #161619;
+      --bg-tertiary: #1e1e22;
+      --bg-elevated: #252529;
+      --surface: #2a2a30;
+      --border: #3a3a42;
+      --border-subtle: #2d2d35;
+      --text-primary: #e8e8ec;
+      --text-secondary: #9898a0;
+      --text-muted: #5a5a66;
+      --accent-primary: #00d4aa;
+      --accent-secondary: #ff6b35;
+      --accent-tertiary: #7c5cff;
+      --accent-warning: #ffb800;
+      --accent-error: #ff4757;
+      --accent-success: #2ed573;
+    }
+    body {
+      font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    .settings-layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .settings-sidebar {
+      width: 240px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-subtle);
+      padding: 24px 16px;
+    }
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+      cursor: pointer;
+    }
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .logo-text {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .settings-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .nav-item {
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.15s;
+    }
+    .nav-item:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+    .nav-item.active {
+      background: rgba(0,212,170,0.1);
+      color: var(--accent-primary);
+    }
+    .nav-icon {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+    }
+
+    /* Main Content */
+    .settings-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .settings-header {
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .settings-header h1 {
+      font-size: 24px;
+      font-weight: 600;
+    }
+    .settings-content {
+      flex: 1;
+      padding: 32px;
+      overflow-y: auto;
+    }
+
+    /* Settings Sections */
+    .settings-section {
+      max-width: 700px;
+      margin-bottom: 40px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent-primary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .setting-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 12px;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .setting-row:last-child {
+      border-bottom: none;
+    }
+    .setting-info {
+      flex: 1;
+    }
+    .setting-label {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .setting-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .setting-control {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Form Controls */
+    .input-text {
+      padding: 10px 14px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 13px;
+      min-width: 200px;
+    }
+    .input-text:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+    .select-box {
+      padding: 10px 14px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 13px;
+      min-width: 160px;
+      cursor: pointer;
+    }
+    .toggle {
+      width: 44px;
+      height: 24px;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+    }
+    .toggle.active {
+      background: var(--accent-primary);
+    }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: all 0.2s;
+    }
+    .toggle.active::after {
+      left: 22px;
+    }
+
+    /* Color Picker */
+    .color-grid {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .color-swatch {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .color-swatch:hover {
+      transform: scale(1.1);
+    }
+    .color-swatch.selected {
+      border-color: var(--accent-primary);
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      font-family: inherit;
+    }
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover {
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+    .btn-primary {
+      background: var(--accent-primary);
+      color: var(--bg-primary);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 20px rgba(0,212,170,0.3);
+    }
+
+    /* Footer */
+    .settings-footer {
+      padding: 20px 32px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="settings-layout">
+      <!-- Sidebar -->
+      <div class="settings-sidebar">
+        <div class="sidebar-header" @click="goHome">
+          <div class="logo-icon">⚡</div>
+          <span class="logo-text">RustEngine</span>
+        </div>
+        <div class="settings-nav">
+          <div 
+            class="nav-item" 
+            :class="{ active: activeNav === 'general' }"
+            @click="activeNav = 'general'"
+          >
+            <span class="nav-icon">⚙️</span>
+            <span>通用</span>
+          </div>
+          <div 
+            class="nav-item" 
+            :class="{ active: activeNav === 'editor' }"
+            @click="activeNav = 'editor'"
+          >
+            <span class="nav-icon">✏️</span>
+            <span>编辑器</span>
+          </div>
+          <div 
+            class="nav-item" 
+            :class="{ active: activeNav === 'theme' }"
+            @click="activeNav = 'theme'"
+          >
+            <span class="nav-icon">🎨</span>
+            <span>主题</span>
+          </div>
+          <div 
+            class="nav-item" 
+            :class="{ active: activeNav === 'shortcuts' }"
+            @click="activeNav = 'shortcuts'"
+          >
+            <span class="nav-icon">⌨️</span>
+            <span>快捷键</span>
+          </div>
+          <div 
+            class="nav-item" 
+            :class="{ active: activeNav === 'performance' }"
+            @click="activeNav = 'performance'"
+          >
+            <span class="nav-icon">🚀</span>
+            <span>性能</span>
+          </div>
+          <div 
+            class="nav-item" 
+            :class="{ active: activeNav === 'plugins' }"
+            @click="activeNav = 'plugins'"
+          >
+            <span class="nav-icon">🧩</span>
+            <span>插件</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="settings-main">
+        <div class="settings-header">
+          <h1>{{ navTitles[activeNav] }}</h1>
+        </div>
+        <div class="settings-content">
+          <!-- General Settings -->
+          <div v-if="activeNav === 'general'">
+            <div class="settings-section">
+              <div class="section-title">🏠 启动</div>
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">启动时打开最近项目</div>
+                    <div class="setting-desc">启动编辑器时自动打开上次编辑的项目</div>
+                  </div>
+                  <div class="setting-control">
+                    <div class="toggle" :class="{ active: settings.autoOpenRecent }" @click="settings.autoOpenRecent = !settings.autoOpenRecent"></div>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">启动画面</div>
+                    <div class="setting-desc">显示项目选择器或直接进入编辑器</div>
+                  </div>
+                  <div class="setting-control">
+                    <select class="select-box" v-model="settings.startupScreen">
+                      <option value="launcher">启动器</option>
+                      <option value="editor">直接进入编辑器</option>
+                      <option value="project">上次项目</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="section-title">📁 文件与项目</div>
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">默认项目路径</div>
+                    <div class="setting-desc">新项目默认创建位置</div>
+                  </div>
+                  <div class="setting-control">
+                    <input type="text" class="input-text" v-model="settings.defaultProjectPath" style="width:280px;">
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">自动保存</div>
+                    <div class="setting-desc">自动保存项目间隔（分钟）</div>
+                  </div>
+                  <div class="setting-control">
+                    <select class="select-box" v-model="settings.autoSaveInterval">
+                      <option value="1">1 分钟</option>
+                      <option value="5">5 分钟</option>
+                      <option value="10">10 分钟</option>
+                      <option value="30">30 分钟</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Editor Settings -->
+          <div v-if="activeNav === 'editor'">
+            <div class="settings-section">
+              <div class="section-title">🎯 编辑器行为</div>
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">显示网格</div>
+                    <div class="setting-desc">在视口显示编辑网格</div>
+                  </div>
+                  <div class="setting-control">
+                    <div class="toggle" :class="{ active: settings.showGrid }" @click="settings.showGrid = !settings.showGrid"></div>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">吸附到网格</div>
+                    <div class="setting-desc">移动物体时自动吸附到网格点</div>
+                  </div>
+                  <div class="setting-control">
+                    <div class="toggle" :class="{ active: settings.snapToGrid }" @click="settings.snapToGrid = !settings.snapToGrid"></div>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">网格大小</div>
+                    <div class="setting-desc">编辑器网格间距（单位）</div>
+                  </div>
+                  <div class="setting-control">
+                    <select class="select-box" v-model="settings.gridSize">
+                      <option value="0.1">0.1</option>
+                      <option value="0.25">0.25</option>
+                      <option value="0.5">0.5</option>
+                      <option value="1">1.0</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="section-title">🔤 字体与代码</div>
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">代码编辑器字体</div>
+                    <div class="setting-desc">代码编辑器的字体选择</div>
+                  </div>
+                  <div class="setting-control">
+                    <select class="select-box" v-model="settings.codeFont">
+                      <option value="JetBrains Mono">JetBrains Mono</option>
+                      <option value="Fira Code">Fira Code</option>
+                      <option value="Cascadia Code">Cascadia Code</option>
+                      <option value="Consolas">Consolas</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">字体大小</div>
+                    <div class="setting-desc">代码编辑器字体大小</div>
+                  </div>
+                  <div class="setting-control">
+                    <select class="select-box" v-model="settings.fontSize">
+                      <option value="12">12px</option>
+                      <option value="13">13px</option>
+                      <option value="14">14px</option>
+                      <option value="16">16px</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Theme Settings -->
+          <div v-if="activeNav === 'theme'">
+            <div class="settings-section">
+              <div class="section-title">🎨 主题</div>
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">编辑器主题</div>
+                    <div class="setting-desc">选择编辑器颜色方案</div>
+                  </div>
+                  <div class="setting-control">
+                    <select class="select-box" v-model="settings.theme">
+                      <option value="dark">深色 (Dark)</option>
+                      <option value="light">浅色 (Light)</option>
+                      <option value="amoled">AMOLED 深色</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <div class="section-title">🎯 强调色</div>
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">界面强调色</div>
+                    <div class="setting-desc">选择界面主要强调颜色</div>
+                  </div>
+                  <div class="setting-control">
+                    <div class="color-grid">
+                      <div class="color-swatch" style="background:#00d4aa" :class="{ selected: settings.accentColor === '#00d4aa' }" @click="settings.accentColor = '#00d4aa'"></div>
+                      <div class="color-swatch" style="background:#ff6b35" :class="{ selected: settings.accentColor === '#ff6b35' }" @click="settings.accentColor = '#ff6b35'"></div>
+                      <div class="color-swatch" style="background:#7c5cff" :class="{ selected: settings.accentColor === '#7c5cff' }" @click="settings.accentColor = '#7c5cff'"></div>
+                      <div class="color-swatch" style="background:#4dabf7" :class="{ selected: settings.accentColor === '#4dabf7' }" @click="settings.accentColor = '#4dabf7'"></div>
+                      <div class="color-swatch" style="background:#ff6b9d" :class="{ selected: settings.accentColor === '#ff6b9d' }" @click="settings.accentColor = '#ff6b9d'"></div>
+                      <div class="color-swatch" style="background:#ffd43b" :class="{ selected: settings.accentColor === '#ffd43b' }" @click="settings.accentColor = '#ffd43b'"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Shortcuts -->
+          <div v-if="activeNav === 'shortcuts'">
+            <div class="settings-section">
+              <div class="section-title">⌨️ 快捷键</div>
+              <div class="setting-card">
+                <div class="setting-row" v-for="shortcut in shortcuts" :key="shortcut.action">
+                  <div class="setting-info">
+                    <div class="setting-label">{{ shortcut.action }}</div>
+                  </div>
+                  <div class="setting-control">
+                    <input type="text" class="input-text" :value="shortcut.key" style="width:180px;text-align:center;font-family:JetBrains Mono,monospace;">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Performance -->
+          <div v-if="activeNav === 'performance'">
+            <div class="settings-section">
+              <div class="section-title">🚀 性能</div>
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">最大 FPS</div>
+                    <div class="setting-desc">编辑器运行时最大帧率限制</div>
+                  </div>
+                  <div class="setting-control">
+                    <select class="select-box" v-model="settings.maxFps">
+                      <option value="30">30</option>
+                      <option value="60">60</option>
+                      <option value="120">120</option>
+                      <option value="0">无限制</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">硬件加速</div>
+                    <div class="setting-desc">使用 GPU 加速编辑器渲染</div>
+                  </div>
+                  <div class="setting-control">
+                    <div class="toggle" :class="{ active: settings.hardwareAcceleration }" @click="settings.hardwareAcceleration = !settings.hardwareAcceleration"></div>
+                  </div>
+                </div>
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="setting-label">实时预览</div>
+                    <div class="setting-desc">场景变更时实时更新视口</div>
+                  </div>
+                  <div class="setting-control">
+                    <div class="toggle" :class="{ active: settings.realtimePreview }" @click="settings.realtimePreview = !settings.realtimePreview"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Plugins -->
+          <div v-if="activeNav === 'plugins'">
+            <div class="settings-section">
+              <div class="section-title">🧩 插件</div>
+              <div class="setting-card">
+                <div class="setting-row" v-for="plugin in plugins" :key="plugin.name">
+                  <div class="setting-info">
+                    <div class="setting-label">{{ plugin.name }}</div>
+                    <div class="setting-desc">{{ plugin.desc }}</div>
+                  </div>
+                  <div class="setting-control">
+                    <div class="toggle" :class="{ active: plugin.enabled }" @click="plugin.enabled = !plugin.enabled"></div>
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-secondary" style="margin-top:12px;">浏览插件商店</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-footer">
+          <button class="btn btn-secondary" @click="resetDefaults">恢复默认</button>
+          <button class="btn btn-primary" @click="saveSettings">保存设置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive } = Vue;
+    
+    createApp({
+      setup() {
+        const activeNav = ref('general');
+        const navTitles = {
+          general: '通用设置',
+          editor: '编辑器设置',
+          theme: '主题',
+          shortcuts: '快捷键',
+          performance: '性能',
+          plugins: '插件'
+        };
+
+        const settings = reactive({
+          autoOpenRecent: true,
+          startupScreen: 'launcher',
+          defaultProjectPath: 'C:\\Projects',
+          autoSaveInterval: '5',
+          showGrid: true,
+          snapToGrid: true,
+          gridSize: '1',
+          codeFont: 'JetBrains Mono',
+          fontSize: '14',
+          theme: 'dark',
+          accentColor: '#00d4aa',
+          maxFps: '60',
+          hardwareAcceleration: true,
+          realtimePreview: true
+        });
+
+        const shortcuts = reactive([
+          { action: '保存项目', key: 'Ctrl+S' },
+          { action: '撤销', key: 'Ctrl+Z' },
+          { action: '重做', key: 'Ctrl+Y' },
+          { action: '运行游戏', key: 'F5' },
+          { action: '停止运行', key: 'Shift+F5' },
+          { action: '编译', key: 'Ctrl+B' },
+          { action: '全屏', key: 'F11' }
+        ]);
+
+        const plugins = reactive([
+          { name: 'ProBuilder', desc: '内置场景构建工具', enabled: true },
+          { name: 'Shader Graph', desc: '可视化着色器编辑器', enabled: true },
+          { name: 'Animation Tools', desc: '动画编辑增强', enabled: true },
+          { name: 'Version Control', desc: 'Git 版本控制集成', enabled: false },
+          { name: 'Asset Store', desc: '资源商店浏览器', enabled: false }
+        ]);
+
+        const goHome = () => {
+          window.location.href = 'index.html';
+        };
+
+        const saveSettings = () => {
+          alert('设置已保存！');
+        };
+
+        const resetDefaults = () => {
+          if (confirm('确定要恢复所有默认设置吗？')) {
+            alert('已恢复默认设置');
+          }
+        };
+
+        return {
+          activeNav,
+          navTitles,
+          settings,
+          shortcuts,
+          plugins,
+          goHome,
+          saveSettings,
+          resetDefaults
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

@@ -21,7 +21,7 @@ impl EguiState {
         scale_factor: f32,
     ) -> Self {
         let ctx = Context::default();
-        let renderer = Renderer::new(device, config.format, None, 0, false);
+        let renderer = Renderer::new(device, config.format, None, 1, false);
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [config.width, config.height],
             pixels_per_point: scale_factor,
@@ -115,22 +115,24 @@ impl EguiState {
             &self.screen_descriptor,
         );
 
-        let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("egui_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &output_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
-        });
-        let mut rpass_static = rpass.forget_lifetime();
-        renderer.render(&mut rpass_static, paint_jobs, &self.screen_descriptor);
+        {
+            let rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("egui_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+            });
+            let mut rpass_static = rpass.forget_lifetime();
+            renderer.render(&mut rpass_static, paint_jobs, &self.screen_descriptor);
+        }
 
         queue.submit([encoder.finish()]);
 

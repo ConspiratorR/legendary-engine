@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>构建项目 - RustEngine</title>
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg-primary: #0d0d0f;
+      --bg-secondary: #161619;
+      --bg-tertiary: #1e1e22;
+      --bg-elevated: #252529;
+      --surface: #2a2a30;
+      --border: #3a3a42;
+      --border-subtle: #2d2d35;
+      --text-primary: #e8e8ec;
+      --text-secondary: #9898a0;
+      --text-muted: #5a5a66;
+      --accent-primary: #00d4aa;
+      --accent-secondary: #ff6b35;
+      --accent-tertiary: #7c5cff;
+      --accent-warning: #ffb800;
+      --accent-error: #ff4757;
+      --accent-success: #2ed573;
+    }
+    body {
+      font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: rgba(0,0,0,0.7);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    .dialog-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dialog {
+      width: 600px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+
+    .dialog-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .dialog-title {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dialog-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--accent-primary);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+    .close-btn {
+      width: 28px;
+      height: 28px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 18px;
+    }
+    .close-btn:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .dialog-body {
+      padding: 24px;
+    }
+
+    /* Project Info */
+    .project-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      margin-bottom: 24px;
+    }
+    .project-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-tertiary));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+    .project-details h3 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .project-details p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Tabs */
+    .build-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .build-tab {
+      padding: 10px 20px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .build-tab:hover {
+      border-color: var(--border);
+    }
+    .build-tab.active {
+      background: rgba(0,212,170,0.1);
+      border-color: var(--accent-primary);
+      color: var(--accent-primary);
+    }
+
+    /* Platform Grid */
+    .platform-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .platform-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      background: var(--bg-tertiary);
+      border: 2px solid var(--border-subtle);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .platform-card:hover {
+      border-color: var(--border);
+    }
+    .platform-card.selected {
+      border-color: var(--accent-primary);
+      background: rgba(0,212,170,0.05);
+    }
+    .platform-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--bg-elevated);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .platform-info h4 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .platform-info span {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Settings */
+    .build-settings {
+      margin-bottom: 24px;
+    }
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .setting-row:last-child {
+      border-bottom: none;
+    }
+    .setting-label {
+      font-size: 13px;
+    }
+    .setting-label span {
+      display: block;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .setting-control select {
+      padding: 8px 12px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 12px;
+      min-width: 140px;
+    }
+    .toggle {
+      width: 40px;
+      height: 22px;
+      background: var(--bg-tertiary);
+      border-radius: 11px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+    }
+    .toggle.active {
+      background: var(--accent-primary);
+    }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: all 0.2s;
+    }
+    .toggle.active::after {
+      left: 20px;
+    }
+
+    /* Build Output */
+    .build-output {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .output-line {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .output-time {
+      color: var(--text-muted);
+    }
+    .output-type {
+      font-weight: 600;
+    }
+    .output-type.info { color: var(--text-secondary); }
+    .output-type.warn { color: var(--accent-warning); }
+    .output-type.success { color: var(--accent-success); }
+    .output-type.error { color: var(--accent-error); }
+
+    /* Progress */
+    .progress-bar {
+      height: 4px;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+      margin-top: 16px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-tertiary));
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    /* Footer */
+    .dialog-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer-left {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .footer-right {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .btn-secondary {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover {
+      border-color: var(--accent-primary);
+    }
+    .btn-primary {
+      background: var(--accent-primary);
+      color: var(--bg-primary);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 20px rgba(0,212,170,0.3);
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="dialog-overlay" @click.self="close">
+      <div class="dialog">
+        <div class="dialog-header">
+          <div class="dialog-title">
+            <div class="dialog-icon">📦</div>
+            构建项目
+          </div>
+          <button class="close-btn" @click="close">×</button>
+        </div>
+
+        <div class="dialog-body">
+          <div class="project-info">
+            <div class="project-icon">🎮</div>
+            <div class="project-details">
+              <h3>MyAwesomeGame</h3>
+              <p>C:\Projects\MyAwesomeGame</p>
+            </div>
+          </div>
+
+          <div class="build-tabs">
+            <div 
+              class="build-tab" 
+              :class="{ active: activeTab === 'platform' }"
+              @click="activeTab = 'platform'"
+            >
+              平台
+            </div>
+            <div 
+              class="build-tab" 
+              :class="{ active: activeTab === 'settings' }"
+              @click="activeTab = 'settings'"
+            >
+              设置
+            </div>
+          </div>
+
+          <div v-show="activeTab === 'platform'">
+            <div class="platform-grid">
+              <div 
+                class="platform-card" 
+                :class="{ selected: platforms.windows }"
+                @click="platforms.windows = !platforms.windows"
+              >
+                <div class="platform-icon">🪟</div>
+                <div class="platform-info">
+                  <h4>Windows</h4>
+                  <span>x64</span>
+                </div>
+              </div>
+              <div 
+                class="platform-card" 
+                :class="{ selected: platforms.macos }"
+                @click="platforms.macos = !platforms.macos"
+              >
+                <div class="platform-icon">🍎</div>
+                <div class="platform-info">
+                  <h4>macOS</h4>
+                  <span>Universal</span>
+                </div>
+              </div>
+              <div 
+                class="platform-card" 
+                :class="{ selected: platforms.linux }"
+                @click="platforms.linux = !platforms.linux"
+              >
+                <div class="platform-icon">🐧</div>
+                <div class="platform-info">
+                  <h4>Linux</h4>
+                  <span>x64</span>
+                </div>
+              </div>
+              <div 
+                class="platform-card" 
+                :class="{ selected: platforms.web }"
+                @click="platforms.web = !platforms.web"
+              >
+                <div class="platform-icon">🌐</div>
+                <div class="platform-info">
+                  <h4>Web</h4>
+                  <span>WASM</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-show="activeTab === 'settings'">
+            <div class="build-settings">
+              <div class="setting-row">
+                <div class="setting-label">
+                  构建配置
+                  <span>优化级别和调试信息</span>
+                </div>
+                <div class="setting-control">
+                  <select v-model="buildConfig">
+                    <option>Release (发布)</option>
+                    <option>Debug (调试)</option>
+                    <option>Development (开发)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">
+                  压缩
+                  <span>压缩构建输出文件</span>
+                </div>
+                <div class="setting-control">
+                  <div class="toggle" :class="{ active: compress }" @click="compress = !compress"></div>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">
+                  符号剥离
+                  <span>移除调试符号以减小体积</span>
+                </div>
+                <div class="setting-control">
+                  <div class="toggle" :class="{ active: stripSymbols }" @click="stripSymbols = !stripSymbols"></div>
+                </div>
+              </div>
+              <div class="setting-row">
+                <div class="setting-label">
+                  增量构建
+                  <span>只编译修改过的文件</span>
+                </div>
+                <div class="setting-control">
+                  <div class="toggle" :class="{ active: incremental }" @click="incremental = !incremental"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="build-output">
+            <div class="output-line" v-for="log in buildLogs" :key="log.id">
+              <span class="output-time">{{ log.time }}</span>
+              <span class="output-type" :class="log.type">{{ log.type }}</span>
+              <span style="color:var(--text-secondary)">{{ log.msg }}</span>
+            </div>
+          </div>
+
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: progress + '%' }"></div>
+          </div>
+        </div>
+
+        <div class="dialog-footer">
+          <div class="footer-left">
+            预计大小: {{ estimatedSize }}
+          </div>
+          <div class="footer-right">
+            <button class="btn btn-secondary" @click="close">取消</button>
+            <button class="btn btn-primary" @click="startBuild" :disabled="isBuilding">
+              {{ isBuilding ? '构建中...' : '开始构建' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive } = Vue;
+    
+    createApp({
+      setup() {
+        const activeTab = ref('platform');
+        const isBuilding = ref(false);
+        const progress = ref(0);
+        
+        const platforms = reactive({
+          windows: true,
+          macos: false,
+          linux: false,
+          web: false
+        });
+
+        const buildConfig = ref('Release (发布)');
+        const compress = ref(true);
+        const stripSymbols = ref(false);
+        const incremental = ref(true);
+
+        const buildLogs = ref([
+          { id: 1, time: '10:30:15', type: 'info', msg: '开始准备构建...' },
+          { id: 2, time: '10:30:16', type: 'success', msg: '依赖解析完成' },
+          { id: 3, time: '10:30:18', type: 'info', msg: '正在编译着色器 (12/12)...' }
+        ]);
+
+        const estimatedSize = ref('~256 MB');
+
+        const close = () => {
+          window.location.href = 'editor.html';
+        };
+
+        const startBuild = () => {
+          isBuilding.value = true;
+          progress.value = 10;
+          
+          const interval = setInterval(() => {
+            progress.value += 15;
+            
+            if (progress.value <= 30) {
+              buildLogs.value.push({ id: Date.now(), time: new Date().toTimeString().split(' ')[0], type: 'info', msg: '编译代码...' });
+            } else if (progress.value <= 50) {
+              buildLogs.value.push({ id: Date.now(), time: new Date().toTimeString().split(' ')[0], type: 'info', msg: '处理资源...' });
+            } else if (progress.value <= 70) {
+              buildLogs.value.push({ id: Date.now(), time: new Date().toTimeString().split(' ')[0], type: 'info', msg: '链接二进制...' });
+            } else if (progress.value <= 90) {
+              buildLogs.value.push({ id: Date.now(), time: new Date().toTimeString().split(' ')[0], type: 'info', msg: '优化输出...' });
+            } else if (progress.value >= 100) {
+              clearInterval(interval);
+              isBuilding.value = false;
+              buildLogs.value.push({ id: Date.now(), time: new Date().toTimeString().split(' ')[0], type: 'success', msg: '构建完成!' });
+              progress.value = 100;
+            }
+          }, 500);
+        };
+
+        return {
+          activeTab,
+          isBuilding,
+          progress,
+          platforms,
+          buildConfig,
+          compress,
+          stripSymbols,
+          incremental,
+          buildLogs,
+          estimatedSize,
+          close,
+          startBuild
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
