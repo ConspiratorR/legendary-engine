@@ -507,6 +507,116 @@ impl<'a> Gui<'a> {
 
         response.clicked()
     }
+
+    pub fn tree_node(&mut self, rect: Rect, label: &str, icon: &str, selected: bool, depth: u32) -> bool {
+        let id = egui::Id::new("gui_tree").with(rect.min.x as u64).with(rect.min.y as u64);
+        let response = self.ui.interact(rect, id, egui::Sense::click());
+
+        let painter = self.ui.painter_at(rect);
+
+        if selected {
+            painter.add(Shape::rect_filled(rect, Rounding::same(4.0), Color32::from_rgba_premultiplied(0, 212, 170, 40)));
+        } else if response.hovered() {
+            painter.add(Shape::rect_filled(rect, Rounding::same(4.0), Color32::from_rgb(30, 30, 34)));
+        }
+
+        let indent = 8.0 + depth as f32 * 16.0;
+        painter.text(
+            egui::pos2(rect.left() + indent, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            icon,
+            egui::FontId::proportional(14.0),
+            Color32::from_gray(200),
+        );
+        painter.text(
+            egui::pos2(rect.left() + indent + 20.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            label,
+            self.skin.font.clone(),
+            if selected { Color32::from_rgb(0, 212, 170) } else { Color32::from_rgb(232, 232, 236) },
+        );
+
+        response.clicked()
+    }
+
+    pub fn vec3_input(&mut self, rect: Rect, label: &str, x: &mut f32, y: &mut f32, z: &mut f32) {
+        let painter = self.ui.painter_at(rect);
+
+        // Label
+        painter.text(
+            egui::pos2(rect.left(), rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            label,
+            egui::FontId::proportional(12.0),
+            Color32::from_gray(152),
+        );
+
+        let input_w = (rect.width() - 80.0) / 3.0;
+        let inputs = [
+            ("X", x, Color32::from_rgb(255, 107, 107)),
+            ("Y", y, Color32::from_rgb(46, 213, 115)),
+            ("Z", z, Color32::from_rgb(77, 171, 247)),
+        ];
+
+        for (j, (axis_label, val, axis_color)) in inputs.iter().enumerate() {
+            let field_x = rect.left() + 80.0 + j as f32 * input_w;
+            let field_rect = Rect::from_min_size(
+                egui::pos2(field_x, rect.top()),
+                egui::vec2(input_w - 2.0, rect.height()),
+            );
+
+            // Colored axis label
+            painter.text(
+                egui::pos2(field_rect.left() + 4.0, field_rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                *axis_label,
+                egui::FontId::proportional(10.0),
+                *axis_color,
+            );
+
+            // Value background
+            let val_rect = Rect::from_min_size(
+                egui::pos2(field_rect.left() + 14.0, field_rect.top()),
+                egui::vec2(field_rect.width() - 14.0, field_rect.height()),
+            );
+            painter.add(Shape::rect_filled(val_rect, Rounding::same(4.0), Color32::from_rgb(30, 30, 34)));
+
+            // Value text
+            painter.text(
+                val_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                format!("{:.1}", **val),
+                egui::FontId::proportional(11.0),
+                Color32::from_rgb(232, 232, 236),
+            );
+        }
+    }
+
+    pub fn input_labeled(&mut self, rect: Rect, label: &str, value: &str) {
+        let painter = self.ui.painter_at(rect);
+
+        painter.text(
+            egui::pos2(rect.left(), rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            label,
+            egui::FontId::proportional(12.0),
+            Color32::from_gray(152),
+        );
+
+        let input_rect = Rect::from_min_size(
+            egui::pos2(rect.left() + 80.0, rect.top()),
+            egui::vec2(rect.width() - 80.0, rect.height()),
+        );
+        painter.add(Shape::rect_filled(input_rect, Rounding::same(4.0), Color32::from_rgb(30, 30, 34)));
+
+        painter.text(
+            egui::pos2(input_rect.left() + 6.0, input_rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            value,
+            self.skin.font.clone(),
+            Color32::from_rgb(232, 232, 236),
+        );
+    }
 }
 
 #[cfg(test)]
@@ -740,6 +850,32 @@ mod tests {
             let rect = Rect::from_min_size(Pos2::new(80.0, 200.0), egui::vec2(60.0, 32.0));
             let clicked = gui.tab(rect, "游戏", true);
             assert!(!clicked);
+        });
+    }
+
+    #[test]
+    fn test_tree_node_draws_without_panic() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 240.0), egui::vec2(200.0, 24.0));
+            let clicked = gui.tree_node(rect, "Player", "🎮", false, 0);
+            assert!(!clicked);
+        });
+    }
+
+    #[test]
+    fn test_vec3_input_draws_without_panic() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 270.0), egui::vec2(300.0, 22.0));
+            let mut x = 1.0; let mut y = 2.0; let mut z = 3.0;
+            gui.vec3_input(rect, "位置", &mut x, &mut y, &mut z);
+        });
+    }
+
+    #[test]
+    fn test_input_labeled_draws_without_panic() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 300.0), egui::vec2(200.0, 22.0));
+            gui.input_labeled(rect, "材质", "Default");
         });
     }
 }
