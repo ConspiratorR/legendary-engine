@@ -220,10 +220,11 @@ impl EditorLayout {
         );
 
         let mut node_counter = 0usize;
-        self.draw_tree(gui, &self.scene_tree, 0, &mut (content_rect.top() + 4.0), 24.0, content_rect.right(), &mut node_counter);
+        Self::draw_tree(gui, &self.scene_tree, 0, &mut (content_rect.top() + 4.0), 24.0, content_rect.right(), &mut node_counter, &mut self.selected_node);
     }
 
-    fn draw_tree(&mut self, gui: &mut Gui, nodes: &[SceneNode], depth: u32, y: &mut f32, item_h: f32, right: f32, counter: &mut usize) {
+    #[allow(clippy::too_many_arguments)]
+    fn draw_tree(gui: &mut Gui, nodes: &[SceneNode], depth: u32, y: &mut f32, item_h: f32, right: f32, counter: &mut usize, selected_node: &mut usize) {
         for node in nodes.iter() {
             let node_rect = Rect::from_min_size(
                 Pos2::new(0.0, *y),
@@ -231,14 +232,14 @@ impl EditorLayout {
             );
             let idx = *counter;
             *counter += 1;
-            let selected = self.selected_node == idx;
+            let selected = *selected_node == idx;
             if gui.tree_node(node_rect, &node.name, &node.icon, selected, depth) {
-                self.selected_node = idx;
+                *selected_node = idx;
             }
             *y += item_h;
 
             if node.expanded {
-                self.draw_tree(gui, &node.children, depth + 1, y, item_h, right, counter);
+                Self::draw_tree(gui, &node.children, depth + 1, y, item_h, right, counter, selected_node);
             }
         }
     }
@@ -377,17 +378,23 @@ impl EditorLayout {
 
         // Position
         let pos_rect = Rect::from_min_size(Pos2::new(left, y), vec2(content_w, row_h));
-        gui.vec3_input(pos_rect, "位置", &mut self.pos[0], &mut self.pos[1], &mut self.pos[2]);
+        let (mut px, mut py, mut pz) = (self.pos[0], self.pos[1], self.pos[2]);
+        gui.vec3_input(pos_rect, "位置", &mut px, &mut py, &mut pz);
+        self.pos = [px, py, pz];
         y += row_h + 6.0;
 
         // Rotation
         let rot_rect = Rect::from_min_size(Pos2::new(left, y), vec2(content_w, row_h));
-        gui.vec3_input(rot_rect, "旋转", &mut self.rot[0], &mut self.rot[1], &mut self.rot[2]);
+        let (mut rx, mut ry, mut rz) = (self.rot[0], self.rot[1], self.rot[2]);
+        gui.vec3_input(rot_rect, "旋转", &mut rx, &mut ry, &mut rz);
+        self.rot = [rx, ry, rz];
         y += row_h + 6.0;
 
         // Scale
         let scale_rect = Rect::from_min_size(Pos2::new(left, y), vec2(content_w, row_h));
-        gui.vec3_input(scale_rect, "缩放", &mut self.scale[0], &mut self.scale[1], &mut self.scale[2]);
+        let (mut sx, mut sy, mut sz) = (self.scale[0], self.scale[1], self.scale[2]);
+        gui.vec3_input(scale_rect, "缩放", &mut sx, &mut sy, &mut sz);
+        self.scale = [sx, sy, sz];
         y += row_h + 12.0;
 
         // Render section
@@ -468,7 +475,7 @@ impl EditorLayout {
                     painter.text(
                         egui::pos2(content_rect.left(), y + 10.0),
                         egui::Align2::LEFT_CENTER,
-                        &format!("{}  {}  {}", time, level, msg),
+                        format!("{}  {}  {}", time, level, msg),
                         egui::FontId::proportional(11.0),
                         level_color,
                     );
@@ -521,7 +528,7 @@ impl EditorLayout {
         painter.text(
             egui::pos2(rect.left() + 80.0, rect.center().y),
             egui::Align2::LEFT_CENTER,
-            &format!("对象: {}", self.scene_tree.iter().map(|n| 1 + n.children.len()).sum::<usize>()),
+            format!("对象: {}", self.scene_tree.iter().map(|n| 1 + n.children.len()).sum::<usize>()),
             egui::FontId::proportional(11.0),
             Color32::from_gray(90),
         );
