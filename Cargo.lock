@@ -766,6 +766,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "engine-framework"
+version = "0.1.0"
+dependencies = [
+ "engine-core",
+ "engine-ecs",
+ "engine-scene",
+]
+
+[[package]]
 name = "engine-input"
 version = "0.1.0"
 dependencies = [
