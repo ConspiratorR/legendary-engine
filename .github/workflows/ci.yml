@@ -1,32 +1,99 @@
-name: CI
+name: RustEngine CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main, develop ]
   pull_request:
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
-  check:
+  test:
+    name: Test Suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.95.0
-          components: clippy, rustfmt
-      - uses: swatinem/rust-cache@v2
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+        components: rustfmt, clippy
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Cache target directory
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Format code
+      run: cargo fmt --all -- --check
+    
+    - name: Run clippy
+      run: cargo clippy --all -- -D warnings
+    
+    - name: Run tests
+      run: cargo test --all --no-fail-fast
+    
+    - name: Build documentation
+      run: cargo doc --all --no-deps
+    
+    - name: Build release
+      run: cargo build --release --all
 
-      - name: Format
-        run: cargo fmt --check
+  examples:
+    name: Build Examples
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Build examples
+      run: |
+        cargo build --example basic -p engine-core
+        cargo build --example input_demo -p engine-core
+        cargo build --example complete_demo -p engine-core
+        cargo build --example particle_demo -p engine-core
+        cargo build --example feature_demo -p engine-core
 
-      - name: Clippy
-        run: cargo clippy -- -D warnings
-
-      - name: Build
-        run: cargo build
-
-      - name: Test
-        run: cargo test
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Run benchmarks
+      run: cargo bench --all || true
