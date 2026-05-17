@@ -1,8 +1,8 @@
+use crate::EguiState;
 use engine_core::app::{App, AppBuilder};
 use engine_core::plugin::Plugin;
 use engine_input::input_manager::InputManager;
 use engine_render::renderer::{GpuDevice, GpuQueue};
-use crate::EguiState;
 
 pub struct EguiPlugin;
 
@@ -64,10 +64,13 @@ impl Plugin for EguiPlugin {
             let renderer = renderer.unwrap();
             let output = renderer.surface.get_current_texture().unwrap();
 
-            resources
-                .get_mut::<EguiState>()
-                .unwrap()
-                .paint(&device, &queue, &output, &paint_jobs, &textures_delta);
+            resources.get_mut::<EguiState>().unwrap().paint(
+                &device,
+                &queue,
+                &output,
+                &paint_jobs,
+                &textures_delta,
+            );
 
             output.present();
         }));

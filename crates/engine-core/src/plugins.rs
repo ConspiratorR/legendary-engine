@@ -1,6 +1,6 @@
-use engine_input::action::ActionMap;
 use crate::app::AppBuilder;
 use crate::plugin::Plugin;
+use engine_input::action::ActionMap;
 
 pub struct ActionPlugin;
 

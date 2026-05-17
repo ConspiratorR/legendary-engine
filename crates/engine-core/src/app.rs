@@ -154,10 +154,8 @@ impl App {
     }
 
     pub fn set_renderer(&mut self, renderer: engine_render::renderer::Renderer) {
-        self.resources
-            .insert(renderer.device.clone());
-        self.resources
-            .insert(renderer.queue.clone());
+        self.resources.insert(renderer.device.clone());
+        self.resources.insert(renderer.queue.clone());
         self.renderer = Some(renderer);
     }
 
