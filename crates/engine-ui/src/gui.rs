@@ -279,6 +279,93 @@ impl<'a> Gui<'a> {
         }
     }
 
+    pub fn separator_h(&mut self, rect: Rect) {
+        let painter = self.ui.painter_at(rect);
+        let y = rect.center().y;
+        painter.add(Shape::line(
+            vec![Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
+            Stroke::new(1.0, Color32::from_gray(60)),
+        ));
+    }
+
+    pub fn colored_label(&mut self, rect: Rect, text: &str, color: Color32) {
+        let painter = self.ui.painter_at(rect);
+        painter.text(
+            egui::pos2(rect.left(), rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            text,
+            self.skin.font.clone(),
+            color,
+        );
+    }
+
+    pub fn status_item(&mut self, rect: Rect, text: &str, dot_color: Color32) {
+        let painter = self.ui.painter_at(rect);
+        let dot_r = 4.0;
+        let dot_center = egui::pos2(rect.left() + dot_r + 2.0, rect.center().y);
+        painter.add(Shape::circle_filled(dot_center, dot_r, dot_color));
+        painter.text(
+            egui::pos2(dot_center.x + dot_r + 6.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            text,
+            self.skin.font.clone(),
+            self.skin.label.normal.text,
+        );
+    }
+
+    pub fn panel_header(&mut self, rect: Rect, title: &str) -> Rect {
+        let painter = self.ui.painter_at(rect);
+        painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+        painter.text(
+            egui::pos2(rect.left() + 12.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            title,
+            egui::FontId::proportional(12.0),
+            Color32::from_gray(90),
+        );
+        let line_y = rect.bottom() - 1.0;
+        painter.add(Shape::line(
+            vec![Pos2::new(rect.left(), line_y), Pos2::new(rect.right(), line_y)],
+            Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        ));
+        Rect::from_min_size(
+            Pos2::new(rect.left(), rect.bottom()),
+            egui::vec2(rect.width(), 0.0),
+        )
+    }
+
+    pub fn checkbox(&mut self, rect: Rect, label: &str, checked: &mut bool) {
+        let id = egui::Id::new("gui_chk").with(rect.min.x as u64).with(rect.min.y as u64);
+        let response = self.ui.interact(rect, id, egui::Sense::click());
+
+        let box_size = rect.height() - 4.0;
+        let box_rect = Rect::from_min_size(
+            egui::pos2(rect.left() + 2.0, rect.top() + 2.0),
+            egui::vec2(box_size, box_size),
+        );
+
+        let painter = self.ui.painter_at(rect);
+        let bg = if *checked { Color32::from_rgb(0, 212, 170) } else { Color32::from_gray(40) };
+        painter.add(Shape::rect_filled(box_rect, Rounding::same(3.0), bg));
+        painter.add(Shape::rect_stroke(box_rect, Rounding::same(3.0), Stroke::new(1.0, Color32::from_gray(100))));
+
+        if *checked {
+            painter.text(box_rect.center(), egui::Align2::CENTER_CENTER, "✓", self.skin.font.clone(), Color32::from_rgb(13, 13, 15));
+        }
+
+        painter.text(
+            egui::pos2(box_rect.right() + 6.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            label,
+            self.skin.font.clone(),
+            self.skin.label.normal.text,
+        );
+
+        if response.clicked() {
+            *checked = !*checked;
+        }
+    }
+
     pub fn selection_grid(
         &mut self,
         rect: Rect,
@@ -479,6 +566,52 @@ mod tests {
             let mut sel = 0;
             gui.selection_grid(rect, &mut sel, &["X", "Y", "Z"], 3);
             assert_eq!(sel, 0);
+        });
+    }
+
+    #[test]
+    fn test_separator_h_draws_without_panic() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 10.0), egui::vec2(100.0, 4.0));
+            gui.separator_h(rect);
+        });
+    }
+
+    #[test]
+    fn test_colored_label_draws_without_panic() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 20.0), egui::vec2(100.0, 20.0));
+            gui.colored_label(rect, "Hello", Color32::RED);
+        });
+    }
+
+    #[test]
+    fn test_checkbox_default_not_checked() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 30.0), egui::vec2(150.0, 22.0));
+            let mut checked = false;
+            gui.checkbox(rect, "Shadow", &mut checked);
+            assert!(!checked, "checkbox should remain false without click");
+        });
+    }
+
+    #[test]
+    fn test_checkbox_checked_state() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 60.0), egui::vec2(150.0, 22.0));
+            let mut checked = true;
+            gui.checkbox(rect, "Shadow", &mut checked);
+            assert!(checked, "checkbox should remain true when initialized true");
+        });
+    }
+
+    #[test]
+    fn test_panel_header_returns_content_rect() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 90.0), egui::vec2(200.0, 36.0));
+            let content_rect = gui.panel_header(rect, "层级");
+            assert!(content_rect.left() >= rect.left());
+            assert!(content_rect.top() >= rect.bottom());
         });
     }
 }
