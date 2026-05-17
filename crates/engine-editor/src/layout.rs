@@ -57,7 +57,10 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
             if state.show_left_panel {
                 crate::hierarchy::draw(state, &mut gui, hierarchy_rect);
             }
-            draw_viewport(state, &mut gui, viewport_rect, w_scale, h_scale);
+            crate::viewport::draw(state, &mut gui, viewport_rect);
+            if state.show_right_panel {
+                crate::inspector::draw(state, &mut gui, inspector_rect);
+            }
             draw_bottom_panel(state, ui, bottom_rect, h_scale, w_scale);
             draw_status_bar(state, &mut gui, status_rect, h_scale, w_scale);
         });
@@ -177,114 +180,6 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
         FontId::proportional(12.0 * h_scale),
         Color32::from_gray(90),
     );
-}
-
-fn draw_viewport(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32, h_scale: f32) {
-    let painter = gui.ui.painter_at(rect);
-
-    let header_h = 32.0 * h_scale;
-    let header_rect = Rect::from_min_size(rect.left_top(), Vec2::new(rect.width(), header_h));
-    painter.add(Shape::rect_filled(header_rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
-    painter.add(Shape::line(
-        vec![Pos2::new(rect.left(), header_rect.bottom() - 1.0), Pos2::new(rect.right(), header_rect.bottom() - 1.0)],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
-    ));
-
-    let char_w = 8.0 * w_scale;
-    let tab_pad = 12.0 * w_scale;
-    let tab_font = 12.0 * h_scale;
-    let tab_gap = 16.0 * w_scale;
-    let mut tx = rect.left() + 12.0 * w_scale;
-    let tabs = &["场景", "游戏", "物理"];
-    for (i, label) in tabs.iter().enumerate() {
-        let text_w = label.len() as f32 * char_w;
-        let tab_rect = Rect::from_min_size(Pos2::new(tx, rect.top()), Vec2::new(text_w + tab_pad * 2.0, header_h));
-        let id = egui::Id::new("vp_tab").with(i as u64);
-        let response = gui.ui.interact(tab_rect, id, egui::Sense::click());
-        if state.active_viewport_tab == i {
-            let line_rect = Rect::from_min_size(Pos2::new(tab_rect.left(), tab_rect.bottom() - 2.0 * h_scale), Vec2::new(tab_rect.width(), 2.0 * h_scale));
-            painter.add(Shape::rect_filled(line_rect, Rounding::ZERO, Color32::from_rgb(0, 212, 170)));
-            painter.text(tab_rect.center(), egui::Align2::CENTER_CENTER, *label, FontId::proportional(tab_font), Color32::from_rgb(0, 212, 170));
-        } else {
-            painter.text(tab_rect.center(), egui::Align2::CENTER_CENTER, *label, FontId::proportional(tab_font), Color32::from_gray(90));
-        }
-        if response.clicked() {
-            state.active_viewport_tab = i;
-        }
-        tx += text_w + tab_pad * 2.0 + tab_gap;
-    }
-
-    let tool_btn = 24.0 * h_scale;
-    let tool_gap = 4.0 * w_scale;
-    let tool_font = 12.0 * h_scale;
-    let tool_icons = &["📐", "#", "⌖"];
-    let rounding = 4.0 * h_scale;
-    let mut tool_x = rect.right() - 12.0 * w_scale - tool_icons.len() as f32 * (tool_btn + tool_gap);
-    for icon in tool_icons {
-        let tool_rect = Rect::from_min_size(Pos2::new(tool_x, rect.top() + (header_h - tool_btn) / 2.0), Vec2::new(tool_btn, tool_btn));
-        let id = egui::Id::new("vp_tool").with(tool_x as u64);
-        let response = gui.ui.interact(tool_rect, id, egui::Sense::click());
-        if response.hovered() {
-            painter.add(Shape::rect_filled(tool_rect, Rounding::same(rounding), Color32::from_rgb(30, 30, 34)));
-        }
-        painter.text(tool_rect.center(), egui::Align2::CENTER_CENTER, *icon, FontId::proportional(tool_font), Color32::from_gray(90));
-        tool_x += tool_btn + tool_gap;
-    }
-
-    let canvas_rect = Rect::from_min_size(
-        Pos2::new(rect.left(), header_rect.bottom()),
-        Vec2::new(rect.width(), rect.bottom() - header_rect.bottom()),
-    );
-    let gradient_steps = 20;
-    let step_h = canvas_rect.height() / gradient_steps as f32;
-    for i in 0..gradient_steps {
-        let t = i as f32 / (gradient_steps - 1) as f32;
-        let r = (10.0 + t * 10.0) as u8;
-        let g = (10.0 + t * 10.0) as u8;
-        let b = (12.0 + t * 16.0) as u8;
-        let strip = Rect::from_min_size(
-            Pos2::new(canvas_rect.left(), canvas_rect.top() + i as f32 * step_h),
-            Vec2::new(canvas_rect.width(), step_h + 1.0),
-        );
-        painter.add(Shape::rect_filled(strip, Rounding::ZERO, Color32::from_rgb(r, g, b)));
-    }
-
-    if state.show_grid {
-        let grid_size = 50.0 * w_scale;
-        let grid_color = Color32::from_rgba_premultiplied(37, 37, 48, 128);
-        let mut x = canvas_rect.left();
-        while x <= canvas_rect.right() {
-            painter.add(Shape::line(
-                vec![Pos2::new(x, canvas_rect.top()), Pos2::new(x, canvas_rect.bottom())],
-                Stroke::new(1.0, grid_color),
-            ));
-            x += grid_size;
-        }
-        let mut y = canvas_rect.top();
-        while y <= canvas_rect.bottom() {
-            painter.add(Shape::line(
-                vec![Pos2::new(canvas_rect.left(), y), Pos2::new(canvas_rect.right(), y)],
-                Stroke::new(1.0, grid_color),
-            ));
-            y += grid_size;
-        }
-    }
-
-    let axis_font = 10.0 * h_scale;
-    let axes = [
-        ("X", Color32::from_rgb(255, 107, 107)),
-        ("Y", Color32::from_rgb(46, 213, 115)),
-        ("Z", Color32::from_rgb(77, 171, 247)),
-    ];
-    for (i, (label, color)) in axes.iter().enumerate() {
-        painter.text(
-            egui::pos2(canvas_rect.left() + 20.0 * w_scale, canvas_rect.top() + 20.0 * h_scale + i as f32 * 14.0 * h_scale),
-            egui::Align2::LEFT_CENTER,
-            *label,
-            FontId::proportional(axis_font),
-            *color,
-        );
-    }
 }
 
 fn draw_bottom_panel(state: &mut EditorState, ui: &egui::Ui, rect: Rect, h_scale: f32, w_scale: f32) {
