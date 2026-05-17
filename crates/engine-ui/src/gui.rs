@@ -424,6 +424,89 @@ impl<'a> Gui<'a> {
             }
         }
     }
+
+    pub fn menu_bar(&mut self, rect: Rect, items: &[&str]) -> Option<usize> {
+        if items.is_empty() {
+            return None;
+        }
+        let painter = self.ui.painter_at(rect);
+        painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+
+        let n = items.len() as f32;
+        let item_w = rect.width() / n;
+
+        for (i, item) in items.iter().enumerate() {
+            let item_rect = Rect::from_min_size(
+                egui::pos2(rect.left() + i as f32 * item_w, rect.top()),
+                egui::vec2(item_w, rect.height()),
+            );
+
+            let id = egui::Id::new("gui_menu").with(i as u64);
+            let response = self.ui.interact(item_rect, id, egui::Sense::click());
+
+            if response.hovered() {
+                painter.add(Shape::rect_filled(item_rect, Rounding::ZERO, Color32::from_rgb(30, 30, 34)));
+            }
+
+            let text_color = if response.hovered() {
+                Color32::from_rgb(232, 232, 236)
+            } else {
+                Color32::from_gray(152)
+            };
+            painter.text(
+                item_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                *item,
+                egui::FontId::proportional(13.0),
+                text_color,
+            );
+
+            if response.clicked() {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    pub fn tool_button(&mut self, rect: Rect, label: &str, active: bool) -> bool {
+        let id = egui::Id::new("gui_tbtn").with(rect.min.x as u64).with(rect.min.y as u64);
+        let response = self.ui.interact(rect, id, egui::Sense::click());
+
+        let painter = self.ui.painter_at(rect);
+
+        if active {
+            painter.add(Shape::rect_filled(rect, Rounding::same(6.0), Color32::from_rgb(0, 212, 170)));
+            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, self.skin.font.clone(), Color32::from_rgb(13, 13, 15));
+        } else if response.hovered() {
+            painter.add(Shape::rect_filled(rect, Rounding::same(6.0), Color32::from_rgb(30, 30, 34)));
+            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, self.skin.font.clone(), Color32::from_gray(152));
+        } else {
+            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, self.skin.font.clone(), Color32::from_gray(152));
+        }
+
+        response.clicked()
+    }
+
+    pub fn tab(&mut self, rect: Rect, label: &str, active: bool) -> bool {
+        let id = egui::Id::new("gui_tab").with(rect.min.x as u64).with(rect.min.y as u64);
+        let response = self.ui.interact(rect, id, egui::Sense::click());
+
+        let painter = self.ui.painter_at(rect);
+
+        if active {
+            painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+            let line_rect = Rect::from_min_size(
+                egui::pos2(rect.left(), rect.bottom() - 2.0),
+                egui::vec2(rect.width(), 2.0),
+            );
+            painter.add(Shape::rect_filled(line_rect, Rounding::ZERO, Color32::from_rgb(0, 212, 170)));
+            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(12.0), Color32::from_rgb(0, 212, 170));
+        } else {
+            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(12.0), Color32::from_gray(90));
+        }
+
+        response.clicked()
+    }
 }
 
 #[cfg(test)]
@@ -612,6 +695,51 @@ mod tests {
             let content_rect = gui.panel_header(rect, "层级");
             assert!(content_rect.left() >= rect.left());
             assert!(content_rect.top() >= rect.bottom());
+        });
+    }
+
+    #[test]
+    fn test_menu_bar_returns_none_without_click() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 120.0), egui::vec2(400.0, 32.0));
+            let result = gui.menu_bar(rect, &["文件", "编辑", "视图"]);
+            assert!(result.is_none(), "menu_bar should return None without click");
+        });
+    }
+
+    #[test]
+    fn test_tool_button_returns_false_without_click() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 160.0), egui::vec2(32.0, 32.0));
+            let clicked = gui.tool_button(rect, "↖", false);
+            assert!(!clicked);
+        });
+    }
+
+    #[test]
+    fn test_tool_button_active_state() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(50.0, 160.0), egui::vec2(32.0, 32.0));
+            let clicked = gui.tool_button(rect, "↔", true);
+            assert!(!clicked, "active tool_button should not auto-click");
+        });
+    }
+
+    #[test]
+    fn test_tab_returns_false_without_click() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 200.0), egui::vec2(60.0, 32.0));
+            let clicked = gui.tab(rect, "场景", false);
+            assert!(!clicked);
+        });
+    }
+
+    #[test]
+    fn test_tab_active_does_not_auto_click() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(80.0, 200.0), egui::vec2(60.0, 32.0));
+            let clicked = gui.tab(rect, "游戏", true);
+            assert!(!clicked);
         });
     }
 }
