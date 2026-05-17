@@ -119,9 +119,10 @@ impl SceneTree {
             .find(|n| n.id == id)
             .and_then(|n| n.parent);
         if let Some(pid) = parent_id
-            && let Some(p) = self.nodes.iter_mut().find(|n| n.id == pid) {
-                p.children.retain(|c| *c != id);
-            }
+            && let Some(p) = self.nodes.iter_mut().find(|n| n.id == pid)
+        {
+            p.children.retain(|c| *c != id);
+        }
         let mut to_remove = vec![id];
         let mut i = 0;
         while i < to_remove.len() {
@@ -144,16 +145,18 @@ impl SceneTree {
             .find(|n| n.id == id)
             .and_then(|n| n.parent);
         if let Some(pid) = old_parent
-            && let Some(p) = self.nodes.iter_mut().find(|n| n.id == pid) {
-                p.children.retain(|c| *c != id);
-            }
+            && let Some(p) = self.nodes.iter_mut().find(|n| n.id == pid)
+        {
+            p.children.retain(|c| *c != id);
+        }
         if let Some(node) = self.nodes.iter_mut().find(|n| n.id == id) {
             node.parent = new_parent;
         }
         if let Some(npid) = new_parent
-            && let Some(p) = self.nodes.iter_mut().find(|n| n.id == npid) {
-                p.children.push(id);
-            }
+            && let Some(p) = self.nodes.iter_mut().find(|n| n.id == npid)
+        {
+            p.children.push(id);
+        }
     }
 
     pub fn rename(&mut self, id: u64, name: &str) {

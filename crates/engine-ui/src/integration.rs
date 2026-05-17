@@ -9,9 +9,9 @@ pub struct EguiState {
     height: u32,
     scale_factor: f32,
     mouse_pos: (f64, f64),
-    mouse_down: bool,
-    just_pressed: bool,
-    just_released: bool,
+    mouse_buttons: [bool; 3],
+    just_pressed: [bool; 3],
+    just_released: [bool; 3],
 }
 
 impl EguiState {
@@ -35,9 +35,9 @@ impl EguiState {
             height: config.height,
             scale_factor,
             mouse_pos: (0.0, 0.0),
-            mouse_down: false,
-            just_pressed: false,
-            just_released: false,
+            mouse_buttons: [false; 3],
+            just_pressed: [false; 3],
+            just_released: [false; 3],
         }
     }
 
@@ -78,23 +78,30 @@ impl EguiState {
 
         events.push(egui::Event::PointerMoved(pos));
 
-        if self.just_pressed {
-            events.push(egui::Event::PointerButton {
-                pos,
-                button: egui::PointerButton::Primary,
-                pressed: true,
-                modifiers: egui::Modifiers::default(),
-            });
-            self.just_pressed = false;
-        }
-        if self.just_released {
-            events.push(egui::Event::PointerButton {
-                pos,
-                button: egui::PointerButton::Primary,
-                pressed: false,
-                modifiers: egui::Modifiers::default(),
-            });
-            self.just_released = false;
+        let buttons = [
+            egui::PointerButton::Primary,
+            egui::PointerButton::Secondary,
+            egui::PointerButton::Middle,
+        ];
+        for (i, &button) in buttons.iter().enumerate() {
+            if self.just_pressed[i] {
+                events.push(egui::Event::PointerButton {
+                    pos,
+                    button,
+                    pressed: true,
+                    modifiers: egui::Modifiers::default(),
+                });
+                self.just_pressed[i] = false;
+            }
+            if self.just_released[i] {
+                events.push(egui::Event::PointerButton {
+                    pos,
+                    button,
+                    pressed: false,
+                    modifiers: egui::Modifiers::default(),
+                });
+                self.just_released[i] = false;
+            }
         }
 
         let raw_input = egui::RawInput {
@@ -176,18 +183,26 @@ impl EguiState {
         self.mouse_pos = (x, y);
     }
 
-    pub fn press(&mut self) {
-        if !self.mouse_down {
-            self.just_pressed = true;
-            self.mouse_down = true;
+    pub fn press_button(&mut self, button: usize) {
+        if !self.mouse_buttons[button] {
+            self.just_pressed[button] = true;
+            self.mouse_buttons[button] = true;
         }
     }
 
-    pub fn release(&mut self) {
-        if self.mouse_down {
-            self.just_released = true;
-            self.mouse_down = false;
+    pub fn release_button(&mut self, button: usize) {
+        if self.mouse_buttons[button] {
+            self.just_released[button] = true;
+            self.mouse_buttons[button] = false;
         }
+    }
+
+    pub fn press_left(&mut self) {
+        self.press_button(0);
+    }
+
+    pub fn release_left(&mut self) {
+        self.release_button(0);
     }
 
     pub fn resize(&mut self, width: u32, height: u32, scale_factor: f32) {
@@ -221,9 +236,9 @@ mod tests {
             height,
             scale_factor,
             mouse_pos: (0.0, 0.0),
-            mouse_down: false,
-            just_pressed: false,
-            just_released: false,
+            mouse_buttons: [false; 3],
+            just_pressed: [false; 3],
+            just_released: [false; 3],
         }
     }
 
@@ -231,22 +246,22 @@ mod tests {
     fn test_mouse_tracking() {
         let mut state = dummy_state(1024, 768, 1.0);
         assert_eq!(state.mouse_pos, (0.0, 0.0));
-        assert!(!state.mouse_down);
+        assert!(!state.mouse_buttons[0]);
 
         state.handle_mouse_move(100.0, 200.0);
         assert_eq!(state.mouse_pos, (100.0, 200.0));
 
-        state.press();
-        assert!(state.mouse_down);
-        assert!(state.just_pressed);
+        state.press_button(0);
+        assert!(state.mouse_buttons[0]);
+        assert!(state.just_pressed[0]);
 
-        state.press();
-        assert!(state.mouse_down);
-        assert!(state.just_pressed);
+        state.press_button(0);
+        assert!(state.mouse_buttons[0]);
+        assert!(state.just_pressed[0]);
 
-        state.release();
-        assert!(!state.mouse_down);
-        assert!(state.just_released);
+        state.release_button(0);
+        assert!(!state.mouse_buttons[0]);
+        assert!(state.just_released[0]);
     }
 
     #[test]

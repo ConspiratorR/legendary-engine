@@ -19,21 +19,33 @@ impl Plugin for EguiPlugin {
                 resources.get_mut::<EguiInitFlag>().unwrap().0 = true;
             }
 
-            let (mouse_x, mouse_y, left_down) = {
+            let (mouse_x, mouse_y, left_down, right_down, middle_down) = {
                 let input = app.resources.get::<InputManager>().unwrap();
                 (
                     input.mouse().position.0,
                     input.mouse().position.1,
                     input.mouse().left_button,
+                    input.mouse().right_button,
+                    input.mouse().middle_button,
                 )
             };
             {
                 let egui_state = app.resources.get_mut::<EguiState>().unwrap();
                 egui_state.handle_mouse_move(mouse_x, mouse_y);
                 if left_down {
-                    egui_state.press();
+                    egui_state.press_button(0);
                 } else {
-                    egui_state.release();
+                    egui_state.release_button(0);
+                }
+                if right_down {
+                    egui_state.press_button(1);
+                } else {
+                    egui_state.release_button(1);
+                }
+                if middle_down {
+                    egui_state.press_button(2);
+                } else {
+                    egui_state.release_button(2);
                 }
             }
 

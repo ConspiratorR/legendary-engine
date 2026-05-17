@@ -4,6 +4,7 @@ pub struct MouseState {
     pub delta: (f64, f64),
     pub left_button: bool,
     pub right_button: bool,
+    pub middle_button: bool,
 }
 
 impl Default for MouseState {
@@ -13,6 +14,7 @@ impl Default for MouseState {
             delta: (0.0, 0.0),
             left_button: false,
             right_button: false,
+            middle_button: false,
         }
     }
 }

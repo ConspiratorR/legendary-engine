@@ -55,16 +55,15 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                 Color32::from_rgb(30, 30, 34),
             ));
         }
-        if response.clicked()
-            && i == 0 {
-                // "+" button: add node under selected or root
-                let parent = state.selected_nodes.first().copied().or(state
-                    .scene_tree
-                    .root_ids
-                    .first()
-                    .copied());
-                state.scene_tree.add_node("New Node", parent);
-            }
+        if response.clicked() && i == 0 {
+            // "+" button: add node under selected or root
+            let parent = state.selected_nodes.first().copied().or(state
+                .scene_tree
+                .root_ids
+                .first()
+                .copied());
+            state.scene_tree.add_node("New Node", parent);
+        }
         painter.text(
             btn_rect.center(),
             egui::Align2::CENTER_CENTER,
@@ -163,9 +162,10 @@ fn draw_node(
         let arrow_id = egui::Id::new("arrow").with(node_id);
         let arrow_response = gui.ui.interact(arrow_rect, arrow_id, egui::Sense::click());
         if arrow_response.clicked()
-            && let Some(n) = state.scene_tree.nodes.iter_mut().find(|n| n.id == node_id) {
-                n.expanded = !n.expanded;
-            }
+            && let Some(n) = state.scene_tree.nodes.iter_mut().find(|n| n.id == node_id)
+        {
+            n.expanded = !n.expanded;
+        }
         painter.text(
             arrow_rect.center(),
             egui::Align2::CENTER_CENTER,

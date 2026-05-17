@@ -68,6 +68,7 @@ pub fn run_default(app_builder: AppBuilder) {
                     match button {
                         MouseButton::Left => input.mouse_mut().left_button = pressed,
                         MouseButton::Right => input.mouse_mut().right_button = pressed,
+                        MouseButton::Middle => input.mouse_mut().middle_button = pressed,
                         _ => {}
                     }
                 }
