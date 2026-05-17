@@ -54,6 +54,9 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
             let mut gui = Gui::new(ui, skin);
             draw_menu_bar(state, &mut gui, menu_rect, w_scale, h_scale);
             draw_toolbar(state, &mut gui, toolbar_rect, w_scale, h_scale);
+            if state.show_left_panel {
+                crate::hierarchy::draw(state, &mut gui, hierarchy_rect);
+            }
             draw_viewport(state, &mut gui, viewport_rect, w_scale, h_scale);
             draw_bottom_panel(state, ui, bottom_rect, h_scale, w_scale);
             draw_status_bar(state, &mut gui, status_rect, h_scale, w_scale);
