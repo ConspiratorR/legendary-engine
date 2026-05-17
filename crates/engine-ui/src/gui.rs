@@ -11,7 +11,7 @@ impl<'a> Gui<'a> {
         Gui { ui, skin }
     }
 
-    fn draw_background(painter: &Painter, block: &ColorBlock, rect: Rect, rounding: Rounding) {
+    pub fn draw_background(painter: &Painter, block: &ColorBlock, rect: Rect, rounding: Rounding) {
         painter.add(Shape::rect_filled(rect, rounding, block.background));
         if let Some(border_color) = block.border {
             painter.add(Shape::rect_stroke(
@@ -236,6 +236,7 @@ impl<'a> Gui<'a> {
             Color32::WHITE,
         );
     }
+
     pub fn toolbar(&mut self, rect: Rect, selected: &mut usize, texts: &[&str]) {
         let painter = self.ui.painter_at(rect);
         let n = texts.len();
