@@ -288,6 +288,15 @@ impl<'a> Gui<'a> {
         ));
     }
 
+    pub fn separator_v(&mut self, rect: Rect) {
+        let painter = self.ui.painter_at(rect);
+        let x = rect.center().x;
+        painter.add(Shape::line(
+            vec![Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
+            Stroke::new(1.0, Color32::from_gray(60)),
+        ));
+    }
+
     pub fn colored_label(&mut self, rect: Rect, text: &str, color: Color32) {
         let painter = self.ui.painter_at(rect);
         painter.text(

@@ -130,13 +130,211 @@ impl EditorLayout {
     }
 }
 
-#[allow(dead_code)]
 impl EditorLayout {
-    fn draw_menu_bar(&mut self, _gui: &mut Gui, _rect: Rect) {}
-    fn draw_toolbar(&mut self, _gui: &mut Gui, _rect: Rect) {}
-    fn draw_hierarchy(&mut self, _gui: &mut Gui, _rect: Rect) {}
-    fn draw_viewport(&mut self, _gui: &mut Gui, _rect: Rect) {}
+    fn draw_menu_bar(&mut self, gui: &mut Gui, rect: Rect) {
+        let items = &["文件", "编辑", "视图", "场景", "资源", "构建", "窗口", "帮助"];
+        let clicked = gui.menu_bar(rect, items);
+        if let Some(i) = clicked {
+            self.active_menu = Some(i);
+        }
+    }
+
+    fn draw_toolbar(&mut self, gui: &mut Gui, rect: Rect) {
+        let painter = gui.ui.painter_at(rect);
+        painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+
+        let tools = &["↖", "↔", "⟳", "⤢"];
+        let btn_size = 32.0;
+        let group_x = rect.left() + 12.0;
+
+        for (i, tool) in tools.iter().enumerate() {
+            let btn_rect = Rect::from_min_size(
+                Pos2::new(group_x + i as f32 * (btn_size + 4.0), rect.top() + (rect.height() - btn_size) / 2.0),
+                vec2(btn_size, btn_size),
+            );
+            if gui.tool_button(btn_rect, tool, self.active_tool == i) {
+                self.active_tool = i;
+            }
+        }
+
+        let sep_x = group_x + 4.0 * (btn_size + 4.0) + 8.0;
+        let sep_rect = Rect::from_min_size(Pos2::new(sep_x, rect.top()), vec2(1.0, rect.height()));
+        gui.separator_v(sep_rect);
+
+        let btn2_x = sep_x + 12.0;
+        let panel_btn_rect = |i: usize| -> Rect {
+            Rect::from_min_size(
+                Pos2::new(btn2_x + i as f32 * (btn_size + 4.0), rect.top() + (rect.height() - btn_size) / 2.0),
+                vec2(btn_size, btn_size),
+            )
+        };
+        if gui.tool_button(panel_btn_rect(0), "📁", false) {
+            self.show_left_panel = !self.show_left_panel;
+        }
+        if gui.tool_button(panel_btn_rect(1), "🔍", false) {
+            self.show_right_panel = !self.show_right_panel;
+        }
+
+        let sep2_x = btn2_x + 2.0 * (btn_size + 4.0) + 8.0;
+        let sep2_rect = Rect::from_min_size(Pos2::new(sep2_x, rect.top()), vec2(1.0, rect.height()));
+        gui.separator_v(sep2_rect);
+
+        // Tool group 3: view mode
+        let view_btn_x = sep2_x + 12.0;
+        let modes = &["3D", "T", "F", "R"];
+        for (i, mode) in modes.iter().enumerate() {
+            let btn_rect = Rect::from_min_size(
+                Pos2::new(view_btn_x + i as f32 * (btn_size + 4.0), rect.top() + (rect.height() - btn_size) / 2.0),
+                vec2(btn_size, btn_size),
+            );
+            gui.tool_button(btn_rect, mode, self.active_viewport == i);
+        }
+
+        let sep3_x = view_btn_x + 4.0 * (btn_size + 4.0) + 8.0;
+
+        let play_x = sep3_x + 12.0;
+        let play_btn = Rect::from_min_size(Pos2::new(play_x, rect.top() + (rect.height() - btn_size) / 2.0), vec2(btn_size, btn_size));
+        gui.tool_button(play_btn, "▶", false);
+
+        let fps_text = format!("FPS: {}", self.fps);
+        let painter = gui.ui.painter_at(rect);
+        painter.text(
+            egui::pos2(rect.right() - 12.0, rect.center().y),
+            egui::Align2::RIGHT_CENTER,
+            &fps_text,
+            egui::FontId::proportional(12.0),
+            Color32::from_gray(90),
+        );
+    }
+
+    fn draw_hierarchy(&mut self, gui: &mut Gui, rect: Rect) {
+        let painter = gui.ui.painter_at(rect);
+        painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+
+        let header_rect = Rect::from_min_size(rect.left_top(), vec2(rect.width(), 36.0));
+        gui.panel_header(header_rect, "层级");
+
+        let content_rect = Rect::from_min_size(
+            Pos2::new(rect.left(), header_rect.bottom()),
+            vec2(rect.width(), rect.bottom() - header_rect.bottom()),
+        );
+
+        let mut node_counter = 0usize;
+        self.draw_tree(gui, &self.scene_tree, 0, &mut (content_rect.top() + 4.0), 24.0, content_rect.right(), &mut node_counter);
+    }
+
+    fn draw_tree(&mut self, gui: &mut Gui, nodes: &[SceneNode], depth: u32, y: &mut f32, item_h: f32, right: f32, counter: &mut usize) {
+        for node in nodes.iter() {
+            let node_rect = Rect::from_min_size(
+                Pos2::new(0.0, *y),
+                vec2(right, item_h),
+            );
+            let idx = *counter;
+            *counter += 1;
+            let selected = self.selected_node == idx;
+            if gui.tree_node(node_rect, &node.name, &node.icon, selected, depth) {
+                self.selected_node = idx;
+            }
+            *y += item_h;
+
+            if node.expanded {
+                self.draw_tree(gui, &node.children, depth + 1, y, item_h, right, counter);
+            }
+        }
+    }
+
+    fn draw_viewport(&mut self, gui: &mut Gui, rect: Rect) {
+        let painter = gui.ui.painter_at(rect);
+
+        let header_rect = Rect::from_min_size(rect.left_top(), vec2(rect.width(), 32.0));
+        painter.add(Shape::rect_filled(header_rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+
+        let tab_w = 60.0;
+        let tabs = &["场景", "游戏", "物理"];
+        for (i, tab_label) in tabs.iter().enumerate() {
+            let tab_rect = Rect::from_min_size(
+                Pos2::new(rect.left() + i as f32 * tab_w, rect.top()),
+                vec2(tab_w, 32.0),
+            );
+            if gui.tab(tab_rect, tab_label, self.active_viewport == i) {
+                self.active_viewport = i;
+            }
+        }
+
+        let canvas_rect = Rect::from_min_size(
+            Pos2::new(rect.left(), header_rect.bottom()),
+            vec2(rect.width(), rect.bottom() - header_rect.bottom()),
+        );
+
+        painter.add(Shape::rect_filled(canvas_rect, Rounding::ZERO, Color32::from_rgb(10, 10, 12)));
+
+        if self.show_grid {
+            let grid_size = 50.0;
+            let mut x = canvas_rect.left();
+            while x <= canvas_rect.right() {
+                painter.add(Shape::line(
+                    vec![Pos2::new(x, canvas_rect.top()), Pos2::new(x, canvas_rect.bottom())],
+                    Stroke::new(1.0, Color32::from_rgba_premultiplied(37, 37, 48, 128)),
+                ));
+                x += grid_size;
+            }
+            let mut y = canvas_rect.top();
+            while y <= canvas_rect.bottom() {
+                painter.add(Shape::line(
+                    vec![Pos2::new(canvas_rect.left(), y), Pos2::new(canvas_rect.right(), y)],
+                    Stroke::new(1.0, Color32::from_rgba_premultiplied(37, 37, 48, 128)),
+                ));
+                y += grid_size;
+            }
+        }
+
+        let axes = [("X", Color32::from_rgb(255, 107, 107)),
+                    ("Y", Color32::from_rgb(46, 213, 115)),
+                    ("Z", Color32::from_rgb(77, 171, 247))];
+        for (i, (label, color)) in axes.iter().enumerate() {
+            painter.text(
+                egui::pos2(canvas_rect.left() + 20.0, canvas_rect.top() + 20.0 + i as f32 * 18.0),
+                egui::Align2::LEFT_CENTER,
+                *label,
+                egui::FontId::proportional(10.0),
+                *color,
+            );
+        }
+
+        let objects = [
+            ("📦", Vec2::new(200.0, 150.0)),
+            ("🎯", Vec2::new(350.0, 230.0)),
+            ("🔮", Vec2::new(450.0, 130.0)),
+        ];
+        for (icon, pos) in &objects {
+            let obj_rect = Rect::from_center_size(
+                Pos2::new(canvas_rect.left() + pos.x, canvas_rect.top() + pos.y),
+                Vec2::new(48.0, 48.0),
+            );
+            painter.add(Shape::rect_filled(
+                obj_rect,
+                Rounding::same(4.0),
+                Color32::from_rgb(42, 42, 53),
+            ));
+            painter.rect_stroke(
+                obj_rect,
+                Rounding::same(4.0),
+                Stroke::new(2.0, Color32::from_rgb(0, 212, 170)),
+            );
+            painter.text(
+                obj_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                *icon,
+                egui::FontId::proportional(24.0),
+                Color32::WHITE,
+            );
+        }
+    }
+
+    #[allow(dead_code)]
     fn draw_inspector(&mut self, _gui: &mut Gui, _rect: Rect) {}
+    #[allow(dead_code)]
     fn draw_bottom_panel(&mut self, _ui: &egui::Ui, _rect: Rect, _skin: &GuiSkin) {}
+    #[allow(dead_code)]
     fn draw_status_bar(&mut self, _gui: &mut Gui, _rect: Rect) {}
 }
