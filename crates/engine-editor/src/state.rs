@@ -249,7 +249,9 @@ impl EditorState {
         }
     }
 
-    pub fn frame(&mut self, _ctx: &Context, _skin: &GuiSkin) {}
+    pub fn frame(&mut self, ctx: &Context, skin: &GuiSkin) {
+        crate::layout::frame(self, ctx, skin);
+    }
 }
 
 #[cfg(test)]
