@@ -209,8 +209,12 @@ fn draw_scene_objects(
         if node.parent.is_none() {
             continue;
         }
-        let world_pos =
-            engine_math::Vec3::new(node.id as f32 * 2.0 - 5.0, 0.0, node.id as f32 * 0.5 - 2.0);
+        let t = state
+            .node_transforms
+            .get(&node.id)
+            .copied()
+            .unwrap_or([0.0; 9]);
+        let world_pos = engine_math::Vec3::new(t[0], t[1], t[2]);
         let clip = view_proj * world_pos.extend_with_w(1.0);
         if clip.w <= 0.0 {
             continue;
@@ -287,22 +291,16 @@ fn draw_transform_overlay(
         Color32::from_rgba_premultiplied(22, 22, 25, 230),
     ));
 
+    let sel_trans = state
+        .selected_nodes
+        .first()
+        .and_then(|id| state.node_transforms.get(id).copied())
+        .unwrap_or([0.0; 9]);
+
     let transform_axes = [
-        (
-            "X",
-            state.camera.target.x as i32,
-            Color32::from_rgb(255, 107, 107),
-        ),
-        (
-            "Y",
-            state.camera.target.y as i32,
-            Color32::from_rgb(46, 213, 115),
-        ),
-        (
-            "Z",
-            state.camera.target.z as i32,
-            Color32::from_rgb(77, 171, 247),
-        ),
+        ("X", sel_trans[0] as i32, Color32::from_rgb(255, 107, 107)),
+        ("Y", sel_trans[1] as i32, Color32::from_rgb(46, 213, 115)),
+        ("Z", sel_trans[2] as i32, Color32::from_rgb(77, 171, 247)),
     ];
     for (i, (label, val, color)) in transform_axes.iter().enumerate() {
         painter.text(

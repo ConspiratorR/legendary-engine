@@ -7,8 +7,14 @@ const AXIS_COLORS: [Color32; 3] = [
     Color32::from_rgb(77, 171, 247),
 ];
 
+const AXIS_DIRS: [Vec2; 3] = [
+    Vec2::new(1.0, 0.0),
+    Vec2::new(0.0, -1.0),
+    Vec2::new(-0.7, 0.7),
+];
+
 pub fn draw(
-    state: &EditorState,
+    state: &mut EditorState,
     painter: &egui::Painter,
     canvas_rect: Rect,
     h_scale: f32,
@@ -18,20 +24,32 @@ pub fn draw(
     let gizmo_size = 60.0 * h_scale;
 
     match state.active_tool {
-        ToolType::Translate => draw_translate_gizmo(painter, gizmo_center, gizmo_size),
+        ToolType::Translate => {
+            draw_translate_gizmo(painter, gizmo_center, gizmo_size);
+            handle_translate_interaction(state, canvas_rect, gizmo_center, gizmo_size);
+        }
         ToolType::Rotate => draw_rotate_gizmo(painter, gizmo_center, gizmo_size),
         ToolType::Scale => draw_scale_gizmo(painter, gizmo_center, gizmo_size),
         ToolType::Select => {}
     }
 }
 
+fn handle_translate_interaction(
+    state: &mut EditorState,
+    _canvas_rect: Rect,
+    _center: Pos2,
+    _size: f32,
+) {
+    if state.selected_nodes.is_empty() {
+        return;
+    }
+    // Full gizmo interaction requires egui drag events routed through the viewport.
+    // For now, gizmo is visual-only; transform editing works via the inspector.
+    _ = state.selected_nodes[0];
+}
+
 fn draw_translate_gizmo(painter: &egui::Painter, center: Pos2, size: f32) {
-    let dirs = [
-        Vec2::new(1.0, 0.0),
-        Vec2::new(0.0, -1.0),
-        Vec2::new(-0.7, 0.7),
-    ];
-    for (i, &dir) in dirs.iter().enumerate() {
+    for (i, &dir) in AXIS_DIRS.iter().enumerate() {
         let tip = Pos2::new(center.x + dir.x * size, center.y + dir.y * size);
         let color = AXIS_COLORS[i];
         painter.add(Shape::line(vec![center, tip], Stroke::new(3.0, color)));
@@ -65,12 +83,7 @@ fn draw_rotate_gizmo(painter: &egui::Painter, center: Pos2, size: f32) {
 }
 
 fn draw_scale_gizmo(painter: &egui::Painter, center: Pos2, size: f32) {
-    let dirs = [
-        Vec2::new(1.0, 0.0),
-        Vec2::new(0.0, -1.0),
-        Vec2::new(-0.7, 0.7),
-    ];
-    for (i, &dir) in dirs.iter().enumerate() {
+    for (i, &dir) in AXIS_DIRS.iter().enumerate() {
         let tip = Pos2::new(center.x + dir.x * size, center.y + dir.y * size);
         let color = AXIS_COLORS[i];
         painter.add(Shape::line(
@@ -80,8 +93,7 @@ fn draw_scale_gizmo(painter: &egui::Painter, center: Pos2, size: f32) {
                 Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), 100),
             ),
         ));
-        let cube_half = 5.0;
-        let cube_rect = Rect::from_center_size(tip, Vec2::new(cube_half * 2.0, cube_half * 2.0));
+        let cube_rect = Rect::from_center_size(tip, Vec2::new(10.0, 10.0));
         painter.add(Shape::rect_filled(cube_rect, Rounding::ZERO, color));
     }
     let center_cube = Rect::from_center_size(center, Vec2::new(10.0, 10.0));

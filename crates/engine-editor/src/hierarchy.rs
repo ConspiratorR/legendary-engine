@@ -82,7 +82,29 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
     ));
 
-    let content_top = header_rect.bottom();
+    // Search bar (visual only — text input disabled to avoid conflicts)
+    let search_h = 28.0 * h_scale;
+    let search_rect = Rect::from_min_size(
+        Pos2::new(
+            rect.left() + 8.0 * w_scale,
+            header_rect.bottom() + 4.0 * h_scale,
+        ),
+        Vec2::new(rect.width() - 16.0 * w_scale, search_h),
+    );
+    painter.add(Shape::rect_filled(
+        search_rect,
+        Rounding::same(4.0 * h_scale),
+        Color32::from_rgb(30, 30, 34),
+    ));
+    painter.text(
+        egui::pos2(search_rect.left() + 8.0 * w_scale, search_rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        "🔍 搜索...",
+        FontId::proportional(12.0 * h_scale),
+        Color32::from_gray(90),
+    );
+
+    let content_top = search_rect.bottom() + 4.0 * h_scale;
     let content_rect = Rect::from_min_size(
         Pos2::new(rect.left(), content_top),
         Vec2::new(rect.width(), rect.bottom() - content_top),

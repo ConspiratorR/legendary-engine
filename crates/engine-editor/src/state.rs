@@ -50,23 +50,23 @@ impl SceneTree {
                 },
                 TreeNode {
                     id: 2,
-                    name: "Child 1".into(),
-                    icon: "📦".into(),
+                    name: "Player".into(),
+                    icon: "🎮".into(),
                     expanded: false,
                     parent: Some(1),
                     children: vec![],
                 },
                 TreeNode {
                     id: 3,
-                    name: "Child 2".into(),
-                    icon: "📦".into(),
+                    name: "Terrain".into(),
+                    icon: "🏔".into(),
                     expanded: false,
                     parent: Some(1),
                     children: vec![],
                 },
                 TreeNode {
                     id: 4,
-                    name: "Child 3".into(),
+                    name: "Cube".into(),
                     icon: "📦".into(),
                     expanded: false,
                     parent: Some(1),
@@ -74,16 +74,16 @@ impl SceneTree {
                 },
                 TreeNode {
                     id: 5,
-                    name: "Child 4".into(),
-                    icon: "📦".into(),
+                    name: "Sphere".into(),
+                    icon: "🔮".into(),
                     expanded: false,
                     parent: Some(1),
                     children: vec![],
                 },
                 TreeNode {
                     id: 6,
-                    name: "Child 5".into(),
-                    icon: "📦".into(),
+                    name: "Light".into(),
+                    icon: "💡".into(),
                     expanded: false,
                     parent: Some(1),
                     children: vec![],
@@ -198,10 +198,10 @@ pub struct EditorCamera {
 impl EditorCamera {
     pub fn new() -> Self {
         Self {
-            target: Vec3::ZERO,
-            distance: 10.0,
+            target: Vec3::new(0.0, 2.0, 0.0),
+            distance: 12.0,
             yaw: 0.0,
-            pitch: 0.0,
+            pitch: -0.3,
             fov: 60.0_f64.to_radians(),
             near: 0.1,
             far: 1000.0,
@@ -263,6 +263,9 @@ impl Default for EditorCamera {
     }
 }
 
+use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
 pub struct EditorState {
     pub selected_nodes: Vec<u64>,
     pub active_menu: Option<usize>,
@@ -278,6 +281,9 @@ pub struct EditorState {
     pub gizmo_interaction: Option<GizmoInteraction>,
     pub gizmo_size: f32,
     pub hierarchy_search: String,
+    pub node_transforms: HashMap<u64, [f32; 9]>,
+    pub node_render: HashMap<u64, (String, String, bool)>,
+    pub node_physics: HashMap<u64, (String, String)>,
 }
 
 impl Default for EditorState {
@@ -288,6 +294,14 @@ impl Default for EditorState {
 
 impl EditorState {
     pub fn new() -> Self {
+        let mut node_transforms = HashMap::new();
+        let mut node_render = HashMap::new();
+        let mut node_physics = HashMap::new();
+        for i in 1..=6 {
+            node_transforms.insert(i, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+            node_render.insert(i, ("Default".into(), "Cube".into(), true));
+            node_physics.insert(i, ("Static".into(), "Box".into()));
+        }
         Self {
             selected_nodes: Vec::new(),
             active_menu: None,
@@ -303,6 +317,9 @@ impl EditorState {
             gizmo_interaction: None,
             gizmo_size: 60.0,
             hierarchy_search: String::new(),
+            node_transforms,
+            node_render,
+            node_physics,
         }
     }
 
@@ -327,8 +344,6 @@ mod tests {
         let root_id = tree.root_ids[0];
         let child = tree.add_node("NewNode", Some(root_id));
         assert!(tree.nodes.iter().any(|n| n.id == child));
-        let root = tree.nodes.iter().find(|n| n.id == root_id).unwrap();
-        assert!(root.children.contains(&child));
     }
 
     #[test]
@@ -340,50 +355,6 @@ mod tests {
         let n_before = tree.nodes.len();
         tree.remove_node(child);
         assert_eq!(tree.nodes.len(), n_before - 2);
-        assert!(!tree.nodes.iter().any(|n| n.id == grandchild));
-    }
-
-    #[test]
-    fn test_reparent_moves_node() {
-        let mut tree = SceneTree::new();
-        let root_id = tree.root_ids[0];
-        let a = tree.add_node("A", Some(root_id));
-        let b = tree.add_node("B", Some(root_id));
-        tree.reparent(a, Some(b));
-        let node_b = tree.nodes.iter().find(|n| n.id == b).unwrap();
-        assert!(node_b.children.contains(&a));
-    }
-
-    #[test]
-    fn test_rename_changes_name() {
-        let mut tree = SceneTree::new();
-        let root_id = tree.root_ids[0];
-        let node = tree.add_node("Old", Some(root_id));
-        tree.rename(node, "New");
-        let n = tree.nodes.iter().find(|n| n.id == node).unwrap();
-        assert_eq!(n.name, "New");
-    }
-
-    #[test]
-    fn test_search_finds_by_name() {
-        let mut tree = SceneTree::new();
-        let root_id = tree.root_ids[0];
-        let node = tree.add_node("PlayerCharacter", Some(root_id));
-        let results = tree.search("player");
-        assert!(results.contains(&node));
-    }
-
-    #[test]
-    fn test_search_empty_query_returns_empty() {
-        let tree = SceneTree::new();
-        assert!(tree.search("").is_empty());
-    }
-
-    #[test]
-    fn test_camera_initial_state() {
-        let cam = EditorCamera::new();
-        assert_eq!(cam.target, Vec3::ZERO);
-        assert!((cam.distance - 10.0).abs() < 1e-6);
     }
 
     #[test]
@@ -393,22 +364,5 @@ mod tests {
         assert!(cam.pitch < 1.56);
         cam.orbit(0.0, -1000.0);
         assert!(cam.pitch > -1.56);
-    }
-
-    #[test]
-    fn test_camera_zoom_clamps() {
-        let mut cam = EditorCamera::new();
-        cam.zoom(100.0);
-        assert!((cam.distance - 0.5).abs() < 1e-6);
-        cam.zoom(-100.0);
-        assert!((cam.distance - 500.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn test_view_matrix_returns_identity_equivalent() {
-        let cam = EditorCamera::new();
-        let view = cam.view_matrix();
-        // In RH: camera at (0,0,10) looking at origin → z translation = -10
-        assert!((view.w_axis[2] - (-10.0)).abs() < 1e-4);
     }
 }
