@@ -137,6 +137,10 @@ impl App {
         self.post_update_hooks = post_hooks;
     }
 
+    pub fn run_with_resources(&mut self) {
+        self.run();
+    }
+
     pub fn run_old(&mut self) {
         self.schedule.run(&mut self.world);
     }

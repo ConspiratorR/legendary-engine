@@ -1,11 +1,14 @@
 use crate::component::ComponentRegistry;
 use crate::entity::Entity;
+use std::any::TypeId;
+use std::collections::HashMap;
 
 pub struct World {
     next_index: u32,
     free_list: Vec<u32>,
     generations: Vec<u32>,
     components: ComponentRegistry,
+    resources: HashMap<TypeId, Box<dyn std::any::Any>>,
 }
 
 impl Default for World {
@@ -21,6 +24,7 @@ impl World {
             free_list: Vec::new(),
             generations: Vec::new(),
             components: ComponentRegistry::new(),
+            resources: HashMap::new(),
         }
     }
 
@@ -85,6 +89,20 @@ impl World {
 
     pub fn get_by_index_mut<T: 'static>(&mut self, index: u32) -> Option<&mut T> {
         self.components.try_get_storage_mut::<T>()?.get_mut(index)
+    }
+
+    pub fn insert_resource<T: 'static>(&mut self, resource: T) {
+        self.resources.insert(TypeId::of::<T>(), Box::new(resource));
+    }
+
+    pub fn get_resource<T: 'static>(&self) -> Option<&T> {
+        self.resources.get(&TypeId::of::<T>())?.downcast_ref::<T>()
+    }
+
+    pub fn get_resource_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.resources
+            .get_mut(&TypeId::of::<T>())?
+            .downcast_mut::<T>()
     }
 }
 

@@ -67,6 +67,50 @@ impl<A: 'static, B: 'static> QueryPair<A, B> {
             Some((world.get_by_index::<A>(idx)?, world.get_by_index::<B>(idx)?))
         })
     }
+
+    pub fn iter_mut<'a>(&self, world: &'a mut World) -> QueryPairIterMut<'a, A, B> {
+        let valid: Vec<_> = {
+            let ents_a = world.component_entities::<A>();
+            let ents_b = world.component_entities::<B>();
+            ents_a
+                .iter()
+                .filter(|idx| ents_b.contains(idx))
+                .copied()
+                .collect()
+        };
+        QueryPairIterMut {
+            indices: valid,
+            index: 0,
+            world: world as *mut World,
+            _marker: PhantomData,
+        }
+    }
+}
+
+pub struct QueryPairIterMut<'a, A, B> {
+    indices: Vec<u32>,
+    index: usize,
+    world: *mut World,
+    _marker: PhantomData<(&'a mut A, &'a mut B)>,
+}
+
+impl<'a, A: 'static, B: 'static> Iterator for QueryPairIterMut<'a, A, B> {
+    type Item = (&'a mut A, &'a mut B);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let idx = self.index;
+        self.index += 1;
+        if idx < self.indices.len() {
+            let entity_idx = self.indices[idx];
+            unsafe {
+                let a = (*self.world).get_by_index_mut::<A>(entity_idx)?;
+                let b = (*self.world).get_by_index_mut::<B>(entity_idx)?;
+                Some((a, b))
+            }
+        } else {
+            None
+        }
+    }
 }
 
 pub struct QueryIterMut<'a, A> {
