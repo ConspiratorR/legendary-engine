@@ -11,8 +11,14 @@ impl Plugin for EditorPlugin {
         app.insert_resource(EditorState::new());
         app.add_post_update_hook(Box::new(|app: &mut App| {
             let skin = app.resources.get::<GuiSkin>().cloned().unwrap_or_default();
-            let ctx = app.resources.get::<EguiState>().unwrap().ctx().clone();
-            let state = app.resources.get_mut::<EditorState>().unwrap();
+            let ctx = match app.resources.get::<EguiState>() {
+                Some(s) => s.ctx().clone(),
+                None => return,
+            };
+            let state = match app.resources.get_mut::<EditorState>() {
+                Some(s) => s,
+                None => return,
+            };
             state.frame(&ctx, &skin);
         }));
     }
