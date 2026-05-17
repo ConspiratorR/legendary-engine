@@ -198,7 +198,7 @@ impl EditorCamera {
     }
 
     pub fn view_matrix(&self) -> Mat4 {
-        Mat4::look_at_lh(self.eye(), self.target, self.up())
+        Mat4::look_at_rh(self.eye(), self.target, self.up())
     }
 
     pub fn projection_matrix(&self, aspect: f32) -> Mat4 {
@@ -349,6 +349,7 @@ mod tests {
     fn test_view_matrix_returns_identity_equivalent() {
         let cam = EditorCamera::new();
         let view = cam.view_matrix();
-        assert!((view.w_axis[2] - 10.0).abs() < 1e-4);
+        // In RH: camera at (0,0,10) looking at origin → z translation = -10
+        assert!((view.w_axis[2] - (-10.0)).abs() < 1e-4);
     }
 }
