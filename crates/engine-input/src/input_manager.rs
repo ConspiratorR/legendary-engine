@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use crate::keyboard::{KeyCode, KeyState};
 use crate::mouse::MouseState;
+use std::collections::HashMap;
 
 pub struct InputManager {
     keys: HashMap<KeyCode, KeyState>,
@@ -40,7 +40,10 @@ impl InputManager {
     }
 
     pub fn key_down(&self, key: KeyCode) -> bool {
-        matches!(self.key_state(key), KeyState::Pressed | KeyState::JustPressed)
+        matches!(
+            self.key_state(key),
+            KeyState::Pressed | KeyState::JustPressed
+        )
     }
 
     pub fn key_just_pressed(&self, key: KeyCode) -> bool {
@@ -69,8 +72,8 @@ impl InputManager {
 
 #[cfg(test)]
 mod tests {
-    use crate::keyboard::{KeyCode, KeyState};
     use crate::input_manager::InputManager;
+    use crate::keyboard::{KeyCode, KeyState};
 
     #[test]
     fn test_key_default_released() {

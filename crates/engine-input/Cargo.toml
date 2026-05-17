@@ -5,5 +5,6 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+engine-ecs = { path = "../engine-ecs" }
 engine-window = { path = "../engine-window" }
 winit = "0.30"

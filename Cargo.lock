@@ -769,6 +769,7 @@ dependencies = [
 name = "engine-input"
 version = "0.1.0"
 dependencies = [
+ "engine-ecs",
  "engine-window",
  "winit",
 ]
