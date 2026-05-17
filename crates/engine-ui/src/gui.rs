@@ -1,5 +1,5 @@
-use egui::{Color32, Painter, Pos2, Rect, Rounding, Shape, Stroke};
 use crate::skin::{ColorBlock, GuiSkin};
+use egui::{Color32, Painter, Pos2, Rect, Rounding, Shape, Stroke};
 
 pub struct Gui<'a> {
     pub ui: &'a egui::Ui,
@@ -14,12 +14,28 @@ impl<'a> Gui<'a> {
     fn draw_background(painter: &Painter, block: &ColorBlock, rect: Rect, rounding: Rounding) {
         painter.add(Shape::rect_filled(rect, rounding, block.background));
         if let Some(border_color) = block.border {
-            painter.add(Shape::rect_stroke(rect, rounding, Stroke::new(1.0, border_color)));
+            painter.add(Shape::rect_stroke(
+                rect,
+                rounding,
+                Stroke::new(1.0, border_color),
+            ));
         }
     }
 
-    fn draw_text(painter: &Painter, block: &ColorBlock, rect: Rect, text: &str, font_id: &egui::FontId) {
-        painter.text(rect.center(), egui::Align2::CENTER_CENTER, text, font_id.clone(), block.text);
+    fn draw_text(
+        painter: &Painter,
+        block: &ColorBlock,
+        rect: Rect,
+        text: &str,
+        font_id: &egui::FontId,
+    ) {
+        painter.text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            text,
+            font_id.clone(),
+            block.text,
+        );
     }
 
     pub fn label(&mut self, rect: Rect, text: &str) {
@@ -30,12 +46,18 @@ impl<'a> Gui<'a> {
     }
 
     pub fn button(&mut self, rect: Rect, text: &str) -> bool {
-        let id = egui::Id::new("gui_btn").with(rect.min.x as u64).with(rect.min.y as u64);
+        let id = egui::Id::new("gui_btn")
+            .with(rect.min.x as u64)
+            .with(rect.min.y as u64);
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
-        let block = if response.clicked() { &self.skin.button.active }
-                    else if response.hovered() { &self.skin.button.hover }
-                    else { &self.skin.button.normal };
+        let block = if response.clicked() {
+            &self.skin.button.active
+        } else if response.hovered() {
+            &self.skin.button.hover
+        } else {
+            &self.skin.button.normal
+        };
 
         let painter = self.ui.painter_at(rect);
         Self::draw_background(&painter, block, rect, self.skin.button.border);
@@ -44,13 +66,19 @@ impl<'a> Gui<'a> {
     }
 
     pub fn repeat_button(&mut self, rect: Rect, text: &str) -> bool {
-        let id = egui::Id::new("gui_rpt").with(rect.min.x as u64).with(rect.min.y as u64);
+        let id = egui::Id::new("gui_rpt")
+            .with(rect.min.x as u64)
+            .with(rect.min.y as u64);
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let is_down = response.is_pointer_button_down_on();
-        let block = if is_down { &self.skin.button.active }
-                    else if response.hovered() { &self.skin.button.hover }
-                    else { &self.skin.button.normal };
+        let block = if is_down {
+            &self.skin.button.active
+        } else if response.hovered() {
+            &self.skin.button.hover
+        } else {
+            &self.skin.button.normal
+        };
 
         let painter = self.ui.painter_at(rect);
         Self::draw_background(&painter, block, rect, self.skin.button.border);
@@ -69,9 +97,144 @@ impl<'a> Gui<'a> {
         let painter = self.ui.painter_at(rect);
         let center_y = rect.center().y;
         painter.add(Shape::line(
-            vec![Pos2::new(rect.left(), center_y), Pos2::new(rect.right(), center_y)],
+            vec![
+                Pos2::new(rect.left(), center_y),
+                Pos2::new(rect.right(), center_y),
+            ],
             Stroke::new(1.0, Color32::from_gray(100)),
         ));
+    }
+
+    pub fn text_field(&mut self, rect: Rect, text: &mut String, id_salt: &str) {
+        let widget_id = egui::Id::new(id_salt).with("field");
+        let response = self.ui.interact(rect, widget_id, egui::Sense::click());
+
+        let block = if response.has_focus() {
+            &self.skin.text_field.focused
+        } else if response.hovered() {
+            &self.skin.text_field.hover
+        } else {
+            &self.skin.text_field.normal
+        };
+
+        let painter = self.ui.painter_at(rect);
+        Self::draw_background(&painter, block, rect, self.skin.text_field.border);
+        painter.text(egui::pos2(rect.left() + 4.0, rect.center().y), egui::Align2::LEFT_CENTER, text.as_str(), self.skin.font.clone(), block.text);
+
+        if response.has_focus() {
+            let mut chars_modified = false;
+            self.ui.ctx().input(|i| {
+                for event in &i.events {
+                    if let egui::Event::Text(c) = event {
+                        text.push_str(c);
+                        chars_modified = true;
+                    }
+                }
+            });
+            if chars_modified {
+                self.ui.ctx().request_repaint();
+            }
+        }
+
+        if response.clicked() {
+            self.ui.ctx().memory_mut(|mem| mem.request_focus(widget_id));
+        }
+    }
+
+    pub fn toggle(&mut self, rect: Rect, value: &mut bool, label: &str) {
+        let id = egui::Id::new("gui_tog")
+            .with(rect.min.x as u64)
+            .with(rect.min.y as u64);
+        let response = self.ui.interact(rect, id, egui::Sense::click());
+        let block = &self.skin.toggle.normal;
+
+        let painter = self.ui.painter_at(rect);
+
+        let check_size = rect.height();
+        let check_rect = Rect::from_min_size(rect.left_top(), egui::vec2(check_size, check_size));
+        Self::draw_background(
+            &painter,
+            &ColorBlock {
+                background: if *value {
+                    Color32::from_rgb(60, 120, 200)
+                } else {
+                    Color32::from_gray(40)
+                },
+                text: Color32::WHITE,
+                border: Some(Color32::from_gray(100)),
+            },
+            check_rect,
+            Rounding::same(3.0),
+        );
+
+        if *value {
+            painter.text(
+                check_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "✓",
+                self.skin.font.clone(),
+                Color32::WHITE,
+            );
+        }
+
+        let label_rect = Rect::from_min_max(
+            egui::pos2(check_rect.right() + 4.0, rect.top()),
+            rect.right_bottom(),
+        );
+        Self::draw_text(&painter, block, label_rect, label, &self.skin.font);
+
+        if response.clicked() {
+            *value = !*value;
+        }
+    }
+
+    pub fn slider(&mut self, rect: Rect, value: &mut f32, min: f32, max: f32) {
+        let id = egui::Id::new("gui_sld")
+            .with(rect.min.x as u64)
+            .with(rect.min.y as u64);
+        let response = self.ui.interact(rect, id, egui::Sense::click_and_drag());
+
+        let painter = self.ui.painter_at(rect);
+
+        let range = max - min;
+        if range.abs() < f32::EPSILON {
+            painter.text(rect.center(), egui::Align2::CENTER_CENTER, "—", self.skin.font.clone(), Color32::GRAY);
+            return;
+        }
+
+        let t = ((*value - min) / range).clamp(0.0, 1.0);
+
+        // Background track
+        Self::draw_background(&painter, &self.skin.slider.normal, rect, Rounding::same(2.0));
+
+        // Filled portion
+        let fill_rect = Rect::from_min_size(rect.left_top(), egui::vec2(rect.width() * t, rect.height()));
+        painter.add(Shape::rect_filled(
+            fill_rect, Rounding::same(2.0), Color32::from_rgb(60, 120, 200),
+        ));
+
+        // Thumb
+        let thumb_x = rect.left() + t * rect.width();
+        let thumb_rect = Rect::from_center_size(
+            egui::pos2(thumb_x, rect.center().y), egui::vec2(6.0, rect.height() + 4.0),
+        );
+        painter.add(Shape::rect_filled(thumb_rect, Rounding::same(3.0), Color32::WHITE));
+
+        // Drag handling
+        if response.dragged() {
+            let delta = response.drag_delta();
+            let new_t = t + delta.x / rect.width();
+            *value = (min + new_t * range).clamp(min, max);
+        }
+
+        // Value label
+        painter.text(
+            egui::pos2(rect.center().x, rect.center().y),
+            egui::Align2::CENTER_CENTER,
+            format!("{:.2}", *value),
+            self.skin.font.clone(),
+            Color32::WHITE,
+        );
     }
 }
 
@@ -132,6 +295,49 @@ mod tests {
             let rect = Rect::from_min_size(Pos2::new(10.0, 110.0), egui::vec2(100.0, 20.0));
             let down = gui.repeat_button(rect, "Hold");
             assert!(!down, "Repeat button should not be down without input");
+        });
+    }
+
+    #[test]
+    fn test_text_field_ignores_input_without_focus() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 160.0), egui::vec2(200.0, 22.0));
+            let mut text = String::from("hello");
+            gui.text_field(rect, &mut text, "test1");
+            assert_eq!(text, "hello", "text should not change without focus/input");
+        });
+    }
+
+    #[test]
+    fn test_toggle_default_not_checked() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 190.0), egui::vec2(150.0, 22.0));
+            let mut val = false;
+            gui.toggle(rect, &mut val, "Option");
+            assert!(!val, "toggle should remain false without click");
+        });
+    }
+
+    #[test]
+    fn test_toggle_checked_state() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 220.0), egui::vec2(150.0, 22.0));
+            let mut val = true;
+            gui.toggle(rect, &mut val, "Option");
+            assert!(val, "toggle should remain true when initialized true");
+        });
+    }
+
+    #[test]
+    fn test_slider_default_value() {
+        run_in_ui(|gui| {
+            let rect = Rect::from_min_size(Pos2::new(10.0, 250.0), egui::vec2(200.0, 22.0));
+            let mut val = 0.5;
+            gui.slider(rect, &mut val, 0.0, 1.0);
+            assert!(
+                (val - 0.5).abs() < f32::EPSILON,
+                "slider value should remain unchanged without drag"
+            );
         });
     }
 }
