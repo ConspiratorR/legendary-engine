@@ -40,12 +40,54 @@ impl SceneTree {
         let root_id = 1;
         Self {
             nodes: vec![
-                TreeNode { id: 1, name: "Root".into(), icon: "📁".into(), expanded: true, parent: None, children: vec![2, 3, 4, 5, 6] },
-                TreeNode { id: 2, name: "Child 1".into(), icon: "📦".into(), expanded: false, parent: Some(1), children: vec![] },
-                TreeNode { id: 3, name: "Child 2".into(), icon: "📦".into(), expanded: false, parent: Some(1), children: vec![] },
-                TreeNode { id: 4, name: "Child 3".into(), icon: "📦".into(), expanded: false, parent: Some(1), children: vec![] },
-                TreeNode { id: 5, name: "Child 4".into(), icon: "📦".into(), expanded: false, parent: Some(1), children: vec![] },
-                TreeNode { id: 6, name: "Child 5".into(), icon: "📦".into(), expanded: false, parent: Some(1), children: vec![] },
+                TreeNode {
+                    id: 1,
+                    name: "Root".into(),
+                    icon: "📁".into(),
+                    expanded: true,
+                    parent: None,
+                    children: vec![2, 3, 4, 5, 6],
+                },
+                TreeNode {
+                    id: 2,
+                    name: "Child 1".into(),
+                    icon: "📦".into(),
+                    expanded: false,
+                    parent: Some(1),
+                    children: vec![],
+                },
+                TreeNode {
+                    id: 3,
+                    name: "Child 2".into(),
+                    icon: "📦".into(),
+                    expanded: false,
+                    parent: Some(1),
+                    children: vec![],
+                },
+                TreeNode {
+                    id: 4,
+                    name: "Child 3".into(),
+                    icon: "📦".into(),
+                    expanded: false,
+                    parent: Some(1),
+                    children: vec![],
+                },
+                TreeNode {
+                    id: 5,
+                    name: "Child 4".into(),
+                    icon: "📦".into(),
+                    expanded: false,
+                    parent: Some(1),
+                    children: vec![],
+                },
+                TreeNode {
+                    id: 6,
+                    name: "Child 5".into(),
+                    icon: "📦".into(),
+                    expanded: false,
+                    parent: Some(1),
+                    children: vec![],
+                },
             ],
             root_ids: vec![root_id],
             next_id: 7,
@@ -71,16 +113,20 @@ impl SceneTree {
     }
 
     pub fn remove_node(&mut self, id: u64) {
-        let parent_id = self.nodes.iter().find(|n| n.id == id).and_then(|n| n.parent);
-        if let Some(pid) = parent_id {
-            if let Some(p) = self.nodes.iter_mut().find(|n| n.id == pid) {
+        let parent_id = self
+            .nodes
+            .iter()
+            .find(|n| n.id == id)
+            .and_then(|n| n.parent);
+        if let Some(pid) = parent_id
+            && let Some(p) = self.nodes.iter_mut().find(|n| n.id == pid) {
                 p.children.retain(|c| *c != id);
             }
-        }
         let mut to_remove = vec![id];
         let mut i = 0;
         while i < to_remove.len() {
-            let cids: Vec<u64> = self.nodes
+            let cids: Vec<u64> = self
+                .nodes
                 .iter()
                 .filter(|n| n.parent == Some(to_remove[i]))
                 .map(|n| n.id)
@@ -92,20 +138,22 @@ impl SceneTree {
     }
 
     pub fn reparent(&mut self, id: u64, new_parent: Option<u64>) {
-        let old_parent = self.nodes.iter().find(|n| n.id == id).and_then(|n| n.parent);
-        if let Some(pid) = old_parent {
-            if let Some(p) = self.nodes.iter_mut().find(|n| n.id == pid) {
+        let old_parent = self
+            .nodes
+            .iter()
+            .find(|n| n.id == id)
+            .and_then(|n| n.parent);
+        if let Some(pid) = old_parent
+            && let Some(p) = self.nodes.iter_mut().find(|n| n.id == pid) {
                 p.children.retain(|c| *c != id);
             }
-        }
         if let Some(node) = self.nodes.iter_mut().find(|n| n.id == id) {
             node.parent = new_parent;
         }
-        if let Some(npid) = new_parent {
-            if let Some(p) = self.nodes.iter_mut().find(|n| n.id == npid) {
+        if let Some(npid) = new_parent
+            && let Some(p) = self.nodes.iter_mut().find(|n| n.id == npid) {
                 p.children.push(id);
             }
-        }
     }
 
     pub fn rename(&mut self, id: u64, name: &str) {
@@ -227,6 +275,12 @@ pub struct EditorState {
     pub gizmo_interaction: Option<GizmoInteraction>,
     pub gizmo_size: f32,
     pub hierarchy_search: String,
+}
+
+impl Default for EditorState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EditorState {

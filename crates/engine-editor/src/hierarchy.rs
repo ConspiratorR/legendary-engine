@@ -1,21 +1,32 @@
+use crate::state::EditorState;
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::Gui;
-use crate::state::EditorState;
 
 pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
     let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
 
     let painter = gui.ui.painter_at(rect);
-    painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+    painter.add(Shape::rect_filled(
+        rect,
+        Rounding::ZERO,
+        Color32::from_rgb(22, 22, 25),
+    ));
     painter.add(Shape::line(
-        vec![Pos2::new(rect.right() - 1.0, rect.top()), Pos2::new(rect.right() - 1.0, rect.bottom())],
+        vec![
+            Pos2::new(rect.right() - 1.0, rect.top()),
+            Pos2::new(rect.right() - 1.0, rect.bottom()),
+        ],
         Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
     ));
 
     let header_h = 36.0 * h_scale;
     let header_rect = Rect::from_min_size(rect.left_top(), Vec2::new(rect.width(), header_h));
-    painter.add(Shape::rect_filled(header_rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+    painter.add(Shape::rect_filled(
+        header_rect,
+        Rounding::ZERO,
+        Color32::from_rgb(22, 22, 25),
+    ));
     painter.text(
         egui::pos2(rect.left() + 12.0 * w_scale, header_rect.center().y),
         egui::Align2::LEFT_CENTER,
@@ -29,27 +40,46 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     let rounding = 4.0 * h_scale;
     for (i, icon) in ["+", "🔍"].iter().enumerate() {
         let btn_rect = Rect::from_min_size(
-            Pos2::new(rect.right() - spacing - i as f32 * spacing, header_rect.top() + (header_h - btn_sz) / 2.0),
+            Pos2::new(
+                rect.right() - spacing - i as f32 * spacing,
+                header_rect.top() + (header_h - btn_sz) / 2.0,
+            ),
             Vec2::new(btn_sz, btn_sz),
         );
         let id = egui::Id::new("hdr_act").with(i as u64);
         let response = gui.ui.interact(btn_rect, id, egui::Sense::click());
         if response.hovered() {
-            painter.add(Shape::rect_filled(btn_rect, Rounding::same(rounding), Color32::from_rgb(30, 30, 34)));
+            painter.add(Shape::rect_filled(
+                btn_rect,
+                Rounding::same(rounding),
+                Color32::from_rgb(30, 30, 34),
+            ));
         }
-        if response.clicked() {
-            if i == 0 {
+        if response.clicked()
+            && i == 0 {
                 // "+" button: add node under selected or root
-                let parent = state.selected_nodes.first().copied().or(state.scene_tree.root_ids.first().copied());
+                let parent = state.selected_nodes.first().copied().or(state
+                    .scene_tree
+                    .root_ids
+                    .first()
+                    .copied());
                 state.scene_tree.add_node("New Node", parent);
             }
-        }
-        painter.text(btn_rect.center(), egui::Align2::CENTER_CENTER, *icon, FontId::proportional(14.0 * h_scale), Color32::from_gray(90));
+        painter.text(
+            btn_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            *icon,
+            FontId::proportional(14.0 * h_scale),
+            Color32::from_gray(90),
+        );
     }
 
     let line_y = header_rect.bottom() - 1.0;
     painter.add(Shape::line(
-        vec![Pos2::new(rect.left(), line_y), Pos2::new(rect.right(), line_y)],
+        vec![
+            Pos2::new(rect.left(), line_y),
+            Pos2::new(rect.right(), line_y),
+        ],
         Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
     ));
 
@@ -70,6 +100,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_node(
     state: &mut EditorState,
     gui: &mut Gui,
@@ -86,7 +117,12 @@ fn draw_node(
             Some(n) => n,
             None => return *y,
         };
-        (node.name.clone(), node.icon.clone(), node.expanded, node.children.clone())
+        (
+            node.name.clone(),
+            node.icon.clone(),
+            node.expanded,
+            node.children.clone(),
+        )
     };
 
     let indent_step = 16.0 * h_scale;
@@ -105,21 +141,31 @@ fn draw_node(
     let is_selected = state.selected_nodes.contains(&node_id);
 
     if is_selected {
-        painter.add(Shape::rect_filled(id_rect, Rounding::same(rounding), Color32::from_rgba_premultiplied(0, 212, 170, 30)));
+        painter.add(Shape::rect_filled(
+            id_rect,
+            Rounding::same(rounding),
+            Color32::from_rgba_premultiplied(0, 212, 170, 30),
+        ));
     } else if response.hovered() {
-        painter.add(Shape::rect_filled(id_rect, Rounding::same(rounding), Color32::from_rgb(30, 30, 34)));
+        painter.add(Shape::rect_filled(
+            id_rect,
+            Rounding::same(rounding),
+            Color32::from_rgb(30, 30, 34),
+        ));
     }
 
     let has_children = !children.is_empty();
-    let arrow_rect = Rect::from_min_size(Pos2::new(indent, *y + (item_h - arrow_sz) / 2.0), Vec2::new(arrow_sz, arrow_sz));
+    let arrow_rect = Rect::from_min_size(
+        Pos2::new(indent, *y + (item_h - arrow_sz) / 2.0),
+        Vec2::new(arrow_sz, arrow_sz),
+    );
     if has_children {
         let arrow_id = egui::Id::new("arrow").with(node_id);
         let arrow_response = gui.ui.interact(arrow_rect, arrow_id, egui::Sense::click());
-        if arrow_response.clicked() {
-            if let Some(n) = state.scene_tree.nodes.iter_mut().find(|n| n.id == node_id) {
+        if arrow_response.clicked()
+            && let Some(n) = state.scene_tree.nodes.iter_mut().find(|n| n.id == node_id) {
                 n.expanded = !n.expanded;
             }
-        }
         painter.text(
             arrow_rect.center(),
             egui::Align2::CENTER_CENTER,
@@ -154,7 +200,17 @@ fn draw_node(
 
     if node_expanded {
         for &child_id in &children {
-            *y = draw_node(state, gui, child_id, depth + 1, y, left, right, item_h, h_scale);
+            *y = draw_node(
+                state,
+                gui,
+                child_id,
+                depth + 1,
+                y,
+                left,
+                right,
+                item_h,
+                h_scale,
+            );
         }
     }
 

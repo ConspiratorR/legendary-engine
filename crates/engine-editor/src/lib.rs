@@ -1,10 +1,10 @@
-pub mod state;
-pub mod layout;
-pub mod hierarchy;
 pub mod camera;
-pub mod viewport;
 pub mod gizmo;
+pub mod hierarchy;
 pub mod inspector;
+pub mod layout;
+pub mod state;
+pub mod viewport;
 
 mod plugin;
 pub use plugin::EditorPlugin;

@@ -20,35 +20,83 @@ impl Default for GuiSkin {
         Self {
             label: GuiStyle::default(),
             button: GuiStyle {
-                normal: ColorBlock { background: Color32::from_gray(80), text: Color32::WHITE, border: None },
-                hover: ColorBlock { background: Color32::from_gray(100), text: Color32::WHITE, border: None },
-                active: ColorBlock { background: Color32::from_gray(120), text: Color32::WHITE, border: None },
-                focused: ColorBlock { background: Color32::from_gray(80), text: Color32::WHITE, border: None },
+                normal: ColorBlock {
+                    background: Color32::from_gray(80),
+                    text: Color32::WHITE,
+                    border: None,
+                },
+                hover: ColorBlock {
+                    background: Color32::from_gray(100),
+                    text: Color32::WHITE,
+                    border: None,
+                },
+                active: ColorBlock {
+                    background: Color32::from_gray(120),
+                    text: Color32::WHITE,
+                    border: None,
+                },
+                focused: ColorBlock {
+                    background: Color32::from_gray(80),
+                    text: Color32::WHITE,
+                    border: None,
+                },
                 ..Default::default()
             },
             box_: GuiStyle {
-                normal: ColorBlock { background: Color32::from_gray(50), text: Color32::WHITE, border: Some(Color32::from_gray(80)) },
+                normal: ColorBlock {
+                    background: Color32::from_gray(50),
+                    text: Color32::WHITE,
+                    border: Some(Color32::from_gray(80)),
+                },
                 ..Default::default()
             },
             text_field: GuiStyle {
-                normal: ColorBlock { background: Color32::from_gray(40), text: Color32::WHITE, border: Some(Color32::from_gray(100)) },
-                focused: ColorBlock { background: Color32::from_gray(45), text: Color32::WHITE, border: Some(Color32::from_rgb(60, 120, 200)) },
+                normal: ColorBlock {
+                    background: Color32::from_gray(40),
+                    text: Color32::WHITE,
+                    border: Some(Color32::from_gray(100)),
+                },
+                focused: ColorBlock {
+                    background: Color32::from_gray(45),
+                    text: Color32::WHITE,
+                    border: Some(Color32::from_rgb(60, 120, 200)),
+                },
                 ..Default::default()
             },
             toggle: GuiStyle::default(),
             window: GuiStyle {
-                normal: ColorBlock { background: Color32::from_gray(55), text: Color32::WHITE, border: Some(Color32::from_gray(90)) },
+                normal: ColorBlock {
+                    background: Color32::from_gray(55),
+                    text: Color32::WHITE,
+                    border: Some(Color32::from_gray(90)),
+                },
                 ..Default::default()
             },
             slider: GuiStyle::default(),
             toolbar: GuiStyle {
-                normal: ColorBlock { background: Color32::from_gray(70), text: Color32::from_gray(180), border: None },
-                active: ColorBlock { background: Color32::from_gray(110), text: Color32::WHITE, border: None },
+                normal: ColorBlock {
+                    background: Color32::from_gray(70),
+                    text: Color32::from_gray(180),
+                    border: None,
+                },
+                active: ColorBlock {
+                    background: Color32::from_gray(110),
+                    text: Color32::WHITE,
+                    border: None,
+                },
                 ..Default::default()
             },
             selection_grid: GuiStyle {
-                normal: ColorBlock { background: Color32::from_gray(60), text: Color32::from_gray(180), border: Some(Color32::from_gray(80)) },
-                active: ColorBlock { background: Color32::from_gray(100), text: Color32::WHITE, border: Some(Color32::from_rgb(60, 120, 200)) },
+                normal: ColorBlock {
+                    background: Color32::from_gray(60),
+                    text: Color32::from_gray(180),
+                    border: Some(Color32::from_gray(80)),
+                },
+                active: ColorBlock {
+                    background: Color32::from_gray(100),
+                    text: Color32::WHITE,
+                    border: Some(Color32::from_rgb(60, 120, 200)),
+                },
                 ..Default::default()
             },
             font: egui::FontId::proportional(14.0),
@@ -71,10 +119,26 @@ pub struct GuiStyle {
 impl Default for GuiStyle {
     fn default() -> Self {
         Self {
-            normal: ColorBlock { background: Color32::from_gray(60), text: Color32::WHITE, border: None },
-            hover: ColorBlock { background: Color32::from_gray(75), text: Color32::WHITE, border: None },
-            active: ColorBlock { background: Color32::from_gray(90), text: Color32::WHITE, border: None },
-            focused: ColorBlock { background: Color32::from_gray(65), text: Color32::WHITE, border: None },
+            normal: ColorBlock {
+                background: Color32::from_gray(60),
+                text: Color32::WHITE,
+                border: None,
+            },
+            hover: ColorBlock {
+                background: Color32::from_gray(75),
+                text: Color32::WHITE,
+                border: None,
+            },
+            active: ColorBlock {
+                background: Color32::from_gray(90),
+                text: Color32::WHITE,
+                border: None,
+            },
+            focused: ColorBlock {
+                background: Color32::from_gray(65),
+                text: Color32::WHITE,
+                border: None,
+            },
             border: Rounding::same(2.0),
             margins: Margin::symmetric(4.0, 2.0),
             font_size: 14.0,
@@ -107,7 +171,11 @@ mod tests {
 
     #[test]
     fn test_color_block_default() {
-        let block = ColorBlock { background: Color32::BLACK, text: Color32::WHITE, border: None };
+        let block = ColorBlock {
+            background: Color32::BLACK,
+            text: Color32::WHITE,
+            border: None,
+        };
         assert_eq!(block.text, Color32::WHITE);
     }
 }

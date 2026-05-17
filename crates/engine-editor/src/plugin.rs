@@ -1,8 +1,8 @@
+use crate::state::EditorState;
 use engine_core::app::{App, AppBuilder};
 use engine_core::plugin::Plugin;
 use engine_ui::EguiState;
 use engine_ui::GuiSkin;
-use crate::state::EditorState;
 
 pub struct EditorPlugin;
 

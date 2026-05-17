@@ -119,7 +119,13 @@ impl<'a> Gui<'a> {
 
         let painter = self.ui.painter_at(rect);
         Self::draw_background(&painter, block, rect, self.skin.text_field.border);
-        painter.text(egui::pos2(rect.left() + 4.0, rect.center().y), egui::Align2::LEFT_CENTER, text.as_str(), self.skin.font.clone(), block.text);
+        painter.text(
+            egui::pos2(rect.left() + 4.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            text.as_str(),
+            self.skin.font.clone(),
+            block.text,
+        );
 
         if response.has_focus() {
             let mut chars_modified = false;
@@ -198,27 +204,46 @@ impl<'a> Gui<'a> {
 
         let range = max - min;
         if range.abs() < f32::EPSILON {
-            painter.text(rect.center(), egui::Align2::CENTER_CENTER, "—", self.skin.font.clone(), Color32::GRAY);
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "—",
+                self.skin.font.clone(),
+                Color32::GRAY,
+            );
             return;
         }
 
         let t = ((*value - min) / range).clamp(0.0, 1.0);
 
         // Background track
-        Self::draw_background(&painter, &self.skin.slider.normal, rect, Rounding::same(2.0));
+        Self::draw_background(
+            &painter,
+            &self.skin.slider.normal,
+            rect,
+            Rounding::same(2.0),
+        );
 
         // Filled portion
-        let fill_rect = Rect::from_min_size(rect.left_top(), egui::vec2(rect.width() * t, rect.height()));
+        let fill_rect =
+            Rect::from_min_size(rect.left_top(), egui::vec2(rect.width() * t, rect.height()));
         painter.add(Shape::rect_filled(
-            fill_rect, Rounding::same(2.0), Color32::from_rgb(60, 120, 200),
+            fill_rect,
+            Rounding::same(2.0),
+            Color32::from_rgb(60, 120, 200),
         ));
 
         // Thumb
         let thumb_x = rect.left() + t * rect.width();
         let thumb_rect = Rect::from_center_size(
-            egui::pos2(thumb_x, rect.center().y), egui::vec2(6.0, rect.height() + 4.0),
+            egui::pos2(thumb_x, rect.center().y),
+            egui::vec2(6.0, rect.height() + 4.0),
         );
-        painter.add(Shape::rect_filled(thumb_rect, Rounding::same(3.0), Color32::WHITE));
+        painter.add(Shape::rect_filled(
+            thumb_rect,
+            Rounding::same(3.0),
+            Color32::WHITE,
+        ));
 
         // Drag handling
         if response.dragged() {
@@ -324,7 +349,11 @@ impl<'a> Gui<'a> {
 
     pub fn panel_header(&mut self, rect: Rect, title: &str) -> Rect {
         let painter = self.ui.painter_at(rect);
-        painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+        painter.add(Shape::rect_filled(
+            rect,
+            Rounding::ZERO,
+            Color32::from_rgb(22, 22, 25),
+        ));
         painter.text(
             egui::pos2(rect.left() + 12.0, rect.center().y),
             egui::Align2::LEFT_CENTER,
@@ -334,7 +363,10 @@ impl<'a> Gui<'a> {
         );
         let line_y = rect.bottom() - 1.0;
         painter.add(Shape::line(
-            vec![Pos2::new(rect.left(), line_y), Pos2::new(rect.right(), line_y)],
+            vec![
+                Pos2::new(rect.left(), line_y),
+                Pos2::new(rect.right(), line_y),
+            ],
             Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
         ));
         Rect::from_min_size(
@@ -344,7 +376,9 @@ impl<'a> Gui<'a> {
     }
 
     pub fn checkbox(&mut self, rect: Rect, label: &str, checked: &mut bool) {
-        let id = egui::Id::new("gui_chk").with(rect.min.x as u64).with(rect.min.y as u64);
+        let id = egui::Id::new("gui_chk")
+            .with(rect.min.x as u64)
+            .with(rect.min.y as u64);
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let box_size = rect.height() - 4.0;
@@ -354,12 +388,26 @@ impl<'a> Gui<'a> {
         );
 
         let painter = self.ui.painter_at(rect);
-        let bg = if *checked { Color32::from_rgb(0, 212, 170) } else { Color32::from_gray(40) };
+        let bg = if *checked {
+            Color32::from_rgb(0, 212, 170)
+        } else {
+            Color32::from_gray(40)
+        };
         painter.add(Shape::rect_filled(box_rect, Rounding::same(3.0), bg));
-        painter.add(Shape::rect_stroke(box_rect, Rounding::same(3.0), Stroke::new(1.0, Color32::from_gray(100))));
+        painter.add(Shape::rect_stroke(
+            box_rect,
+            Rounding::same(3.0),
+            Stroke::new(1.0, Color32::from_gray(100)),
+        ));
 
         if *checked {
-            painter.text(box_rect.center(), egui::Align2::CENTER_CENTER, "✓", self.skin.font.clone(), Color32::from_rgb(13, 13, 15));
+            painter.text(
+                box_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "✓",
+                self.skin.font.clone(),
+                Color32::from_rgb(13, 13, 15),
+            );
         }
 
         painter.text(
@@ -414,12 +462,7 @@ impl<'a> Gui<'a> {
             };
 
             let painter = self.ui.painter_at(cell_rect);
-            Self::draw_background(
-                &painter,
-                block,
-                cell_rect,
-                self.skin.selection_grid.border,
-            );
+            Self::draw_background(&painter, block, cell_rect, self.skin.selection_grid.border);
             painter.text(
                 cell_rect.center(),
                 egui::Align2::CENTER_CENTER,
@@ -439,7 +482,11 @@ impl<'a> Gui<'a> {
             return None;
         }
         let painter = self.ui.painter_at(rect);
-        painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+        painter.add(Shape::rect_filled(
+            rect,
+            Rounding::ZERO,
+            Color32::from_rgb(22, 22, 25),
+        ));
 
         let n = items.len() as f32;
         let item_w = rect.width() / n;
@@ -454,7 +501,11 @@ impl<'a> Gui<'a> {
             let response = self.ui.interact(item_rect, id, egui::Sense::click());
 
             if response.hovered() {
-                painter.add(Shape::rect_filled(item_rect, Rounding::ZERO, Color32::from_rgb(30, 30, 34)));
+                painter.add(Shape::rect_filled(
+                    item_rect,
+                    Rounding::ZERO,
+                    Color32::from_rgb(30, 30, 34),
+                ));
             }
 
             let text_color = if response.hovered() {
@@ -478,55 +529,122 @@ impl<'a> Gui<'a> {
     }
 
     pub fn tool_button(&mut self, rect: Rect, label: &str, active: bool) -> bool {
-        let id = egui::Id::new("gui_tbtn").with(rect.min.x as u64).with(rect.min.y as u64);
+        let id = egui::Id::new("gui_tbtn")
+            .with(rect.min.x as u64)
+            .with(rect.min.y as u64);
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let painter = self.ui.painter_at(rect);
 
         if active {
-            painter.add(Shape::rect_filled(rect, Rounding::same(6.0), Color32::from_rgb(0, 212, 170)));
-            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, self.skin.font.clone(), Color32::from_rgb(13, 13, 15));
+            painter.add(Shape::rect_filled(
+                rect,
+                Rounding::same(6.0),
+                Color32::from_rgb(0, 212, 170),
+            ));
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                label,
+                self.skin.font.clone(),
+                Color32::from_rgb(13, 13, 15),
+            );
         } else if response.hovered() {
-            painter.add(Shape::rect_filled(rect, Rounding::same(6.0), Color32::from_rgb(30, 30, 34)));
-            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, self.skin.font.clone(), Color32::from_gray(152));
+            painter.add(Shape::rect_filled(
+                rect,
+                Rounding::same(6.0),
+                Color32::from_rgb(30, 30, 34),
+            ));
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                label,
+                self.skin.font.clone(),
+                Color32::from_gray(152),
+            );
         } else {
-            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, self.skin.font.clone(), Color32::from_gray(152));
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                label,
+                self.skin.font.clone(),
+                Color32::from_gray(152),
+            );
         }
 
         response.clicked()
     }
 
     pub fn tab(&mut self, rect: Rect, label: &str, active: bool) -> bool {
-        let id = egui::Id::new("gui_tab").with(rect.min.x as u64).with(rect.min.y as u64);
+        let id = egui::Id::new("gui_tab")
+            .with(rect.min.x as u64)
+            .with(rect.min.y as u64);
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let painter = self.ui.painter_at(rect);
 
         if active {
-            painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+            painter.add(Shape::rect_filled(
+                rect,
+                Rounding::ZERO,
+                Color32::from_rgb(22, 22, 25),
+            ));
             let line_rect = Rect::from_min_size(
                 egui::pos2(rect.left(), rect.bottom() - 2.0),
                 egui::vec2(rect.width(), 2.0),
             );
-            painter.add(Shape::rect_filled(line_rect, Rounding::ZERO, Color32::from_rgb(0, 212, 170)));
-            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(12.0), Color32::from_rgb(0, 212, 170));
+            painter.add(Shape::rect_filled(
+                line_rect,
+                Rounding::ZERO,
+                Color32::from_rgb(0, 212, 170),
+            ));
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                label,
+                egui::FontId::proportional(12.0),
+                Color32::from_rgb(0, 212, 170),
+            );
         } else {
-            painter.text(rect.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(12.0), Color32::from_gray(90));
+            painter.text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                label,
+                egui::FontId::proportional(12.0),
+                Color32::from_gray(90),
+            );
         }
 
         response.clicked()
     }
 
-    pub fn tree_node(&mut self, rect: Rect, label: &str, icon: &str, selected: bool, depth: u32) -> bool {
-        let id = egui::Id::new("gui_tree").with(rect.min.x as u64).with(rect.min.y as u64);
+    pub fn tree_node(
+        &mut self,
+        rect: Rect,
+        label: &str,
+        icon: &str,
+        selected: bool,
+        depth: u32,
+    ) -> bool {
+        let id = egui::Id::new("gui_tree")
+            .with(rect.min.x as u64)
+            .with(rect.min.y as u64);
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let painter = self.ui.painter_at(rect);
 
         if selected {
-            painter.add(Shape::rect_filled(rect, Rounding::same(4.0), Color32::from_rgba_premultiplied(0, 212, 170, 40)));
+            painter.add(Shape::rect_filled(
+                rect,
+                Rounding::same(4.0),
+                Color32::from_rgba_premultiplied(0, 212, 170, 40),
+            ));
         } else if response.hovered() {
-            painter.add(Shape::rect_filled(rect, Rounding::same(4.0), Color32::from_rgb(30, 30, 34)));
+            painter.add(Shape::rect_filled(
+                rect,
+                Rounding::same(4.0),
+                Color32::from_rgb(30, 30, 34),
+            ));
         }
 
         let indent = 8.0 + depth as f32 * 16.0;
@@ -542,7 +660,11 @@ impl<'a> Gui<'a> {
             egui::Align2::LEFT_CENTER,
             label,
             self.skin.font.clone(),
-            if selected { Color32::from_rgb(0, 212, 170) } else { Color32::from_rgb(232, 232, 236) },
+            if selected {
+                Color32::from_rgb(0, 212, 170)
+            } else {
+                Color32::from_rgb(232, 232, 236)
+            },
         );
 
         response.clicked()
@@ -588,7 +710,11 @@ impl<'a> Gui<'a> {
                 egui::pos2(field_rect.left() + 14.0, field_rect.top()),
                 egui::vec2(field_rect.width() - 14.0, field_rect.height()),
             );
-            painter.add(Shape::rect_filled(val_rect, Rounding::same(4.0), Color32::from_rgb(30, 30, 34)));
+            painter.add(Shape::rect_filled(
+                val_rect,
+                Rounding::same(4.0),
+                Color32::from_rgb(30, 30, 34),
+            ));
 
             // Value text
             painter.text(
@@ -616,7 +742,11 @@ impl<'a> Gui<'a> {
             egui::pos2(rect.left() + 80.0, rect.top()),
             egui::vec2(rect.width() - 80.0, rect.height()),
         );
-        painter.add(Shape::rect_filled(input_rect, Rounding::same(4.0), Color32::from_rgb(30, 30, 34)));
+        painter.add(Shape::rect_filled(
+            input_rect,
+            Rounding::same(4.0),
+            Color32::from_rgb(30, 30, 34),
+        ));
 
         painter.text(
             egui::pos2(input_rect.left() + 6.0, input_rect.center().y),
@@ -822,7 +952,10 @@ mod tests {
         run_in_ui(|gui| {
             let rect = Rect::from_min_size(Pos2::new(10.0, 120.0), egui::vec2(400.0, 32.0));
             let result = gui.menu_bar(rect, &["文件", "编辑", "视图"]);
-            assert!(result.is_none(), "menu_bar should return None without click");
+            assert!(
+                result.is_none(),
+                "menu_bar should return None without click"
+            );
         });
     }
 
@@ -875,7 +1008,9 @@ mod tests {
     fn test_vec3_input_draws_without_panic() {
         run_in_ui(|gui| {
             let rect = Rect::from_min_size(Pos2::new(10.0, 270.0), egui::vec2(300.0, 22.0));
-            let mut x = 1.0; let mut y = 2.0; let mut z = 3.0;
+            let mut x = 1.0;
+            let mut y = 2.0;
+            let mut z = 3.0;
             gui.vec3_input(rect, "位置", &mut x, &mut y, &mut z);
         });
     }

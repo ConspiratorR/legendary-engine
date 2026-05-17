@@ -51,7 +51,10 @@ impl EguiState {
         for path in &cjk_candidates {
             if let Ok(data) = std::fs::read(path) {
                 let name = format!("cjk_{}", path.rsplit('\\').next().unwrap_or("font"));
-                fonts.font_data.insert(name.clone(), std::sync::Arc::new(egui::FontData::from_owned(data)));
+                fonts.font_data.insert(
+                    name.clone(),
+                    std::sync::Arc::new(egui::FontData::from_owned(data)),
+                );
                 fonts
                     .families
                     .entry(egui::FontFamily::Proportional)

@@ -1,6 +1,6 @@
+use crate::state::{EditorState, ToolType};
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::{Gui, GuiSkin};
-use crate::state::{EditorState, ToolType};
 
 pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
     let screen_rect = ctx.screen_rect();
@@ -17,7 +17,8 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
             let status_h = 24.0 * h_scale;
             let bottom_h = (screen.height() * 180.0 / 1080.0).clamp(120.0, 400.0);
 
-            let menu_rect = Rect::from_min_size(screen.left_top(), Vec2::new(screen.width(), menu_h));
+            let menu_rect =
+                Rect::from_min_size(screen.left_top(), Vec2::new(screen.width(), menu_h));
             let toolbar_rect = Rect::from_min_size(
                 Pos2::new(screen.left(), menu_rect.bottom()),
                 Vec2::new(screen.width(), toolbar_h),
@@ -40,15 +41,27 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
 
             let hierarchy_rect = Rect::from_min_size(
                 main_rect.left_top(),
-                Vec2::new(if state.show_left_panel { left_w } else { 0.0 }, main_rect.height()),
+                Vec2::new(
+                    if state.show_left_panel { left_w } else { 0.0 },
+                    main_rect.height(),
+                ),
             );
             let inspector_rect = Rect::from_min_size(
-                Pos2::new(main_rect.right() - (if state.show_right_panel { right_w } else { 0.0 }), main_rect.top()),
-                Vec2::new(if state.show_right_panel { right_w } else { 0.0 }, main_rect.height()),
+                Pos2::new(
+                    main_rect.right() - (if state.show_right_panel { right_w } else { 0.0 }),
+                    main_rect.top(),
+                ),
+                Vec2::new(
+                    if state.show_right_panel { right_w } else { 0.0 },
+                    main_rect.height(),
+                ),
             );
             let viewport_rect = Rect::from_min_size(
                 Pos2::new(hierarchy_rect.right(), main_rect.top()),
-                Vec2::new(inspector_rect.left() - hierarchy_rect.right(), main_rect.height()),
+                Vec2::new(
+                    inspector_rect.left() - hierarchy_rect.right(),
+                    main_rect.height(),
+                ),
             );
 
             let mut gui = Gui::new(ui, skin);
@@ -68,13 +81,22 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
 
 fn draw_menu_bar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32, h_scale: f32) {
     let painter = gui.ui.painter_at(rect);
-    painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+    painter.add(Shape::rect_filled(
+        rect,
+        Rounding::ZERO,
+        Color32::from_rgb(22, 22, 25),
+    ));
     painter.add(Shape::line(
-        vec![Pos2::new(rect.left(), rect.bottom() - 1.0), Pos2::new(rect.right(), rect.bottom() - 1.0)],
+        vec![
+            Pos2::new(rect.left(), rect.bottom() - 1.0),
+            Pos2::new(rect.right(), rect.bottom() - 1.0),
+        ],
         Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
     ));
 
-    let items = &["文件", "编辑", "视图", "场景", "资源", "构建", "窗口", "帮助"];
+    let items = &[
+        "文件", "编辑", "视图", "场景", "资源", "构建", "窗口", "帮助",
+    ];
     let font_sz = 13.0 * h_scale;
     let char_w = 8.0 * w_scale;
     let item_pad = 12.0 * w_scale;
@@ -82,18 +104,29 @@ fn draw_menu_bar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f3
     let mut x = rect.left() + 8.0 * w_scale;
     for (i, item) in items.iter().enumerate() {
         let text_w = item.len() as f32 * char_w;
-        let item_rect = Rect::from_min_size(Pos2::new(x, rect.top()), Vec2::new(text_w + item_pad * 2.0, rect.height()));
+        let item_rect = Rect::from_min_size(
+            Pos2::new(x, rect.top()),
+            Vec2::new(text_w + item_pad * 2.0, rect.height()),
+        );
         let id = egui::Id::new("mm").with(i as u64);
         let response = gui.ui.interact(item_rect, id, egui::Sense::click());
         if response.hovered() || state.active_menu == Some(i) {
-            painter.add(Shape::rect_filled(item_rect, Rounding::same(rounding), Color32::from_rgb(30, 30, 34)));
+            painter.add(Shape::rect_filled(
+                item_rect,
+                Rounding::same(rounding),
+                Color32::from_rgb(30, 30, 34),
+            ));
         }
         painter.text(
             egui::pos2(x + item_pad, rect.center().y),
             egui::Align2::LEFT_CENTER,
             *item,
             FontId::proportional(font_sz),
-            if response.hovered() { Color32::from_rgb(232, 232, 236) } else { Color32::from_gray(152) },
+            if response.hovered() {
+                Color32::from_rgb(232, 232, 236)
+            } else {
+                Color32::from_gray(152)
+            },
         );
         if response.clicked() {
             state.active_menu = Some(i);
@@ -120,9 +153,16 @@ fn draw_separator(painter: &egui::Painter, pos: f32, top: f32, bottom: f32, h_sc
 
 fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32, h_scale: f32) {
     let painter = gui.ui.painter_at(rect);
-    painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+    painter.add(Shape::rect_filled(
+        rect,
+        Rounding::ZERO,
+        Color32::from_rgb(22, 22, 25),
+    ));
     painter.add(Shape::line(
-        vec![Pos2::new(rect.left(), rect.bottom() - 1.0), Pos2::new(rect.right(), rect.bottom() - 1.0)],
+        vec![
+            Pos2::new(rect.left(), rect.bottom() - 1.0),
+            Pos2::new(rect.right(), rect.bottom() - 1.0),
+        ],
         Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
     ));
 
@@ -133,9 +173,17 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
     let cy = rect.top() + (rect.height() - btn_size) / 2.0;
 
     let tools = &["↖", "↔", "⟳", "⤢"];
-    let tool_types = [ToolType::Select, ToolType::Translate, ToolType::Rotate, ToolType::Scale];
+    let tool_types = [
+        ToolType::Select,
+        ToolType::Translate,
+        ToolType::Rotate,
+        ToolType::Scale,
+    ];
     for (i, tool) in tools.iter().enumerate() {
-        let btn_rect = Rect::from_min_size(Pos2::new(x + i as f32 * (btn_size + gap), cy), Vec2::new(btn_size, btn_size));
+        let btn_rect = Rect::from_min_size(
+            Pos2::new(x + i as f32 * (btn_size + gap), cy),
+            Vec2::new(btn_size, btn_size),
+        );
         if gui.tool_button(btn_rect, tool, state.active_tool == tool_types[i]) {
             state.active_tool = tool_types[i];
         }
@@ -145,10 +193,17 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
     x += pad;
 
     for (i, icon) in ["📁", "🔍"].iter().enumerate() {
-        let btn_rect = Rect::from_min_size(Pos2::new(x + i as f32 * (btn_size + gap), cy), Vec2::new(btn_size, btn_size));
+        let btn_rect = Rect::from_min_size(
+            Pos2::new(x + i as f32 * (btn_size + gap), cy),
+            Vec2::new(btn_size, btn_size),
+        );
         if gui.tool_button(btn_rect, icon, false) {
-            if i == 0 { state.show_left_panel = !state.show_left_panel; }
-            if i == 1 { state.show_right_panel = !state.show_right_panel; }
+            if i == 0 {
+                state.show_left_panel = !state.show_left_panel;
+            }
+            if i == 1 {
+                state.show_right_panel = !state.show_right_panel;
+            }
         }
     }
     x += 2.0 * (btn_size + gap) + pad;
@@ -157,7 +212,10 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
 
     let modes = &["3D", "T", "F", "R"];
     for (i, mode) in modes.iter().enumerate() {
-        let btn_rect = Rect::from_min_size(Pos2::new(x + i as f32 * (btn_size + gap), cy), Vec2::new(btn_size, btn_size));
+        let btn_rect = Rect::from_min_size(
+            Pos2::new(x + i as f32 * (btn_size + gap), cy),
+            Vec2::new(btn_size, btn_size),
+        );
         gui.tool_button(btn_rect, mode, state.active_viewport_tab == i);
     }
     x += 4.0 * (btn_size + gap) + pad;
@@ -182,11 +240,24 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
     );
 }
 
-fn draw_bottom_panel(state: &mut EditorState, ui: &egui::Ui, rect: Rect, h_scale: f32, w_scale: f32) {
+fn draw_bottom_panel(
+    state: &mut EditorState,
+    ui: &egui::Ui,
+    rect: Rect,
+    h_scale: f32,
+    w_scale: f32,
+) {
     let painter = ui.painter_at(rect);
-    painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(22, 22, 25)));
+    painter.add(Shape::rect_filled(
+        rect,
+        Rounding::ZERO,
+        Color32::from_rgb(22, 22, 25),
+    ));
     painter.add(Shape::line(
-        vec![Pos2::new(rect.left(), rect.top()), Pos2::new(rect.right(), rect.top())],
+        vec![
+            Pos2::new(rect.left(), rect.top()),
+            Pos2::new(rect.right(), rect.top()),
+        ],
         Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
     ));
 
@@ -198,15 +269,37 @@ fn draw_bottom_panel(state: &mut EditorState, ui: &egui::Ui, rect: Rect, h_scale
     let mut tx = rect.left() + 8.0 * w_scale;
     for (i, label) in tabs.iter().enumerate() {
         let text_w = label.len() as f32 * char_w;
-        let tab_rect = Rect::from_min_size(Pos2::new(tx, rect.top()), Vec2::new(text_w + 28.0 * w_scale, tab_h));
+        let tab_rect = Rect::from_min_size(
+            Pos2::new(tx, rect.top()),
+            Vec2::new(text_w + 28.0 * w_scale, tab_h),
+        );
         let id = egui::Id::new("btm_tab").with(i as u64);
         let response = ui.interact(tab_rect, id, egui::Sense::click());
         if state.active_bottom_tab == i {
-            let line_rect = Rect::from_min_size(Pos2::new(tab_rect.left(), tab_rect.bottom() - 2.0 * h_scale), Vec2::new(tab_rect.width(), 2.0 * h_scale));
-            painter.add(Shape::rect_filled(line_rect, Rounding::ZERO, Color32::from_rgb(0, 212, 170)));
-            painter.text(tab_rect.center(), egui::Align2::CENTER_CENTER, *label, FontId::proportional(tab_font), Color32::from_rgb(0, 212, 170));
+            let line_rect = Rect::from_min_size(
+                Pos2::new(tab_rect.left(), tab_rect.bottom() - 2.0 * h_scale),
+                Vec2::new(tab_rect.width(), 2.0 * h_scale),
+            );
+            painter.add(Shape::rect_filled(
+                line_rect,
+                Rounding::ZERO,
+                Color32::from_rgb(0, 212, 170),
+            ));
+            painter.text(
+                tab_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                *label,
+                FontId::proportional(tab_font),
+                Color32::from_rgb(0, 212, 170),
+            );
         } else {
-            painter.text(tab_rect.center(), egui::Align2::CENTER_CENTER, *label, FontId::proportional(tab_font), Color32::from_gray(90));
+            painter.text(
+                tab_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                *label,
+                FontId::proportional(tab_font),
+                Color32::from_gray(90),
+            );
         }
         if response.clicked() {
             state.active_bottom_tab = i;
@@ -216,7 +309,10 @@ fn draw_bottom_panel(state: &mut EditorState, ui: &egui::Ui, rect: Rect, h_scale
 
     let content_rect = Rect::from_min_size(
         Pos2::new(rect.left() + 12.0 * w_scale, tab_bar_rect.bottom()),
-        Vec2::new(rect.width() - 24.0 * w_scale, rect.bottom() - tab_bar_rect.bottom()),
+        Vec2::new(
+            rect.width() - 24.0 * w_scale,
+            rect.bottom() - tab_bar_rect.bottom(),
+        ),
     );
 
     let log_font = 11.0 * h_scale;
@@ -238,9 +334,27 @@ fn draw_bottom_panel(state: &mut EditorState, ui: &egui::Ui, rect: Rect, h_scale
                     "warn" => Color32::from_rgb(255, 184, 0),
                     _ => Color32::from_rgb(255, 71, 87),
                 };
-                painter.text(egui::pos2(content_rect.left(), y), egui::Align2::LEFT_CENTER, *time, FontId::proportional(log_font), time_color);
-                painter.text(egui::pos2(content_rect.left() + 60.0 * w_scale, y), egui::Align2::LEFT_CENTER, *level, FontId::proportional(log_font), level_color);
-                painter.text(egui::pos2(content_rect.left() + 110.0 * w_scale, y), egui::Align2::LEFT_CENTER, *msg, FontId::proportional(log_font), Color32::from_rgb(232, 232, 236));
+                painter.text(
+                    egui::pos2(content_rect.left(), y),
+                    egui::Align2::LEFT_CENTER,
+                    *time,
+                    FontId::proportional(log_font),
+                    time_color,
+                );
+                painter.text(
+                    egui::pos2(content_rect.left() + 60.0 * w_scale, y),
+                    egui::Align2::LEFT_CENTER,
+                    *level,
+                    FontId::proportional(log_font),
+                    level_color,
+                );
+                painter.text(
+                    egui::pos2(content_rect.left() + 110.0 * w_scale, y),
+                    egui::Align2::LEFT_CENTER,
+                    *msg,
+                    FontId::proportional(log_font),
+                    Color32::from_rgb(232, 232, 236),
+                );
                 y += log_step;
             }
         }
@@ -254,28 +368,50 @@ fn draw_bottom_panel(state: &mut EditorState, ui: &egui::Ui, rect: Rect, h_scale
             ];
             let mut y = content_rect.top() + 8.0 * h_scale;
             for line in &perf_data {
-                painter.text(egui::pos2(content_rect.left(), y), egui::Align2::LEFT_CENTER, *line, FontId::proportional(log_font), Color32::from_rgb(232, 232, 236));
+                painter.text(
+                    egui::pos2(content_rect.left(), y),
+                    egui::Align2::LEFT_CENTER,
+                    *line,
+                    FontId::proportional(log_font),
+                    Color32::from_rgb(232, 232, 236),
+                );
                 y += log_step;
             }
         }
         _ => {
-            painter.text(content_rect.center(), egui::Align2::CENTER_CENTER, "-- 面板内容 --", FontId::proportional(log_font), Color32::from_gray(90));
+            painter.text(
+                content_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                "-- 面板内容 --",
+                FontId::proportional(log_font),
+                Color32::from_gray(90),
+            );
         }
     }
 }
 
 fn draw_status_bar(state: &EditorState, gui: &mut Gui, rect: Rect, h_scale: f32, w_scale: f32) {
     let painter = gui.ui.painter_at(rect);
-    painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(30, 30, 34)));
+    painter.add(Shape::rect_filled(
+        rect,
+        Rounding::ZERO,
+        Color32::from_rgb(30, 30, 34),
+    ));
     painter.add(Shape::line(
-        vec![Pos2::new(rect.left(), rect.top()), Pos2::new(rect.right(), rect.top())],
+        vec![
+            Pos2::new(rect.left(), rect.top()),
+            Pos2::new(rect.right(), rect.top()),
+        ],
         Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
     ));
 
     let status_font = 11.0 * h_scale;
     let pad12 = 12.0 * w_scale;
     gui.status_item(
-        Rect::from_min_size(Pos2::new(rect.left() + pad12, rect.top()), Vec2::new(60.0 * w_scale, rect.height())),
+        Rect::from_min_size(
+            Pos2::new(rect.left() + pad12, rect.top()),
+            Vec2::new(60.0 * w_scale, rect.height()),
+        ),
         "就绪",
         Color32::from_rgb(46, 213, 115),
     );

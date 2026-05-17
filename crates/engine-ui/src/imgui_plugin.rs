@@ -1,6 +1,6 @@
+use crate::GuiSkin;
 use engine_core::app::AppBuilder;
 use engine_core::plugin::Plugin;
-use crate::GuiSkin;
 
 pub struct ImGuiPlugin;
 

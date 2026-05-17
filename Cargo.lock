@@ -297,6 +297,7 @@ dependencies = [
  "egui",
  "engine-core",
  "engine-ecs",
+ "engine-editor",
  "engine-framework",
  "engine-input",
  "engine-ui",
