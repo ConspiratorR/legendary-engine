@@ -291,19 +291,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
-name = "basic"
-version = "0.1.0"
-dependencies = [
- "egui",
- "engine-core",
- "engine-ecs",
- "engine-editor",
- "engine-framework",
- "engine-input",
- "engine-ui",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -843,6 +830,7 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "engine-core",
+ "engine-framework",
  "engine-math",
  "engine-ui",
 ]

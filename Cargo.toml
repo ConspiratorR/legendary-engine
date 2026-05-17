@@ -10,7 +10,6 @@ members = [
     "crates/engine-render",
     "crates/engine-input",
     "crates/engine-audio",
-    "examples/basic",
     "crates/engine-framework",
     "crates/engine-ui",
     "crates/engine-editor",

@@ -8,4 +8,9 @@ license.workspace = true
 engine-core = { path = "../engine-core" }
 engine-ui = { path = "../engine-ui" }
 engine-math = { path = "../engine-math" }
+engine-framework = { path = "../engine-framework" }
 egui = "=0.30.0"
+
+[[bin]]
+name = "engine-editor"
+path = "src/main.rs"
