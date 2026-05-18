@@ -264,6 +264,7 @@ impl Default for EditorCamera {
 }
 
 use std::collections::HashMap;
+use crate::resource_browser::ResourceBrowser;
 
 #[derive(Debug, Clone)]
 pub struct EditorState {
@@ -284,6 +285,7 @@ pub struct EditorState {
     pub node_transforms: HashMap<u64, [f32; 9]>,
     pub node_render: HashMap<u64, (String, String, bool)>,
     pub node_physics: HashMap<u64, (String, String)>,
+    pub resource_browser: ResourceBrowser,
 }
 
 impl Default for EditorState {
@@ -320,6 +322,7 @@ impl EditorState {
             node_transforms,
             node_render,
             node_physics,
+            resource_browser: ResourceBrowser::new(),
         }
     }
 

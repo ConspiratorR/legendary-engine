@@ -829,6 +829,7 @@ name = "engine-editor"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "engine-asset",
  "engine-core",
  "engine-framework",
  "engine-input",
@@ -859,6 +860,23 @@ name = "engine-math"
 version = "0.1.0"
 dependencies = [
  "glam",
+]
+
+[[package]]
+name = "engine-network"
+version = "0.1.0"
+dependencies = [
+ "engine-core",
+ "engine-ecs",
+]
+
+[[package]]
+name = "engine-physics"
+version = "0.1.0"
+dependencies = [
+ "engine-core",
+ "engine-ecs",
+ "engine-math",
 ]
 
 [[package]]

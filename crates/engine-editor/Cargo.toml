@@ -10,6 +10,7 @@ engine-ui = { path = "../engine-ui" }
 engine-math = { path = "../engine-math" }
 engine-framework = { path = "../engine-framework" }
 engine-input = { path = "../engine-input" }
+engine-asset = { path = "../engine-asset" }
 egui = "=0.30.0"
 
 [[bin]]

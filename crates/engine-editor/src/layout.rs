@@ -102,36 +102,69 @@ fn draw_menu_bar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f3
     let item_pad = 12.0 * w_scale;
     let rounding = 4.0 * h_scale;
     let mut x = rect.left() + 8.0 * w_scale;
+    
+    // Track menu rects for dropdown rendering
+    let mut menu_rects = Vec::new();
+    
     for (i, item) in items.iter().enumerate() {
         let text_w = item.len() as f32 * char_w;
         let item_rect = Rect::from_min_size(
             Pos2::new(x, rect.top()),
             Vec2::new(text_w + item_pad * 2.0, rect.height()),
         );
+        menu_rects.push((i, item_rect));
+        
         let id = egui::Id::new("mm").with(i as u64);
         let response = gui.ui.interact(item_rect, id, egui::Sense::click());
-        if response.hovered() || state.active_menu == Some(i) {
+        
+        // If a menu is active and we hover another, switch to that one
+        if state.active_menu.is_some() && response.hovered() {
+            state.active_menu = Some(i);
+        } else if response.hovered() || state.active_menu == Some(i) {
             painter.add(Shape::rect_filled(
                 item_rect,
                 Rounding::same(rounding),
                 Color32::from_rgb(30, 30, 34),
             ));
         }
+        
         painter.text(
             egui::pos2(x + item_pad, rect.center().y),
             egui::Align2::LEFT_CENTER,
             *item,
             FontId::proportional(font_sz),
-            if response.hovered() {
+            if response.hovered() || state.active_menu == Some(i) {
                 Color32::from_rgb(232, 232, 236)
             } else {
                 Color32::from_gray(152)
             },
         );
+        
         if response.clicked() {
-            state.active_menu = Some(i);
+            if state.active_menu == Some(i) {
+                // Toggle off if clicking the same menu
+                state.active_menu = None;
+            } else {
+                state.active_menu = Some(i);
+            }
         }
+        
         x += text_w + item_pad * 2.0 + 4.0 * w_scale;
+    }
+
+    // Draw dropdown menu if active
+    if let Some(active_idx) = state.active_menu {
+        if let Some((_, menu_rect)) = menu_rects.iter().find(|(i, _)| *i == active_idx) {
+            draw_dropdown_menu(state, gui, menu_rect, w_scale, h_scale, active_idx);
+        }
+    }
+    
+    // Check for clicks outside menus to close active menu
+    if let Some(pos) = gui.ui.input(|i| i.pointer.latest_pos()) {
+        let is_inside_any_menu = menu_rects.iter().any(|(_, r)| r.contains(pos));
+        if !is_inside_any_menu && gui.ui.input(|i| i.pointer.primary_clicked()) {
+            state.active_menu = None;
+        }
     }
 
     painter.text(
@@ -141,6 +174,117 @@ fn draw_menu_bar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f3
         FontId::proportional(font_sz),
         Color32::from_gray(152),
     );
+}
+
+fn draw_dropdown_menu(
+    state: &mut EditorState,
+    gui: &mut Gui,
+    menu_rect: Rect,
+    w_scale: f32,
+    h_scale: f32,
+    menu_idx: usize,
+) {
+    let menu_items = match menu_idx {
+        0 => vec!["新建项目", "打开项目", "保存", "另存为", "退出"], // 文件
+        1 => vec!["撤销", "重做", "剪切", "复制", "粘贴"], // 编辑
+        2 => vec!["切换左侧面板", "切换右侧面板", "重置布局"], // 视图
+        3 => vec!["新建场景", "保存场景", "加载场景"], // 场景
+        4 => vec!["导入资源", "刷新资源"], // 资源
+        5 => vec!["构建项目", "运行项目"], // 构建
+        6 => vec!["控制台", "性能", "资源浏览器"], // 窗口
+        7 => vec!["关于", "文档"], // 帮助
+        _ => vec![],
+    };
+    
+    if menu_items.is_empty() {
+        return;
+    }
+    
+    let item_h = 32.0 * h_scale;
+    let menu_w = 200.0 * w_scale;
+    let padding = 8.0 * w_scale;
+    
+    let dropdown_rect = Rect::from_min_size(
+        Pos2::new(menu_rect.left(), menu_rect.bottom()),
+        Vec2::new(menu_w, item_h * menu_items.len() as f32 + padding * 2.0),
+    );
+    
+    let painter = gui.ui.painter_at(dropdown_rect);
+    
+    // Draw menu background
+    painter.add(Shape::rect_filled(
+        dropdown_rect,
+        Rounding::same(4.0 * h_scale),
+        Color32::from_rgb(30, 30, 34),
+    ));
+    
+    // Draw border
+    painter.add(Shape::rect_stroke(
+        dropdown_rect,
+        Rounding::same(4.0 * h_scale),
+        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+    ));
+    
+    // Draw menu items
+    let font_sz = 13.0 * h_scale;
+    let char_w = 8.0 * w_scale;
+    let item_pad = 16.0 * w_scale;
+    let rounding = 4.0 * h_scale;
+    
+    let mut y = dropdown_rect.top() + padding;
+    for (i, item) in menu_items.iter().enumerate() {
+        let item_rect = Rect::from_min_size(
+            Pos2::new(dropdown_rect.left(), y),
+            Vec2::new(dropdown_rect.width(), item_h),
+        );
+        let id = egui::Id::new("dropdown_item").with(menu_idx).with(i as u64);
+        let response = gui.ui.interact(item_rect, id, egui::Sense::click());
+        
+        if response.hovered() {
+            painter.add(Shape::rect_filled(
+                item_rect,
+                Rounding::same(rounding),
+                Color32::from_rgb(0, 110, 210),
+            ));
+        }
+        
+        painter.text(
+            egui::pos2(dropdown_rect.left() + item_pad, item_rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            *item,
+            FontId::proportional(font_sz),
+            if response.hovered() {
+                Color32::from_rgb(232, 232, 236)
+            } else {
+                Color32::from_gray(180)
+            },
+        );
+        
+        if response.clicked() {
+            // Handle menu item actions
+            match menu_idx {
+                2 => { // 视图菜单
+                    match i {
+                        0 => state.show_left_panel = !state.show_left_panel,
+                        1 => state.show_right_panel = !state.show_right_panel,
+                        _ => {},
+                    }
+                },
+                6 => { // 窗口菜单
+                    match i {
+                        0 => state.active_bottom_tab = 0, // 日志
+                        1 => state.active_bottom_tab = 1, // 性能
+                        2 => state.active_bottom_tab = 2, // 资源
+                        _ => {},
+                    }
+                },
+                _ => {},
+            }
+            state.active_menu = None; // Close menu after action
+        }
+        
+        y += item_h;
+    }
 }
 
 fn draw_separator(painter: &egui::Painter, pos: f32, top: f32, bottom: f32, h_scale: f32) {
@@ -263,7 +407,7 @@ fn draw_bottom_panel(
 
     let tab_h = 32.0 * h_scale;
     let tab_bar_rect = Rect::from_min_size(rect.left_top(), Vec2::new(rect.width(), tab_h));
-    let tabs = &["日志", "性能", "音频", "网络"];
+    let tabs = &["日志", "性能", "资源", "音频", "网络"];
     let tab_font = 12.0 * h_scale;
     let char_w = 8.0 * w_scale;
     let mut tx = rect.left() + 8.0 * w_scale;
@@ -308,9 +452,9 @@ fn draw_bottom_panel(
     }
 
     let content_rect = Rect::from_min_size(
-        Pos2::new(rect.left() + 12.0 * w_scale, tab_bar_rect.bottom()),
+        Pos2::new(rect.left(), tab_bar_rect.bottom()),
         Vec2::new(
-            rect.width() - 24.0 * w_scale,
+            rect.width(),
             rect.bottom() - tab_bar_rect.bottom(),
         ),
     );
@@ -335,21 +479,21 @@ fn draw_bottom_panel(
                     _ => Color32::from_rgb(255, 71, 87),
                 };
                 painter.text(
-                    egui::pos2(content_rect.left(), y),
+                    egui::pos2(content_rect.left() + 12.0 * w_scale, y),
                     egui::Align2::LEFT_CENTER,
                     *time,
                     FontId::proportional(log_font),
                     time_color,
                 );
                 painter.text(
-                    egui::pos2(content_rect.left() + 60.0 * w_scale, y),
+                    egui::pos2(content_rect.left() + 72.0 * w_scale, y),
                     egui::Align2::LEFT_CENTER,
                     *level,
                     FontId::proportional(log_font),
                     level_color,
                 );
                 painter.text(
-                    egui::pos2(content_rect.left() + 110.0 * w_scale, y),
+                    egui::pos2(content_rect.left() + 122.0 * w_scale, y),
                     egui::Align2::LEFT_CENTER,
                     *msg,
                     FontId::proportional(log_font),
@@ -369,7 +513,7 @@ fn draw_bottom_panel(
             let mut y = content_rect.top() + 8.0 * h_scale;
             for line in &perf_data {
                 painter.text(
-                    egui::pos2(content_rect.left(), y),
+                    egui::pos2(content_rect.left() + 12.0 * w_scale, y),
                     egui::Align2::LEFT_CENTER,
                     *line,
                     FontId::proportional(log_font),
@@ -377,6 +521,10 @@ fn draw_bottom_panel(
                 );
                 y += log_step;
             }
+        }
+        2 => {
+            let mut gui = Gui::new(ui, &engine_ui::GuiSkin::default());
+            crate::resource_browser::draw(state, &mut gui, content_rect);
         }
         _ => {
             painter.text(

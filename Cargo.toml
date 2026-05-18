@@ -13,6 +13,8 @@ members = [
     "crates/engine-framework",
     "crates/engine-ui",
     "crates/engine-editor",
+    "crates/engine-physics",
+    "crates/engine-network",
 ]
 
 [workspace.package]

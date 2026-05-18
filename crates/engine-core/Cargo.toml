@@ -13,6 +13,8 @@ engine-audio = { path = "../engine-audio" }
 engine-asset = { path = "../engine-asset" }
 engine-window = { path = "../engine-window" }
 engine-math = { path = "../engine-math" }
+engine-physics = { path = "../engine-physics" }
+engine-network = { path = "../engine-network" }
 winit = "0.30"
 log = "0.4"
 env_logger = "0.11"

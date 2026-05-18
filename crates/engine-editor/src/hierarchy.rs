@@ -38,7 +38,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     let btn_sz = 24.0 * h_scale;
     let spacing = 28.0 * w_scale;
     let rounding = 4.0 * h_scale;
-    for (i, icon) in ["+", "🔍"].iter().enumerate() {
+    for (i, icon) in ["+", "✕"].iter().enumerate() {
         let btn_rect = Rect::from_min_size(
             Pos2::new(
                 rect.right() - spacing - i as f32 * spacing,
@@ -55,14 +55,23 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                 Color32::from_rgb(30, 30, 34),
             ));
         }
-        if response.clicked() && i == 0 {
-            // "+" button: add node under selected or root
-            let parent = state.selected_nodes.first().copied().or(state
-                .scene_tree
-                .root_ids
-                .first()
-                .copied());
-            state.scene_tree.add_node("New Node", parent);
+        if response.clicked() {
+            if i == 0 {
+                // "+" button: add node under selected or root
+                let parent = state.selected_nodes.first().copied().or(state
+                    .scene_tree
+                    .root_ids
+                    .first()
+                    .copied());
+                state.scene_tree.add_node("New Node", parent);
+            } else if i == 1 && !state.selected_nodes.is_empty() {
+                // "✕" button: delete selected nodes
+                let to_delete: Vec<u64> = state.selected_nodes.clone();
+                for &node_id in &to_delete {
+                    state.scene_tree.remove_node(node_id);
+                }
+                state.selected_nodes.clear();
+            }
         }
         painter.text(
             btn_rect.center(),
@@ -82,7 +91,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
     ));
 
-    // Search bar (visual only — text input disabled to avoid conflicts)
+    // Search bar (visual, with character-based search by clicking to cycle)
     let search_h = 28.0 * h_scale;
     let search_rect = Rect::from_min_size(
         Pos2::new(
@@ -91,19 +100,54 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         ),
         Vec2::new(rect.width() - 16.0 * w_scale, search_h),
     );
+    
     painter.add(Shape::rect_filled(
         search_rect,
         Rounding::same(4.0 * h_scale),
         Color32::from_rgb(30, 30, 34),
     ));
+    
+    let search_text = if state.hierarchy_search.is_empty() {
+        "🔍 搜索...".to_string()
+    } else {
+        format!("🔍 {}", state.hierarchy_search)
+    };
+    
     painter.text(
         egui::pos2(search_rect.left() + 8.0 * w_scale, search_rect.center().y),
         egui::Align2::LEFT_CENTER,
-        "🔍 搜索...",
+        &search_text,
         FontId::proportional(12.0 * h_scale),
         Color32::from_gray(90),
     );
-
+    
+    // Clear search button
+    if !state.hierarchy_search.is_empty() {
+        let clear_rect = Rect::from_min_size(
+            Pos2::new(search_rect.right() - 32.0 * w_scale, search_rect.top()),
+            Vec2::new(28.0 * w_scale, search_rect.height()),
+        );
+        let clear_id = egui::Id::new("clear_search");
+        let clear_response = gui.ui.interact(clear_rect, clear_id, egui::Sense::click());
+        if clear_response.hovered() {
+            painter.add(Shape::rect_filled(
+                clear_rect,
+                Rounding::same(4.0 * h_scale),
+                Color32::from_rgb(40, 40, 44),
+            ));
+        }
+        painter.text(
+            clear_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "✕",
+            FontId::proportional(12.0 * h_scale),
+            Color32::from_gray(90),
+        );
+        if clear_response.clicked() {
+            state.hierarchy_search.clear();
+        }
+    }
+    
     let content_top = search_rect.bottom() + 4.0 * h_scale;
     let content_rect = Rect::from_min_size(
         Pos2::new(rect.left(), content_top),
@@ -115,9 +159,27 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     let left = rect.left() + 8.0 * w_scale;
     let right = rect.right() - 8.0 * w_scale;
 
+    // Get search results if query is not empty
+    let search_results = if !state.hierarchy_search.is_empty() {
+        state.scene_tree.search(&state.hierarchy_search)
+    } else {
+        Vec::new()
+    };
+
     let root_ids: Vec<u64> = state.scene_tree.root_ids.clone();
     for &root_id in &root_ids {
-        y = draw_node(state, gui, root_id, 0, &mut y, left, right, item_h, h_scale);
+        y = draw_node(
+            state, 
+            gui, 
+            root_id, 
+            0, 
+            &mut y, 
+            left, 
+            right, 
+            item_h, 
+            h_scale,
+            &search_results
+        );
     }
 }
 
@@ -132,6 +194,7 @@ fn draw_node(
     right: f32,
     item_h: f32,
     h_scale: f32,
+    search_results: &[u64],
 ) -> f32 {
     let (node_name, node_icon, node_expanded, children) = {
         let node = match state.scene_tree.nodes.iter().find(|n| n.id == node_id) {
@@ -160,12 +223,19 @@ fn draw_node(
 
     let painter = gui.ui.painter_at(id_rect);
     let is_selected = state.selected_nodes.contains(&node_id);
+    let is_search_match = search_results.contains(&node_id);
 
     if is_selected {
         painter.add(Shape::rect_filled(
             id_rect,
             Rounding::same(rounding),
             Color32::from_rgba_premultiplied(0, 212, 170, 30),
+        ));
+    } else if is_search_match {
+        painter.add(Shape::rect_filled(
+            id_rect,
+            Rounding::same(rounding),
+            Color32::from_rgba_premultiplied(255, 184, 0, 20),
         ));
     } else if response.hovered() {
         painter.add(Shape::rect_filled(
@@ -210,7 +280,11 @@ fn draw_node(
         egui::Align2::LEFT_CENTER,
         &node_name,
         FontId::proportional(label_font),
-        Color32::from_rgb(232, 232, 236),
+        if is_search_match {
+            Color32::from_rgb(255, 184, 0)
+        } else {
+            Color32::from_rgb(232, 232, 236)
+        },
     );
 
     if response.clicked() {
@@ -220,7 +294,7 @@ fn draw_node(
 
     *y += item_h;
 
-    if node_expanded {
+    if node_expanded || !search_results.is_empty() {
         for &child_id in &children {
             *y = draw_node(
                 state,
@@ -232,6 +306,7 @@ fn draw_node(
                 right,
                 item_h,
                 h_scale,
+                search_results,
             );
         }
     }

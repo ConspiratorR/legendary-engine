@@ -4,6 +4,7 @@ pub mod gizmo;
 pub mod hierarchy;
 pub mod inspector;
 pub mod layout;
+pub mod resource_browser;
 pub mod scene_serializer;
 pub mod shortcuts;
 pub mod state;
