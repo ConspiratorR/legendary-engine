@@ -39,6 +39,7 @@ impl KeyBinding {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EditorAction {
     SaveScene,
     LoadScene,
@@ -61,7 +62,7 @@ pub enum EditorAction {
     NextFrame,
     PrevFrame,
     ToggleGrid,
-    Toggle Gizmos,
+    ToggleGizmos,
     ShowConsole,
     ShowHierarchy,
     ShowInspector,
@@ -100,7 +101,7 @@ impl ShortcutManager {
         self.bind(EditorAction::ScaleTool, KeyBinding::new(KeyCode::KeyR));
         self.bind(EditorAction::Play, KeyBinding::new(KeyCode::KeyP).with_ctrl());
         self.bind(EditorAction::Pause, KeyBinding::new(KeyCode::Pause));
-        self.bind(EditorAction::Stop, KeyBinding::new(KeyCode::Stop).with_ctrl());
+        self.bind(EditorAction::Stop, KeyBinding::new(KeyCode::F5).with_ctrl());
         self.bind(EditorAction::NextFrame, KeyBinding::new(KeyCode::Period).with_ctrl());
         self.bind(EditorAction::PrevFrame, KeyBinding::new(KeyCode::Comma).with_ctrl());
     }
@@ -151,7 +152,8 @@ impl ShortcutManager {
             if binding.alt {
                 parts.push("Alt");
             }
-            parts.push(format!("{:?}", binding.key).replace("Key", "").as_str());
+            let key_str = format!("{:?}", binding.key).replace("Key", "");
+            parts.push(key_str.as_str());
             parts.join("+")
         } else {
             "None".to_string()

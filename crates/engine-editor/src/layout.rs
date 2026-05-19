@@ -155,7 +155,7 @@ fn draw_menu_bar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f3
     // Draw dropdown menu if active
     if let Some(active_idx) = state.active_menu {
         if let Some((_, menu_rect)) = menu_rects.iter().find(|(i, _)| *i == active_idx) {
-            draw_dropdown_menu(state, gui, menu_rect, w_scale, h_scale, active_idx);
+            draw_dropdown_menu(state, gui, *menu_rect, w_scale, h_scale, active_idx);
         }
     }
     
@@ -523,7 +523,8 @@ fn draw_bottom_panel(
             }
         }
         2 => {
-            let mut gui = Gui::new(ui, &engine_ui::GuiSkin::default());
+            let skin_default = engine_ui::GuiSkin::default();
+            let mut gui = Gui::new(ui, &skin_default);
             crate::resource_browser::draw(state, &mut gui, content_rect);
         }
         _ => {

@@ -10,7 +10,7 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut AppBuilder) {
         // Add physics world as a resource
         let world = app.world_mut();
-        world.insert(PhysicsWorld::default());
+        world.insert_resource(PhysicsWorld::default());
 
         // Register physics components with ECS
         // This would typically add systems to the schedule

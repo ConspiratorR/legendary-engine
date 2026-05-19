@@ -1,4 +1,4 @@
-use engine_editor::EditorState;
+use engine_editor::state::EditorState;
 use engine_render::renderer::Renderer;
 use engine_ui::{EguiState, GuiSkin};
 use engine_window::{create_window, WindowConfig};
@@ -16,7 +16,7 @@ fn main() -> anyhow::Result<()> {
 
     // Create event loop and window
     let event_loop = EventLoop::new()?;
-    let window = create_window(
+    let window = std::sync::Arc::new(create_window(
         &WindowConfig {
             title: "RustEngine Editor".to_string(),
             width: 1280,
@@ -24,7 +24,7 @@ fn main() -> anyhow::Result<()> {
             vsync: true,
         },
         &event_loop,
-    );
+    ));
 
     // Pollster (for async)
     let mut render = None;
@@ -33,7 +33,7 @@ fn main() -> anyhow::Result<()> {
 
     pollster::block_on(async {
         // Initialize renderer
-        let renderer = Renderer::new(&window).await;
+        let renderer = Renderer::new(std::sync::Arc::clone(&window));
         let scale_factor = window.scale_factor() as f32;
         let mut egui_state_local = EguiState::new(
             &renderer.device,

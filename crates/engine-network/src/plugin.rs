@@ -1,8 +1,6 @@
 //! Network plugin for engine.
 use engine_core::app::AppBuilder;
 use engine_core::plugin::Plugin;
-use crate::connection::Connection;
-
 /// Plugin that adds networking capabilities.
 pub struct NetworkPlugin;
 
@@ -30,7 +28,7 @@ impl Plugin for NetworkPlugin {
     fn build(&self, app: &mut AppBuilder) {
         // Add network config as a resource
         let world = app.world_mut();
-        world.insert(NetworkConfig::default());
+        world.insert_resource(NetworkConfig::default());
         
         // If server would add systems to process network messages
     }
