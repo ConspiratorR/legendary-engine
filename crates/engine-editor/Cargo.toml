@@ -11,7 +11,14 @@ engine-math = { path = "../engine-math" }
 engine-framework = { path = "../engine-framework" }
 engine-input = { path = "../engine-input" }
 engine-asset = { path = "../engine-asset" }
+engine-render = { path = "../engine-render" }
+engine-window = { path = "../engine-window" }
 egui = "=0.30.0"
+anyhow = "1.0"
+pollster = "0.3"
+log = "0.4"
+env_logger = "0.11"
+winit = "0.30"
 
 [[bin]]
 name = "engine-editor"
