@@ -2,6 +2,7 @@ use crate::hierarchy::{Children, Parent};
 use crate::node::SceneNode;
 use crate::transform::{GlobalTransform, Transform};
 use engine_ecs::world::World;
+use engine_math::Mat4;
 
 pub struct SceneManager {
     world: World,
@@ -25,7 +26,7 @@ impl SceneManager {
         self.root
     }
 
-    pub fn add_node(&mut self, name: &str) -> SceneNodeBuilder {
+    pub fn add_node(&mut self, name: &str) -> SceneNodeBuilder<'_> {
         let entity = self.world.spawn();
         let node = SceneNode::new(entity);
         let idx = entity.index() as usize;
@@ -38,7 +39,7 @@ impl SceneManager {
         self.world.add_component(entity, Children::new());
         self.set_parent_internal(node, self.root);
         SceneNodeBuilder {
-            scene_manager: self as *mut _,
+            scene_manager: self,
             node,
         }
     }
@@ -86,6 +87,27 @@ impl SceneManager {
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
+
+    pub fn sync_transforms(&mut self) {
+        let root_entity = self.root.entity();
+        let mut stack = vec![(root_entity, Mat4::IDENTITY)];
+        while let Some((entity, parent_global)) = stack.pop() {
+            let local_matrix = self
+                .world
+                .get::<Transform>(entity)
+                .map(|t| t.to_matrix())
+                .unwrap_or(Mat4::IDENTITY);
+            let global = parent_global * local_matrix;
+            if let Some(gt) = self.world.get_mut::<GlobalTransform>(entity) {
+                gt.0 = global;
+            }
+            if let Some(children) = self.world.get::<Children>(entity) {
+                for child in children.0.iter().rev() {
+                    stack.push((*child, global));
+                }
+            }
+        }
+    }
 }
 
 impl Default for SceneManager {
@@ -94,21 +116,19 @@ impl Default for SceneManager {
     }
 }
 
-pub struct SceneNodeBuilder {
-    scene_manager: *mut SceneManager,
+pub struct SceneNodeBuilder<'a> {
+    scene_manager: &'a mut SceneManager,
     node: SceneNode,
 }
 
-impl SceneNodeBuilder {
-    pub fn with_transform(self, transform: Transform) -> SceneNodeBuilder {
-        let sm = unsafe { &mut *self.scene_manager };
-        *sm.transform_mut(self.node) = transform;
+impl<'a> SceneNodeBuilder<'a> {
+    pub fn with_transform(self, transform: Transform) -> SceneNodeBuilder<'a> {
+        *self.scene_manager.transform_mut(self.node) = transform;
         self
     }
 
-    pub fn with_child(self, child: SceneNode) -> SceneNodeBuilder {
-        let sm = unsafe { &mut *self.scene_manager };
-        sm.set_parent(child, self.node);
+    pub fn with_child(self, child: SceneNode) -> SceneNodeBuilder<'a> {
+        self.scene_manager.set_parent(child, self.node);
         self
     }
 
@@ -117,8 +137,8 @@ impl SceneNodeBuilder {
     }
 }
 
-impl From<SceneNodeBuilder> for SceneNode {
-    fn from(builder: SceneNodeBuilder) -> Self {
+impl<'a> From<SceneNodeBuilder<'a>> for SceneNode {
+    fn from(builder: SceneNodeBuilder<'a>) -> Self {
         builder.node
     }
 }

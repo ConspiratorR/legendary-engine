@@ -45,6 +45,7 @@ impl World {
         if idx as usize >= self.generations.len() {
             return;
         }
+        self.components.remove_entity(idx);
         self.generations[idx as usize] = entity.generation() + 1;
         self.free_list.push(idx);
     }

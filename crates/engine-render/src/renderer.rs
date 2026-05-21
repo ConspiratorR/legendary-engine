@@ -1,6 +1,9 @@
 use std::ops::Deref;
 use std::sync::Arc;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
+use crate::graph::{RenderGraph, pass, execute};
+use crate::pipeline::sprite::SpritePipeline;
+use engine_math::Mat4;
 
 #[derive(Clone)]
 pub struct GpuDevice(pub Arc<Device>);
@@ -27,6 +30,9 @@ pub struct Renderer {
     pub queue: GpuQueue,
     pub surface: Surface<'static>,
     pub config: SurfaceConfiguration,
+    pub graph: RenderGraph,
+    pub sprite_pipeline: Arc<SpritePipeline>,
+    camera_uniform: wgpu::Buffer,
 }
 
 impl Renderer {
@@ -57,11 +63,24 @@ impl Renderer {
             .get_default_config(&adapter, size.width, size.height)
             .unwrap();
         surface.configure(&device, &config);
+
+        let sprite_pipeline = Arc::new(SpritePipeline::new(&device, config.format));
+
+        let camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("camera_uniform"),
+            size: 64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         Self {
             device: GpuDevice(Arc::new(device)),
             queue: GpuQueue(Arc::new(queue)),
             surface,
             config,
+            graph: RenderGraph::new(),
+            sprite_pipeline,
+            camera_uniform,
         }
     }
 
@@ -71,34 +90,49 @@ impl Renderer {
         self.surface.configure(&self.device, &self.config);
     }
 
-    pub fn present(&self) -> Result<(), wgpu::SurfaceError> {
+    pub fn present(&mut self, camera_matrix: &Mat4, sprite_data: &[crate::sprite::SpriteDraw]) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = Renderer::cmd_buf(&self.device);
-        let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("main_pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
+
+        // Build render graph for this frame
+        self.graph.reset();
+        let swapchain = self.graph.import_texture_view("swapchain", view);
+
+        let sprite_pipeline = self.sprite_pipeline.clone();
+        self.graph.add_render_pass(pass::RenderPassDesc {
+            label: Some("sprite_pass".to_string()),
+            color_attachments: vec![pass::ColorAttachment {
+                resource: swapchain,
+                load_op: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store_op: wgpu::StoreOp::Store,
+            }],
             depth_stencil_attachment: None,
-            occlusion_query_set: None,
-            timestamp_writes: None,
+            execute: Box::new(move |ctx| {
+                ctx.pass.set_pipeline(&sprite_pipeline.pipeline);
+                ctx.pass.draw(0..6, 0..1);
+            }),
         });
+
+        let compiled = self.graph.compile(&self.device).unwrap();
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("main_encoder"),
+        });
+
+        // Upload camera uniform
+        let matrix_data = camera_matrix.to_cols_array();
+        self.queue.write_buffer(&self.camera_uniform, 0, bytemuck::cast_slice(&matrix_data));
+
+        let mut exec_ctx = execute::ExecuteContext {
+            device: &self.device,
+            queue: &self.queue,
+            encoder: &mut encoder,
+        };
+        self.graph.execute(&compiled, &mut exec_ctx).unwrap();
+
         self.queue.submit([encoder.finish()]);
         output.present();
         Ok(())
-    }
-
-    fn cmd_buf(device: &Device) -> wgpu::CommandEncoder {
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("main_encoder"),
-        })
     }
 }

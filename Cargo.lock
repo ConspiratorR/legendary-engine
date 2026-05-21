@@ -820,9 +820,6 @@ dependencies = [
 [[package]]
 name = "engine-ecs"
 version = "0.1.0"
-dependencies = [
- "thiserror 2.0.18",
-]
 
 [[package]]
 name = "engine-editor"
@@ -907,7 +904,6 @@ version = "0.1.0"
 dependencies = [
  "engine-ecs",
  "engine-math",
- "thiserror 2.0.18",
 ]
 
 [[package]]

@@ -1,4 +1,3 @@
-use crate::transform::Transform;
 use engine_ecs::entity::Entity;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -14,9 +13,4 @@ impl SceneNode {
     pub fn entity(&self) -> Entity {
         self.entity
     }
-}
-
-pub struct SceneBuilder {
-    pub entity: Entity,
-    pub transform: Option<Transform>,
 }

@@ -1,5 +1,11 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
+
+pub trait Storage: Any {
+    fn remove_index(&mut self, index: u32);
+    fn as_any_ref(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
 
 pub struct SparseSet<T> {
     sparse: Vec<Option<T>>,
@@ -63,8 +69,25 @@ impl<T> SparseSet<T> {
     }
 }
 
+impl<T: 'static> Storage for SparseSet<T> {
+    fn remove_index(&mut self, index: u32) {
+        self.entities.retain(|e| *e != index);
+        if let Some(slot) = self.sparse.get_mut(index as usize) {
+            *slot = None;
+        }
+    }
+
+    fn as_any_ref(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 pub struct ComponentRegistry {
-    storages: HashMap<TypeId, Box<dyn std::any::Any>>,
+    storages: HashMap<TypeId, Box<dyn Storage>>,
 }
 
 impl Default for ComponentRegistry {
@@ -85,18 +108,25 @@ impl ComponentRegistry {
         self.storages
             .entry(tid)
             .or_insert_with(|| Box::new(SparseSet::<T>::new()))
+            .as_any_mut()
             .downcast_mut::<SparseSet<T>>()
             .expect("Type mismatch in ComponentRegistry")
     }
 
     pub fn try_get_storage<T: 'static>(&self) -> Option<&SparseSet<T>> {
         let tid = TypeId::of::<T>();
-        self.storages.get(&tid)?.downcast_ref::<SparseSet<T>>()
+        self.storages.get(&tid)?.as_any_ref().downcast_ref::<SparseSet<T>>()
     }
 
     pub fn try_get_storage_mut<T: 'static>(&mut self) -> Option<&mut SparseSet<T>> {
         let tid = TypeId::of::<T>();
-        self.storages.get_mut(&tid)?.downcast_mut::<SparseSet<T>>()
+        self.storages.get_mut(&tid)?.as_any_mut().downcast_mut::<SparseSet<T>>()
+    }
+
+    pub fn remove_entity(&mut self, index: u32) {
+        for storage in self.storages.values_mut() {
+            storage.remove_index(index);
+        }
     }
 }
 

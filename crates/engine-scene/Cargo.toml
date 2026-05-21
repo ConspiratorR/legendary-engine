@@ -7,4 +7,3 @@ license.workspace = true
 [dependencies]
 engine-ecs = { path = "../engine-ecs" }
 engine-math = { path = "../engine-math" }
-thiserror = "2"
