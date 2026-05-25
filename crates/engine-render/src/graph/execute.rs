@@ -16,7 +16,6 @@ impl RenderGraph {
         ctx: &mut ExecuteContext<'_>,
     ) -> Result<(), wgpu::SurfaceError> {
         for (compiled_pass, execute_fn) in compiled.passes.iter().zip(closures.drain(..)) {
-
             // Resolve color attachment views
             let color_attachments: Vec<Option<wgpu::RenderPassColorAttachment<'_>>> = compiled_pass
                 .color_attachments
