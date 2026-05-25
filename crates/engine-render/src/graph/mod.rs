@@ -5,7 +5,7 @@ pub mod pass;
 pub mod texture;
 
 pub use buffer::BufferDesc;
-pub use texture::{BufferHandle as _, TextureDesc, TextureHandle};
+pub use texture::{TextureDesc, TextureHandle};
 
 use std::collections::HashMap;
 

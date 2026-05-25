@@ -142,6 +142,10 @@ impl TextureStore {
         if width == 0 || height == 0 {
             return Err(TextureLoadError::InvalidDimensions { width, height });
         }
+        let expected_len = (4 * width * height) as usize;
+        if pixels.len() < expected_len {
+            return Err(TextureLoadError::InvalidDimensions { width, height });
+        }
 
         let size = wgpu::Extent3d {
             width,
