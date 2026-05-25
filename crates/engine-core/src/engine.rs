@@ -84,7 +84,8 @@ pub fn run_default(app_builder: AppBuilder) {
                     app.post_render_hooks = hooks;
                 } else if let Some(r) = app.renderer_mut() {
                     let default_cam = engine_math::Mat4::IDENTITY;
-                    let _ = r.present(&default_cam, &[]);
+                    let batches: Vec<engine_render::sprite::SpriteBatch> = Vec::new();
+                    let _ = r.present(&default_cam, &batches);
                 }
             }
         })

@@ -11,10 +11,19 @@ pub struct TextureDesc {
 }
 
 impl TextureDesc {
-    pub fn new_2d(width: u32, height: u32, format: wgpu::TextureFormat, usage: wgpu::TextureUsages) -> Self {
+    pub fn new_2d(
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
+    ) -> Self {
         Self {
             label: None,
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_levels: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -50,12 +59,22 @@ pub(crate) struct TextureNode {
 
 impl TextureNode {
     pub fn new(desc: TextureDesc) -> Self {
-        Self { desc, texture: None, view: None, import: false }
+        Self {
+            desc,
+            texture: None,
+            view: None,
+            import: false,
+        }
     }
 
     pub fn imported(texture: wgpu::Texture, view: wgpu::TextureView) -> Self {
         Self {
-            desc: TextureDesc::new_2d(texture.width(), texture.height(), texture.format(), texture.usage()),
+            desc: TextureDesc::new_2d(
+                texture.width(),
+                texture.height(),
+                texture.format(),
+                texture.usage(),
+            ),
             texture: Some(texture),
             view: Some(view),
             import: true,
@@ -64,7 +83,12 @@ impl TextureNode {
 
     pub fn imported_view(view: wgpu::TextureView) -> Self {
         Self {
-            desc: TextureDesc::new_2d(0, 0, wgpu::TextureFormat::Bgra8UnormSrgb, wgpu::TextureUsages::RENDER_ATTACHMENT),
+            desc: TextureDesc::new_2d(
+                0,
+                0,
+                wgpu::TextureFormat::Bgra8UnormSrgb,
+                wgpu::TextureUsages::RENDER_ATTACHMENT,
+            ),
             texture: None,
             view: Some(view),
             import: true,
@@ -78,7 +102,12 @@ mod tests {
 
     #[test]
     fn test_texture_desc_2d() {
-        let desc = TextureDesc::new_2d(640, 480, wgpu::TextureFormat::Bgra8UnormSrgb, wgpu::TextureUsages::RENDER_ATTACHMENT);
+        let desc = TextureDesc::new_2d(
+            640,
+            480,
+            wgpu::TextureFormat::Bgra8UnormSrgb,
+            wgpu::TextureUsages::RENDER_ATTACHMENT,
+        );
         assert_eq!(desc.size.width, 640);
         assert_eq!(desc.size.height, 480);
         assert_eq!(desc.format, wgpu::TextureFormat::Bgra8UnormSrgb);

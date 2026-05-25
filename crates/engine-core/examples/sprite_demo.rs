@@ -1,5 +1,6 @@
 use engine_math::Mat4;
 use engine_render::renderer::Renderer;
+use engine_render::sprite::SpriteBatch;
 use engine_window::{window::WindowConfig, window::create_window};
 use log::info;
 use winit::event::{Event, WindowEvent};
@@ -46,7 +47,7 @@ fn main() {
             let view = Mat4::IDENTITY;
             let camera_matrix = proj * view;
 
-            let sprites = Vec::new();
+            let sprites: Vec<SpriteBatch> = Vec::new();
             let _ = renderer.present(&camera_matrix, &sprites);
         }
     }).unwrap();

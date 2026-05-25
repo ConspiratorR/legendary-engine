@@ -1,9 +1,12 @@
+use crate::graph::RenderGraph;
+use crate::graph::pass::{self, RenderPassDesc};
+use crate::pipeline::sprite::SpritePipeline;
+use crate::sprite::SpriteBatch;
+use crate::texture_store::TextureStore;
+use engine_math::Mat4;
 use std::ops::Deref;
 use std::sync::Arc;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
-use crate::graph::{RenderGraph, pass, execute};
-use crate::pipeline::sprite::SpritePipeline;
-use engine_math::Mat4;
 
 #[derive(Clone)]
 pub struct GpuDevice(pub Arc<Device>);
@@ -32,7 +35,9 @@ pub struct Renderer {
     pub config: SurfaceConfiguration,
     pub graph: RenderGraph,
     pub sprite_pipeline: Arc<SpritePipeline>,
+    pub texture_store: TextureStore,
     camera_uniform: wgpu::Buffer,
+    camera_bind_group: wgpu::BindGroup,
 }
 
 impl Renderer {
@@ -73,6 +78,18 @@ impl Renderer {
             mapped_at_creation: false,
         });
 
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("camera_bind_group"),
+            layout: &sprite_pipeline.camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_uniform.as_entire_binding(),
+            }],
+        });
+
+        let texture_store =
+            TextureStore::new(&device, &queue, &sprite_pipeline.texture_bind_group_layout);
+
         Self {
             device: GpuDevice(Arc::new(device)),
             queue: GpuQueue(Arc::new(queue)),
@@ -80,7 +97,9 @@ impl Renderer {
             config,
             graph: RenderGraph::new(),
             sprite_pipeline,
+            texture_store,
             camera_uniform,
+            camera_bind_group,
         }
     }
 
@@ -90,18 +109,43 @@ impl Renderer {
         self.surface.configure(&self.device, &self.config);
     }
 
-    pub fn present(&mut self, camera_matrix: &Mat4, sprite_data: &[crate::sprite::SpriteDraw]) -> Result<(), wgpu::SurfaceError> {
+    pub fn present(
+        &mut self,
+        camera_matrix: &Mat4,
+        sprite_batches: &[SpriteBatch],
+    ) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Build render graph for this frame
+        // Upload camera uniform
+        let matrix_data = camera_matrix.to_cols_array();
+        self.queue
+            .write_buffer(&self.camera_uniform, 0, bytemuck::cast_slice(&matrix_data));
+
+        // Reset graph and import swapchain view
         self.graph.reset();
         let swapchain = self.graph.import_texture_view("swapchain", view);
 
-        let sprite_pipeline = self.sprite_pipeline.clone();
-        self.graph.add_render_pass(pass::RenderPassDesc {
+        // Borrow data for the closure — no cloning needed since the closure
+        // lives only as long as this function scope.
+        let camera_bg = &self.camera_bind_group;
+        let pipeline = &self.sprite_pipeline.pipeline;
+        let batch_refs: Vec<(
+            &wgpu::BindGroup,
+            &Option<wgpu::Buffer>,
+            &Option<wgpu::Buffer>,
+            u32,
+        )> = sprite_batches
+            .iter()
+            .map(|b| {
+                let bg = self.texture_store.get_bind_group(b.texture_id);
+                (bg, &b.vertex_buffer, &b.index_buffer, b.index_count)
+            })
+            .collect();
+
+        let sprite_closure: pass::ExecuteFn<'_> = self.graph.add_render_pass(RenderPassDesc {
             label: Some("sprite_pass".to_string()),
             color_attachments: vec![pass::ColorAttachment {
                 resource: swapchain,
@@ -110,26 +154,36 @@ impl Renderer {
             }],
             depth_stencil_attachment: None,
             execute: Box::new(move |ctx| {
-                ctx.pass.set_pipeline(&sprite_pipeline.pipeline);
-                ctx.pass.draw(0..6, 0..1);
+                ctx.pass.set_pipeline(pipeline);
+                ctx.pass.set_bind_group(0, camera_bg, &[]);
+                for (bind_group, vb, ib, index_count) in &batch_refs {
+                    ctx.pass.set_bind_group(1, *bind_group, &[]);
+                    if let (Some(vb), Some(ib)) = (vb, ib) {
+                        ctx.pass.set_vertex_buffer(0, vb.slice(..));
+                        ctx.pass
+                            .set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+                        ctx.pass.draw_indexed(0..*index_count, 0, 0..1);
+                    }
+                }
             }),
         });
 
+        // Compile and execute graph
         let compiled = self.graph.compile(&self.device).unwrap();
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("main_encoder"),
-        });
-
-        // Upload camera uniform
-        let matrix_data = camera_matrix.to_cols_array();
-        self.queue.write_buffer(&self.camera_uniform, 0, bytemuck::cast_slice(&matrix_data));
-
-        let mut exec_ctx = execute::ExecuteContext {
-            device: &self.device,
-            queue: &self.queue,
-            encoder: &mut encoder,
-        };
-        self.graph.execute(&compiled, &mut exec_ctx).unwrap();
+        let mut closures: Vec<pass::ExecuteFn<'_>> = vec![sprite_closure];
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("main_encoder"),
+            });
+        {
+            let mut ctx = crate::graph::execute::ExecuteContext {
+                device: &self.device,
+                queue: &self.queue,
+                encoder: &mut encoder,
+            };
+            self.graph.execute(&compiled, &mut closures, &mut ctx)?;
+        }
 
         self.queue.submit([encoder.finish()]);
         output.present();

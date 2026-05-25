@@ -1,5 +1,7 @@
 use crate::graph::texture::TextureHandle;
 
+pub type ExecuteFn<'a> = Box<dyn FnOnce(&mut PassContext<'_>) + Send + 'a>;
+
 pub struct ColorAttachment {
     pub resource: TextureHandle,
     pub load_op: wgpu::LoadOp<wgpu::Color>,
@@ -12,20 +14,26 @@ pub struct DepthStencilAttachment {
     pub depth_store_op: wgpu::StoreOp,
 }
 
-pub struct RenderPassDesc {
+pub struct RenderPassDesc<'a> {
     pub label: Option<String>,
     pub color_attachments: Vec<ColorAttachment>,
     pub depth_stencil_attachment: Option<DepthStencilAttachment>,
-    pub execute: Box<dyn FnOnce(&mut PassContext<'_>) + Send>,
+    pub execute: ExecuteFn<'a>,
 }
 
-pub struct RenderPassNode {
-    pub desc: RenderPassDesc,
+pub(crate) struct PassMetadata {
+    pub label: Option<String>,
+    pub color_attachments: Vec<ColorAttachment>,
+    pub depth_stencil_attachment: Option<DepthStencilAttachment>,
+}
+
+pub(crate) struct RenderPassNode {
+    pub meta: PassMetadata,
 }
 
 impl RenderPassNode {
-    pub fn new(desc: RenderPassDesc) -> Self {
-        Self { desc }
+    pub fn new(meta: PassMetadata) -> Self {
+        Self { meta }
     }
 }
 

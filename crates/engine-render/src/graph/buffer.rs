@@ -8,7 +8,12 @@ pub struct BufferDesc {
 
 impl BufferDesc {
     pub fn new(size: u64, usage: wgpu::BufferUsages) -> Self {
-        Self { label: None, size, usage, transient: false }
+        Self {
+            label: None,
+            size,
+            usage,
+            transient: false,
+        }
     }
 
     pub fn named(mut self, name: &str) -> Self {
@@ -30,7 +35,11 @@ pub(crate) struct BufferNode {
 
 impl BufferNode {
     pub fn new(desc: BufferDesc) -> Self {
-        Self { desc, buffer: None, import: false }
+        Self {
+            desc,
+            buffer: None,
+            import: false,
+        }
     }
 
     pub fn imported(buffer: wgpu::Buffer) -> Self {

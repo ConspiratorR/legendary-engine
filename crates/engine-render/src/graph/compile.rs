@@ -61,32 +61,37 @@ impl RenderGraph {
         // Resolve view indices for each pass
         let mut compiled_passes = Vec::new();
         for pass in &self.passes {
-            let color_attachments = pass.desc.color_attachments.iter().map(|ca| {
-                let idx = ca.resource.0 as usize;
-                if idx >= self.textures.len() || self.textures[idx].is_none() {
-                    panic!("Color attachment texture handle {} not found", idx);
-                }
-                CompiledColorAttachment {
-                    view_index: idx,
-                    load: ca.load_op.clone(),
-                    store: ca.store_op,
-                }
-            }).collect();
+            let color_attachments = pass
+                .meta
+                .color_attachments
+                .iter()
+                .map(|ca| {
+                    let idx = ca.resource.0 as usize;
+                    if idx >= self.textures.len() || self.textures[idx].is_none() {
+                        panic!("Color attachment texture handle {} not found", idx);
+                    }
+                    CompiledColorAttachment {
+                        view_index: idx,
+                        load: ca.load_op,
+                        store: ca.store_op,
+                    }
+                })
+                .collect();
 
-            let depth_stencil = pass.desc.depth_stencil_attachment.as_ref().map(|ds| {
+            let depth_stencil = pass.meta.depth_stencil_attachment.as_ref().map(|ds| {
                 let idx = ds.resource.0 as usize;
                 if idx >= self.textures.len() || self.textures[idx].is_none() {
                     panic!("Depth attachment texture handle {} not found", idx);
                 }
                 CompiledDepthStencilAttachment {
                     view_index: idx,
-                    depth_load: ds.depth_load_op.clone(),
+                    depth_load: ds.depth_load_op,
                     depth_store: ds.depth_store_op,
                 }
             });
 
             compiled_passes.push(CompiledPass {
-                label: pass.desc.label.clone(),
+                label: pass.meta.label.clone(),
                 color_attachments,
                 depth_stencil_attachment: depth_stencil,
             });

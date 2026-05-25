@@ -1,11 +1,11 @@
-pub mod texture;
 pub mod buffer;
-pub mod pass;
 pub mod compile;
 pub mod execute;
+pub mod pass;
+pub mod texture;
 
-pub use texture::{TextureDesc, TextureHandle, BufferHandle as _};
 pub use buffer::BufferDesc;
+pub use texture::{BufferHandle as _, TextureDesc, TextureHandle};
 
 use std::collections::HashMap;
 
@@ -48,22 +48,35 @@ impl RenderGraph {
         id
     }
 
-    pub fn import_texture(&mut self, name: &str, texture: wgpu::Texture, view: wgpu::TextureView) -> TextureHandle {
+    pub fn import_texture(
+        &mut self,
+        name: &str,
+        texture: wgpu::Texture,
+        view: wgpu::TextureView,
+    ) -> TextureHandle {
         let id = TextureHandle(self.textures.len() as u32);
         self.texture_map.insert(name.to_string(), id);
-        self.textures.push(Some(texture::TextureNode::imported(texture, view)));
+        self.textures
+            .push(Some(texture::TextureNode::imported(texture, view)));
         id
     }
 
     pub fn import_texture_view(&mut self, name: &str, view: wgpu::TextureView) -> TextureHandle {
         let id = TextureHandle(self.textures.len() as u32);
         self.texture_map.insert(name.to_string(), id);
-        self.textures.push(Some(texture::TextureNode::imported_view(view)));
+        self.textures
+            .push(Some(texture::TextureNode::imported_view(view)));
         id
     }
 
-    pub fn add_render_pass(&mut self, desc: pass::RenderPassDesc) {
-        self.passes.push(pass::RenderPassNode::new(desc));
+    pub fn add_render_pass<'a>(&mut self, desc: pass::RenderPassDesc<'a>) -> pass::ExecuteFn<'a> {
+        let meta = pass::PassMetadata {
+            label: desc.label,
+            color_attachments: desc.color_attachments,
+            depth_stencil_attachment: desc.depth_stencil_attachment,
+        };
+        self.passes.push(pass::RenderPassNode::new(meta));
+        desc.execute
     }
 
     pub fn is_compiled(&self) -> bool {
@@ -71,8 +84,10 @@ impl RenderGraph {
     }
 
     pub fn reset(&mut self) {
-        self.textures.retain(|t| t.as_ref().map_or(false, |n| n.import));
-        self.buffers.retain(|b| b.as_ref().map_or(false, |n| n.import));
+        self.textures
+            .retain(|t| t.as_ref().is_some_and(|n| n.import));
+        self.buffers
+            .retain(|b| b.as_ref().is_some_and(|n| n.import));
         self.passes.clear();
     }
 }
