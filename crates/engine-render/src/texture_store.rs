@@ -233,6 +233,65 @@ impl TextureStore {
         self.textures.remove(&id);
         self.bind_groups.remove(&id);
     }
+
+    pub fn create_render_target(
+        &mut self,
+        device: &wgpu::Device,
+        texture_layout: &wgpu::BindGroupLayout,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        label: Option<&str>,
+    ) -> u64 {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label,
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label,
+            layout: texture_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+        });
+
+        let id = self.next_id;
+        self.next_id += 1;
+        self.textures.insert(
+            id,
+            GpuTexture {
+                texture,
+                view,
+                width,
+                height,
+            },
+        );
+        self.bind_groups.insert(id, bind_group);
+        id
+    }
+
+    pub fn get_render_target_view(&self, key: u64) -> Option<&wgpu::TextureView> {
+        self.textures.get(&key).map(|t| &t.view)
+    }
 }
 
 #[cfg(test)]
