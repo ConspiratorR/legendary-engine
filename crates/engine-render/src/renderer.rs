@@ -109,6 +109,7 @@ impl Renderer {
         self.surface.configure(&self.device, &self.config);
     }
 
+    #[deprecated(note = "Use render_frame() for multi-camera support")]
     pub fn present(
         &mut self,
         camera_matrix: &Mat4,
