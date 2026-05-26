@@ -1,6 +1,7 @@
 //! Rendering pipeline with wgpu.
 
 pub mod camera;
+pub mod frustum;
 pub mod graph;
 pub mod pipeline;
 pub mod renderer;
