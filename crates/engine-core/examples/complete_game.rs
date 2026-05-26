@@ -3,11 +3,11 @@ use engine_core::app::{App, AppBuilder};
 use engine_core::plugin::Plugin;
 use engine_core::time::Time;
 use engine_ecs::world::World;
-use engine_math::Vec3;
 use engine_input::InputManager;
 use engine_input::keyboard::KeyCode;
-use engine_physics::{RigidBody, Collider, PhysicsWorld, PhysicsPlugin, BodyType};
-use engine_network::{NetworkConfig, NetworkPlugin, NetworkMessage, Connection, ConnectionState};
+use engine_math::Vec3;
+use engine_network::{Connection, ConnectionState, NetworkConfig, NetworkMessage, NetworkPlugin};
+use engine_physics::{BodyType, Collider, PhysicsPlugin, PhysicsWorld, RigidBody};
 
 /// Integrated game plugin - combines all features.
 struct CompleteGamePlugin;
@@ -68,24 +68,25 @@ fn main() {
     // Simulate 300 frames
     for frame in 0..300 {
         app.run();
-        
+
         // Print status updates periodically
         if frame % 60 == 0 {
             let world = app.world();
-            
+
             println!("Frame {:3}:", frame);
-            
+
             if let Some(physics) = world.get::<PhysicsWorld>() {
                 println!("  Physics: Active ({} bodies)", physics.body_count);
             }
-            
+
             if let Some(config) = world.get::<NetworkConfig>() {
-                println!("  Network: {} mode (port {})",
+                println!(
+                    "  Network: {} mode (port {})",
                     if config.is_server { "SERVER" } else { "CLIENT" },
                     config.port
                 );
             }
-            
+
             if let Some(input) = world.get::<InputManager>() {
                 // Input manager is available
                 let key_state = if input.is_key_pressed(KeyCode::Space) {
@@ -95,7 +96,7 @@ fn main() {
                 };
                 println!("  Input: {}", key_state);
             }
-            
+
             println!();
         }
     }

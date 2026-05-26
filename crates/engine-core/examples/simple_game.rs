@@ -4,8 +4,8 @@ use engine_core::time::Time;
 use engine_ecs::query::QueryPair;
 use engine_ecs::system::IntoSystem;
 use engine_ecs::world::World;
-use engine_input::keyboard::KeyCode;
 use engine_input::InputManager;
+use engine_input::keyboard::KeyCode;
 use engine_math::Vec3;
 
 // Game components
@@ -47,15 +47,21 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut AppBuilder) {
         // Initialize game entities
         let world = app.world_mut();
-        
+
         // Spawn player
         let player = world.spawn();
         world.add_component(player, Position(Vec3::new(0.0, 0.0, 0.0)));
         world.add_component(player, Velocity(Vec3::new(0.0, 0.0, 0.0)));
         world.add_component(player, Player);
         world.add_component(player, Collider { radius: 0.5 });
-        world.add_component(player, Health { current: 100.0, max: 100.0 });
-        
+        world.add_component(
+            player,
+            Health {
+                current: 100.0,
+                max: 100.0,
+            },
+        );
+
         // Spawn some enemies
         for i in 0..5 {
             let enemy = world.spawn();
@@ -63,7 +69,11 @@ impl Plugin for GamePlugin {
             let distance = 8.0;
             world.add_component(
                 enemy,
-                Position(Vec3::new(angle.cos() * distance, angle.sin() * distance, 0.0)),
+                Position(Vec3::new(
+                    angle.cos() * distance,
+                    angle.sin() * distance,
+                    0.0,
+                )),
             );
             world.add_component(
                 enemy,
@@ -71,13 +81,19 @@ impl Plugin for GamePlugin {
             );
             world.add_component(enemy, Enemy);
             world.add_component(enemy, Collider { radius: 0.4 });
-            world.add_component(enemy, Health { current: 50.0, max: 50.0 });
+            world.add_component(
+                enemy,
+                Health {
+                    current: 50.0,
+                    max: 50.0,
+                },
+            );
         }
-        
+
         // Spawn score tracker
         let score_entity = world.spawn();
         world.add_component(score_entity, Score { value: 0 });
-        
+
         // Add systems
         app.add_system(player_control_system());
         app.add_system(movement_system());
@@ -94,7 +110,7 @@ fn player_control_system() -> impl IntoSystem {
             let mut query = QueryPair::<&mut Velocity, &Player>::new();
             for (vel, _) in query.iter_mut(world) {
                 let mut direction = Vec3::new(0.0, 0.0, 0.0);
-                
+
                 if input.is_key_pressed(KeyCode::W) || input.is_key_pressed(KeyCode::Up) {
                     direction.y += 1.0;
                 }
@@ -107,7 +123,7 @@ fn player_control_system() -> impl IntoSystem {
                 if input.is_key_pressed(KeyCode::D) || input.is_key_pressed(KeyCode::Right) {
                     direction.x += 1.0;
                 }
-                
+
                 // Normalize and apply speed
                 if direction.length_squared() > 0.0001 {
                     vel.0 = direction.normalize() * 5.0;
@@ -127,11 +143,11 @@ fn movement_system() -> impl IntoSystem {
         } else {
             0.016
         };
-        
+
         let mut query = QueryPair::<&mut Position, &Velocity>::new();
         for (pos, vel) in query.iter_mut(world) {
             pos.0 += vel.0 * delta_time;
-            
+
             // Simple world bounds (keep player in arena)
             let bounds = 10.0;
             pos.0.x = pos.0.x.clamp(-bounds, bounds);
@@ -149,7 +165,7 @@ fn enemy_ai_system() -> impl IntoSystem {
         for (pos, _) in player_query.iter(world) {
             player_pos = pos.0;
         }
-        
+
         // Update enemy velocities to move towards player
         let mut enemy_query = QueryPair::<&mut Velocity, &Enemy>::new();
         for (vel, _) in enemy_query.iter_mut(world) {
@@ -161,7 +177,7 @@ fn enemy_ai_system() -> impl IntoSystem {
                     Vec3::new(0.0, 0.0, 0.0)
                 }
             };
-            
+
             let direction = (player_pos - current_pos).normalize();
             vel.0 = direction * 2.0;
         }
@@ -173,14 +189,14 @@ fn collision_system() -> impl IntoSystem {
     |world: &mut World| {
         // Simple collision damage system
         let mut player_query = QueryPair::<&Position, &mut Health>::new();
-        
+
         // First, collect all enemy positions and colliders
         let mut enemies = Vec::new();
         let enemy_query = QueryPair::<&Position, &Collider>::new();
         for (pos, collider) in enemy_query.iter(world) {
             enemies.push((pos.0, collider.radius));
         }
-        
+
         // Check player against enemies
         for (player_pos, mut player_health) in player_query.iter_mut(world) {
             let player_radius = 0.5;
@@ -207,7 +223,7 @@ fn score_system() -> impl IntoSystem {
         for (score, _) in query.iter_mut(world) {
             // Increase score over time
             score.value += 1;
-            
+
             // Only print every 60 frames
             if score.value % 60 == 0 {
                 // Find player health
@@ -216,8 +232,11 @@ fn score_system() -> impl IntoSystem {
                 for (health, _) in health_query.iter(world) {
                     player_health = health.current;
                 }
-                
-                println!("Score: {}, Player Health: {:.1}", score.value, player_health);
+
+                println!(
+                    "Score: {}, Player Health: {:.1}",
+                    score.value, player_health
+                );
             }
         }
     }
@@ -231,18 +250,18 @@ pub fn main() {
     println!("  A/Left  - Move Left");
     println!("  D/Right - Move Right");
     println!("\nObjective: Avoid enemies and survive as long as possible!\n");
-    
+
     let mut app_builder = AppBuilder::new();
     app_builder.add_plugin(GamePlugin);
     let mut app = app_builder.build();
-    
+
     println!("Game Starting...\n");
-    
+
     // Run 300 frames (5 seconds at 60fps)
     for frame in 1..=300 {
         app.run();
     }
-    
+
     println!("\n=== Game Over! ===");
     println!("Thanks for playing!");
 }

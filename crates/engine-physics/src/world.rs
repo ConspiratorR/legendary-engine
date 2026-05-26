@@ -1,9 +1,9 @@
 //! Physics world for managing and simulating physics.
-use std::collections::HashMap;
-use engine_math::Vec3;
-use crate::body::{RigidBody, BodyType};
+use crate::body::{BodyType, RigidBody};
 use crate::collider::{Collider, CollisionInfo, check_sphere_sphere};
 use engine_ecs::world::World;
+use engine_math::Vec3;
+use std::collections::HashMap;
 
 /// Physics world configuration.
 #[derive(Debug, Clone)]
@@ -67,7 +67,7 @@ impl PhysicsWorld {
     fn detect_collisions(&mut self, world: &World) {
         // Clear previous collisions
         self.collisions.clear();
-        
+
         // For demonstration purposes, we're keeping it simple
         // In a real implementation, we would use ECS queries and broad/narrow phase
     }
@@ -77,7 +77,10 @@ impl PhysicsWorld {
         // Iterate through detected collisions and resolve them
         for (_, _, collision) in &self.collisions {
             // Apply impulse response here
-            println!("Collision resolved: normal={:?}, depth={}", collision.normal, collision.depth);
+            println!(
+                "Collision resolved: normal={:?}, depth={}",
+                collision.normal, collision.depth
+            );
         }
     }
 }

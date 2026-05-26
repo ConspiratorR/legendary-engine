@@ -8,10 +8,10 @@
 
 pub mod body;
 pub mod collider;
-pub mod world;
 pub mod plugin;
+pub mod world;
 
 pub use body::RigidBody;
 pub use collider::Collider;
-pub use world::PhysicsWorld;
 pub use plugin::PhysicsPlugin;
+pub use world::PhysicsWorld;

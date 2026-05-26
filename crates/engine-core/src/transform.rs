@@ -77,19 +77,11 @@ impl Transform {
     }
 
     pub fn forward(&self) -> Vec3 {
-        Vec3::new(
-            self.rotation.z.cos(),
-            self.rotation.z.sin(),
-            0.0,
-        )
+        Vec3::new(self.rotation.z.cos(), self.rotation.z.sin(), 0.0)
     }
 
     pub fn right(&self) -> Vec3 {
-        Vec3::new(
-            -self.rotation.z.sin(),
-            self.rotation.z.cos(),
-            0.0,
-        )
+        Vec3::new(-self.rotation.z.sin(), self.rotation.z.cos(), 0.0)
     }
 
     pub fn world_position(&self, parent: Option<&Transform>) -> Vec3 {

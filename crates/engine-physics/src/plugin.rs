@@ -1,7 +1,7 @@
 //! Physics plugin for engine.
+use crate::world::PhysicsWorld;
 use engine_core::app::AppBuilder;
 use engine_core::plugin::Plugin;
-use crate::world::PhysicsWorld;
 
 /// Plugin that adds physics simulation capabilities.
 pub struct PhysicsPlugin;

@@ -29,7 +29,7 @@ impl Plugin for NetworkPlugin {
         // Add network config as a resource
         let world = app.world_mut();
         world.insert_resource(NetworkConfig::default());
-        
+
         // If server would add systems to process network messages
     }
 }

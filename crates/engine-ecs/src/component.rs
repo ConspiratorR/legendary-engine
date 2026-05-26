@@ -115,12 +115,18 @@ impl ComponentRegistry {
 
     pub fn try_get_storage<T: 'static>(&self) -> Option<&SparseSet<T>> {
         let tid = TypeId::of::<T>();
-        self.storages.get(&tid)?.as_any_ref().downcast_ref::<SparseSet<T>>()
+        self.storages
+            .get(&tid)?
+            .as_any_ref()
+            .downcast_ref::<SparseSet<T>>()
     }
 
     pub fn try_get_storage_mut<T: 'static>(&mut self) -> Option<&mut SparseSet<T>> {
         let tid = TypeId::of::<T>();
-        self.storages.get_mut(&tid)?.as_any_mut().downcast_mut::<SparseSet<T>>()
+        self.storages
+            .get_mut(&tid)?
+            .as_any_mut()
+            .downcast_mut::<SparseSet<T>>()
     }
 
     pub fn remove_entity(&mut self, index: u32) {

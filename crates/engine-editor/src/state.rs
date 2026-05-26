@@ -263,8 +263,8 @@ impl Default for EditorCamera {
     }
 }
 
-use std::collections::HashMap;
 use crate::resource_browser::ResourceBrowser;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct EditorState {

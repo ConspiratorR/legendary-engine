@@ -58,7 +58,10 @@ impl Scene {
 
     pub fn remove_entity(&mut self, id: u64) -> Option<SceneEntity> {
         self.entities.retain(|e| e.id != id);
-        self.entities.iter().position(|e| e.id == id).map(|pos| self.entities.remove(pos))
+        self.entities
+            .iter()
+            .position(|e| e.id == id)
+            .map(|pos| self.entities.remove(pos))
     }
 
     pub fn get_entity(&self, id: u64) -> Option<&SceneEntity> {
@@ -68,16 +71,19 @@ impl Scene {
     pub fn get_entity_mut(&mut self, id: u64) -> Option<&mut SceneEntity> {
         self.entities.iter_mut().find(|e| e.id == id)
     }
-    
+
     pub fn to_string_pretty(&self) -> String {
         let mut output = format!("Scene: {}\n", self.name);
         output += &format!("Settings:\n");
         output += &format!("  Ambient Color: {:?}\n", self.settings.ambient_color);
         output += &format!("  Fog Enabled: {}\n", self.settings.fog_enabled);
         output += &format!("\nEntities ({}):\n", self.entities.len());
-        
+
         for entity in &self.entities {
-            output += &format!("  Entity {}: {} (active: {})\n", entity.id, entity.name, entity.active);
+            output += &format!(
+                "  Entity {}: {} (active: {})\n",
+                entity.id, entity.name, entity.active
+            );
             if !entity.components.is_empty() {
                 output += &format!("    Components:\n");
                 for component in &entity.components {
@@ -88,7 +94,7 @@ impl Scene {
                 output += &format!("    Children: {:?}\n", entity.children);
             }
         }
-        
+
         output
     }
 }
@@ -109,7 +115,9 @@ impl SceneEntity {
     }
 
     pub fn remove_component(&mut self, type_name: &str) -> Option<ComponentData> {
-        self.components.iter().position(|c| c.type_name == type_name)
+        self.components
+            .iter()
+            .position(|c| c.type_name == type_name)
             .map(|pos| self.components.remove(pos))
     }
 }
@@ -184,7 +192,7 @@ impl SceneManager {
             None
         }
     }
-    
+
     pub fn print_scene(&self) {
         if let Some(ref scene) = self.current_scene {
             println!("{}", scene.to_string_pretty());

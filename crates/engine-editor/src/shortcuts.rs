@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use engine_input::keyboard::KeyCode;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct KeyBinding {
@@ -85,25 +85,64 @@ impl ShortcutManager {
     }
 
     fn register_defaults(&mut self) {
-        self.bind(EditorAction::SaveScene, KeyBinding::new(KeyCode::KeyS).with_ctrl());
-        self.bind(EditorAction::LoadScene, KeyBinding::new(KeyCode::KeyO).with_ctrl());
-        self.bind(EditorAction::NewScene, KeyBinding::new(KeyCode::KeyN).with_ctrl());
-        self.bind(EditorAction::Undo, KeyBinding::new(KeyCode::KeyZ).with_ctrl());
-        self.bind(EditorAction::Redo, KeyBinding::new(KeyCode::KeyY).with_ctrl());
-        self.bind(EditorAction::Copy, KeyBinding::new(KeyCode::KeyC).with_ctrl());
-        self.bind(EditorAction::Paste, KeyBinding::new(KeyCode::KeyV).with_ctrl());
-        self.bind(EditorAction::Duplicate, KeyBinding::new(KeyCode::KeyD).with_ctrl());
+        self.bind(
+            EditorAction::SaveScene,
+            KeyBinding::new(KeyCode::KeyS).with_ctrl(),
+        );
+        self.bind(
+            EditorAction::LoadScene,
+            KeyBinding::new(KeyCode::KeyO).with_ctrl(),
+        );
+        self.bind(
+            EditorAction::NewScene,
+            KeyBinding::new(KeyCode::KeyN).with_ctrl(),
+        );
+        self.bind(
+            EditorAction::Undo,
+            KeyBinding::new(KeyCode::KeyZ).with_ctrl(),
+        );
+        self.bind(
+            EditorAction::Redo,
+            KeyBinding::new(KeyCode::KeyY).with_ctrl(),
+        );
+        self.bind(
+            EditorAction::Copy,
+            KeyBinding::new(KeyCode::KeyC).with_ctrl(),
+        );
+        self.bind(
+            EditorAction::Paste,
+            KeyBinding::new(KeyCode::KeyV).with_ctrl(),
+        );
+        self.bind(
+            EditorAction::Duplicate,
+            KeyBinding::new(KeyCode::KeyD).with_ctrl(),
+        );
         self.bind(EditorAction::Delete, KeyBinding::new(KeyCode::Delete));
-        self.bind(EditorAction::SelectAll, KeyBinding::new(KeyCode::KeyA).with_ctrl());
-        self.bind(EditorAction::FocusOnSelection, KeyBinding::new(KeyCode::KeyF));
+        self.bind(
+            EditorAction::SelectAll,
+            KeyBinding::new(KeyCode::KeyA).with_ctrl(),
+        );
+        self.bind(
+            EditorAction::FocusOnSelection,
+            KeyBinding::new(KeyCode::KeyF),
+        );
         self.bind(EditorAction::TranslateTool, KeyBinding::new(KeyCode::KeyW));
         self.bind(EditorAction::RotateTool, KeyBinding::new(KeyCode::KeyE));
         self.bind(EditorAction::ScaleTool, KeyBinding::new(KeyCode::KeyR));
-        self.bind(EditorAction::Play, KeyBinding::new(KeyCode::KeyP).with_ctrl());
+        self.bind(
+            EditorAction::Play,
+            KeyBinding::new(KeyCode::KeyP).with_ctrl(),
+        );
         self.bind(EditorAction::Pause, KeyBinding::new(KeyCode::Pause));
         self.bind(EditorAction::Stop, KeyBinding::new(KeyCode::F5).with_ctrl());
-        self.bind(EditorAction::NextFrame, KeyBinding::new(KeyCode::Period).with_ctrl());
-        self.bind(EditorAction::PrevFrame, KeyBinding::new(KeyCode::Comma).with_ctrl());
+        self.bind(
+            EditorAction::NextFrame,
+            KeyBinding::new(KeyCode::Period).with_ctrl(),
+        );
+        self.bind(
+            EditorAction::PrevFrame,
+            KeyBinding::new(KeyCode::Comma).with_ctrl(),
+        );
     }
 
     pub fn bind(&mut self, action: EditorAction, binding: KeyBinding) {
@@ -118,7 +157,13 @@ impl ShortcutManager {
         self.bindings.get(action)
     }
 
-    pub fn get_action(&self, key: KeyCode, ctrl: bool, shift: bool, alt: bool) -> Option<EditorAction> {
+    pub fn get_action(
+        &self,
+        key: KeyCode,
+        ctrl: bool,
+        shift: bool,
+        alt: bool,
+    ) -> Option<EditorAction> {
         for (action, binding) in &self.bindings {
             if binding.matches(key, ctrl, shift, alt) {
                 return Some(action.clone());

@@ -52,7 +52,11 @@ impl ResourceManager {
                 .unwrap_or("")
                 .to_string();
 
-            let size = if metadata.is_file() { metadata.len() } else { 0 };
+            let size = if metadata.is_file() {
+                metadata.len()
+            } else {
+                0
+            };
             let last_modified = 0;
 
             self.resources.push(ResourceMeta {

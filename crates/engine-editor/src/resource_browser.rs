@@ -160,11 +160,16 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
 
     let btn_size = 24.0 * h_scale;
     let refresh_rect = Rect::from_min_size(
-        Pos2::new(rect.right() - btn_size - 8.0 * w_scale, header_rect.top() + (header_h - btn_size) / 2.0),
+        Pos2::new(
+            rect.right() - btn_size - 8.0 * w_scale,
+            header_rect.top() + (header_h - btn_size) / 2.0,
+        ),
         Vec2::new(btn_size, btn_size),
     );
     let refresh_id = egui::Id::new("refresh_resources");
-    let refresh_response = gui.ui.interact(refresh_rect, refresh_id, egui::Sense::click());
+    let refresh_response = gui
+        .ui
+        .interact(refresh_rect, refresh_id, egui::Sense::click());
     if refresh_response.hovered() {
         painter.add(Shape::rect_filled(
             refresh_rect,
@@ -182,7 +187,10 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
 
     let line_y = header_rect.bottom() - 1.0;
     painter.add(Shape::line(
-        vec![Pos2::new(rect.left(), line_y), Pos2::new(rect.right(), line_y)],
+        vec![
+            Pos2::new(rect.left(), line_y),
+            Pos2::new(rect.right(), line_y),
+        ],
         Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
     ));
 
@@ -200,12 +208,15 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     let path_parts: Vec<_> = state.resource_browser.current_path.split('/').collect();
     let mut path_x = 12.0 * w_scale;
     for (i, part) in path_parts.iter().enumerate() {
-        let text_w = painter.layout(
-            part.to_string(),
-            FontId::proportional(11.0 * h_scale),
-            Color32::from_rgb(0, 212, 170),
-            f32::INFINITY,
-        ).rect.width();
+        let text_w = painter
+            .layout(
+                part.to_string(),
+                FontId::proportional(11.0 * h_scale),
+                Color32::from_rgb(0, 212, 170),
+                f32::INFINITY,
+            )
+            .rect
+            .width();
 
         painter.text(
             egui::pos2(rect.left() + path_x, path_bar_rect.center().y),
@@ -283,7 +294,10 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         if !entry.is_directory {
             let size_str = state.resource_browser.format_size(entry.size);
             painter.text(
-                egui::pos2(file_rect.right() - file_pad - 8.0 * w_scale, file_rect.center().y),
+                egui::pos2(
+                    file_rect.right() - file_pad - 8.0 * w_scale,
+                    file_rect.center().y,
+                ),
                 egui::Align2::RIGHT_CENTER,
                 &size_str,
                 FontId::proportional(10.0 * h_scale),

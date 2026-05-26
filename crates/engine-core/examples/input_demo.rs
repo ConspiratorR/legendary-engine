@@ -20,7 +20,7 @@ pub fn main() {
 
     let mut app_builder = AppBuilder::new();
     app_builder.add_plugin(SetupPlugin);
-    
+
     // 使用 pre_update_hook 来访问资源
     app_builder.add_pre_update_hook(Box::new(|app: &mut App| {
         if let Some(keys) = app.resources.get::<HashMap<String, bool>>() {
@@ -32,7 +32,7 @@ pub fn main() {
             }
         }
     }));
-    
+
     let mut app = app_builder.build();
 
     for frame in 1..=3 {

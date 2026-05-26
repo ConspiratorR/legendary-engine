@@ -14,22 +14,21 @@ impl Config {
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| ConfigError::IoError(e))?;
-        
+        let content = fs::read_to_string(path).map_err(|e| ConfigError::IoError(e))?;
+
         Self::from_toml(&content)
     }
 
     pub fn from_toml(toml_str: &str) -> Result<Self, ConfigError> {
         let mut config = Self::new();
-        
+
         for line in toml_str.lines() {
             let line = line.trim();
-            
+
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-            
+
             if let Some((key, value)) = line.split_once('=') {
                 let key = key.trim().to_string();
                 let value = value.trim().to_string();
@@ -37,7 +36,7 @@ impl Config {
                 config.data.insert(key, value.to_string());
             }
         }
-        
+
         Ok(config)
     }
 
@@ -46,17 +45,20 @@ impl Config {
     }
 
     pub fn get_or(&self, key: &str, default: &str) -> String {
-        self.data.get(key).cloned().unwrap_or_else(|| default.to_string())
+        self.data
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| default.to_string())
     }
 
     pub fn get_bool(&self, key: &str) -> Option<bool> {
-        self.data.get(key).and_then(|v| {
-            match v.to_lowercase().as_str() {
+        self.data
+            .get(key)
+            .and_then(|v| match v.to_lowercase().as_str() {
                 "true" | "1" | "yes" | "on" => Some(true),
                 "false" | "0" | "no" | "off" => Some(false),
                 _ => None,
-            }
-        })
+            })
     }
 
     pub fn get_i32(&self, key: &str) -> Option<i32> {
@@ -73,14 +75,13 @@ impl Config {
 
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), ConfigError> {
         let mut content = String::new();
-        
+
         for (key, value) in &self.data {
             content.push_str(&format!("{} = \"{}\"\n", key, value));
         }
-        
-        fs::write(path, content)
-            .map_err(|e| ConfigError::IoError(e))?;
-        
+
+        fs::write(path, content).map_err(|e| ConfigError::IoError(e))?;
+
         Ok(())
     }
 

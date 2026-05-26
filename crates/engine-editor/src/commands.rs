@@ -25,10 +25,10 @@ impl CommandManager {
     pub fn execute(&mut self, command: Box<dyn Command>) {
         let mut cmd = command;
         cmd.execute();
-        
+
         self.undo_stack.push_back(cmd);
         self.redo_stack.clear();
-        
+
         while self.undo_stack.len() > self.max_history {
             self.undo_stack.pop_front();
         }
@@ -96,7 +96,10 @@ impl CreateEntityCommand {
 
 impl Command for CreateEntityCommand {
     fn execute(&mut self) {
-        println!("Creating entity: {} (ID: {})", self.entity_name, self.entity_id);
+        println!(
+            "Creating entity: {} (ID: {})",
+            self.entity_name, self.entity_id
+        );
     }
 
     fn undo(&mut self) {
@@ -120,13 +123,19 @@ pub struct DeleteEntityCommand {
 
 impl DeleteEntityCommand {
     pub fn new(entity_id: u64, entity_name: String) -> Self {
-        Self { entity_id, entity_name }
+        Self {
+            entity_id,
+            entity_name,
+        }
     }
 }
 
 impl Command for DeleteEntityCommand {
     fn execute(&mut self) {
-        println!("Deleting entity: {} (ID: {})", self.entity_name, self.entity_id);
+        println!(
+            "Deleting entity: {} (ID: {})",
+            self.entity_name, self.entity_id
+        );
     }
 
     fn undo(&mut self) {
@@ -161,15 +170,24 @@ impl MoveEntityCommand {
 
 impl Command for MoveEntityCommand {
     fn execute(&mut self) {
-        println!("Moving entity {} to parent {:?}", self.entity_id, self.to_parent);
+        println!(
+            "Moving entity {} to parent {:?}",
+            self.entity_id, self.to_parent
+        );
     }
 
     fn undo(&mut self) {
-        println!("Undo: Move entity {} back to parent {:?}", self.entity_id, self.from_parent);
+        println!(
+            "Undo: Move entity {} back to parent {:?}",
+            self.entity_id, self.from_parent
+        );
     }
 
     fn redo(&mut self) {
-        println!("Redo: Move entity {} to parent {:?}", self.entity_id, self.to_parent);
+        println!(
+            "Redo: Move entity {} to parent {:?}",
+            self.entity_id, self.to_parent
+        );
     }
 
     fn description(&self) -> String {
@@ -200,11 +218,17 @@ impl Command for RenameEntityCommand {
     }
 
     fn undo(&mut self) {
-        println!("Undo: Rename entity {} back to '{}'", self.entity_id, self.old_name);
+        println!(
+            "Undo: Rename entity {} back to '{}'",
+            self.entity_id, self.old_name
+        );
     }
 
     fn redo(&mut self) {
-        println!("Redo: Rename entity {} to '{}'", self.entity_id, self.new_name);
+        println!(
+            "Redo: Rename entity {} to '{}'",
+            self.entity_id, self.new_name
+        );
     }
 
     fn description(&self) -> String {

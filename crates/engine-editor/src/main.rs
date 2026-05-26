@@ -1,7 +1,7 @@
 use engine_editor::state::EditorState;
 use engine_render::renderer::Renderer;
 use engine_ui::{EguiState, GuiSkin};
-use engine_window::{create_window, WindowConfig};
+use engine_window::{WindowConfig, create_window};
 use log::info;
 use winit::{
     event::{Event, WindowEvent},
@@ -10,8 +10,7 @@ use winit::{
 
 fn main() -> anyhow::Result<()> {
     // Initialize logging
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     info!("Starting RustEngine Editor");
 
     // Create event loop and window
@@ -35,11 +34,7 @@ fn main() -> anyhow::Result<()> {
         // Initialize renderer
         let renderer = Renderer::new(std::sync::Arc::clone(&window));
         let scale_factor = window.scale_factor() as f32;
-        let mut egui_state_local = EguiState::new(
-            &renderer.device,
-            &renderer.config,
-            scale_factor,
-        );
+        let mut egui_state_local = EguiState::new(&renderer.device, &renderer.config, scale_factor);
 
         render = Some(renderer);
         egui_state = Some(egui_state_local);
@@ -79,7 +74,13 @@ fn main() -> anyhow::Result<()> {
 
                                 // Render
                                 if let Ok(output) = r.surface.get_current_texture() {
-                                    e.paint(&r.device, &r.queue, &output, &paint_jobs, &textures_delta);
+                                    e.paint(
+                                        &r.device,
+                                        &r.queue,
+                                        &output,
+                                        &paint_jobs,
+                                        &textures_delta,
+                                    );
                                     output.present();
                                 }
                             }

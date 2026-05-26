@@ -20,7 +20,9 @@ impl ColliderShape {
             ColliderShape::Sphere { radius } => *radius,
             ColliderShape::Box { half_extents } => half_extents.length(),
             ColliderShape::Capsule { radius, height } => radius + height * 0.5,
-            ColliderShape::Cylinder { radius, height } => radius * radius + (height * 0.5) * (height * 0.5),
+            ColliderShape::Cylinder { radius, height } => {
+                radius * radius + (height * 0.5) * (height * 0.5)
+            }
         }
     }
 }
@@ -93,7 +95,12 @@ pub struct CollisionInfo {
 }
 
 /// Physics layers for collision detection.
-pub fn check_sphere_sphere(pos1: Vec3, radius1: f32, pos2: Vec3, radius2: f32) -> Option<CollisionInfo> {
+pub fn check_sphere_sphere(
+    pos1: Vec3,
+    radius1: f32,
+    pos2: Vec3,
+    radius2: f32,
+) -> Option<CollisionInfo> {
     let delta = pos2 - pos1;
     let distance = delta.length();
     let combined_radius = radius1 + radius2;

@@ -1,5 +1,5 @@
-use std::sync::Mutex;
 use std::io::{self, Write};
+use std::sync::Mutex;
 use std::time::SystemTime;
 
 pub struct Logger {
@@ -58,19 +58,20 @@ impl Logger {
         let timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default();
-        
+
         let level_str = match level {
             LogLevel::Error => "ERROR",
-            LogLevel::Warn  => "WARN ",
-            LogLevel::Info  => "INFO ",
+            LogLevel::Warn => "WARN ",
+            LogLevel::Info => "INFO ",
             LogLevel::Debug => "DEBUG",
             LogLevel::Trace => "TRACE",
         };
 
-        let log_line = format!("[{:010}.{:03}] [{}] {}", 
-            timestamp.as_secs(), 
+        let log_line = format!(
+            "[{:010}.{:03}] [{}] {}",
+            timestamp.as_secs(),
             timestamp.subsec_millis(),
-            level_str, 
+            level_str,
             msg
         );
 
@@ -91,7 +92,7 @@ impl Logger {
                 .create(true)
                 .append(true)
                 .open("engine.log")?;
-            
+
             for line in buffer.iter() {
                 writeln!(file, "{}", line)?;
             }

@@ -1,6 +1,6 @@
 //! Connection management for networking.
-use std::collections::VecDeque;
 use crate::message::NetworkMessage;
+use std::collections::VecDeque;
 
 /// State of a network connection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

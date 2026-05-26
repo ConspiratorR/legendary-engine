@@ -100,19 +100,19 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         ),
         Vec2::new(rect.width() - 16.0 * w_scale, search_h),
     );
-    
+
     painter.add(Shape::rect_filled(
         search_rect,
         Rounding::same(4.0 * h_scale),
         Color32::from_rgb(30, 30, 34),
     ));
-    
+
     let search_text = if state.hierarchy_search.is_empty() {
         "🔍 搜索...".to_string()
     } else {
         format!("🔍 {}", state.hierarchy_search)
     };
-    
+
     painter.text(
         egui::pos2(search_rect.left() + 8.0 * w_scale, search_rect.center().y),
         egui::Align2::LEFT_CENTER,
@@ -120,7 +120,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         FontId::proportional(12.0 * h_scale),
         Color32::from_gray(90),
     );
-    
+
     // Clear search button
     if !state.hierarchy_search.is_empty() {
         let clear_rect = Rect::from_min_size(
@@ -147,7 +147,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             state.hierarchy_search.clear();
         }
     }
-    
+
     let content_top = search_rect.bottom() + 4.0 * h_scale;
     let content_rect = Rect::from_min_size(
         Pos2::new(rect.left(), content_top),
@@ -169,16 +169,16 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     let root_ids: Vec<u64> = state.scene_tree.root_ids.clone();
     for &root_id in &root_ids {
         y = draw_node(
-            state, 
-            gui, 
-            root_id, 
-            0, 
-            &mut y, 
-            left, 
-            right, 
-            item_h, 
+            state,
+            gui,
+            root_id,
+            0,
+            &mut y,
+            left,
+            right,
+            item_h,
             h_scale,
-            &search_results
+            &search_results,
         );
     }
 }

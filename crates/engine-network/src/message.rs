@@ -15,18 +15,11 @@ pub enum NetworkMessage {
         rotation: [f32; 4],
     },
     /// Player input.
-    PlayerInput {
-        input_data: Vec<u8>,
-    },
+    PlayerInput { input_data: Vec<u8> },
     /// Chat message.
-    Chat {
-        sender: String,
-        text: String,
-    },
+    Chat { sender: String, text: String },
     /// Disconnect notification.
-    Disconnect {
-        reason: String,
-    },
+    Disconnect { reason: String },
 }
 
 /// Reliability mode for messages.
@@ -51,7 +44,11 @@ impl NetworkMessage {
                 bytes.extend(version.as_bytes());
                 bytes
             }
-            NetworkMessage::EntityUpdate { entity_id, position, rotation } => {
+            NetworkMessage::EntityUpdate {
+                entity_id,
+                position,
+                rotation,
+            } => {
                 let mut bytes = vec![1];
                 bytes.extend(&entity_id.to_le_bytes());
                 bytes.extend(&position[0].to_le_bytes());
@@ -102,7 +99,11 @@ impl NetworkMessage {
                     f32::from_le_bytes(bytes[29..33].try_into().ok()?),
                     f32::from_le_bytes(bytes[33..37].try_into().ok()?),
                 ];
-                Some(NetworkMessage::EntityUpdate { entity_id, position, rotation })
+                Some(NetworkMessage::EntityUpdate {
+                    entity_id,
+                    position,
+                    rotation,
+                })
             }
             _ => None,
         }

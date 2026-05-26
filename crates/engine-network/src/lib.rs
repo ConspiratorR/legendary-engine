@@ -5,10 +5,10 @@
 //! - Client/server architecture
 //! - Basic connection management
 
-pub mod message;
 pub mod connection;
+pub mod message;
 pub mod plugin;
 
-pub use message::NetworkMessage;
 pub use connection::{Connection, ConnectionState};
+pub use message::NetworkMessage;
 pub use plugin::NetworkPlugin;

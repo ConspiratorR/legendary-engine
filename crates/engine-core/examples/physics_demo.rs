@@ -4,7 +4,7 @@ use engine_core::plugin::Plugin;
 use engine_core::time::Time;
 use engine_ecs::world::World;
 use engine_math::Vec3;
-use engine_physics::{RigidBody, Collider, PhysicsWorld, PhysicsPlugin, BodyType};
+use engine_physics::{BodyType, Collider, PhysicsPlugin, PhysicsWorld, RigidBody};
 
 /// Simple physics plugin that adds some basic systems.
 struct PhysicsDemoPlugin;
@@ -48,7 +48,7 @@ fn main() {
     // Simulate 500 frames
     for frame in 0..500 {
         app.run();
-        
+
         if frame % 60 == 0 {
             // Check physics world
             let world = app.world();

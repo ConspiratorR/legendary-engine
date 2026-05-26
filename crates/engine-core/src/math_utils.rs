@@ -63,7 +63,7 @@ pub fn ease_in_out_cubic(t: f32) -> f32 {
 pub fn bounce_out(t: f32) -> f32 {
     let n1 = 7.5625;
     let d1 = 2.75;
-    
+
     if t < 1.0 / d1 {
         n1 * t * t
     } else if t < 2.0 / d1 {
@@ -87,9 +87,13 @@ pub fn rad_to_deg(radians: f32) -> f32 {
 }
 
 pub fn sign(value: f32) -> f32 {
-    if value > 0.0 { 1.0 }
-    else if value < 0.0 { -1.0 }
-    else { 0.0 }
+    if value > 0.0 {
+        1.0
+    } else if value < 0.0 {
+        -1.0
+    } else {
+        0.0
+    }
 }
 
 pub fn inverse_lerp(a: f32, b: f32, value: f32) -> f32 {
@@ -107,11 +111,7 @@ pub fn remap(value: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -
 
 pub fn ping_pong(t: f32, length: f32) -> f32 {
     let t = t % (length * 2.0);
-    if t <= length {
-        t
-    } else {
-        length * 2.0 - t
-    }
+    if t <= length { t } else { length * 2.0 - t }
 }
 
 pub fn repeat(t: f32, length: f32) -> f32 {
