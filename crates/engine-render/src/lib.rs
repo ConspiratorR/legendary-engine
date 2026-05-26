@@ -1,5 +1,6 @@
 //! Rendering pipeline with wgpu.
 
+pub mod camera;
 pub mod graph;
 pub mod pipeline;
 pub mod renderer;
