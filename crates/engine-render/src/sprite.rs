@@ -10,6 +10,7 @@ pub struct Sprite {
     pub flip_y: bool,
 }
 
+#[derive(Clone)]
 pub struct SpriteDraw {
     pub world_matrix: Mat4,
     pub color: [f32; 4],

@@ -3,7 +3,7 @@ use crate::graph::pass::{self, RenderPassDesc};
 use crate::pipeline::sprite::SpritePipeline;
 use crate::sprite::SpriteBatch;
 use crate::texture_store::TextureStore;
-use engine_math::Mat4;
+use engine_math::{Mat4, Vec3};
 use std::ops::Deref;
 use std::sync::Arc;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
@@ -183,6 +183,121 @@ impl Renderer {
                 encoder: &mut encoder,
             };
             self.graph.execute(&compiled, &mut closures, &mut ctx)?;
+        }
+
+        self.queue.submit([encoder.finish()]);
+        output.present();
+        Ok(())
+    }
+
+    pub fn render_frame(
+        &mut self,
+        cameras: &[&crate::camera::Camera],
+        all_sprites: &[crate::sprite::SpriteDraw],
+    ) -> Result<(), wgpu::SurfaceError> {
+        use crate::camera::{Camera, RenderTarget};
+        use crate::frustum::Frustum;
+
+        let mut sorted: Vec<&Camera> = cameras.to_vec();
+        sorted.sort_by_key(|c| c.priority);
+
+        let output = self.surface.get_current_texture()?;
+        let swapchain_view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("main_encoder"),
+            });
+
+        let surface_width = self.config.width;
+        let surface_height = self.config.height;
+
+        for camera in &sorted {
+            if !camera.is_active {
+                continue;
+            }
+
+            let (vx, vy, vw, vh) = camera.viewport.to_absolute(surface_width, surface_height);
+            let aspect = vw as f32 / vh.max(1) as f32;
+            let vp_matrix = camera.view_projection(aspect);
+
+            let frustum = Frustum::from_view_projection(&vp_matrix);
+            let visible: Vec<crate::sprite::SpriteDraw> = all_sprites
+                .iter()
+                .filter(|s| {
+                    let pos = s.world_matrix.transform_point3(Vec3::ZERO);
+                    let half = Vec3::new(s.size.x * 0.5, s.size.y * 0.5, 0.1);
+                    frustum.test_aabb(pos - half, pos + half)
+                })
+                .cloned()
+                .collect();
+
+            let mut batches = crate::sprite::collect_batches(&visible);
+            for batch in &mut batches {
+                batch.upload(&self.device);
+            }
+
+            let matrix_data = vp_matrix.to_cols_array();
+            self.queue
+                .write_buffer(&self.camera_uniform, 0, bytemuck::cast_slice(&matrix_data));
+
+            let target_view = match camera.render_target {
+                RenderTarget::Screen => &swapchain_view,
+                RenderTarget::Texture(key) => self
+                    .texture_store
+                    .get_render_target_view(key)
+                    .expect("render target texture not found"),
+            };
+
+            let camera_bg = &self.camera_bind_group;
+            let pipeline = &self.sprite_pipeline.pipeline;
+            let batch_refs: Vec<(
+                &wgpu::BindGroup,
+                &Option<wgpu::Buffer>,
+                &Option<wgpu::Buffer>,
+                u32,
+            )> = batches
+                .iter()
+                .map(|b| {
+                    let bg = self.texture_store.get_bind_group(b.texture_id);
+                    (bg, &b.vertex_buffer, &b.index_buffer, b.index_count)
+                })
+                .collect();
+
+            let clear = camera.clear_color.unwrap_or(crate::camera::Color::BLACK);
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("camera_pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: target_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(clear.to_wgpu()),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+
+                pass.set_viewport(vx as f32, vy as f32, vw as f32, vh as f32, 0.0, 1.0);
+                pass.set_scissor_rect(vx, vy, vw, vh);
+
+                pass.set_pipeline(pipeline);
+                pass.set_bind_group(0, camera_bg, &[]);
+                for (bind_group, vb, ib, index_count) in &batch_refs {
+                    pass.set_bind_group(1, *bind_group, &[]);
+                    if let (Some(vb), Some(ib)) = (vb, ib) {
+                        pass.set_vertex_buffer(0, vb.slice(..));
+                        pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+                        pass.draw_indexed(0..*index_count, 0, 0..1);
+                    }
+                }
+            }
         }
 
         self.queue.submit([encoder.finish()]);
