@@ -5,6 +5,9 @@ use std::ops::Deref;
 use std::sync::Arc;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 
+const CAMERA_UNIFORM_SIZE: u64 = 64;
+const DEFAULT_SPRITE_CAPACITY: usize = 10000;
+
 #[derive(Clone)]
 pub struct GpuDevice(pub Arc<Device>);
 
@@ -38,18 +41,18 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: std::sync::Arc<winit::window::Window>) -> Self {
+    pub fn new(window: std::sync::Arc<winit::window::Window>) -> Result<Self, Box<dyn std::error::Error>> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
-        let surface = instance.create_surface(window.clone()).unwrap();
+        let surface = instance.create_surface(window.clone())?;
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         }))
-        .unwrap();
+        .ok_or("Failed to find suitable adapter")?;
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
                 required_features: wgpu::Features::empty(),
@@ -59,18 +62,18 @@ impl Renderer {
             },
             None,
         ))
-        .unwrap();
+        .map_err(|e| format!("Failed to create device: {}", e))?;
         let size = window.inner_size();
         let config = surface
             .get_default_config(&adapter, size.width, size.height)
-            .unwrap();
+            .ok_or("Failed to get surface config")?;
         surface.configure(&device, &config);
 
         let sprite_pipeline = Arc::new(SpritePipeline::new(&device, config.format));
 
         let camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("camera_uniform"),
-            size: 64,
+            size: CAMERA_UNIFORM_SIZE,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -84,9 +87,9 @@ impl Renderer {
             }],
         });
 
-        let sprite_renderer = SpriteRenderer::new(&device, sprite_pipeline.clone(), 10000);
+        let sprite_renderer = SpriteRenderer::new(&device, sprite_pipeline.clone(), DEFAULT_SPRITE_CAPACITY);
 
-        Self {
+        Ok(Self {
             device: GpuDevice(Arc::new(device)),
             queue: GpuQueue(Arc::new(queue)),
             surface,
@@ -96,7 +99,7 @@ impl Renderer {
             camera_uniform,
             camera_bind_group,
             sprite_renderer,
-        }
+        })
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -202,7 +205,7 @@ impl Renderer {
                 RenderTarget::Texture(key) => bridge
                     .texture_store()
                     .get_render_target_view(key)
-                    .expect("render target texture not found"),
+                    .ok_or(wgpu::SurfaceError::Lost)?,
             };
 
             let camera_bg = &self.camera_bind_group;

@@ -16,7 +16,8 @@ pub fn run_default(app_builder: AppBuilder) {
     let mut app = app_builder.build();
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
     let window = Arc::new(create_window(&WindowConfig::default(), &event_loop));
-    let renderer = engine_render::renderer::Renderer::new(window.clone());
+    let renderer = engine_render::renderer::Renderer::new(window.clone())
+        .expect("Failed to create renderer");
     app.set_renderer(renderer);
 
     use winit::event::{ElementState, Event, MouseButton, WindowEvent};

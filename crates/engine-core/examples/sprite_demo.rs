@@ -25,7 +25,7 @@ fn main() {
         &event_loop,
     ));
 
-    let renderer = Renderer::new(window);
+    let renderer = Renderer::new(window).expect("Failed to create renderer");
 
     let mut bridge = TextureBridge::new(&renderer.device, &renderer.queue);
 
