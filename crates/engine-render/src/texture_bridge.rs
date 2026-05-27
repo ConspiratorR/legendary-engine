@@ -86,6 +86,7 @@ pub struct TextureBridge {
     completed_queue: crossbeam_channel::Receiver<LoadResult>,
     load_sender: crossbeam_channel::Sender<LoadRequest>,
     texture_store: TextureStore,
+    texture_layout: wgpu::BindGroupLayout,
     pub on_loaded: EventChannel<TextureLoaded>,
 }
 
@@ -93,7 +94,7 @@ impl TextureBridge {
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        texture_layout: &wgpu::BindGroupLayout,
+        texture_layout: wgpu::BindGroupLayout,
     ) -> Self {
         let (load_tx, load_rx) = crossbeam_channel::unbounded::<LoadRequest>();
         let (done_tx, done_rx) = crossbeam_channel::unbounded::<LoadResult>();
@@ -120,7 +121,10 @@ impl TextureBridge {
                         error: e,
                     },
                 };
-                let _ = done_tx.send(load_result);
+                // If receiver is dropped, the bridge is shutting down — just stop the thread
+                if done_tx.send(load_result).is_err() {
+                    break;
+                }
             }
         });
 
@@ -129,7 +133,8 @@ impl TextureBridge {
             states: HashMap::new(),
             completed_queue: done_rx,
             load_sender: load_tx,
-            texture_store: TextureStore::new(device, queue, texture_layout),
+            texture_store: TextureStore::new(device, queue, &texture_layout),
+            texture_layout,
             on_loaded: EventChannel::new(),
         }
     }
@@ -146,12 +151,7 @@ impl TextureBridge {
         });
     }
 
-    pub fn flush(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        texture_layout: &wgpu::BindGroupLayout,
-    ) {
+    pub fn flush(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
         while let Ok(result) = self.completed_queue.try_recv() {
             match result {
                 LoadResult::Success {
@@ -162,7 +162,7 @@ impl TextureBridge {
                 } => match self.texture_store.load_from_bytes(
                     device,
                     queue,
-                    texture_layout,
+                    &self.texture_layout,
                     &pixels,
                     width,
                     height,
@@ -271,7 +271,7 @@ mod tests {
     #[test]
     fn test_resolve_unknown_returns_fallback() {
         let (device, queue, layout) = test_device_and_layout();
-        let bridge = TextureBridge::new(&device, &queue, &layout);
+        let bridge = TextureBridge::new(&device, &queue, layout);
         let tex = Texture {
             id: "test".into(),
             width: 1,
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn test_request_sets_pending_state() {
         let (device, queue, layout) = test_device_and_layout();
-        let mut bridge = TextureBridge::new(&device, &queue, &layout);
+        let mut bridge = TextureBridge::new(&device, &queue, layout);
         let tex = Texture {
             id: "test".into(),
             width: 1,
