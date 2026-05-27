@@ -31,6 +31,7 @@ pub struct Renderer {
     pub config: SurfaceConfiguration,
     pub graph: crate::graph::RenderGraph,
     pub sprite_pipeline: Arc<SpritePipeline>,
+    pub bridge: crate::texture_bridge::TextureBridge,
     camera_uniform: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 }
@@ -64,7 +65,37 @@ impl Renderer {
             .unwrap();
         surface.configure(&device, &config);
 
-        let sprite_pipeline = Arc::new(SpritePipeline::new(&device, config.format));
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("sprite_texture_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
+        let sprite_pipeline = Arc::new(SpritePipeline::new(
+            &device,
+            config.format,
+            &texture_bind_group_layout,
+        ));
+
+        let bridge =
+            crate::texture_bridge::TextureBridge::new(&device, &queue, texture_bind_group_layout);
 
         let camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("camera_uniform"),
@@ -89,6 +120,7 @@ impl Renderer {
             config,
             graph: crate::graph::RenderGraph::new(),
             sprite_pipeline,
+            bridge,
             camera_uniform,
             camera_bind_group,
         }
@@ -104,7 +136,6 @@ impl Renderer {
         &mut self,
         cameras: &[&crate::camera::Camera],
         all_sprites: &[crate::sprite::Sprite],
-        bridge: &mut crate::texture_bridge::TextureBridge,
     ) -> Result<(), wgpu::SurfaceError> {
         use crate::camera::{Camera, RenderTarget};
         use crate::frustum::Frustum;
@@ -114,7 +145,7 @@ impl Renderer {
         sorted.sort_by_key(|c| c.priority);
 
         // Flush pending texture uploads
-        bridge.flush(&self.device, &self.queue);
+        self.bridge.flush(&self.device, &self.queue);
 
         // Convert Sprite → SpriteDraw
         let sprite_draws: Vec<SpriteDraw> = all_sprites
@@ -123,7 +154,7 @@ impl Renderer {
                 world_matrix: s.transform,
                 color: s.color,
                 size: s.size,
-                texture_id: bridge.resolve(&s.texture),
+                texture_id: self.bridge.resolve(&s.texture),
                 flip_x: s.flip_x,
                 flip_y: s.flip_y,
             })
@@ -174,7 +205,8 @@ impl Renderer {
 
             let target_view = match camera.render_target {
                 RenderTarget::Screen => &swapchain_view,
-                RenderTarget::Texture(key) => bridge
+                RenderTarget::Texture(key) => self
+                    .bridge
                     .texture_store()
                     .get_render_target_view(key)
                     .expect("render target texture not found"),
@@ -190,7 +222,7 @@ impl Renderer {
             )> = batches
                 .iter()
                 .map(|b| {
-                    let bg = bridge.texture_store().get_bind_group(b.texture_id);
+                    let bg = self.bridge.texture_store().get_bind_group(b.texture_id);
                     (bg, &b.vertex_buffer, &b.index_buffer, b.index_count)
                 })
                 .collect();
