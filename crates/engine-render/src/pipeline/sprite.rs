@@ -94,6 +94,34 @@ impl SpritePipeline {
             push_constant_ranges: &[],
         });
 
+        // Instance buffer layout: mat4x4 (4 x vec4)
+        let instance_layout = wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<engine_math::Mat4>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 3,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    shader_location: 4,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+            ],
+        };
+
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("sprite_pipeline"),
             layout: Some(&pipeline_layout),
@@ -101,7 +129,7 @@ impl SpritePipeline {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[SpriteVertex::desc()],
+                buffers: &[SpriteVertex::desc(), instance_layout],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
