@@ -20,10 +20,10 @@ pub trait Asset: Clone + 'static {
 }
 
 pub struct Handle<T: Asset> {
-    pub(crate) inner: Arc<HandleInner<T>>,
+    inner: Arc<HandleInner<T>>,
 }
 
-pub(crate) struct HandleInner<T: Asset> {
+struct HandleInner<T: Asset> {
     asset: T,
     ref_count: AtomicUsize,
 }
