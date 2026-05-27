@@ -39,6 +39,7 @@ impl PersistentBuffer {
 
 /// 高性能精灵渲染器
 /// 使用持久映射缓冲 + 间接绘制
+#[allow(dead_code)]
 pub struct SpriteRenderer {
     /// 双缓冲实例缓冲
     instance_buffers: [PersistentBuffer; 2],
@@ -69,28 +70,18 @@ impl SpriteRenderer {
         let instance_size = sprite_capacity * 64;
         let indirect_size = sprite_capacity * std::mem::size_of::<DrawIndexedIndirectArgs>();
 
-        let vertex_buffer = PersistentBuffer::new(
-            device,
-            vertex_size,
-            Some("sprite_vertex_buffer"),
-        );
+        let vertex_buffer =
+            PersistentBuffer::new(device, vertex_size, Some("sprite_vertex_buffer"));
 
-        let index_buffer = PersistentBuffer::new(
-            device,
-            index_size,
-            Some("sprite_index_buffer"),
-        );
+        let index_buffer = PersistentBuffer::new(device, index_size, Some("sprite_index_buffer"));
 
         let instance_buffers = [
             PersistentBuffer::new(device, instance_size, Some("sprite_instance_buffer_0")),
             PersistentBuffer::new(device, instance_size, Some("sprite_instance_buffer_1")),
         ];
 
-        let indirect_buffer = PersistentBuffer::new(
-            device,
-            indirect_size,
-            Some("sprite_indirect_buffer"),
-        );
+        let indirect_buffer =
+            PersistentBuffer::new(device, indirect_size, Some("sprite_indirect_buffer"));
 
         Self {
             instance_buffers,
@@ -123,7 +114,11 @@ impl SpriteRenderer {
         indirect_offset: usize,
     ) {
         let vertex_data = bytemuck::cast_slice(&batch.vertices);
-        queue.write_buffer(self.vertex_buffer.buffer(), vertex_offset as u64, vertex_data);
+        queue.write_buffer(
+            self.vertex_buffer.buffer(),
+            vertex_offset as u64,
+            vertex_data,
+        );
 
         let index_data = bytemuck::cast_slice(&batch.indices);
         queue.write_buffer(
