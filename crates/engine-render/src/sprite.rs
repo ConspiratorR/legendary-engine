@@ -1,3 +1,4 @@
+use crate::indirect::DrawIndexedIndirectArgs;
 use crate::pipeline::sprite::SpriteVertex;
 use engine_asset::asset::Handle;
 use engine_asset::types::Texture;
@@ -30,6 +31,8 @@ pub struct SpriteBatch {
     pub vertex_buffer: Option<wgpu::Buffer>,
     pub index_buffer: Option<wgpu::Buffer>,
     pub index_count: u32,
+    pub instance_data: Vec<Mat4>,
+    pub indirect_cmd: DrawIndexedIndirectArgs,
 }
 
 impl SpriteBatch {
@@ -41,6 +44,8 @@ impl SpriteBatch {
             vertex_buffer: None,
             index_buffer: None,
             index_count: 0,
+            instance_data: Vec::new(),
+            indirect_cmd: DrawIndexedIndirectArgs::new(0, 0),
         }
     }
 
@@ -75,6 +80,8 @@ impl SpriteBatch {
         ]);
         self.indices
             .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+
+        self.instance_data.push(draw.world_matrix);
     }
 
     pub fn upload(&mut self, device: &wgpu::Device) {
@@ -94,6 +101,13 @@ impl SpriteBatch {
                 contents: index_data,
                 usage: wgpu::BufferUsages::INDEX,
             }),
+        );
+    }
+
+    pub fn update_indirect_cmd(&mut self) {
+        self.indirect_cmd = DrawIndexedIndirectArgs::new(
+            self.indices.len() as u32,
+            self.instance_data.len() as u32,
         );
     }
 }
