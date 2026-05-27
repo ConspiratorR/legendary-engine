@@ -1,9 +1,5 @@
-use crate::graph::RenderGraph;
-use crate::graph::pass::{self, RenderPassDesc};
 use crate::pipeline::sprite::SpritePipeline;
-use crate::sprite::SpriteBatch;
-use crate::texture_store::TextureStore;
-use engine_math::{Mat4, Vec3};
+use engine_math::Vec3;
 use std::ops::Deref;
 use std::sync::Arc;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
@@ -33,9 +29,8 @@ pub struct Renderer {
     pub queue: GpuQueue,
     pub surface: Surface<'static>,
     pub config: SurfaceConfiguration,
-    pub graph: RenderGraph,
+    pub graph: crate::graph::RenderGraph,
     pub sprite_pipeline: Arc<SpritePipeline>,
-    pub texture_store: TextureStore,
     camera_uniform: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 }
@@ -87,17 +82,13 @@ impl Renderer {
             }],
         });
 
-        let texture_store =
-            TextureStore::new(&device, &queue, &sprite_pipeline.texture_bind_group_layout);
-
         Self {
             device: GpuDevice(Arc::new(device)),
             queue: GpuQueue(Arc::new(queue)),
             surface,
             config,
-            graph: RenderGraph::new(),
+            graph: crate::graph::RenderGraph::new(),
             sprite_pipeline,
-            texture_store,
             camera_uniform,
             camera_bind_group,
         }
@@ -109,98 +100,34 @@ impl Renderer {
         self.surface.configure(&self.device, &self.config);
     }
 
-    #[deprecated(note = "Use render_frame() for multi-camera support")]
-    pub fn present(
-        &mut self,
-        camera_matrix: &Mat4,
-        sprite_batches: &[SpriteBatch],
-    ) -> Result<(), wgpu::SurfaceError> {
-        let output = self.surface.get_current_texture()?;
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        // Upload camera uniform
-        let matrix_data = camera_matrix.to_cols_array();
-        self.queue
-            .write_buffer(&self.camera_uniform, 0, bytemuck::cast_slice(&matrix_data));
-
-        // Reset graph and import swapchain view
-        self.graph.reset();
-        let swapchain = self.graph.import_texture_view("swapchain", view);
-
-        // Borrow data for the closure — no cloning needed since the closure
-        // lives only as long as this function scope.
-        let camera_bg = &self.camera_bind_group;
-        let pipeline = &self.sprite_pipeline.pipeline;
-        let batch_refs: Vec<(
-            &wgpu::BindGroup,
-            &Option<wgpu::Buffer>,
-            &Option<wgpu::Buffer>,
-            u32,
-        )> = sprite_batches
-            .iter()
-            .map(|b| {
-                let bg = self.texture_store.get_bind_group(b.texture_id);
-                (bg, &b.vertex_buffer, &b.index_buffer, b.index_count)
-            })
-            .collect();
-
-        let sprite_closure: pass::ExecuteFn<'_> = self.graph.add_render_pass(RenderPassDesc {
-            label: Some("sprite_pass".to_string()),
-            color_attachments: vec![pass::ColorAttachment {
-                resource: swapchain,
-                load_op: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                store_op: wgpu::StoreOp::Store,
-            }],
-            depth_stencil_attachment: None,
-            execute: Box::new(move |ctx| {
-                ctx.pass.set_pipeline(pipeline);
-                ctx.pass.set_bind_group(0, camera_bg, &[]);
-                for (bind_group, vb, ib, index_count) in &batch_refs {
-                    ctx.pass.set_bind_group(1, *bind_group, &[]);
-                    if let (Some(vb), Some(ib)) = (vb, ib) {
-                        ctx.pass.set_vertex_buffer(0, vb.slice(..));
-                        ctx.pass
-                            .set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
-                        ctx.pass.draw_indexed(0..*index_count, 0, 0..1);
-                    }
-                }
-            }),
-        });
-
-        // Compile and execute graph
-        let compiled = self.graph.compile(&self.device).unwrap();
-        let mut closures: Vec<pass::ExecuteFn<'_>> = vec![sprite_closure];
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("main_encoder"),
-            });
-        {
-            let mut ctx = crate::graph::execute::ExecuteContext {
-                device: &self.device,
-                queue: &self.queue,
-                encoder: &mut encoder,
-            };
-            self.graph.execute(&compiled, &mut closures, &mut ctx)?;
-        }
-
-        self.queue.submit([encoder.finish()]);
-        output.present();
-        Ok(())
-    }
-
     pub fn render_frame(
         &mut self,
         cameras: &[&crate::camera::Camera],
-        all_sprites: &[crate::sprite::SpriteDraw],
+        all_sprites: &[crate::sprite::Sprite],
+        bridge: &mut crate::texture_bridge::TextureBridge,
     ) -> Result<(), wgpu::SurfaceError> {
         use crate::camera::{Camera, RenderTarget};
         use crate::frustum::Frustum;
+        use crate::sprite::SpriteDraw;
 
         let mut sorted: Vec<&Camera> = cameras.to_vec();
         sorted.sort_by_key(|c| c.priority);
+
+        // Flush pending texture uploads
+        bridge.flush(&self.device, &self.queue);
+
+        // Convert Sprite → SpriteDraw
+        let sprite_draws: Vec<SpriteDraw> = all_sprites
+            .iter()
+            .map(|s| SpriteDraw {
+                world_matrix: s.transform,
+                color: s.color,
+                size: s.size,
+                texture_id: bridge.resolve(&s.texture),
+                flip_x: s.flip_x,
+                flip_y: s.flip_y,
+            })
+            .collect();
 
         let output = self.surface.get_current_texture()?;
         let swapchain_view = output
@@ -226,7 +153,7 @@ impl Renderer {
             let vp_matrix = camera.view_projection(aspect);
 
             let frustum = Frustum::from_view_projection(&vp_matrix);
-            let visible: Vec<crate::sprite::SpriteDraw> = all_sprites
+            let visible: Vec<crate::sprite::SpriteDraw> = sprite_draws
                 .iter()
                 .filter(|s| {
                     let pos = s.world_matrix.transform_point3(Vec3::ZERO);
@@ -247,8 +174,8 @@ impl Renderer {
 
             let target_view = match camera.render_target {
                 RenderTarget::Screen => &swapchain_view,
-                RenderTarget::Texture(key) => self
-                    .texture_store
+                RenderTarget::Texture(key) => bridge
+                    .texture_store()
                     .get_render_target_view(key)
                     .expect("render target texture not found"),
             };
@@ -263,7 +190,7 @@ impl Renderer {
             )> = batches
                 .iter()
                 .map(|b| {
-                    let bg = self.texture_store.get_bind_group(b.texture_id);
+                    let bg = bridge.texture_store().get_bind_group(b.texture_id);
                     (bg, &b.vertex_buffer, &b.index_buffer, b.index_count)
                 })
                 .collect();
