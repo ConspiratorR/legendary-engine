@@ -4,12 +4,14 @@ use std::sync::Arc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ListenerId(usize);
 
+type Listener<T> = (ListenerId, Arc<dyn Fn(&T) + Send + Sync>);
+
 /// Generic synchronous publish/subscribe event channel.
 ///
 /// Listeners are called in registration order when `emit()` is invoked.
 /// Uses `Fn(&T)` so multiple listeners can fire without `&mut` conflicts.
 pub struct EventChannel<T: Send + 'static> {
-    listeners: Vec<(ListenerId, Arc<dyn Fn(&T) + Send + Sync>)>,
+    listeners: Vec<Listener<T>>,
     next_id: usize,
 }
 
