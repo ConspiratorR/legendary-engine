@@ -3,16 +3,27 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+/// Unique identifier for a Handle, derived from its inner Arc pointer.
+/// All clones of the same Handle share the same Arc and thus the same HandleId.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct HandleId(usize);
+
+impl HandleId {
+    pub fn from_handle<T: Asset>(handle: &Handle<T>) -> Self {
+        Self(Arc::as_ptr(&handle.inner) as *const () as usize)
+    }
+}
+
 pub trait Asset: Clone + 'static {
     type Id: ?Sized + std::fmt::Debug + std::hash::Hash + Eq;
     fn id(&self) -> &Self::Id;
 }
 
 pub struct Handle<T: Asset> {
-    inner: Arc<HandleInner<T>>,
+    pub(crate) inner: Arc<HandleInner<T>>,
 }
 
-struct HandleInner<T: Asset> {
+pub(crate) struct HandleInner<T: Asset> {
     asset: T,
     ref_count: AtomicUsize,
 }
@@ -53,7 +64,7 @@ impl<T: Asset> Drop for Handle<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::asset::{Asset, Handle};
+    use crate::asset::{Asset, Handle, HandleId};
     use crate::loader;
     use crate::registry::Registry;
 
@@ -126,5 +137,20 @@ mod tests {
         let loaded = reg.get::<MyAsset>("path/to/asset");
         assert!(loaded.is_some());
         assert_eq!(loaded.unwrap().value, 99);
+    }
+
+    #[test]
+    fn test_handle_id_same_for_clones() {
+        let asset = MyAsset::new(1);
+        let h1 = Handle::new(asset);
+        let h2 = h1.clone();
+        assert_eq!(HandleId::from_handle(&h1), HandleId::from_handle(&h2));
+    }
+
+    #[test]
+    fn test_handle_id_different_for_distinct_handles() {
+        let h1 = Handle::new(MyAsset::new(1));
+        let h2 = Handle::new(MyAsset::new(2));
+        assert_ne!(HandleId::from_handle(&h1), HandleId::from_handle(&h2));
     }
 }
