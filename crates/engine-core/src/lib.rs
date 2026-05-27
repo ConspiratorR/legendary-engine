@@ -5,6 +5,7 @@ pub mod color;
 pub mod config;
 pub mod debug;
 pub mod engine;
+pub mod event;
 pub mod logger;
 pub mod math_utils;
 pub mod plugin;
