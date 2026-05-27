@@ -1,4 +1,5 @@
 use crate::pipeline::sprite::SpritePipeline;
+use crate::sprite_renderer::SpriteRenderer;
 use engine_math::Vec3;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -33,6 +34,7 @@ pub struct Renderer {
     pub sprite_pipeline: Arc<SpritePipeline>,
     camera_uniform: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    pub sprite_renderer: SpriteRenderer,
 }
 
 impl Renderer {
@@ -82,6 +84,8 @@ impl Renderer {
             }],
         });
 
+        let sprite_renderer = SpriteRenderer::new(&device, sprite_pipeline.clone(), 10000);
+
         Self {
             device: GpuDevice(Arc::new(device)),
             queue: GpuQueue(Arc::new(queue)),
@@ -91,6 +95,7 @@ impl Renderer {
             sprite_pipeline,
             camera_uniform,
             camera_bind_group,
+            sprite_renderer,
         }
     }
 
@@ -113,10 +118,8 @@ impl Renderer {
         let mut sorted: Vec<&Camera> = cameras.to_vec();
         sorted.sort_by_key(|c| c.priority);
 
-        // Flush pending texture uploads
         bridge.flush(&self.device, &self.queue);
 
-        // Convert Sprite → SpriteDraw
         let sprite_draws: Vec<SpriteDraw> = all_sprites
             .iter()
             .map(|s| SpriteDraw {
@@ -143,6 +146,8 @@ impl Renderer {
         let surface_width = self.config.width;
         let surface_height = self.config.height;
 
+        self.sprite_renderer.begin_frame();
+
         for camera in &sorted {
             if !camera.is_active {
                 continue;
@@ -164,8 +169,28 @@ impl Renderer {
                 .collect();
 
             let mut batches = crate::sprite::collect_batches(&visible);
+
             for batch in &mut batches {
-                batch.upload(&self.device);
+                batch.update_indirect_cmd();
+            }
+
+            let mut vertex_offset: usize = 0;
+            let mut instance_offset: usize = 0;
+            let mut indirect_offset: usize = 0;
+
+            for batch in &batches {
+                self.sprite_renderer.upload_batch(
+                    &self.queue,
+                    batch,
+                    vertex_offset,
+                    instance_offset,
+                    indirect_offset,
+                );
+                vertex_offset += batch.vertices.len()
+                    * std::mem::size_of::<crate::pipeline::sprite::SpriteVertex>();
+                instance_offset +=
+                    batch.instance_data.len() * std::mem::size_of::<engine_math::Mat4>();
+                indirect_offset += std::mem::size_of::<crate::indirect::DrawIndexedIndirectArgs>();
             }
 
             let matrix_data = vp_matrix.to_cols_array();
@@ -182,18 +207,7 @@ impl Renderer {
 
             let camera_bg = &self.camera_bind_group;
             let pipeline = &self.sprite_pipeline.pipeline;
-            let batch_refs: Vec<(
-                &wgpu::BindGroup,
-                &Option<wgpu::Buffer>,
-                &Option<wgpu::Buffer>,
-                u32,
-            )> = batches
-                .iter()
-                .map(|b| {
-                    let bg = bridge.texture_store().get_bind_group(b.texture_id);
-                    (bg, &b.vertex_buffer, &b.index_buffer, b.index_count)
-                })
-                .collect();
+            let buffers = self.sprite_renderer.get_buffers();
 
             let clear = camera.clear_color.unwrap_or(crate::camera::Color::BLACK);
             {
@@ -217,13 +231,18 @@ impl Renderer {
 
                 pass.set_pipeline(pipeline);
                 pass.set_bind_group(0, camera_bg, &[]);
-                for (bind_group, vb, ib, index_count) in &batch_refs {
-                    pass.set_bind_group(1, *bind_group, &[]);
-                    if let (Some(vb), Some(ib)) = (vb, ib) {
-                        pass.set_vertex_buffer(0, vb.slice(..));
-                        pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
-                        pass.draw_indexed(0..*index_count, 0, 0..1);
-                    }
+
+                pass.set_vertex_buffer(0, buffers.vertex_buffer.slice(..));
+                pass.set_vertex_buffer(1, buffers.instance_buffer.slice(..));
+                pass.set_index_buffer(buffers.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+
+                let mut indirect_offset: u64 = 0;
+                for batch in &batches {
+                    let bind_group = bridge.texture_store().get_bind_group(batch.texture_id);
+                    pass.set_bind_group(1, bind_group, &[]);
+                    pass.draw_indexed_indirect(buffers.indirect_buffer, indirect_offset);
+                    indirect_offset +=
+                        std::mem::size_of::<crate::indirect::DrawIndexedIndirectArgs>() as u64;
                 }
             }
         }
