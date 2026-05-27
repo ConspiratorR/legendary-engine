@@ -86,16 +86,33 @@ pub struct TextureBridge {
     completed_queue: crossbeam_channel::Receiver<LoadResult>,
     load_sender: crossbeam_channel::Sender<LoadRequest>,
     texture_store: TextureStore,
-    texture_layout: wgpu::BindGroupLayout,
     pub on_loaded: EventChannel<TextureLoaded>,
 }
 
 impl TextureBridge {
-    pub fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        texture_layout: wgpu::BindGroupLayout,
-    ) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+        let texture_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("sprite_texture_bind_group_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+
         let (load_tx, load_rx) = crossbeam_channel::unbounded::<LoadRequest>();
         let (done_tx, done_rx) = crossbeam_channel::unbounded::<LoadResult>();
 
@@ -121,7 +138,6 @@ impl TextureBridge {
                         error: e,
                     },
                 };
-                // If receiver is dropped, the bridge is shutting down — just stop the thread
                 if done_tx.send(load_result).is_err() {
                     break;
                 }
@@ -133,8 +149,7 @@ impl TextureBridge {
             states: HashMap::new(),
             completed_queue: done_rx,
             load_sender: load_tx,
-            texture_store: TextureStore::new(device, queue, &texture_layout),
-            texture_layout,
+            texture_store: TextureStore::new(device, queue, texture_layout),
             on_loaded: EventChannel::new(),
         }
     }
@@ -159,14 +174,10 @@ impl TextureBridge {
                     pixels,
                     width,
                     height,
-                } => match self.texture_store.load_from_bytes(
-                    device,
-                    queue,
-                    &self.texture_layout,
-                    &pixels,
-                    width,
-                    height,
-                ) {
+                } => match self
+                    .texture_store
+                    .load_from_bytes(device, queue, &pixels, width, height)
+                {
                     Ok(texture_id) => {
                         self.handle_to_id.insert(handle_id, texture_id);
                         self.states.insert(handle_id, LoadState::Ready(texture_id));
@@ -223,7 +234,7 @@ impl TextureBridge {
 mod tests {
     use super::*;
 
-    fn test_device_and_layout() -> (wgpu::Device, wgpu::Queue, wgpu::BindGroupLayout) {
+    fn test_device() -> (wgpu::Device, wgpu::Queue) {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
@@ -244,34 +255,13 @@ mod tests {
             None,
         ))
         .unwrap();
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("test_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-        (device, queue, layout)
+        (device, queue)
     }
 
     #[test]
     fn test_resolve_unknown_returns_fallback() {
-        let (device, queue, layout) = test_device_and_layout();
-        let bridge = TextureBridge::new(&device, &queue, layout);
+        let (device, queue) = test_device();
+        let bridge = TextureBridge::new(&device, &queue);
         let tex = Texture {
             id: "test".into(),
             width: 1,
@@ -285,8 +275,8 @@ mod tests {
 
     #[test]
     fn test_request_sets_pending_state() {
-        let (device, queue, layout) = test_device_and_layout();
-        let mut bridge = TextureBridge::new(&device, &queue, layout);
+        let (device, queue) = test_device();
+        let mut bridge = TextureBridge::new(&device, &queue);
         let tex = Texture {
             id: "test".into(),
             width: 1,

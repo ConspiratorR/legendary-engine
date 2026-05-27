@@ -4,6 +4,7 @@ use engine_math::{Mat4, Vec2, Vec3};
 use engine_render::camera::{Camera, Color, Viewport};
 use engine_render::renderer::Renderer;
 use engine_render::sprite::Sprite;
+use engine_render::texture_bridge::TextureBridge;
 use engine_window::{window::WindowConfig, window::create_window};
 use log::info;
 use winit::event::{Event, WindowEvent};
@@ -24,7 +25,9 @@ fn main() {
         &event_loop,
     ));
 
-    let mut renderer = Renderer::new(window);
+    let renderer = Renderer::new(window);
+
+    let mut bridge = TextureBridge::new(&renderer.device, &renderer.queue);
 
     let tex_asset = Texture {
         id: "test".into(),
@@ -34,9 +37,9 @@ fn main() {
         channels: 4,
     };
     let handle = Handle::new(tex_asset);
-    renderer.bridge.request(&handle, "assets/test.png");
+    bridge.request(&handle, "assets/test.png");
 
-    renderer.bridge.on_loaded.subscribe(|e| {
+    bridge.on_loaded.subscribe(|e| {
         info!("Texture loaded: {:?} → {:?}", e.handle_id, e.result);
     });
 
@@ -73,6 +76,7 @@ fn main() {
     };
     mini_camera.clear_color = Some(Color::new(0.2, 0.2, 0.3, 1.0));
 
+    let mut renderer = renderer;
     event_loop
         .run(move |event, elwt| {
             elwt.set_control_flow(ControlFlow::Poll);
@@ -93,7 +97,7 @@ fn main() {
 
             if let Event::AboutToWait = event {
                 let cameras: Vec<&Camera> = vec![&main_camera, &mini_camera];
-                let _ = renderer.render_frame(&cameras, &sprites);
+                let _ = renderer.render_frame(&cameras, &sprites, &mut bridge);
             }
         })
         .unwrap();

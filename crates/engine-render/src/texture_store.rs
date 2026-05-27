@@ -22,6 +22,7 @@ pub struct TextureStore {
     textures: HashMap<u64, GpuTexture>,
     bind_groups: HashMap<u64, wgpu::BindGroup>,
     sampler: wgpu::Sampler,
+    texture_layout: wgpu::BindGroupLayout,
     fallback_id: u64,
     next_id: u64,
 }
@@ -30,7 +31,7 @@ impl TextureStore {
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        texture_layout: &wgpu::BindGroupLayout,
+        texture_layout: wgpu::BindGroupLayout,
     ) -> Self {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("texture_store_sampler"),
@@ -80,7 +81,7 @@ impl TextureStore {
 
         let fallback_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("fallback_bind_group"),
-            layout: texture_layout,
+            layout: &texture_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -110,6 +111,7 @@ impl TextureStore {
             textures,
             bind_groups,
             sampler,
+            texture_layout,
             fallback_id: 0,
             next_id: 1,
         }
@@ -119,7 +121,6 @@ impl TextureStore {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        texture_layout: &wgpu::BindGroupLayout,
         path: &str,
     ) -> Result<u64, TextureLoadError> {
         let bytes = std::fs::read(path)?;
@@ -127,14 +128,13 @@ impl TextureStore {
             image::load_from_memory(&bytes).map_err(|e| TextureLoadError::Decode(e.to_string()))?;
         let rgba = img.to_rgba8();
         let (width, height) = rgba.dimensions();
-        self.load_from_bytes(device, queue, texture_layout, &rgba, width, height)
+        self.load_from_bytes(device, queue, &rgba, width, height)
     }
 
     pub fn load_from_bytes(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        texture_layout: &wgpu::BindGroupLayout,
         pixels: &[u8],
         width: u32,
         height: u32,
@@ -181,7 +181,7 @@ impl TextureStore {
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
-            layout: texture_layout,
+            layout: &self.texture_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -237,7 +237,6 @@ impl TextureStore {
     pub fn create_render_target(
         &mut self,
         device: &wgpu::Device,
-        texture_layout: &wgpu::BindGroupLayout,
         width: u32,
         height: u32,
         format: wgpu::TextureFormat,
@@ -261,7 +260,7 @@ impl TextureStore {
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label,
-            layout: texture_layout,
+            layout: &self.texture_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -349,7 +348,7 @@ mod tests {
     fn test_fallback_exists() {
         let (device, queue) = test_device();
         let layout = test_layout(&device);
-        let store = TextureStore::new(&device, &queue, &layout);
+        let store = TextureStore::new(&device, &queue, layout);
         assert!(store.contains(0));
         assert_eq!(store.get_size(0), (2, 2));
     }
@@ -358,7 +357,7 @@ mod tests {
     fn test_invalid_id_returns_fallback() {
         let (device, queue) = test_device();
         let layout = test_layout(&device);
-        let store = TextureStore::new(&device, &queue, &layout);
+        let store = TextureStore::new(&device, &queue, layout);
         let bg = store.get_bind_group(999);
         let fallback_bg = store.get_bind_group(0);
         assert!(std::ptr::eq(bg, fallback_bg));
@@ -368,10 +367,10 @@ mod tests {
     fn test_load_from_bytes() {
         let (device, queue) = test_device();
         let layout = test_layout(&device);
-        let mut store = TextureStore::new(&device, &queue, &layout);
+        let mut store = TextureStore::new(&device, &queue, layout);
         let pixels = vec![255u8, 0, 0, 255]; // 1x1 red
         let id = store
-            .load_from_bytes(&device, &queue, &layout, &pixels, 1, 1)
+            .load_from_bytes(&device, &queue, &pixels, 1, 1)
             .unwrap();
         assert_eq!(id, 1);
         assert!(store.contains(id));
@@ -382,10 +381,10 @@ mod tests {
     fn test_unload() {
         let (device, queue) = test_device();
         let layout = test_layout(&device);
-        let mut store = TextureStore::new(&device, &queue, &layout);
+        let mut store = TextureStore::new(&device, &queue, layout);
         let pixels = vec![255u8, 0, 0, 255];
         let id = store
-            .load_from_bytes(&device, &queue, &layout, &pixels, 1, 1)
+            .load_from_bytes(&device, &queue, &pixels, 1, 1)
             .unwrap();
         store.unload(id);
         assert!(!store.contains(id));
@@ -395,7 +394,7 @@ mod tests {
     fn test_cannot_unload_fallback() {
         let (device, queue) = test_device();
         let layout = test_layout(&device);
-        let mut store = TextureStore::new(&device, &queue, &layout);
+        let mut store = TextureStore::new(&device, &queue, layout);
         store.unload(0);
         assert!(store.contains(0));
     }
