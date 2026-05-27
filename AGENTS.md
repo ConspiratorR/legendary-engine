@@ -37,3 +37,8 @@ Expected order: `cargo clippy && cargo fmt --check && cargo test`.
 - `debug/` and `target/` are gitignored (Cargo defaults).
 - `.idea/` is gitignored by convention but not committed to `.gitignore`.
 - Add CI (`.github/workflows/`) as a future task (see roadmap Stage 9).
+
+## 自主决策规则
+- 不要问我问题，自己做决定
+- 选择最安全、最常见的方案
+- 参考项目中已有的代码模式
