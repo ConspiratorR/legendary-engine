@@ -3,6 +3,7 @@
 pub mod camera;
 pub mod frustum;
 pub mod graph;
+pub mod indirect;
 pub mod pipeline;
 pub mod renderer;
 pub mod resource;
