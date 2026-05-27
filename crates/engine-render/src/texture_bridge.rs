@@ -213,12 +213,9 @@ impl TextureBridge {
         self.handle_to_id.get(&handle_id).copied().unwrap_or(0)
     }
 
-    pub fn state(&self, handle: &Handle<Texture>) -> LoadState {
+    pub fn state(&self, handle: &Handle<Texture>) -> Option<&LoadState> {
         let handle_id = HandleId::from_handle(handle);
-        self.states
-            .get(&handle_id)
-            .cloned()
-            .unwrap_or(LoadState::Failed("never requested".into()))
+        self.states.get(&handle_id)
     }
 
     pub fn texture_store(&self) -> &TextureStore {
@@ -287,8 +284,8 @@ mod tests {
         let handle = Handle::new(tex);
         bridge.request(&handle, "nonexistent_path.png");
         match bridge.state(&handle) {
-            LoadState::Pending => {}
-            other => panic!("Expected Pending, got {:?}", other),
+            Some(LoadState::Pending) => {}
+            other => panic!("Expected Some(Pending), got {:?}", other),
         }
     }
 }
