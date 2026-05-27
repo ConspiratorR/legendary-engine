@@ -1,11 +1,14 @@
 use crate::pipeline::sprite::SpriteVertex;
+use engine_asset::asset::Handle;
+use engine_asset::types::Texture;
 use engine_math::{Mat4, Vec2};
 use wgpu::util::DeviceExt;
 
 pub struct Sprite {
-    pub texture_id: u64,
+    pub texture: Handle<Texture>,
     pub color: [f32; 4],
     pub size: Vec2,
+    pub transform: Mat4,
     pub flip_x: bool,
     pub flip_y: bool,
 }
