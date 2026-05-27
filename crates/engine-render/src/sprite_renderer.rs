@@ -1,26 +1,17 @@
-use std::ptr;
 use std::sync::Arc;
 
 use crate::indirect::DrawIndexedIndirectArgs;
 use crate::pipeline::sprite::SpritePipeline;
 use crate::sprite::SpriteBatch;
 
-/// 持久映射的 GPU 缓冲
-/// 实现零拷贝上传，CPU 直接写入 GPU 内存
+/// GPU 缓冲包装
 pub struct PersistentBuffer {
     buffer: wgpu::Buffer,
     size: usize,
-    mapped_ptr: *mut u8,
 }
 
-unsafe impl Send for PersistentBuffer {}
-unsafe impl Sync for PersistentBuffer {}
-
 impl PersistentBuffer {
-    /// 创建持久映射缓冲
-    ///
-    /// # Safety
-    /// 返回的缓冲区的映射指针必须在缓冲区有效期内有效
+    /// 创建缓冲区
     pub fn new(device: &wgpu::Device, size: usize, label: Option<&str>) -> Self {
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label,
@@ -29,16 +20,10 @@ impl PersistentBuffer {
                 | wgpu::BufferUsages::INDEX
                 | wgpu::BufferUsages::INDIRECT
                 | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: true,
+            mapped_at_creation: false,
         });
 
-        let mapped_ptr = buffer.slice(..).get_mapped_range_mut().as_mut_ptr();
-
-        Self {
-            buffer,
-            size,
-            mapped_ptr,
-        }
+        Self { buffer, size }
     }
 
     /// 获取缓冲区引用
@@ -49,30 +34,6 @@ impl PersistentBuffer {
     /// 获取缓冲区大小
     pub fn size(&self) -> usize {
         self.size
-    }
-
-    /// 写入数据到缓冲区指定偏移
-    ///
-    /// # Safety
-    /// 调用者必须确保 offset + data.len() <= self.size
-    pub unsafe fn write(&self, offset: usize, data: &[u8]) {
-        debug_assert!(
-            offset + data.len() <= self.size,
-            "Write out of bounds: offset={}, len={}, size={}",
-            offset,
-            data.len(),
-            self.size
-        );
-
-        unsafe {
-            let dst = self.mapped_ptr.add(offset);
-            ptr::copy_nonoverlapping(data.as_ptr(), dst, data.len());
-        }
-    }
-
-    /// 取消映射（在 GPU 使用前调用）
-    pub fn unmap(&self) {
-        self.buffer.unmap();
     }
 }
 
@@ -131,13 +92,6 @@ impl SpriteRenderer {
             Some("sprite_indirect_buffer"),
         );
 
-        // 取消映射，准备 GPU 使用
-        vertex_buffer.unmap();
-        index_buffer.unmap();
-        instance_buffers[0].unmap();
-        instance_buffers[1].unmap();
-        indirect_buffer.unmap();
-
         Self {
             instance_buffers,
             indirect_buffer,
@@ -159,42 +113,38 @@ impl SpriteRenderer {
         &self.instance_buffers[self.current_frame]
     }
 
-    /// 上传批次数据到持久缓冲
+    /// 上传批次数据到缓冲
     pub fn upload_batch(
         &self,
-        _device: &wgpu::Device,
-        _queue: &wgpu::Queue,
+        queue: &wgpu::Queue,
         batch: &SpriteBatch,
         vertex_offset: usize,
         instance_offset: usize,
         indirect_offset: usize,
     ) {
-        // 写入顶点数据
         let vertex_data = bytemuck::cast_slice(&batch.vertices);
-        unsafe {
-            self.vertex_buffer.write(vertex_offset, vertex_data);
-        }
+        queue.write_buffer(self.vertex_buffer.buffer(), vertex_offset as u64, vertex_data);
 
-        // 写入索引数据
         let index_data = bytemuck::cast_slice(&batch.indices);
-        unsafe {
-            self.index_buffer.write(
-                vertex_offset / 36 * 6 * 2, // 索引偏移 = 顶点偏移 / 顶点大小 * 索引大小
-                index_data,
-            );
-        }
+        queue.write_buffer(
+            self.index_buffer.buffer(),
+            (vertex_offset / 36 * 6 * 2) as u64,
+            index_data,
+        );
 
-        // 写入实例数据
         let instance_data = bytemuck::cast_slice(&batch.instance_data);
-        unsafe {
-            self.current_instance_buffer().write(instance_offset, instance_data);
-        }
+        queue.write_buffer(
+            self.current_instance_buffer().buffer(),
+            instance_offset as u64,
+            instance_data,
+        );
 
-        // 写入间接绘制命令
         let indirect_data = bytemuck::bytes_of(&batch.indirect_cmd);
-        unsafe {
-            self.indirect_buffer.write(indirect_offset, indirect_data);
-        }
+        queue.write_buffer(
+            self.indirect_buffer.buffer(),
+            indirect_offset as u64,
+            indirect_data,
+        );
     }
 
     /// 获取绘制所需的缓冲区引用
