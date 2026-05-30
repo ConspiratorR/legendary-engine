@@ -154,4 +154,10 @@ impl SpritePipeline {
             texture_bind_group_layout,
         }
     }
+
+    /// Returns a reference to the texture bind group layout.
+    /// Used by TextureBridge to create compatible bind groups.
+    pub fn texture_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.texture_bind_group_layout
+    }
 }

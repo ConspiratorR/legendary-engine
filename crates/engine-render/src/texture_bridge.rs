@@ -90,29 +90,11 @@ pub struct TextureBridge {
 }
 
 impl TextureBridge {
-    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
-        let texture_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("sprite_texture_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture_layout: wgpu::BindGroupLayout,
+    ) -> Self {
         let (load_tx, load_rx) = crossbeam_channel::unbounded::<LoadRequest>();
         let (done_tx, done_rx) = crossbeam_channel::unbounded::<LoadResult>();
 
@@ -255,10 +237,35 @@ mod tests {
         (device, queue)
     }
 
+    fn test_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("test_texture_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        })
+    }
+
     #[test]
     fn test_resolve_unknown_returns_fallback() {
         let (device, queue) = test_device();
-        let bridge = TextureBridge::new(&device, &queue);
+        let layout = test_layout(&device);
+        let bridge = TextureBridge::new(&device, &queue, layout);
         let tex = Texture {
             id: "test".into(),
             width: 1,
@@ -273,7 +280,8 @@ mod tests {
     #[test]
     fn test_request_sets_pending_state() {
         let (device, queue) = test_device();
-        let mut bridge = TextureBridge::new(&device, &queue);
+        let layout = test_layout(&device);
+        let mut bridge = TextureBridge::new(&device, &queue, layout);
         let tex = Texture {
             id: "test".into(),
             width: 1,

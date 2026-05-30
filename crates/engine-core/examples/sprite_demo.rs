@@ -27,7 +27,11 @@ fn main() {
 
     let renderer = Renderer::new(window).expect("Failed to create renderer");
 
-    let mut bridge = TextureBridge::new(&renderer.device, &renderer.queue);
+    let mut bridge = TextureBridge::new(
+        &renderer.device,
+        &renderer.queue,
+        renderer.sprite_pipeline.texture_layout().clone(),
+    );
 
     let tex_asset = Texture {
         id: "test".into(),
