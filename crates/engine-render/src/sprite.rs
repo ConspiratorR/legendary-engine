@@ -3,8 +3,6 @@ use crate::pipeline::sprite::SpriteVertex;
 use engine_asset::asset::Handle;
 use engine_asset::types::Texture;
 use engine_math::{Mat4, Vec2};
-use wgpu::util::DeviceExt;
-
 pub struct Sprite {
     pub texture: Handle<Texture>,
     pub color: [f32; 4],
@@ -29,8 +27,6 @@ pub struct SpriteBatch {
     pub texture_id: u64,
     pub vertices: Vec<SpriteVertex>,
     pub indices: Vec<u16>,
-    pub vertex_buffer: Option<wgpu::Buffer>,
-    pub index_buffer: Option<wgpu::Buffer>,
     pub index_count: u32,
     pub instance_data: Vec<Mat4>,
     pub indirect_cmd: DrawIndexedIndirectArgs,
@@ -42,8 +38,6 @@ impl SpriteBatch {
             texture_id,
             vertices: Vec::new(),
             indices: Vec::new(),
-            vertex_buffer: None,
-            index_buffer: None,
             index_count: 0,
             instance_data: Vec::new(),
             indirect_cmd: DrawIndexedIndirectArgs::new(0, 0),
@@ -85,26 +79,6 @@ impl SpriteBatch {
         self.instance_data.push(draw.world_matrix);
     }
 
-    pub fn upload(&mut self, device: &wgpu::Device) {
-        let vertex_data = bytemuck::cast_slice(&self.vertices);
-        self.vertex_buffer = Some(
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("sprite_vertex_buffer"),
-                contents: vertex_data,
-                usage: wgpu::BufferUsages::VERTEX,
-            }),
-        );
-        let index_data = bytemuck::cast_slice(&self.indices);
-        self.index_count = self.indices.len() as u32;
-        self.index_buffer = Some(
-            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("sprite_index_buffer"),
-                contents: index_data,
-                usage: wgpu::BufferUsages::INDEX,
-            }),
-        );
-    }
-
     pub fn update_indirect_cmd(&mut self) {
         self.indirect_cmd = DrawIndexedIndirectArgs::new(
             self.indices.len() as u32,
@@ -122,16 +96,22 @@ pub fn collect_batches(sprites: &[SpriteDraw]) -> Vec<SpriteBatch> {
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    // Group by texture_id (stable sort preserves depth order within each group)
+    // Group by texture_id, preserving depth order across groups
     let mut batch_map: std::collections::HashMap<u64, Vec<&SpriteDraw>> =
         std::collections::HashMap::new();
+    let mut order: Vec<u64> = Vec::new();
     for draw in sorted {
-        batch_map.entry(draw.texture_id).or_default().push(draw);
+        let entry = batch_map.entry(draw.texture_id);
+        if matches!(entry, std::collections::hash_map::Entry::Vacant(_)) {
+            order.push(draw.texture_id);
+        }
+        entry.or_default().push(draw);
     }
 
-    let mut batches: Vec<SpriteBatch> = batch_map
+    let batches: Vec<SpriteBatch> = order
         .into_iter()
-        .map(|(tex_idx, draws)| {
+        .map(|tex_idx| {
+            let draws = batch_map.remove(&tex_idx).unwrap();
             let mut batch = SpriteBatch::new(tex_idx);
             for draw in draws {
                 batch.push(draw);
@@ -139,8 +119,6 @@ pub fn collect_batches(sprites: &[SpriteDraw]) -> Vec<SpriteBatch> {
             batch
         })
         .collect();
-
-    batches.sort_by_key(|b| b.texture_id);
     batches
 }
 
@@ -183,8 +161,54 @@ mod tests {
         ];
         let batches = collect_batches(&draws);
         assert_eq!(batches.len(), 2);
-        assert_eq!(batches[0].texture_id, 0);
-        assert_eq!(batches[1].texture_id, 1);
+        // Batch order follows depth-sorted insertion order (first-seen texture first)
+        assert_eq!(batches[0].texture_id, 1);
+        assert_eq!(batches[1].texture_id, 0);
+    }
+
+    #[test]
+    fn test_collect_batches_sorts_by_depth_back_to_front() {
+        let draws = vec![
+            SpriteDraw {
+                texture_id: 0,
+                depth: 10.0,
+                ..sprite_draw_default()
+            },
+            SpriteDraw {
+                texture_id: 1,
+                depth: 1.0,
+                ..sprite_draw_default()
+            },
+            SpriteDraw {
+                texture_id: 0,
+                depth: 5.0,
+                ..sprite_draw_default()
+            },
+        ];
+        let batches = collect_batches(&draws);
+        // Batch for tex 1 (depth 1.0) should come before batch for tex 0 (first at depth 5.0)
+        assert_eq!(batches[0].texture_id, 1);
+        assert_eq!(batches[1].texture_id, 0);
+        // Within tex 0 batch: depth 5.0 before depth 10.0
+        assert!(batches[1].vertices.len() >= 8); // 2 sprites * 4 verts
+    }
+
+    #[test]
+    fn test_collect_batches_nan_depth_does_not_panic() {
+        let draws = vec![
+            SpriteDraw {
+                texture_id: 0,
+                depth: f32::NAN,
+                ..sprite_draw_default()
+            },
+            SpriteDraw {
+                texture_id: 0,
+                depth: 1.0,
+                ..sprite_draw_default()
+            },
+        ];
+        let batches = collect_batches(&draws);
+        assert_eq!(batches.len(), 1);
     }
 
     fn sprite_draw_default() -> SpriteDraw {

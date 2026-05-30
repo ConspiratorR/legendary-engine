@@ -2,7 +2,6 @@ use crate::texture_store::TextureStore;
 use engine_asset::asset::{Handle, HandleId};
 use engine_asset::types::Texture;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Unique identifier for a registered event listener.
@@ -229,6 +228,7 @@ impl TextureBridge {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     fn test_device() -> (wgpu::Device, wgpu::Queue) {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
