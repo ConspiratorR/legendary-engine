@@ -116,6 +116,7 @@ impl Renderer {
         cameras: &[&crate::camera::Camera],
         all_sprites: &[crate::sprite::Sprite],
         bridge: &mut crate::texture_bridge::TextureBridge,
+        registry: &engine_asset::registry::Registry,
     ) -> Result<(), wgpu::SurfaceError> {
         use crate::camera::{Camera, RenderTarget};
         use crate::frustum::Frustum;
@@ -124,6 +125,7 @@ impl Renderer {
         let mut sorted: Vec<&Camera> = cameras.to_vec();
         sorted.sort_by_key(|c| c.priority);
 
+        bridge.auto_sync(registry);
         bridge.flush(&self.device, &self.queue);
 
         let sprite_draws: Vec<SpriteDraw> = all_sprites

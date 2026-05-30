@@ -1,4 +1,5 @@
 use engine_asset::asset::Handle;
+use engine_asset::registry::Registry;
 use engine_asset::types::Texture;
 use engine_math::{Mat4, Vec2, Vec3};
 use engine_render::camera::{Camera, Color, Viewport};
@@ -6,8 +7,8 @@ use engine_render::renderer::Renderer;
 use engine_render::sprite::Sprite;
 use engine_render::texture_bridge::TextureBridge;
 use engine_window::{window::WindowConfig, window::create_window};
-use std::path::PathBuf;
 use log::info;
+use std::path::PathBuf;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -82,6 +83,7 @@ fn main() {
     };
     mini_camera.clear_color = Some(Color::new(0.2, 0.2, 0.3, 1.0));
 
+    let registry = Registry::new();
     let mut renderer = renderer;
     event_loop
         .run(move |event, elwt| {
@@ -103,7 +105,7 @@ fn main() {
 
             if let Event::AboutToWait = event {
                 let cameras: Vec<&Camera> = vec![&main_camera, &mini_camera];
-                let _ = renderer.render_frame(&cameras, &sprites, &mut bridge);
+                let _ = renderer.render_frame(&cameras, &sprites, &mut bridge, &registry);
             }
         })
         .unwrap();
