@@ -2,6 +2,7 @@ use crate::texture_store::TextureStore;
 use engine_asset::asset::{Handle, HandleId};
 use engine_asset::types::Texture;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Unique identifier for a registered event listener.
@@ -272,6 +273,7 @@ mod tests {
             height: 1,
             data: vec![255, 0, 0, 255],
             channels: 4,
+            asset_path: PathBuf::new(),
         };
         let handle = Handle::new(tex);
         assert_eq!(bridge.resolve(&handle), 0);
@@ -288,6 +290,7 @@ mod tests {
             height: 1,
             data: vec![255, 0, 0, 255],
             channels: 4,
+            asset_path: PathBuf::new(),
         };
         let handle = Handle::new(tex);
         bridge.request(&handle, "nonexistent_path.png");

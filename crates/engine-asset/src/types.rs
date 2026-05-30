@@ -10,6 +10,7 @@ pub struct Texture {
     pub height: u32,
     pub data: Vec<u8>,
     pub channels: u8,
+    pub asset_path: PathBuf,
 }
 
 impl Asset for Texture {

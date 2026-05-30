@@ -6,6 +6,7 @@ use engine_render::renderer::Renderer;
 use engine_render::sprite::Sprite;
 use engine_render::texture_bridge::TextureBridge;
 use engine_window::{window::WindowConfig, window::create_window};
+use std::path::PathBuf;
 use log::info;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -39,6 +40,7 @@ fn main() {
         height: 1,
         data: vec![0; 4],
         channels: 4,
+        asset_path: PathBuf::new(),
     };
     let handle = Handle::new(tex_asset);
     bridge.request(&handle, "assets/test.png");
