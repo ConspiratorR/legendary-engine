@@ -26,80 +26,80 @@ impl Default for ResourceBrowser {
 
 impl ResourceBrowser {
     pub fn new() -> Self {
-        let mut entries = Vec::new();
-
-        entries.push(ResourceEntry {
-            name: "Images".into(),
-            file_type: ResourceType::Directory,
-            size: 0,
-            is_directory: true,
-        });
-        entries.push(ResourceEntry {
-            name: "Audio".into(),
-            file_type: ResourceType::Directory,
-            size: 0,
-            is_directory: true,
-        });
-        entries.push(ResourceEntry {
-            name: "Models".into(),
-            file_type: ResourceType::Directory,
-            size: 0,
-            is_directory: true,
-        });
-        entries.push(ResourceEntry {
-            name: "Scripts".into(),
-            file_type: ResourceType::Directory,
-            size: 0,
-            is_directory: true,
-        });
-        entries.push(ResourceEntry {
-            name: "Materials".into(),
-            file_type: ResourceType::Directory,
-            size: 0,
-            is_directory: true,
-        });
-        entries.push(ResourceEntry {
-            name: "player.png".into(),
-            file_type: ResourceType::Texture,
-            size: 128 * 1024,
-            is_directory: false,
-        });
-        entries.push(ResourceEntry {
-            name: "background.png".into(),
-            file_type: ResourceType::Texture,
-            size: 512 * 1024,
-            is_directory: false,
-        });
-        entries.push(ResourceEntry {
-            name: "sound_bg.wav".into(),
-            file_type: ResourceType::Audio,
-            size: 2_300_000,
-            is_directory: false,
-        });
-        entries.push(ResourceEntry {
-            name: "jump.wav".into(),
-            file_type: ResourceType::Audio,
-            size: 86 * 1024,
-            is_directory: false,
-        });
-        entries.push(ResourceEntry {
-            name: "player.glb".into(),
-            file_type: ResourceType::Mesh,
-            size: 5_200_000,
-            is_directory: false,
-        });
-        entries.push(ResourceEntry {
-            name: "player_move.lua".into(),
-            file_type: ResourceType::Script,
-            size: 1500,
-            is_directory: false,
-        });
-        entries.push(ResourceEntry {
-            name: "wood.mat".into(),
-            file_type: ResourceType::Material,
-            size: 320,
-            is_directory: false,
-        });
+        let entries = vec![
+            ResourceEntry {
+                name: "Images".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "Audio".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "Models".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "Scripts".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "Materials".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "player.png".into(),
+                file_type: ResourceType::Texture,
+                size: 128 * 1024,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "background.png".into(),
+                file_type: ResourceType::Texture,
+                size: 512 * 1024,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "sound_bg.wav".into(),
+                file_type: ResourceType::Audio,
+                size: 2_300_000,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "jump.wav".into(),
+                file_type: ResourceType::Audio,
+                size: 86 * 1024,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "player.glb".into(),
+                file_type: ResourceType::Mesh,
+                size: 5_200_000,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "player_move.lua".into(),
+                file_type: ResourceType::Script,
+                size: 1500,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "wood.mat".into(),
+                file_type: ResourceType::Material,
+                size: 320,
+                is_directory: false,
+            },
+        ];
 
         Self {
             current_path: "Assets".into(),
@@ -140,7 +140,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             Pos2::new(rect.left(), rect.top()),
             Pos2::new(rect.left(), rect.bottom()),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     let header_h = 36.0 * h_scale;
@@ -191,7 +191,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             Pos2::new(rect.left(), line_y),
             Pos2::new(rect.right(), line_y),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     let path_bar_h = 28.0 * h_scale;

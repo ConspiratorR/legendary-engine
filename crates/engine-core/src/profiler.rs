@@ -12,6 +12,7 @@ pub struct Timer {
     start: Instant,
     elapsed: Duration,
     count: u64,
+    #[allow(dead_code)]
     children: HashMap<String, Duration>,
 }
 
@@ -115,7 +116,7 @@ impl Profiler {
         if !self.timers.is_empty() {
             println!("\nTimer Breakdown:");
             let mut timers: Vec<_> = self.timers.values().collect();
-            timers.sort_by(|a, b| b.elapsed.cmp(&a.elapsed));
+            timers.sort_by_key(|b| std::cmp::Reverse(b.elapsed));
 
             for timer in timers {
                 println!(

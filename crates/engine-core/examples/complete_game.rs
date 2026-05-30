@@ -1,15 +1,29 @@
-//! Complete integrated game example - uses all major engine features.
-use engine_core::app::{App, AppBuilder};
+//! Complete integrated game example - uses ECS and input features.
+use engine_core::app::AppBuilder;
 use engine_core::plugin::Plugin;
-use engine_core::time::Time;
-use engine_ecs::world::World;
-use engine_input::InputManager;
+use engine_input::input_manager::InputManager;
 use engine_input::keyboard::KeyCode;
 use engine_math::Vec3;
-use engine_network::{Connection, ConnectionState, NetworkConfig, NetworkMessage, NetworkPlugin};
-use engine_physics::{BodyType, Collider, PhysicsPlugin, PhysicsWorld, RigidBody};
 
-/// Integrated game plugin - combines all features.
+#[derive(Debug, Clone)]
+struct Position(Vec3);
+
+#[derive(Debug, Clone)]
+struct Velocity(Vec3);
+
+#[derive(Debug, Clone)]
+struct Player;
+
+#[derive(Debug, Clone)]
+struct Enemy;
+
+#[derive(Debug, Clone)]
+struct Health {
+    current: f32,
+    max: f32,
+}
+
+/// Integrated game plugin - combines ECS entities.
 struct CompleteGamePlugin;
 
 impl Plugin for CompleteGamePlugin {
@@ -18,83 +32,137 @@ impl Plugin for CompleteGamePlugin {
 
         // Set up a player
         let player = world.spawn();
-        world.add_component(player, RigidBody::new_dynamic());
-        world.add_component(player, Collider::cuboid(0.5, 1.8, 0.5));
+        world.add_component(player, Position(Vec3::new(0.0, 0.0, 0.0)));
+        world.add_component(player, Velocity(Vec3::new(0.0, 0.0, 0.0)));
+        world.add_component(player, Player);
+        world.add_component(
+            player,
+            Health {
+                current: 100.0,
+                max: 100.0,
+            },
+        );
 
         // Set up the environment
         let ground = world.spawn();
-        world.add_component(ground, RigidBody::new_static());
-        world.add_component(ground, Collider::cuboid(10.0, 0.5, 10.0));
+        world.add_component(ground, Position(Vec3::new(0.0, -1.0, 0.0)));
 
         // Add some enemies
         for i in 0..5 {
+            let angle = i as f32 * std::f32::consts::PI * 2.0 / 5.0;
             let enemy = world.spawn();
-            world.add_component(enemy, RigidBody::new_dynamic());
-            world.add_component(enemy, Collider::sphere(0.5));
+            world.add_component(
+                enemy,
+                Position(Vec3::new(angle.cos() * 8.0, angle.sin() * 8.0, 0.0)),
+            );
+            world.add_component(enemy, Velocity(Vec3::new(0.0, 0.0, 0.0)));
+            world.add_component(enemy, Enemy);
+            world.add_component(
+                enemy,
+                Health {
+                    current: 50.0,
+                    max: 50.0,
+                },
+            );
         }
 
-        // Configure network for client mode
-        if let Some(mut config) = world.get_mut::<NetworkConfig>() {
-            config.is_server = false;
-            config.port = 7777;
-        }
-
-        println!("✅ Complete game initialized!");
+        println!("Complete game initialized!");
         println!("  - 1 player entity");
         println!("  - 1 ground platform");
         println!("  - 5 enemy entities");
-        println!("  - Physics system active");
-        println!("  - Network client mode configured");
+        println!("  - Input system active");
     }
 }
 
 fn main() {
     println!("=== RustEngine Complete Game Demo ===\n");
     println!("Features included:");
-    println!("  ✨ Entity Component System (ECS)");
-    println!("  ⚡ Physics engine");
-    println!("  🎮 Input system");
-    println!("  🌐 Network support");
-    println!("  📦 Resource system\n");
+    println!("  Entity Component System (ECS)");
+    println!("  Input system");
+    println!("  Resource system\n");
 
-    let mut app = AppBuilder::new()
-        .add_plugin(PhysicsPlugin)
-        .add_plugin(NetworkPlugin)
-        .add_plugin(CompleteGamePlugin)
-        .build();
+    let mut app_builder = AppBuilder::new();
+    app_builder.add_plugin(CompleteGamePlugin);
+    let mut app = app_builder.build();
 
     println!("Starting simulation...\n");
 
     // Simulate 300 frames
     for frame in 0..300 {
-        app.run();
+        // Read input and update player velocity
+        {
+            let player_entities = app.world.component_entities::<Player>();
+            if let Some(&player_idx) = player_entities.first() {
+                let (pressed_w, pressed_s, pressed_a, pressed_d) = {
+                    let input = app.world.get_resource::<InputManager>();
+                    match input {
+                        Some(i) => (
+                            i.key_down(KeyCode::KeyW),
+                            i.key_down(KeyCode::KeyS),
+                            i.key_down(KeyCode::KeyA),
+                            i.key_down(KeyCode::KeyD),
+                        ),
+                        None => (false, false, false, false),
+                    }
+                };
+
+                let mut direction = Vec3::new(0.0, 0.0, 0.0);
+                if pressed_w {
+                    direction.y += 1.0;
+                }
+                if pressed_s {
+                    direction.y -= 1.0;
+                }
+                if pressed_a {
+                    direction.x -= 1.0;
+                }
+                if pressed_d {
+                    direction.x += 1.0;
+                }
+
+                if let Some(vel) = app.world.get_by_index_mut::<Velocity>(player_idx) {
+                    if direction.length_squared() > 0.0001 {
+                        vel.0 = direction.normalize() * 5.0;
+                    } else {
+                        vel.0 = Vec3::new(0.0, 0.0, 0.0);
+                    }
+                }
+            }
+        }
+
+        // Update positions
+        {
+            let indices = app.world.component_entities::<Velocity>();
+            let moves: Vec<(u32, Vec3)> = indices
+                .iter()
+                .filter_map(|&idx| {
+                    let vel = app.world.get_by_index::<Velocity>(idx)?;
+                    Some((idx, vel.0 * 0.016))
+                })
+                .collect();
+            for (idx, delta) in moves {
+                if let Some(pos) = app.world.get_by_index_mut::<Position>(idx) {
+                    pos.0 += delta;
+                }
+            }
+        }
 
         // Print status updates periodically
         if frame % 60 == 0 {
-            let world = app.world();
-
             println!("Frame {:3}:", frame);
 
-            if let Some(physics) = world.get::<PhysicsWorld>() {
-                println!("  Physics: Active ({} bodies)", physics.body_count);
-            }
+            // Count entities
+            let player_count = app.world.component_entities::<Player>().len();
+            let enemy_count = app.world.component_entities::<Enemy>().len();
+            println!(
+                "  Entities: {} players, {} enemies",
+                player_count, enemy_count
+            );
 
-            if let Some(config) = world.get::<NetworkConfig>() {
-                println!(
-                    "  Network: {} mode (port {})",
-                    if config.is_server { "SERVER" } else { "CLIENT" },
-                    config.port
-                );
-            }
-
-            if let Some(input) = world.get::<InputManager>() {
-                // Input manager is available
-                let key_state = if input.is_key_pressed(KeyCode::Space) {
-                    "SPACE pressed"
-                } else {
-                    "SPACE not pressed"
-                };
-                println!("  Input: {}", key_state);
+            // Show input state
+            if let Some(input) = app.world.get_resource::<InputManager>() {
+                let space = input.key_down(KeyCode::Space);
+                println!("  Input: Space={}", space);
             }
 
             println!();
@@ -102,5 +170,5 @@ fn main() {
     }
 
     println!("=== Demo complete! ===");
-    println!("🚀 Ready for real-time rendering and actual gameplay!");
+    println!("Ready for real-time rendering and actual gameplay!");
 }

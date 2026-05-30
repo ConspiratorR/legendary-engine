@@ -14,7 +14,7 @@ impl Config {
     }
 
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
-        let content = fs::read_to_string(path).map_err(|e| ConfigError::IoError(e))?;
+        let content = fs::read_to_string(path).map_err(ConfigError::IoError)?;
 
         Self::from_toml(&content)
     }
@@ -80,7 +80,7 @@ impl Config {
             content.push_str(&format!("{} = \"{}\"\n", key, value));
         }
 
-        fs::write(path, content).map_err(|e| ConfigError::IoError(e))?;
+        fs::write(path, content).map_err(ConfigError::IoError)?;
 
         Ok(())
     }

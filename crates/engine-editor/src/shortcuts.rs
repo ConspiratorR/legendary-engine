@@ -166,7 +166,7 @@ impl ShortcutManager {
     ) -> Option<EditorAction> {
         for (action, binding) in &self.bindings {
             if binding.matches(key, ctrl, shift, alt) {
-                return Some(action.clone());
+                return Some(*action);
             }
         }
         None

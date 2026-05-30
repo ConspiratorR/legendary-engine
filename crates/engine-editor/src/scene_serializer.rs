@@ -74,7 +74,7 @@ impl Scene {
 
     pub fn to_string_pretty(&self) -> String {
         let mut output = format!("Scene: {}\n", self.name);
-        output += &format!("Settings:\n");
+        output += "Settings:\n";
         output += &format!("  Ambient Color: {:?}\n", self.settings.ambient_color);
         output += &format!("  Fog Enabled: {}\n", self.settings.fog_enabled);
         output += &format!("\nEntities ({}):\n", self.entities.len());
@@ -85,7 +85,7 @@ impl Scene {
                 entity.id, entity.name, entity.active
             );
             if !entity.components.is_empty() {
-                output += &format!("    Components:\n");
+                output += "    Components:\n";
                 for component in &entity.components {
                     output += &format!("      - {}\n", component.type_name);
                 }

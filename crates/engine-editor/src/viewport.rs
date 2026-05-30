@@ -25,7 +25,7 @@ fn draw_viewport_header(
             Pos2::new(rect.left(), header_h - 1.0),
             Pos2::new(rect.right(), header_h - 1.0),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     let char_w = 8.0 * w_scale;
@@ -148,7 +148,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                     Pos2::new(x, canvas_rect.top()),
                     Pos2::new(x, canvas_rect.bottom()),
                 ],
-                Stroke::new(1.0, grid_color),
+                Stroke::new(1.0_f32, grid_color),
             ));
             x += grid_size;
         }
@@ -159,7 +159,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                     Pos2::new(canvas_rect.left(), y),
                     Pos2::new(canvas_rect.right(), y),
                 ],
-                Stroke::new(1.0, grid_color),
+                Stroke::new(1.0_f32, grid_color),
             ));
             y += grid_size;
         }
@@ -257,7 +257,7 @@ fn draw_scene_objects(
         painter.rect_stroke(
             obj_rect,
             Rounding::same(4.0 * h_scale),
-            Stroke::new(2.0, border_color),
+            Stroke::new(2.0_f32, border_color),
         );
         painter.text(
             obj_rect.center(),

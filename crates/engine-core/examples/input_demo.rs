@@ -23,7 +23,7 @@ pub fn main() {
 
     // 使用 pre_update_hook 来访问资源
     app_builder.add_pre_update_hook(Box::new(|app: &mut App| {
-        if let Some(keys) = app.resources.get::<HashMap<String, bool>>() {
+        if let Some(keys) = app.world.get_resource::<HashMap<String, bool>>() {
             println!("Keys pressed in this frame:");
             for (key, &pressed) in keys {
                 if pressed {

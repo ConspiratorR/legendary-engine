@@ -91,7 +91,7 @@ fn draw_menu_bar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f3
             Pos2::new(rect.left(), rect.bottom() - 1.0),
             Pos2::new(rect.right(), rect.bottom() - 1.0),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     let items = &[
@@ -153,10 +153,10 @@ fn draw_menu_bar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f3
     }
 
     // Draw dropdown menu if active
-    if let Some(active_idx) = state.active_menu {
-        if let Some((_, menu_rect)) = menu_rects.iter().find(|(i, _)| *i == active_idx) {
-            draw_dropdown_menu(state, gui, *menu_rect, w_scale, h_scale, active_idx);
-        }
+    if let Some(active_idx) = state.active_menu
+        && let Some((_, menu_rect)) = menu_rects.iter().find(|(i, _)| *i == active_idx)
+    {
+        draw_dropdown_menu(state, gui, *menu_rect, w_scale, h_scale, active_idx);
     }
 
     // Check for clicks outside menus to close active menu
@@ -222,12 +222,12 @@ fn draw_dropdown_menu(
     painter.add(Shape::rect_stroke(
         dropdown_rect,
         Rounding::same(4.0 * h_scale),
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     // Draw menu items
     let font_sz = 13.0 * h_scale;
-    let char_w = 8.0 * w_scale;
+    let _char_w = 8.0 * w_scale;
     let item_pad = 16.0 * w_scale;
     let rounding = 4.0 * h_scale;
 
@@ -293,7 +293,7 @@ fn draw_separator(painter: &egui::Painter, pos: f32, top: f32, bottom: f32, h_sc
     let m = 8.0 * h_scale;
     painter.add(Shape::line(
         vec![Pos2::new(pos, top + m), Pos2::new(pos, bottom - m)],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 }
 
@@ -309,7 +309,7 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
             Pos2::new(rect.left(), rect.bottom() - 1.0),
             Pos2::new(rect.right(), rect.bottom() - 1.0),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     let btn_size = 32.0 * h_scale;
@@ -404,7 +404,7 @@ fn draw_bottom_panel(
             Pos2::new(rect.left(), rect.top()),
             Pos2::new(rect.right(), rect.top()),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     let tab_h = 32.0 * h_scale;
@@ -550,7 +550,7 @@ fn draw_status_bar(state: &EditorState, gui: &mut Gui, rect: Rect, h_scale: f32,
             Pos2::new(rect.left(), rect.top()),
             Pos2::new(rect.right(), rect.top()),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     let status_font = 11.0 * h_scale;

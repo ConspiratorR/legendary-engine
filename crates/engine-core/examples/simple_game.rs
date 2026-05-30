@@ -1,10 +1,10 @@
-use engine_core::app::{App, AppBuilder};
+use engine_core::app::AppBuilder;
 use engine_core::plugin::Plugin;
 use engine_core::time::Time;
 use engine_ecs::query::QueryPair;
 use engine_ecs::system::IntoSystem;
 use engine_ecs::world::World;
-use engine_input::InputManager;
+use engine_input::input_manager::InputManager;
 use engine_input::keyboard::KeyCode;
 use engine_math::Vec3;
 
@@ -22,14 +22,6 @@ struct Player;
 struct Enemy;
 
 #[derive(Debug, Clone)]
-struct Projectile;
-
-#[derive(Debug, Clone)]
-struct Collider {
-    radius: f32,
-}
-
-#[derive(Debug, Clone)]
 struct Health {
     current: f32,
     max: f32,
@@ -45,7 +37,6 @@ struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut AppBuilder) {
-        // Initialize game entities
         let world = app.world_mut();
 
         // Spawn player
@@ -53,7 +44,6 @@ impl Plugin for GamePlugin {
         world.add_component(player, Position(Vec3::new(0.0, 0.0, 0.0)));
         world.add_component(player, Velocity(Vec3::new(0.0, 0.0, 0.0)));
         world.add_component(player, Player);
-        world.add_component(player, Collider { radius: 0.5 });
         world.add_component(
             player,
             Health {
@@ -80,7 +70,6 @@ impl Plugin for GamePlugin {
                 Velocity(Vec3::new(-angle.sin() * 0.5, angle.cos() * 0.5, 0.0)),
             );
             world.add_component(enemy, Enemy);
-            world.add_component(enemy, Collider { radius: 0.4 });
             world.add_component(
                 enemy,
                 Health {
@@ -94,11 +83,13 @@ impl Plugin for GamePlugin {
         let score_entity = world.spawn();
         world.add_component(score_entity, Score { value: 0 });
 
+        // Insert Time resource
+        world.insert_resource(Time::new());
+
         // Add systems
         app.add_system(player_control_system());
         app.add_system(movement_system());
         app.add_system(enemy_ai_system());
-        app.add_system(collision_system());
         app.add_system(score_system());
     }
 }
@@ -106,30 +97,41 @@ impl Plugin for GamePlugin {
 // Player control system
 fn player_control_system() -> impl IntoSystem {
     |world: &mut World| {
-        if let Some(input) = world.get_resource::<InputManager>() {
-            let mut query = QueryPair::<&mut Velocity, &Player>::new();
-            for (vel, _) in query.iter_mut(world) {
-                let mut direction = Vec3::new(0.0, 0.0, 0.0);
+        let (pressed_w, pressed_s, pressed_a, pressed_d) = {
+            if let Some(input) = world.get_resource::<InputManager>() {
+                (
+                    input.key_down(KeyCode::KeyW) || input.key_down(KeyCode::ArrowUp),
+                    input.key_down(KeyCode::KeyS) || input.key_down(KeyCode::ArrowDown),
+                    input.key_down(KeyCode::KeyA) || input.key_down(KeyCode::ArrowLeft),
+                    input.key_down(KeyCode::KeyD) || input.key_down(KeyCode::ArrowRight),
+                )
+            } else {
+                (false, false, false, false)
+            }
+        };
 
-                if input.is_key_pressed(KeyCode::W) || input.is_key_pressed(KeyCode::Up) {
-                    direction.y += 1.0;
-                }
-                if input.is_key_pressed(KeyCode::S) || input.is_key_pressed(KeyCode::Down) {
-                    direction.y -= 1.0;
-                }
-                if input.is_key_pressed(KeyCode::A) || input.is_key_pressed(KeyCode::Left) {
-                    direction.x -= 1.0;
-                }
-                if input.is_key_pressed(KeyCode::D) || input.is_key_pressed(KeyCode::Right) {
-                    direction.x += 1.0;
-                }
+        let query = QueryPair::<&mut Velocity, &Player>::new();
+        for (vel, _) in query.iter_mut(world) {
+            let mut direction = Vec3::new(0.0, 0.0, 0.0);
 
-                // Normalize and apply speed
-                if direction.length_squared() > 0.0001 {
-                    vel.0 = direction.normalize() * 5.0;
-                } else {
-                    vel.0 = Vec3::new(0.0, 0.0, 0.0);
-                }
+            if pressed_w {
+                direction.y += 1.0;
+            }
+            if pressed_s {
+                direction.y -= 1.0;
+            }
+            if pressed_a {
+                direction.x -= 1.0;
+            }
+            if pressed_d {
+                direction.x += 1.0;
+            }
+
+            // Apply speed
+            if direction.length_squared() > 0.0001 {
+                vel.0 = direction.normalize() * 5.0;
+            } else {
+                vel.0 = Vec3::new(0.0, 0.0, 0.0);
             }
         }
     }
@@ -144,7 +146,7 @@ fn movement_system() -> impl IntoSystem {
             0.016
         };
 
-        let mut query = QueryPair::<&mut Position, &Velocity>::new();
+        let query = QueryPair::<&mut Position, &Velocity>::new();
         for (pos, vel) in query.iter_mut(world) {
             pos.0 += vel.0 * delta_time;
 
@@ -156,7 +158,7 @@ fn movement_system() -> impl IntoSystem {
     }
 }
 
-// Enemy AI system
+// Enemy AI system - collect positions first, then update velocities
 fn enemy_ai_system() -> impl IntoSystem {
     |world: &mut World| {
         // Find player position
@@ -166,79 +168,55 @@ fn enemy_ai_system() -> impl IntoSystem {
             player_pos = pos.0;
         }
 
-        // Update enemy velocities to move towards player
-        let mut enemy_query = QueryPair::<&mut Velocity, &Enemy>::new();
-        for (vel, _) in enemy_query.iter_mut(world) {
-            let current_pos = {
-                let query = QueryPair::<&Position, &Enemy>::new();
-                if let Some((pos, _)) = query.iter(world).next() {
-                    pos.0
-                } else {
-                    Vec3::new(0.0, 0.0, 0.0)
-                }
-            };
+        // Collect enemy positions (separate from velocity update to avoid borrow conflict)
+        let enemy_positions: Vec<Vec3> = {
+            let pos_query = QueryPair::<&Position, &Enemy>::new();
+            pos_query.iter(world).map(|(pos, _)| pos.0).collect()
+        };
 
-            let direction = (player_pos - current_pos).normalize();
-            vel.0 = direction * 2.0;
-        }
-    }
-}
-
-// Collision system
-fn collision_system() -> impl IntoSystem {
-    |world: &mut World| {
-        // Simple collision damage system
-        let mut player_query = QueryPair::<&Position, &mut Health>::new();
-
-        // First, collect all enemy positions and colliders
-        let mut enemies = Vec::new();
-        let enemy_query = QueryPair::<&Position, &Collider>::new();
-        for (pos, collider) in enemy_query.iter(world) {
-            enemies.push((pos.0, collider.radius));
-        }
-
-        // Check player against enemies
-        for (player_pos, mut player_health) in player_query.iter_mut(world) {
-            let player_radius = 0.5;
-            for (enemy_pos, enemy_radius) in &enemies {
-                let distance = (player_pos.0 - *enemy_pos).length();
-                if distance < player_radius + enemy_radius {
-                    // Collision detected! Apply damage over time
-                    player_health.current -= 10.0 * 0.016; // 10 damage per second
-                    if player_health.current < 0.0 {
-                        player_health.current = 0.0;
-                        println!("Player died! Game Over!");
-                    }
+        // Update enemy velocities
+        let vel_query = QueryPair::<&mut Velocity, &Enemy>::new();
+        for (i, (vel, _)) in vel_query.iter_mut(world).enumerate() {
+            if let Some(&current_pos) = enemy_positions.get(i) {
+                let to_player = player_pos - current_pos;
+                if to_player.length_squared() > 0.0001 {
+                    vel.0 = to_player.normalize() * 2.0;
                 }
             }
         }
     }
 }
 
-// Score and game status system
+// Score system - track score and print status
 fn score_system() -> impl IntoSystem {
     |world: &mut World| {
-        // Update score and print game status periodically
-        let mut query = QueryPair::<&mut Score, ()>::new();
-        for (score, _) in query.iter_mut(world) {
-            // Increase score over time
-            score.value += 1;
+        // Collect player health first (immutable borrows)
+        let player_health: f32 = {
+            let health_query = QueryPair::<&Health, &Player>::new();
+            health_query
+                .iter(world)
+                .map(|(h, _)| h.current)
+                .next()
+                .unwrap_or(100.0)
+        };
 
-            // Only print every 60 frames
-            if score.value % 60 == 0 {
-                // Find player health
-                let mut player_health = 100.0;
-                let health_query = QueryPair::<&Health, &Player>::new();
-                for (health, _) in health_query.iter(world) {
-                    player_health = health.current;
+        // Update score (mutable borrow, released before next immutable borrows)
+        let should_print = {
+            let mut query = QueryPair::<&mut Score, ()>::new();
+            let mut printed = false;
+            for (score, _) in query.iter_mut(world) {
+                score.value += 1;
+                if score.value % 60 == 0 {
+                    println!(
+                        "Score: {}, Player Health: {:.1}",
+                        score.value, player_health
+                    );
+                    printed = true;
                 }
-
-                println!(
-                    "Score: {}, Player Health: {:.1}",
-                    score.value, player_health
-                );
             }
-        }
+            printed
+        };
+        let _ = should_print;
     }
 }
 
@@ -258,7 +236,7 @@ pub fn main() {
     println!("Game Starting...\n");
 
     // Run 300 frames (5 seconds at 60fps)
-    for frame in 1..=300 {
+    for _frame in 1..=300 {
         app.run();
     }
 

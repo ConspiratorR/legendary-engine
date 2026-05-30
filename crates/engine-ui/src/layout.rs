@@ -306,7 +306,7 @@ impl VerticalScope<'_> {
                 Pos2::new(rect.left(), center_y),
                 Pos2::new(rect.right(), center_y),
             ],
-            Stroke::new(1.0, Color32::from_gray(100)),
+            Stroke::new(1.0_f32, Color32::from_gray(100)),
         ));
         self.start.y = rect.bottom();
     }

@@ -23,12 +23,12 @@ impl Default for AppBuilder {
 
 impl AppBuilder {
     pub fn new() -> Self {
-        let mut resources = ResourceRegistry::new();
-        resources.insert(InputManager::new());
+        let mut world = World::new();
+        world.insert_resource(InputManager::new());
         Self {
-            world: World::new(),
+            world,
             schedule: Schedule::new(),
-            resources,
+            resources: ResourceRegistry::new(),
             pre_update_hooks: Vec::new(),
             post_update_hooks: Vec::new(),
             post_render_hooks: Vec::new(),
@@ -49,7 +49,7 @@ impl AppBuilder {
     }
 
     pub fn insert_resource<T: 'static>(&mut self, resource: T) -> &mut Self {
-        self.resources.insert(resource);
+        self.world.insert_resource(resource);
         self
     }
 
@@ -107,12 +107,12 @@ impl Default for App {
 
 impl App {
     pub fn new() -> Self {
-        let mut resources = ResourceRegistry::new();
-        resources.insert(InputManager::new());
+        let mut world = World::new();
+        world.insert_resource(InputManager::new());
         Self {
-            world: World::new(),
+            world,
             schedule: Schedule::new(),
-            resources,
+            resources: ResourceRegistry::new(),
             renderer: None,
             pre_update_hooks: Vec::new(),
             post_update_hooks: Vec::new(),
@@ -126,7 +126,7 @@ impl App {
             hook(self);
         }
         self.pre_update_hooks = pre_hooks;
-        if let Some(input) = self.resources.get_mut::<InputManager>() {
+        if let Some(input) = self.world.get_resource_mut::<InputManager>() {
             input.update_frame();
         }
         self.schedule.run(&mut self.world);
@@ -146,7 +146,7 @@ impl App {
     }
 
     pub fn input_mut(&mut self) -> &mut InputManager {
-        self.resources.get_mut::<InputManager>().unwrap()
+        self.world.get_resource_mut::<InputManager>().unwrap()
     }
 
     pub fn renderer(&self) -> Option<&engine_render::renderer::Renderer> {
@@ -158,8 +158,8 @@ impl App {
     }
 
     pub fn set_renderer(&mut self, renderer: engine_render::renderer::Renderer) {
-        self.resources.insert(renderer.device.clone());
-        self.resources.insert(renderer.queue.clone());
+        self.world.insert_resource(renderer.device.clone());
+        self.world.insert_resource(renderer.queue.clone());
         self.renderer = Some(renderer);
     }
 

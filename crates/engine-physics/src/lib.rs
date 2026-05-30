@@ -12,6 +12,8 @@ pub mod plugin;
 pub mod world;
 
 pub use body::RigidBody;
-pub use collider::Collider;
+pub use collider::{
+    Collider, check_box_box, check_collision, check_sphere_box, check_sphere_sphere,
+};
 pub use plugin::PhysicsPlugin;
 pub use world::PhysicsWorld;

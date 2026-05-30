@@ -8,6 +8,7 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
+#[allow(deprecated, unused_assignments)]
 fn main() -> anyhow::Result<()> {
     // Initialize logging
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
@@ -35,7 +36,7 @@ fn main() -> anyhow::Result<()> {
         let renderer =
             Renderer::new(std::sync::Arc::clone(&window)).expect("Failed to create renderer");
         let scale_factor = window.scale_factor() as f32;
-        let mut egui_state_local = EguiState::new(&renderer.device, &renderer.config, scale_factor);
+        let egui_state_local = EguiState::new(&renderer.device, &renderer.config, scale_factor);
 
         render = Some(renderer);
         egui_state = Some(egui_state_local);
@@ -68,7 +69,7 @@ fn main() -> anyhow::Result<()> {
                                 e.begin_frame(dt);
 
                                 // Update editor
-                                editor_state.frame(&e.ctx(), &GuiSkin::default());
+                                editor_state.frame(e.ctx(), &GuiSkin::default());
 
                                 // End frame and render
                                 let (paint_jobs, textures_delta) = e.end_frame();

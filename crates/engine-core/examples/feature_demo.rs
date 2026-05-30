@@ -36,17 +36,17 @@ pub fn main() {
 
     // Add profiling hooks
     app_builder.add_pre_update_hook(Box::new(|app| {
-        if let Some(profiler) = app.resources.get_mut::<Profiler>() {
+        if let Some(profiler) = app.world.get_resource_mut::<Profiler>() {
             profiler.start("update");
         }
 
-        if let Some(time) = app.resources.get_mut::<Time>() {
+        if let Some(time) = app.world.get_resource_mut::<Time>() {
             time.update();
         }
     }));
 
     app_builder.add_post_update_hook(Box::new(|app| {
-        if let Some(profiler) = app.resources.get_mut::<Profiler>() {
+        if let Some(profiler) = app.world.get_resource_mut::<Profiler>() {
             profiler.end("update");
             profiler.record_frame();
         }
@@ -54,9 +54,9 @@ pub fn main() {
 
     // Add stats display hook
     app_builder.add_post_update_hook(Box::new(|app: &mut App| {
-        if let Some(time) = app.resources.get::<Time>() {
+        if let Some(time) = app.world.get_resource::<Time>() {
             if time.frame_count() % 60 == 0 {
-                if let Some(config) = app.resources.get::<Config>() {
+                if let Some(config) = app.world.get_resource::<Config>() {
                     println!("\n--- Configuration ---");
                     println!(
                         "Game Title: {}",
@@ -76,7 +76,7 @@ pub fn main() {
                     );
                 }
 
-                if let Some(profiler) = app.resources.get::<Profiler>() {
+                if let Some(profiler) = app.world.get_resource::<Profiler>() {
                     profiler.print_stats();
                 }
             }

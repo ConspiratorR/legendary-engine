@@ -92,12 +92,12 @@ pub fn main() {
     // Add systems as hooks to update particles
     app_builder.add_pre_update_hook(Box::new(|app| {
         // Update time
-        if let Some(time) = app.resources.get_mut::<Time>() {
+        if let Some(time) = app.world.get_resource_mut::<Time>() {
             time.update();
         }
 
         // Spawn particles
-        if let Some(system) = app.resources.get_mut::<ParticleSystem>() {
+        if let Some(system) = app.world.get_resource_mut::<ParticleSystem>() {
             let dt = system.spawn_timer;
             system.spawn_timer += 0.016;
 
@@ -121,14 +121,14 @@ pub fn main() {
 
     // Add particle update hook
     app_builder.add_pre_update_hook(Box::new(|app| {
-        if let Some(system) = app.resources.get_mut::<ParticleSystem>() {
+        if let Some(system) = app.world.get_resource_mut::<ParticleSystem>() {
             system.update(0.016);
         }
     }));
 
     // Add debug hook to show particle count
     app_builder.add_post_update_hook(Box::new(|app: &mut App| {
-        if let Some(time) = app.resources.get::<Time>() {
+        if let Some(time) = app.world.get_resource::<Time>() {
             if time.frame_count() % 60 == 0 {
                 let particle_count = app
                     .resources
@@ -156,7 +156,7 @@ pub fn main() {
     println!("\n=== Demo Complete ===");
 
     // Get final particle count
-    if let Some(system) = app.resources.get::<ParticleSystem>() {
+    if let Some(system) = app.world.get_resource::<ParticleSystem>() {
         println!("Final particle count: {}", system.particles.len());
     }
 }

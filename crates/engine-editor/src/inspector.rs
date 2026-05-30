@@ -17,7 +17,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             Pos2::new(rect.left(), rect.top()),
             Pos2::new(rect.left(), rect.bottom()),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     let search_h = 36.0 * h_scale;
@@ -90,7 +90,7 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
         let sep_y = y;
         painter.add(Shape::line(
             vec![Pos2::new(x, sep_y), Pos2::new(x + w, sep_y)],
-            Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+            Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
         ));
         y += 8.0;
 
@@ -131,7 +131,7 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     let sep_y = y;
     painter.add(Shape::line(
         vec![Pos2::new(x, sep_y), Pos2::new(x + w, sep_y)],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
     y += 8.0;
 
@@ -161,7 +161,7 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     let sep_y = y;
     painter.add(Shape::line(
         vec![Pos2::new(x, sep_y), Pos2::new(x + w, sep_y)],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
     y += 8.0;
 

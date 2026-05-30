@@ -81,6 +81,7 @@ impl Default for CommandManager {
 pub struct CreateEntityCommand {
     entity_id: u64,
     entity_name: String,
+    #[allow(dead_code)]
     parent_id: Option<u64>,
 }
 
@@ -263,8 +264,8 @@ impl TransformEntityCommand {
             new_position: new_pos,
             old_rotation: old_rot,
             new_rotation: new_rot,
-            old_scale: old_scale,
-            new_scale: new_scale,
+            old_scale,
+            new_scale,
         }
     }
 }

@@ -52,7 +52,7 @@ fn draw_translate_gizmo(painter: &egui::Painter, center: Pos2, size: f32) {
     for (i, &dir) in AXIS_DIRS.iter().enumerate() {
         let tip = Pos2::new(center.x + dir.x * size, center.y + dir.y * size);
         let color = AXIS_COLORS[i];
-        painter.add(Shape::line(vec![center, tip], Stroke::new(3.0, color)));
+        painter.add(Shape::line(vec![center, tip], Stroke::new(3.0_f32, color)));
         let arrow_base = Pos2::new(
             center.x + dir.x * (size - 8.0),
             center.y + dir.y * (size - 8.0),
@@ -78,7 +78,7 @@ fn draw_rotate_gizmo(painter: &egui::Painter, center: Pos2, size: f32) {
             let p = Pos2::new(center.x + angle.cos() * size, center.y + angle.sin() * size);
             points.push(p);
         }
-        painter.add(Shape::line(points, Stroke::new(2.0, color)));
+        painter.add(Shape::line(points, Stroke::new(2.0_f32, color)));
     }
 }
 
@@ -89,7 +89,7 @@ fn draw_scale_gizmo(painter: &egui::Painter, center: Pos2, size: f32) {
         painter.add(Shape::line(
             vec![center, tip],
             Stroke::new(
-                2.0,
+                2.0_f32,
                 Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), 100),
             ),
         ));

@@ -28,6 +28,7 @@ impl BufferDesc {
 }
 
 pub(crate) struct BufferNode {
+    #[allow(dead_code)]
     pub desc: BufferDesc,
     pub buffer: Option<wgpu::Buffer>,
     pub import: bool,
@@ -42,6 +43,7 @@ impl BufferNode {
         }
     }
 
+    #[allow(dead_code)]
     pub fn imported(buffer: wgpu::Buffer) -> Self {
         Self {
             desc: BufferDesc::new(buffer.size(), buffer.usage()),

@@ -26,7 +26,7 @@ pub fn main() {
 
     // Add a hook to show time info
     app_builder.add_post_update_hook(Box::new(|app: &mut App| {
-        if let Some(time) = app.resources.get::<Time>() {
+        if let Some(time) = app.world.get_resource::<Time>() {
             let frame = time.frame_count();
             let fps = time.fps();
             let elapsed = time.elapsed_seconds();

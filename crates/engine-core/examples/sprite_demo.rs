@@ -3,6 +3,7 @@ use engine_asset::registry::Registry;
 use engine_asset::types::Texture;
 use engine_math::{Mat4, Vec2, Vec3};
 use engine_render::camera::{Camera, Color, Viewport};
+use engine_render::pipeline::sprite::SpritePipeline;
 use engine_render::renderer::Renderer;
 use engine_render::sprite::Sprite;
 use engine_render::texture_bridge::TextureBridge;
@@ -29,11 +30,8 @@ fn main() {
 
     let renderer = Renderer::new(window).expect("Failed to create renderer");
 
-    let mut bridge = TextureBridge::new(
-        &renderer.device,
-        &renderer.queue,
-        renderer.sprite_pipeline.texture_layout().clone(),
-    );
+    let texture_layout = SpritePipeline::create_texture_layout(&renderer.device);
+    let mut bridge = TextureBridge::new(&renderer.device, &renderer.queue, texture_layout);
 
     let tex_asset = Texture {
         id: "test".into(),

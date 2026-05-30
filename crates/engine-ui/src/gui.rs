@@ -17,7 +17,7 @@ impl<'a> Gui<'a> {
             painter.add(Shape::rect_stroke(
                 rect,
                 rounding,
-                Stroke::new(1.0, border_color),
+                Stroke::new(1.0_f32, border_color),
             ));
         }
     }
@@ -101,7 +101,7 @@ impl<'a> Gui<'a> {
                 Pos2::new(rect.left(), center_y),
                 Pos2::new(rect.right(), center_y),
             ],
-            Stroke::new(1.0, Color32::from_gray(100)),
+            Stroke::new(1.0_f32, Color32::from_gray(100)),
         ));
     }
 
@@ -309,7 +309,7 @@ impl<'a> Gui<'a> {
         let y = rect.center().y;
         painter.add(Shape::line(
             vec![Pos2::new(rect.left(), y), Pos2::new(rect.right(), y)],
-            Stroke::new(1.0, Color32::from_gray(60)),
+            Stroke::new(1.0_f32, Color32::from_gray(60)),
         ));
     }
 
@@ -318,7 +318,7 @@ impl<'a> Gui<'a> {
         let x = rect.center().x;
         painter.add(Shape::line(
             vec![Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
-            Stroke::new(1.0, Color32::from_gray(60)),
+            Stroke::new(1.0_f32, Color32::from_gray(60)),
         ));
     }
 
@@ -367,7 +367,7 @@ impl<'a> Gui<'a> {
                 Pos2::new(rect.left(), line_y),
                 Pos2::new(rect.right(), line_y),
             ],
-            Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+            Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
         ));
         Rect::from_min_size(
             Pos2::new(rect.left(), rect.bottom()),
@@ -397,7 +397,7 @@ impl<'a> Gui<'a> {
         painter.add(Shape::rect_stroke(
             box_rect,
             Rounding::same(3.0),
-            Stroke::new(1.0, Color32::from_gray(100)),
+            Stroke::new(1.0_f32, Color32::from_gray(100)),
         ));
 
         if *checked {

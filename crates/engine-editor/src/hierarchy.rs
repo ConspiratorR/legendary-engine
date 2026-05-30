@@ -17,7 +17,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             Pos2::new(rect.right() - 1.0, rect.top()),
             Pos2::new(rect.right() - 1.0, rect.bottom()),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     let header_h = 36.0 * h_scale;
@@ -88,7 +88,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             Pos2::new(rect.left(), line_y),
             Pos2::new(rect.right(), line_y),
         ],
-        Stroke::new(1.0, Color32::from_rgb(45, 45, 53)),
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
     // Search bar (visual, with character-based search by clicking to cycle)
