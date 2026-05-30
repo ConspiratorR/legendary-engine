@@ -35,4 +35,13 @@ impl Registry {
     pub fn contains(&self, key: &str) -> bool {
         self.assets.contains_key(key)
     }
+
+    /// Returns references to all stored handles of a given asset type.
+    /// Iterates all entries and attempts to downcast each to Handle<T>.
+    pub fn get_handles_of_type<T: Asset + 'static>(&self) -> Vec<&Handle<T>> {
+        self.assets
+            .values()
+            .filter_map(|boxed| boxed.downcast_ref::<Handle<T>>())
+            .collect()
+    }
 }

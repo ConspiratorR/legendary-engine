@@ -208,6 +208,22 @@ impl TextureBridge {
     pub fn texture_store_mut(&mut self) -> &mut TextureStore {
         &mut self.texture_store
     }
+
+    /// Scans the Registry for Handle<Texture> assets and automatically
+    /// requests loading for any that haven't been requested yet.
+    /// Call this before flush() in the render loop.
+    pub fn auto_sync(&mut self, registry: &engine_asset::registry::Registry) {
+        let handles = registry.get_handles_of_type::<Texture>();
+        for handle in handles {
+            let handle_id = HandleId::from_handle(handle);
+            if !self.states.contains_key(&handle_id) {
+                let path = &handle.get().asset_path;
+                if !path.as_os_str().is_empty() {
+                    self.request(handle, &path.to_string_lossy());
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
