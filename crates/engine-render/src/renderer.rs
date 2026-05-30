@@ -41,7 +41,9 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn new(window: std::sync::Arc<winit::window::Window>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(
+        window: std::sync::Arc<winit::window::Window>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
@@ -87,7 +89,8 @@ impl Renderer {
             }],
         });
 
-        let sprite_renderer = SpriteRenderer::new(&device, sprite_pipeline.clone(), DEFAULT_SPRITE_CAPACITY);
+        let sprite_renderer =
+            SpriteRenderer::new(&device, sprite_pipeline.clone(), DEFAULT_SPRITE_CAPACITY);
 
         Ok(Self {
             device: GpuDevice(Arc::new(device)),

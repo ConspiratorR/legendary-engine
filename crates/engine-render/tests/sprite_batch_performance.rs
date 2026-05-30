@@ -1,7 +1,7 @@
 // crates/engine-render/tests/sprite_batch_performance.rs
 
-use engine_render::sprite::{collect_batches, SpriteBatch, SpriteDraw};
 use engine_math::{Mat4, Vec2, Vec3};
+use engine_render::sprite::{SpriteBatch, SpriteDraw, collect_batches};
 
 #[test]
 fn test_sprite_batch_instance_data() {

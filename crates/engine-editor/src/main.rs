@@ -32,8 +32,8 @@ fn main() -> anyhow::Result<()> {
 
     pollster::block_on(async {
         // Initialize renderer
-        let renderer = Renderer::new(std::sync::Arc::clone(&window))
-            .expect("Failed to create renderer");
+        let renderer =
+            Renderer::new(std::sync::Arc::clone(&window)).expect("Failed to create renderer");
         let scale_factor = window.scale_factor() as f32;
         let mut egui_state_local = EguiState::new(&renderer.device, &renderer.config, scale_factor);
 
