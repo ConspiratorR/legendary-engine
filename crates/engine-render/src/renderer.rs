@@ -130,13 +130,17 @@ impl Renderer {
 
         let sprite_draws: Vec<SpriteDraw> = all_sprites
             .iter()
-            .map(|s| SpriteDraw {
-                world_matrix: s.transform,
-                color: s.color,
-                size: s.size,
-                texture_id: bridge.resolve(&s.texture),
-                flip_x: s.flip_x,
-                flip_y: s.flip_y,
+            .map(|s| {
+                let pos = s.transform.transform_point3(engine_math::Vec3::ZERO);
+                SpriteDraw {
+                    world_matrix: s.transform,
+                    color: s.color,
+                    size: s.size,
+                    texture_id: bridge.resolve(&s.texture),
+                    flip_x: s.flip_x,
+                    flip_y: s.flip_y,
+                    depth: pos.z,
+                }
             })
             .collect();
 

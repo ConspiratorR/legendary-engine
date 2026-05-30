@@ -22,6 +22,7 @@ pub struct SpriteDraw {
     pub texture_id: u64,
     pub flip_x: bool,
     pub flip_y: bool,
+    pub depth: f32,
 }
 
 pub struct SpriteBatch {
@@ -113,9 +114,18 @@ impl SpriteBatch {
 }
 
 pub fn collect_batches(sprites: &[SpriteDraw]) -> Vec<SpriteBatch> {
+    // Sort by depth (back-to-front) for correct alpha blending
+    let mut sorted: Vec<&SpriteDraw> = sprites.iter().collect();
+    sorted.sort_by(|a, b| {
+        a.depth
+            .partial_cmp(&b.depth)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Group by texture_id (stable sort preserves depth order within each group)
     let mut batch_map: std::collections::HashMap<u64, Vec<&SpriteDraw>> =
         std::collections::HashMap::new();
-    for draw in sprites {
+    for draw in sorted {
         batch_map.entry(draw.texture_id).or_default().push(draw);
     }
 
@@ -148,6 +158,7 @@ mod tests {
             texture_id: 0,
             flip_x: false,
             flip_y: false,
+            depth: 0.0,
         };
         batch.push(&draw);
         assert_eq!(batch.vertices.len(), 4);
@@ -184,6 +195,7 @@ mod tests {
             texture_id: 0,
             flip_x: false,
             flip_y: false,
+            depth: 0.0,
         }
     }
 }

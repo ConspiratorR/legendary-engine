@@ -14,6 +14,7 @@ fn test_sprite_batch_instance_data() {
         texture_id: 0,
         flip_x: false,
         flip_y: false,
+        depth: 0.0,
     };
 
     batch.push(&draw);
@@ -39,6 +40,7 @@ fn test_collect_batches_with_instances() {
             size: Vec2::new(100.0, 100.0),
             flip_x: false,
             flip_y: false,
+            depth: 0.0,
         },
         SpriteDraw {
             texture_id: 0,
@@ -47,6 +49,7 @@ fn test_collect_batches_with_instances() {
             size: Vec2::new(100.0, 100.0),
             flip_x: false,
             flip_y: false,
+            depth: 0.0,
         },
         SpriteDraw {
             texture_id: 1,
@@ -55,6 +58,7 @@ fn test_collect_batches_with_instances() {
             size: Vec2::new(100.0, 100.0),
             flip_x: false,
             flip_y: false,
+            depth: 0.0,
         },
     ];
 
