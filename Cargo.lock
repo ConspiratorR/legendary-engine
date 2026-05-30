@@ -900,6 +900,7 @@ dependencies = [
  "bytemuck",
  "crossbeam-channel",
  "engine-asset",
+ "engine-ecs",
  "engine-math",
  "engine-window",
  "image",

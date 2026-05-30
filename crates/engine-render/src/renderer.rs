@@ -140,6 +140,7 @@ impl Renderer {
                     flip_x: s.flip_x,
                     flip_y: s.flip_y,
                     depth: pos.z,
+                    uv_region: s.uv_region,
                 }
             })
             .collect();

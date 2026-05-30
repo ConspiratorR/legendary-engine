@@ -15,6 +15,7 @@ fn test_sprite_batch_instance_data() {
         flip_x: false,
         flip_y: false,
         depth: 0.0,
+        uv_region: [0.0, 0.0, 1.0, 1.0],
     };
 
     batch.push(&draw);
@@ -41,6 +42,7 @@ fn test_collect_batches_with_instances() {
             flip_x: false,
             flip_y: false,
             depth: 0.0,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
         },
         SpriteDraw {
             texture_id: 0,
@@ -50,6 +52,7 @@ fn test_collect_batches_with_instances() {
             flip_x: false,
             flip_y: false,
             depth: 0.0,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
         },
         SpriteDraw {
             texture_id: 1,
@@ -59,6 +62,7 @@ fn test_collect_batches_with_instances() {
             flip_x: false,
             flip_y: false,
             depth: 0.0,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
         },
     ];
 

@@ -58,6 +58,7 @@ fn main() {
             transform: Mat4::from_translation(Vec3::new(200.0, 300.0, 0.0)),
             flip_x: false,
             flip_y: false,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
         },
         Sprite {
             texture: handle.clone(),
@@ -66,6 +67,7 @@ fn main() {
             transform: Mat4::from_translation(Vec3::new(600.0, 300.0, 0.0)),
             flip_x: false,
             flip_y: false,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
         },
     ];
 

@@ -8,6 +8,7 @@ license.workspace = true
 engine-window = { path = "../engine-window" }
 engine-math = { path = "../engine-math" }
 engine-asset = { path = "../engine-asset" }
+engine-ecs = { path = "../engine-ecs" }
 wgpu = { version = "23", features = ["wgsl"] }
 winit = "0.30"
 thiserror = "2"

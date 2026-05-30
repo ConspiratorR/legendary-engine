@@ -10,6 +10,9 @@ pub struct Sprite {
     pub transform: Mat4,
     pub flip_x: bool,
     pub flip_y: bool,
+    /// UV region `[u_min, v_min, u_max, v_max]` for sprite sheet sub-regions.
+    /// Default `[0.0, 0.0, 1.0, 1.0]` uses the full texture.
+    pub uv_region: [f32; 4],
 }
 
 #[derive(Clone)]
@@ -21,6 +24,8 @@ pub struct SpriteDraw {
     pub flip_x: bool,
     pub flip_y: bool,
     pub depth: f32,
+    /// UV region `[u_min, v_min, u_max, v_max]` for sprite sheet frames.
+    pub uv_region: [f32; 4],
 }
 
 pub struct SpriteBatch {
@@ -48,8 +53,17 @@ impl SpriteBatch {
         let base = self.vertices.len() as u16;
         let w = draw.size.x * 0.5;
         let h = draw.size.y * 0.5;
-        let (u0, u1) = if draw.flip_x { (1.0, 0.0) } else { (0.0, 1.0) };
-        let (v0, v1) = if draw.flip_y { (1.0, 0.0) } else { (0.0, 1.0) };
+        let [reg_u0, reg_v0, reg_u1, reg_v1] = draw.uv_region;
+        let (u0, u1) = if draw.flip_x {
+            (reg_u1, reg_u0)
+        } else {
+            (reg_u0, reg_u1)
+        };
+        let (v0, v1) = if draw.flip_y {
+            (reg_v1, reg_v0)
+        } else {
+            (reg_v0, reg_v1)
+        };
 
         self.vertices.extend_from_slice(&[
             SpriteVertex {
@@ -137,6 +151,7 @@ mod tests {
             flip_x: false,
             flip_y: false,
             depth: 0.0,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
         };
         batch.push(&draw);
         assert_eq!(batch.vertices.len(), 4);
@@ -220,6 +235,7 @@ mod tests {
             flip_x: false,
             flip_y: false,
             depth: 0.0,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
         }
     }
 }
