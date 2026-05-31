@@ -21,7 +21,7 @@ impl ColliderShape {
             ColliderShape::Box { half_extents } => half_extents.length(),
             ColliderShape::Capsule { radius, height } => radius + height * 0.5,
             ColliderShape::Cylinder { radius, height } => {
-                radius * radius + (height * 0.5) * (height * 0.5)
+                (radius * radius + (height * 0.5) * (height * 0.5)).sqrt()
             }
         }
     }

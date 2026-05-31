@@ -190,11 +190,11 @@ fn my_system(app: &App) {
 | **Sprite 组件 & 批处理** | ✅ | `Sprite` 组件、`SpriteBatch`（按纹理分组）、`collect_batches` |
 | **摄像机系统** | 🔨 | 已有 `Camera` + 透视/正交投影，需完善视锥裁剪和多摄像机支持 |
 | **Sprite 示例** | ✅ | `sprite_demo` — 渲染图集成验证 |
-| **纹理加载 → Sprite** | ⏳ | 需将 `engine-asset` 的 `ImageData` 直接导入 `SpritePipeline` 的纹理绑定 |
-| **Sprite 批量绘制** | ⏳ | 将 `SpriteBatch` 数据上传 GPU 并通过 Render Graph 绑定绘制 |
-| **2D 精灵动画** | ⏳ | 精灵表、帧序列、循环模式 |
-| **2D 粒子系统** | ⏳ | 粒子发射器、生命周期、颜色/大小渐变 |
-| **Tilemap 支持** | ⏳ | 图块集、瓦片图层、碰撞规则 |
+| **纹理加载 → Sprite** | ✅ | `EventChannel` + `TextureStore` 桥接（[texture_bridge.rs](crates/engine-render/src/texture_bridge.rs), 290 行） |
+| **Sprite 批量绘制** | ✅ | `SpriteRenderer` + `PersistentBuffer` GPU 上传（[sprite_renderer.rs](crates/engine-render/src/sprite_renderer.rs), 133 行） |
+| **2D 精灵动画** | ✅ | 精灵表、帧序列、循环模式、ECS 更新系统（[animation.rs](crates/engine-render/src/animation.rs), 482 行） |
+| **2D 粒子系统** | ✅ | 粒子发射器、生命周期、颜色/大小渐变、ECS 模拟（[particle.rs](crates/engine-render/src/particle.rs), 829 行） |
+| **Tilemap 支持** | ✅ | 图块集、瓦片图层、`SpriteDraw` 转换（[tilemap.rs](crates/engine-render/src/tilemap.rs), 557 行, 14 测试） |
 
 ### 阶段 2 — 框架 & 状态管理
 
@@ -226,11 +226,11 @@ fn my_system(app: &App) {
 | **RigidBody** | ✅ | 刚体定义、力/冲量、速度、阻尼 |
 | **Collider** | ✅ | 球体/盒体/胶囊/圆柱碰撞体、摩擦力/恢复系数/密度 |
 | **碰撞检测** | 🔨 | 球体-球体碰撞已实现，需扩展到 OBB、胶囊、GJK/SAT |
-| **物理世界 step** | ⏳ | 填充 `apply_forces`、`integrate_bodies`、`detect_collisions`、`resolve_collisions` |
+| **物理世界 step** | ✅ | 子步模拟、Baumgarte 约束求解、摩擦力/恢复力（[world.rs](crates/engine-physics/src/world.rs), 377 行, 6 测试） |
 | **接触点求解** | ⏳ | 约束求解、摩擦模型 |
 | **连续碰撞检测** | ⏳ | CCD 支持 |
 | **关节系统** | ⏳ | 铰链、球窝、弹簧约束 |
-| **ECS 集成** | ⏳ | 将 PhysicsPlugin 连接到 ECS 调度器 |
+| **ECS 集成** | ✅ | `PhysicsPlugin` 已注册 physics_step_system（[plugin.rs](crates/engine-physics/src/plugin.rs), 45 行） |
 
 ### 阶段 5 — 音频系统
 
