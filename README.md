@@ -201,8 +201,8 @@ fn my_system(app: &App) {
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | **State Stack** | ✅ | 基础状态栈已完成 |
-| **Menu / Title 状态** | ⏳ | 集成 UI 的菜单系统 |
-| **Pause / GameOver 状态** | ⏳ | 游戏流程控制 |
+| **Menu / Title 状态** | ✅ | 标题画面、主菜单（新游戏/继续/设置/退出） |
+| **Pause / GameOver 状态** | ✅ | 暂停菜单、游戏结束、状态生命周期 |
 | **Save/Load** | ✅ | 槽位管理、JSON 序列化、分类键值存储 |
 
 ### 阶段 3 — 3D 渲染管线
@@ -264,7 +264,7 @@ fn my_system(app: &App) {
 | **编辑器摄像机** | ✅ | 轨道/平移/缩放 |
 | **场景序列化** | ✅ | JSON 序列化/反序列化、ECS ↔ Scene 双向桥接 |
 | **资源浏览器** | ✅ | 文件浏览、路径导航 |
-| **节点图编辑器** | ⏳ | 材质节点图、可视化脚本 |
+| **节点图编辑器** | ✅ | NodeGraph 数据结构、拓扑排序、10+ 内置节点、导出 |
 | **动画编辑器** | ⏳ | 关键帧编辑、动画曲线 |
 
 ### 阶段 8 — 动画系统
@@ -274,7 +274,7 @@ fn my_system(app: &App) {
 | **关键帧动画** | ✅ | Position/Rotation/Scale 关键帧、线性/步进/三次插值、AnimationPlayer |
 | **骨骼动画** | ✅ | Joint/Skeleton/Skin、SkeletalAnimationPlayer、骨骼混合、矩阵调色板 |
 | **状态机** | ✅ | AnimationStateMachine、条件过渡、混合过渡、参数系统 |
-| **IK/FK** | ⏳ | 反向/正向运动学 |
+| **IK/FK** | ✅ | CCD/FABRIK 反向运动学、正向运动学、IK 链/目标 |
 
 ### 阶段 9 — 发布 & 生态
 
