@@ -11,6 +11,7 @@ pub mod particle;
 pub mod pipeline;
 pub mod renderer;
 pub mod resource;
+pub mod shadow;
 pub mod sprite;
 pub mod sprite_renderer;
 pub mod texture_bridge;

@@ -213,7 +213,7 @@ fn my_system(app: &App) {
 | **Mesh 渲染** | ✅ | 顶点/索引缓冲、Camera UBO 集成、深度测试 |
 | **材质系统** | ✅ | PBR 材质组件（base_color, metallic, roughness, ao, emissive）、GPU Uniform |
 | **光照** | ✅ | 方向光、点光源、聚光灯（ECS 组件 + 多光源 Shader） |
-| **阴影** | ⏳ | Shadow mapping |
+| **阴影** | ✅ | ShadowPass、级联阴影(CSM)、深度纹理、ShadowUniform |
 | **模型加载** | ✅ | glTF/GLB 几何体加载（顶点、法线、UV、索引） |
 | **环境贴图 / IBL** | ⏳ | HDR 环境贴图、预过滤、LUT 生成 |
 | **延迟渲染** | ⏳ | G-Buffer、屏幕空间处理 |
@@ -238,7 +238,7 @@ fn my_system(app: &App) {
 |------|------|------|
 | **基础播放** | ✅ | `AudioManager` 基于 rodio，支持文件解码和播放 |
 | **音量控制** | ✅ | 主音量、音效/音乐分轨音量、播放句柄控制 |
-| **3D 空间音频** | ⏳ | 距离衰减、方向、多普勒效应 |
+| **3D 空间音频** | ✅ | 距离衰减（3种模型）、多普勒效应、立体声声像定位 |
 | **音频混音器** | ✅ | 命名总线、独立音量/静音、默认 6 总线（master/sfx/music/ambient/voice/ui） |
 | **流式播放** | ✅ | AudioStream 探测、StreamingConfig 配置、格式检测 |
 
