@@ -14,11 +14,18 @@ impl HandleId {
     }
 }
 
+/// Trait for types that can be stored as assets.
 pub trait Asset: Clone + 'static {
+    /// The type used to identify assets of this kind.
     type Id: ?Sized + std::fmt::Debug + std::hash::Hash + Eq;
+    /// Return the identifier for this asset.
     fn id(&self) -> &Self::Id;
 }
 
+/// A reference-counted handle to an asset.
+///
+/// Cloning a `Handle` increments the reference count; dropping decrements it.
+/// The asset is freed when the last handle is dropped.
 pub struct Handle<T: Asset> {
     inner: Arc<HandleInner<T>>,
 }
@@ -29,6 +36,7 @@ struct HandleInner<T: Asset> {
 }
 
 impl<T: Asset> Handle<T> {
+    /// Create a new handle wrapping the given asset.
     pub fn new(asset: T) -> Self {
         Self {
             inner: Arc::new(HandleInner {
@@ -38,10 +46,12 @@ impl<T: Asset> Handle<T> {
         }
     }
 
+    /// Return the current reference count.
     pub fn ref_count(&self) -> usize {
         self.inner.ref_count.load(Ordering::Relaxed)
     }
 
+    /// Borrow the underlying asset.
     pub fn get(&self) -> &T {
         &self.inner.asset
     }

@@ -36,7 +36,7 @@ impl Default for GeometryPassUniform {
 ///
 /// Holds the render targets used during the geometry pass:
 /// - albedo: base color RGB + alpha (Rgba8UnormSrgb)
-/// - normal: world-space normal packed to [0,1] (Rgba16Float)
+/// - normal: world-space normal packed to \[0,1\] (Rgba16Float)
 /// - position: world-space position XYZ (Rgba16Float)
 /// - material: metallic R, roughness G, ao B (Rgba8Unorm)
 /// - depth: depth buffer (Depth32Float)

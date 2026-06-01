@@ -1,10 +1,15 @@
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
+/// Configuration for creating a window.
 pub struct WindowConfig {
+    /// The window title.
     pub title: String,
+    /// The window width in physical pixels.
     pub width: u32,
+    /// The window height in physical pixels.
     pub height: u32,
+    /// Whether to enable vertical sync.
     pub vsync: bool,
 }
 
@@ -19,6 +24,7 @@ impl Default for WindowConfig {
     }
 }
 
+/// Create a [`Window`] from the given configuration and event loop.
 #[allow(deprecated)]
 pub fn create_window(
     config: &WindowConfig,

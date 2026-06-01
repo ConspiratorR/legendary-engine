@@ -129,7 +129,8 @@ fn create_constant_vec4(position: Pos2) -> Node {
 fn create_constant_color(position: Pos2) -> Node {
     let mut node = Node::new(0, NodeType::ConstantColor, "Color", position);
     node.add_output("Color", PinType::Color);
-    node.values.insert(0, NodeValue::Color([1.0, 1.0, 1.0, 1.0]));
+    node.values
+        .insert(0, NodeValue::Color([1.0, 1.0, 1.0, 1.0]));
     node
 }
 
@@ -326,7 +327,11 @@ mod tests {
     #[test]
     fn test_create_all_builtin_nodes() {
         let types = builtin_node_types();
-        assert!(types.len() >= 25, "Expected at least 25 builtin node types, got {}", types.len());
+        assert!(
+            types.len() >= 25,
+            "Expected at least 25 builtin node types, got {}",
+            types.len()
+        );
 
         for node_type in &types {
             let node = create_node(node_type.clone(), Pos2::new(0.0, 0.0));

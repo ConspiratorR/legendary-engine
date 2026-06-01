@@ -41,6 +41,14 @@ legendary-engine/
 - Rust 1.95.0 或更高版本
 - Cargo 工具链
 
+### 跨平台支持
+
+RustEngine 支持以下平台：
+- **Windows** - 原生支持
+- **macOS** - Metal 渲染后端
+- **Linux** - Wayland/X11 支持
+- **Android** - NDK 交叉编译（实验性）
+
 ### 构建项目
 
 ```bash
@@ -49,6 +57,11 @@ cargo build
 
 # 发布模式（优化）
 cargo build --release
+
+# 使用 just 构建自动化（推荐安装 just）
+just build          # 等同于 cargo build
+just build-release  # 等同于 cargo build --release
+just ci             # 运行完整 CI 检查（fmt + clippy + build + test）
 ```
 
 ### 运行示例
@@ -56,6 +69,9 @@ cargo build --release
 ```bash
 # 基本 ECS 示例
 cargo run --example basic -p engine-core
+
+# 跨平台示例（推荐）
+cargo run --example cross_platform -p engine-core
 
 # 输入处理示例
 cargo run --example input_demo -p engine-core
@@ -286,12 +302,59 @@ fn my_system(app: &App) {
 | **文档** | ⏳ | API 文档、使用手册、教程 |
 | **示例游戏** | ✅ | game_flow_demo — 完整游戏流程（菜单→游戏→暂停→结束）+ ECS/物理/渲染/音频演示 |
 
+## 跨平台开发
+
+### 平台特定代码
+
+使用条件编译隔离平台特定代码：
+
+```rust
+#[cfg(windows)]
+fn platform_specific() {
+    // Windows 特定代码
+}
+
+#[cfg(target_os = "macos")]
+fn platform_specific() {
+    // macOS 特定代码
+}
+
+#[cfg(target_os = "linux")]
+fn platform_specific() {
+    // Linux 特定代码
+}
+```
+
+### 交叉编译
+
+```bash
+# 安装目标平台
+rustup target add x86_64-unknown-linux-gnu
+rustup target add x86_64-apple-darwin
+rustup target add aarch64-linux-android
+
+# 交叉编译
+just build-linux    # Linux
+just build-macos    # macOS
+just build-android  # Android
+```
+
+### CI/CD
+
+项目使用 GitHub Actions 进行跨平台 CI：
+- Ubuntu (Linux)
+- Windows
+- macOS
+
+每个平台都会运行完整的构建和测试套件。
+
 ## 贡献
 
 欢迎贡献代码！请确保提交前运行：
 - `cargo fmt` - 格式化
 - `cargo clippy` - 代码检查
 - `cargo test` - 运行所有测试
+- `just ci` - 运行完整 CI 检查（推荐）
 
 ## 许可证
 

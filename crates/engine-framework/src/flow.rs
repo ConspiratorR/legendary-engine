@@ -4,6 +4,11 @@ use crate::states::{GameOverState, MenuState, PauseState, TitleState};
 use engine_core::app::{App, AppBuilder};
 use engine_core::plugin::Plugin;
 
+/// Plugin that wires the standard game-flow state machine.
+///
+/// Registers [`GameStateAction`] and [`GameSession`] resources, pushes
+/// the initial [`TitleState`], and installs a post-update hook that
+/// processes queued state transitions.
 pub struct GameFlowPlugin;
 
 impl Plugin for GameFlowPlugin {

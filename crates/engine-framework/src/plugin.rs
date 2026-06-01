@@ -2,6 +2,8 @@ use crate::{FrameworkResource, StateStack};
 use engine_core::app::{App, AppBuilder};
 use engine_core::plugin::Plugin;
 
+/// Plugin that registers the [`StateStack`] and [`FrameworkResource`]
+/// and hooks state updates into the engine lifecycle.
 pub struct FrameworkPlugin;
 
 impl Plugin for FrameworkPlugin {

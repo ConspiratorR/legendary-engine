@@ -239,8 +239,13 @@ impl Node {
 
     pub fn add_input(&mut self, name: &str, pin_type: PinType) -> usize {
         let index = self.inputs.len();
-        self.inputs
-            .push(Pin::new(self.id, index, name, pin_type, PinDirection::Input));
+        self.inputs.push(Pin::new(
+            self.id,
+            index,
+            name,
+            pin_type,
+            PinDirection::Input,
+        ));
         index
     }
 
@@ -277,7 +282,9 @@ impl Node {
             .chain(self.outputs.iter())
             .map(|p| p.name.len() as f32)
             .fold(0.0_f32, f32::max);
-        (name_len * 8.0 + 40.0).max(max_pin_len * 7.0 + 80.0).max(140.0)
+        (name_len * 8.0 + 40.0)
+            .max(max_pin_len * 7.0 + 80.0)
+            .max(140.0)
     }
 
     pub fn height(&self) -> f32 {
@@ -370,8 +377,7 @@ impl NodeGraph {
         }
 
         // Remove any existing connection to this input pin
-        self.connections
-            .retain(|c| c.input_pin != input);
+        self.connections.retain(|c| c.input_pin != input);
 
         // Check for cycles before adding
         if self.would_create_cycle(output.node_id, input.node_id) {
@@ -590,7 +596,10 @@ mod tests {
 
         let output = PinId::new(id, 1); // output index is 1 (after input)
         let input = PinId::new(id, 0);
-        assert_eq!(graph.connect(output, input), Err(ConnectError::SelfConnection));
+        assert_eq!(
+            graph.connect(output, input),
+            Err(ConnectError::SelfConnection)
+        );
     }
 
     #[test]

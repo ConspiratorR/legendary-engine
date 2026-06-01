@@ -1,17 +1,29 @@
 use egui::{Color32, Margin, Rounding};
 
+/// Visual theme for the GUI, defining styles for each widget type.
 #[derive(Clone)]
 pub struct GuiSkin {
+    /// Style for labels.
     pub label: GuiStyle,
+    /// Style for buttons.
     pub button: GuiStyle,
+    /// Style for box containers.
     pub box_: GuiStyle,
+    /// Style for text fields.
     pub text_field: GuiStyle,
+    /// Style for toggles.
     pub toggle: GuiStyle,
+    /// Style for windows.
     pub window: GuiStyle,
+    /// Style for sliders.
     pub slider: GuiStyle,
+    /// Style for toolbars.
     pub toolbar: GuiStyle,
+    /// Style for selection grids.
     pub selection_grid: GuiStyle,
+    /// The font used across all widgets.
     pub font: egui::FontId,
+    /// Optional cursor icon override.
     pub cursor: Option<egui::CursorIcon>,
 }
 
@@ -105,14 +117,22 @@ impl Default for GuiSkin {
     }
 }
 
+/// Style configuration for a single widget type.
 #[derive(Clone)]
 pub struct GuiStyle {
+    /// Colors for the normal (idle) state.
     pub normal: ColorBlock,
+    /// Colors for the hover state.
     pub hover: ColorBlock,
+    /// Colors for the active (pressed) state.
     pub active: ColorBlock,
+    /// Colors for the focused state.
     pub focused: ColorBlock,
+    /// Corner rounding.
     pub border: Rounding,
+    /// Inner margins.
     pub margins: Margin,
+    /// Font size in points.
     pub font_size: f32,
 }
 
@@ -146,10 +166,14 @@ impl Default for GuiStyle {
     }
 }
 
+/// A set of colors for a single widget state (background, text, optional border).
 #[derive(Clone)]
 pub struct ColorBlock {
+    /// Fill color.
     pub background: Color32,
+    /// Text color.
     pub text: Color32,
+    /// Optional border color.
     pub border: Option<Color32>,
 }
 

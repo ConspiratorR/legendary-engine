@@ -76,6 +76,14 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
                 crate::inspector::draw(state, &mut gui, inspector_rect);
             }
             draw_bottom_panel(state, ui, bottom_rect, h_scale, w_scale);
+            if state.animation_editor.visible {
+                let anim_h = (screen.height() * 300.0 / 1080.0).clamp(200.0, 500.0);
+                let anim_rect = Rect::from_min_size(
+                    Pos2::new(screen.left(), status_rect.top() - anim_h),
+                    Vec2::new(screen.width(), anim_h),
+                );
+                crate::animation_editor::draw_animation_editor(state, ui, anim_rect);
+            }
             draw_status_bar(state, &mut gui, status_rect, h_scale, w_scale);
         });
 }
@@ -192,7 +200,7 @@ fn draw_dropdown_menu(
         3 => vec!["新建场景", "保存场景", "加载场景"],               // 场景
         4 => vec!["导入资源", "刷新资源"],                           // 资源
         5 => vec!["构建项目", "运行项目"],                           // 构建
-        6 => vec!["控制台", "性能", "资源浏览器"],                   // 窗口
+        6 => vec!["控制台", "性能", "资源浏览器", "动画编辑器"],     // 窗口
         7 => vec!["关于", "文档"],                                   // 帮助
         _ => vec![],
     };
@@ -311,6 +319,7 @@ fn draw_dropdown_menu(
                         0 => state.active_bottom_tab = 0, // 日志
                         1 => state.active_bottom_tab = 1, // 性能
                         2 => state.active_bottom_tab = 2, // 资源
+                        3 => state.animation_editor.visible = !state.animation_editor.visible, // 动画编辑器
                         _ => {}
                     }
                 }

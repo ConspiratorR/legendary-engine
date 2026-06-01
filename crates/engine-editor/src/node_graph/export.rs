@@ -22,7 +22,10 @@ pub fn extract_material_params(graph: &NodeGraph) -> MaterialParams {
     let mut params = MaterialParams::default();
 
     // Find the MaterialOutput node
-    let output_node = graph.nodes.values().find(|n| n.node_type == NodeType::MaterialOutput);
+    let output_node = graph
+        .nodes
+        .values()
+        .find(|n| n.node_type == NodeType::MaterialOutput);
 
     if let Some(node) = output_node {
         // Get values from connections or defaults
@@ -134,11 +137,7 @@ pub fn generate_wgsl(graph: &NodeGraph) -> String {
                 let _ = writeln!(wgsl, "    let {} = {};", var_name, val);
             }
             NodeType::ConstantVec2 => {
-                let val = node
-                    .values
-                    .get(&0)
-                    .map(|v| v.to_vec4())
-                    .unwrap_or([0.0; 4]);
+                let val = node.values.get(&0).map(|v| v.to_vec4()).unwrap_or([0.0; 4]);
                 let _ = writeln!(
                     wgsl,
                     "    let {} = vec2<f32>({}, {});",
@@ -146,11 +145,7 @@ pub fn generate_wgsl(graph: &NodeGraph) -> String {
                 );
             }
             NodeType::ConstantVec3 => {
-                let val = node
-                    .values
-                    .get(&0)
-                    .map(|v| v.to_vec4())
-                    .unwrap_or([0.0; 4]);
+                let val = node.values.get(&0).map(|v| v.to_vec4()).unwrap_or([0.0; 4]);
                 let _ = writeln!(
                     wgsl,
                     "    let {} = vec3<f32>({}, {}, {});",
@@ -158,11 +153,7 @@ pub fn generate_wgsl(graph: &NodeGraph) -> String {
                 );
             }
             NodeType::ConstantVec4 | NodeType::ConstantColor => {
-                let val = node
-                    .values
-                    .get(&0)
-                    .map(|v| v.to_vec4())
-                    .unwrap_or([0.0; 4]);
+                let val = node.values.get(&0).map(|v| v.to_vec4()).unwrap_or([0.0; 4]);
                 let _ = writeln!(
                     wgsl,
                     "    let {} = vec4<f32>({}, {}, {}, {});",
@@ -243,11 +234,7 @@ pub fn generate_wgsl(graph: &NodeGraph) -> String {
             NodeType::Power => {
                 let base = get_input_var(graph, node, 0, &result);
                 let exp = get_input_var(graph, node, 1, &result);
-                let _ = writeln!(
-                    wgsl,
-                    "    let {} = pow({}, {});",
-                    var_name, base, exp
-                );
+                let _ = writeln!(wgsl, "    let {} = pow({}, {});", var_name, base, exp);
             }
             NodeType::Saturate => {
                 let a = get_input_var(graph, node, 0, &result);
@@ -260,11 +247,7 @@ pub fn generate_wgsl(graph: &NodeGraph) -> String {
             NodeType::DotProduct => {
                 let a = get_input_var(graph, node, 0, &result);
                 let b = get_input_var(graph, node, 1, &result);
-                let _ = writeln!(
-                    wgsl,
-                    "    let {} = dot({}, {});",
-                    var_name, a, b
-                );
+                let _ = writeln!(wgsl, "    let {} = dot({}, {});", var_name, a, b);
             }
             NodeType::Normalize => {
                 let a = get_input_var(graph, node, 0, &result);
@@ -273,11 +256,7 @@ pub fn generate_wgsl(graph: &NodeGraph) -> String {
             NodeType::CrossProduct => {
                 let a = get_input_var(graph, node, 0, &result);
                 let b = get_input_var(graph, node, 1, &result);
-                let _ = writeln!(
-                    wgsl,
-                    "    let {} = cross({}, {});",
-                    var_name, a, b
-                );
+                let _ = writeln!(wgsl, "    let {} = cross({}, {});", var_name, a, b);
             }
             NodeType::CombineRgb => {
                 let r = get_input_var(graph, node, 0, &result);
@@ -369,8 +348,8 @@ fn get_input_var(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node_graph::nodes::create_node;
     use crate::node_graph::graph::NodeGraph;
+    use crate::node_graph::nodes::create_node;
     use crate::node_graph::types::PinId;
     use egui::Pos2;
 

@@ -4,6 +4,10 @@ use engine_core::plugin::Plugin;
 use engine_input::input_manager::InputManager;
 use engine_render::renderer::{GpuDevice, GpuQueue};
 
+/// Plugin that initializes `egui` integration with the wgpu renderer.
+///
+/// Registers an [`EguiState`] resource and hooks input forwarding and
+/// rendering into the engine lifecycle.
 pub struct EguiPlugin;
 
 impl Plugin for EguiPlugin {

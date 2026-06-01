@@ -6,6 +6,11 @@ enum PendingOp {
     Replace(Box<dyn GameState>),
 }
 
+/// A stack of [`GameState`]s with deferred push/pop/replace operations.
+///
+/// Only the topmost state receives `update` calls. Operations are queued
+/// and applied atomically when [`flush`](Self::flush) is called, so
+/// mid-frame state changes are safe.
 pub struct StateStack {
     states: Vec<Box<dyn GameState>>,
     pending: Vec<PendingOp>,
@@ -18,28 +23,36 @@ impl Default for StateStack {
 }
 
 impl StateStack {
+    /// Create an empty state stack.
     pub fn new() -> Self {
         Self {
             states: Vec::new(),
             pending: Vec::new(),
         }
     }
+    /// Queue a state to be pushed on the next `flush`.
     pub fn push(&mut self, state: Box<dyn GameState>) {
         self.pending.push(PendingOp::Push(state));
     }
+    /// Queue the top state to be popped on the next `flush`.
     pub fn pop(&mut self) {
         self.pending.push(PendingOp::Pop);
     }
+    /// Queue a replacement of the top state on the next `flush`.
     pub fn replace(&mut self, state: Box<dyn GameState>) {
         self.pending.push(PendingOp::Replace(state));
     }
+    /// Return the number of active (flushed) states.
     pub fn len(&self) -> usize {
         self.states.len()
     }
+    /// Returns `true` if there are no active states.
     pub fn is_empty(&self) -> bool {
         self.states.is_empty()
     }
 
+    /// Apply all pending push/pop/replace operations, calling the
+    /// appropriate `on_enter` / `on_exit` lifecycle hooks.
     pub fn flush(
         &mut self,
         world: &mut engine_ecs::world::World,
@@ -84,6 +97,7 @@ impl StateStack {
         }
     }
 
+    /// Call `update` on the topmost state (if any).
     pub fn update_top(
         &mut self,
         world: &mut engine_ecs::world::World,

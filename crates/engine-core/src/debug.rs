@@ -32,9 +32,9 @@ static INIT: Once = Once::new();
 /// - Initializes [`env_logger`] with default filter `info`.
 pub fn init_logger() {
     INIT.call_once(|| {
-        if cfg!(windows) {
-            alloc_console();
-        }
+        #[cfg(windows)]
+        alloc_console();
+
         set_panic_hook();
         init_env_logger();
         log::info!("logger initialized");

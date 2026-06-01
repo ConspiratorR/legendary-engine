@@ -1,6 +1,10 @@
 use crate::world::World;
 use std::marker::PhantomData;
 
+/// Single-component query over all entities that have component `A`.
+///
+/// Use [`iter`](Self::iter) for shared access or [`iter_mut`](Self::iter_mut)
+/// for exclusive access to each component.
 pub struct Query<T> {
     _marker: PhantomData<T>,
 }
@@ -12,12 +16,14 @@ impl<A: 'static> Default for Query<A> {
 }
 
 impl<A: 'static> Query<A> {
+    /// Create a new single-component query.
     pub fn new() -> Self {
         Self {
             _marker: PhantomData,
         }
     }
 
+    /// Iterate over all components `A` (shared references).
     pub fn iter<'a>(&self, world: &'a World) -> impl Iterator<Item = &'a A> {
         let indices: Vec<_> = world.component_entities::<A>();
         indices
@@ -25,6 +31,7 @@ impl<A: 'static> Query<A> {
             .filter_map(move |idx| world.get_by_index::<A>(idx))
     }
 
+    /// Iterate over all components `A` (exclusive references).
     pub fn iter_mut<'a>(&self, world: &'a mut World) -> QueryIterMut<'a, A> {
         let indices = world.component_entities::<A>();
         QueryIterMut {
@@ -36,6 +43,9 @@ impl<A: 'static> Query<A> {
     }
 }
 
+/// Two-component join query.
+///
+/// Yields pairs `(&A, &B)` for every entity that has **both** components.
 pub struct QueryPair<A, B> {
     _marker: PhantomData<(A, B)>,
 }
@@ -47,12 +57,14 @@ impl<A: 'static, B: 'static> Default for QueryPair<A, B> {
 }
 
 impl<A: 'static, B: 'static> QueryPair<A, B> {
+    /// Create a new two-component join query.
     pub fn new() -> Self {
         Self {
             _marker: PhantomData,
         }
     }
 
+    /// Iterate over matching component pairs (shared references).
     pub fn iter<'a>(&self, world: &'a World) -> impl Iterator<Item = (&'a A, &'a B)> {
         let valid: Vec<_> = {
             let ents_a = world.component_entities::<A>();
@@ -68,6 +80,7 @@ impl<A: 'static, B: 'static> QueryPair<A, B> {
         })
     }
 
+    /// Iterate over matching component pairs (exclusive references).
     pub fn iter_mut<'a>(&self, world: &'a mut World) -> QueryPairIterMut<'a, A, B> {
         let valid: Vec<_> = {
             let ents_a = world.component_entities::<A>();
@@ -87,6 +100,7 @@ impl<A: 'static, B: 'static> QueryPair<A, B> {
     }
 }
 
+/// Iterator for exclusive two-component join queries.
 pub struct QueryPairIterMut<'a, A, B> {
     indices: Vec<u32>,
     index: usize,
@@ -113,6 +127,7 @@ impl<'a, A: 'static, B: 'static> Iterator for QueryPairIterMut<'a, A, B> {
     }
 }
 
+/// Iterator for exclusive single-component queries.
 pub struct QueryIterMut<'a, A> {
     indices: Vec<u32>,
     index: usize,

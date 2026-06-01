@@ -1,16 +1,24 @@
 use crate::skin::{ColorBlock, GuiSkin};
 use egui::{Color32, Painter, Pos2, Rect, Rounding, Shape, Stroke};
 
+/// Immediate-mode GUI widget drawer backed by `egui`.
+///
+/// Wraps an `egui::Ui` reference and a [`GuiSkin`] to provide
+/// skinned versions of common widgets (label, button, slider, etc.).
 pub struct Gui<'a> {
+    /// The underlying egui UI context.
     pub ui: &'a egui::Ui,
+    /// The skin controlling visual appearance.
     pub skin: &'a GuiSkin,
 }
 
 impl<'a> Gui<'a> {
+    /// Create a new `Gui` from an egui UI and skin.
     pub fn new(ui: &'a egui::Ui, skin: &'a GuiSkin) -> Gui<'a> {
         Gui { ui, skin }
     }
 
+    /// Draw a colored rectangle with an optional border.
     pub fn draw_background(painter: &Painter, block: &ColorBlock, rect: Rect, rounding: Rounding) {
         painter.add(Shape::rect_filled(rect, rounding, block.background));
         if let Some(border_color) = block.border {

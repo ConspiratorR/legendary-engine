@@ -4,6 +4,12 @@ use crate::transform::{GlobalTransform, Transform};
 use engine_ecs::world::World;
 use engine_math::Mat4;
 
+/// Manages a scene graph of [`SceneNode`]s with hierarchical transforms.
+///
+/// Each node has a [`Transform`] (local) and a
+/// [`GlobalTransform`] (world-space).
+/// Call [`sync_transforms`](Self::sync_transforms) after modifying local
+/// transforms to recompute the global ones.
 pub struct SceneManager {
     world: World,
     root: SceneNode,
@@ -11,6 +17,7 @@ pub struct SceneManager {
 }
 
 impl SceneManager {
+    /// Create a new scene manager with a single root node.
     pub fn new() -> Self {
         let mut world = World::new();
         let root_entity = world.spawn();
@@ -22,10 +29,16 @@ impl SceneManager {
         Self { world, root, names }
     }
 
+    /// Return the root node of the scene.
     pub fn root(&self) -> SceneNode {
         self.root
     }
 
+    /// Begin building a new child node with the given `name`.
+    ///
+    /// The node is automatically parented to the root. Use
+    /// [`SceneNodeBuilder::with_transform`] to set an initial transform,
+    /// then call [`SceneNodeBuilder::build`] or convert with `Into`.
     pub fn add_node(&mut self, name: &str) -> SceneNodeBuilder<'_> {
         let entity = self.world.spawn();
         let node = SceneNode::new(entity);
@@ -52,6 +65,7 @@ impl SceneManager {
         }
     }
 
+    /// Reparent `child` under `parent`, removing it from its previous parent.
     pub fn set_parent(&mut self, child: SceneNode, parent: SceneNode) {
         if let Some(old_parent) = self.parent(child)
             && let Some(children) = self.world.get_mut::<Children>(old_parent.entity())
@@ -61,12 +75,14 @@ impl SceneManager {
         self.set_parent_internal(child, parent);
     }
 
+    /// Return the parent of a node, or `None` for the root.
     pub fn parent(&self, node: SceneNode) -> Option<SceneNode> {
         self.world
             .get::<Parent>(node.entity())
             .map(|p| SceneNode::new(p.0))
     }
 
+    /// Return the name of a node.
     pub fn name(&self, node: SceneNode) -> &str {
         let idx = node.entity().index() as usize;
         if idx < self.names.len() {
@@ -76,18 +92,22 @@ impl SceneManager {
         }
     }
 
+    /// Get a shared reference to a node's local transform.
     pub fn transform(&self, node: SceneNode) -> &Transform {
         self.world.get::<Transform>(node.entity()).unwrap()
     }
 
+    /// Get an exclusive reference to a node's local transform.
     pub fn transform_mut(&mut self, node: SceneNode) -> &mut Transform {
         self.world.get_mut::<Transform>(node.entity()).unwrap()
     }
 
+    /// Get mutable access to the underlying ECS world.
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
     }
 
+    /// Recompute all [`GlobalTransform`]s from the local transform hierarchy.
     pub fn sync_transforms(&mut self) {
         let root_entity = self.root.entity();
         let mut stack = vec![(root_entity, Mat4::IDENTITY)];
@@ -116,22 +136,26 @@ impl Default for SceneManager {
     }
 }
 
+/// Builder for configuring a newly created [`SceneNode`].
 pub struct SceneNodeBuilder<'a> {
     scene_manager: &'a mut SceneManager,
     node: SceneNode,
 }
 
 impl<'a> SceneNodeBuilder<'a> {
+    /// Set the local transform of the node being built.
     pub fn with_transform(self, transform: Transform) -> SceneNodeBuilder<'a> {
         *self.scene_manager.transform_mut(self.node) = transform;
         self
     }
 
+    /// Add an existing node as a child of the node being built.
     pub fn with_child(self, child: SceneNode) -> SceneNodeBuilder<'a> {
         self.scene_manager.set_parent(child, self.node);
         self
     }
 
+    /// Finish building and return the node.
     pub fn build(self) -> SceneNode {
         self.node
     }

@@ -150,7 +150,11 @@ impl fmt::Display for NodeValue {
                 write!(f, "({:.2}, {:.2}, {:.2}, {:.2})", v[0], v[1], v[2], v[3])
             }
             NodeValue::Color(v) => {
-                write!(f, "rgba({:.2}, {:.2}, {:.2}, {:.2})", v[0], v[1], v[2], v[3])
+                write!(
+                    f,
+                    "rgba({:.2}, {:.2}, {:.2}, {:.2})",
+                    v[0], v[1], v[2], v[3]
+                )
             }
             NodeValue::Bool(v) => write!(f, "{}", v),
             NodeValue::Int(v) => write!(f, "{}", v),

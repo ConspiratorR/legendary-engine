@@ -1,11 +1,16 @@
 use std::fmt;
 use std::ops::{Add, Div, Mul, Sub};
 
+/// An RGBA color in linear space (0.0–1.0 per channel).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color {
+    /// Red channel.
     pub r: f32,
+    /// Green channel.
     pub g: f32,
+    /// Blue channel.
     pub b: f32,
+    /// Alpha (opacity) channel.
     pub a: f32,
 }
 
@@ -16,14 +21,17 @@ impl Default for Color {
 }
 
 impl Color {
+    /// Create a color from floating-point RGBA components.
     pub const fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
     }
 
+    /// Create an opaque color from floating-point RGB components.
     pub const fn rgb(r: f32, g: f32, b: f32) -> Self {
         Self { r, g, b, a: 1.0 }
     }
 
+    /// Create a color from 8-bit RGBA components (0–255).
     pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self {
             r: r as f32 / 255.0,
@@ -33,6 +41,7 @@ impl Color {
         }
     }
 
+    /// Create an opaque color from a 24-bit hex value (e.g. `0xFF8800`).
     pub const fn from_hex(hex: u32) -> Self {
         let r = ((hex >> 16) & 0xFF) as f32 / 255.0;
         let g = ((hex >> 8) & 0xFF) as f32 / 255.0;
@@ -101,14 +110,17 @@ impl Color {
         a: 0.0,
     };
 
+    /// Return a copy with the alpha channel replaced.
     pub fn with_alpha(self, alpha: f32) -> Self {
         Self { a: alpha, ..self }
     }
 
+    /// Convert to a `[f32; 4]` array.
     pub fn to_array(&self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
 
+    /// Convert to a `[u8; 4]` array (0–255 per channel).
     pub fn to_u8_array(&self) -> [u8; 4] {
         [
             (self.r * 255.0) as u8,
@@ -118,6 +130,7 @@ impl Color {
         ]
     }
 
+    /// Linearly interpolate between `self` and `other` by factor `t` (0.0–1.0).
     pub fn lerp(self, other: Self, t: f32) -> Self {
         Self {
             r: self.r + (other.r - self.r) * t,
@@ -127,6 +140,7 @@ impl Color {
         }
     }
 
+    /// Clamp all channels to the 0.0–1.0 range.
     pub fn saturate(&self) -> Self {
         Self {
             r: self.r.clamp(0.0, 1.0),
@@ -136,6 +150,7 @@ impl Color {
         }
     }
 
+    /// Compute the perceptual grayscale value (ITU-R BT.601 weights).
     pub fn grayscale(&self) -> f32 {
         0.299 * self.r + 0.587 * self.g + 0.114 * self.b
     }

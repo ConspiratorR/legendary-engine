@@ -1,11 +1,21 @@
 use crate::world::World;
 
+/// A system that operates on a [`World`].
+///
+/// Systems are the primary way to express game logic. They receive
+/// mutable access to the world and can read/write components and resources.
 pub trait System {
+    /// Execute this system against the given `world`.
     fn run(&self, world: &mut World);
 }
 
+/// Conversion trait from closures/functions into [`System`] instances.
+///
+/// Any `Fn(&mut World)` automatically implements this trait.
 pub trait IntoSystem {
+    /// The concrete `System` type produced.
     type System: System;
+    /// Convert into a boxed system.
     fn system(self) -> Self::System;
 }
 
@@ -20,6 +30,7 @@ where
     }
 }
 
+/// A [`System`] implementation that wraps a closure.
 pub struct FnSystem<F>(F);
 
 impl<F> System for FnSystem<F>

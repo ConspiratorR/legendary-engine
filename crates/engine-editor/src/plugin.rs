@@ -4,6 +4,8 @@ use engine_core::plugin::Plugin;
 use engine_ui::EguiState;
 use engine_ui::GuiSkin;
 
+/// Plugin that registers the editor state and hooks the editor UI into
+/// the post-update phase.
 pub struct EditorPlugin;
 
 impl Plugin for EditorPlugin {

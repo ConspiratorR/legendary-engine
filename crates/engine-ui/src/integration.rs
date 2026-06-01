@@ -1,7 +1,13 @@
 use egui::Context;
 use egui_wgpu::{Renderer, ScreenDescriptor};
 
+/// Manages the `egui` context, renderer, and input forwarding.
+///
+/// Call [`begin_frame`](Self::begin_frame) at the start of each frame,
+/// use [`ctx`](Self::ctx) to build UI, then [`end_frame`](Self::end_frame)
+/// and [`paint`](Self::paint) to render.
 pub struct EguiState {
+    /// The egui context for building UI.
     pub ctx: Context,
     renderer: Option<Renderer>,
     screen_descriptor: ScreenDescriptor,

@@ -3,8 +3,10 @@ use crate::input_manager::InputManager;
 use crate::keyboard::KeyCode;
 use std::collections::HashMap;
 
+/// Snapshot of a named action's current state.
 #[derive(Debug, Clone, Copy)]
 pub struct ActionState {
+    /// The current axis value (0.0 = inactive, 1.0 = fully active, -1.0 = negative axis).
     pub value: f32,
     just_pressed: bool,
     just_released: bool,
@@ -13,17 +15,25 @@ pub struct ActionState {
 }
 
 impl ActionState {
+    /// Returns `true` on the first frame the action is active.
     pub fn just_pressed(&self) -> bool {
         self.just_pressed
     }
+    /// Returns `true` while the action is active (value != 0.0).
     pub fn pressed(&self) -> bool {
         self.value != 0.0
     }
+    /// Returns `true` on the first frame the action becomes inactive.
     pub fn just_released(&self) -> bool {
         self.just_released
     }
 }
 
+/// Maps named actions to physical input bindings.
+///
+/// Register bindings with [`bind_key`](Self::bind_key) or
+/// [`bind_axis`](Self::bind_axis), then call [`update`](Self::update)
+/// each frame and query with [`action`](Self::action).
 pub struct ActionMap {
     bindings: Vec<(String, Binding)>,
     states: HashMap<String, ActionState>,
@@ -36,6 +46,7 @@ impl Default for ActionMap {
 }
 
 impl ActionMap {
+    /// Create an empty action map with no bindings.
     pub fn new() -> Self {
         Self {
             bindings: Vec::new(),
@@ -43,23 +54,30 @@ impl ActionMap {
         }
     }
 
+    /// Bind a single key to an action name.
     pub fn bind_key(&mut self, action: &str, key: KeyCode) {
         self.bindings.push((action.to_string(), Binding::Key(key)));
     }
 
+    /// Bind two keys as a bipolar axis to an action name.
     pub fn bind_axis(&mut self, action: &str, positive: KeyCode, negative: KeyCode) {
         self.bindings
             .push((action.to_string(), Binding::Axis { positive, negative }));
     }
 
+    /// Register multiple bindings at once.
     pub fn bind_all(&mut self, bindings: impl IntoIterator<Item = (String, Binding)>) {
         self.bindings.extend(bindings);
     }
 
+    /// Return all registered bindings.
     pub fn bindings(&self) -> &[(String, Binding)] {
         &self.bindings
     }
 
+    /// Query the current state of a named action.
+    ///
+    /// Returns a default (inactive) state if the action has no bindings.
     pub fn action(&self, name: &str) -> ActionState {
         self.states.get(name).copied().unwrap_or(ActionState {
             value: 0.0,
@@ -69,6 +87,7 @@ impl ActionMap {
         })
     }
 
+    /// Recompute all action states from the current input.
     pub fn update(&mut self, input: &InputManager) {
         let mut values: HashMap<String, f32> = HashMap::new();
         for (name, binding) in &self.bindings {

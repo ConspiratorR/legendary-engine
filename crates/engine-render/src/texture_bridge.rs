@@ -78,7 +78,7 @@ enum LoadResult {
     },
 }
 
-/// Bridge between asset system Handle<Texture> and render system TextureStore.
+/// Bridge between asset system `Handle<Texture>` and render system TextureStore.
 /// Loads textures asynchronously and uploads to GPU on flush().
 pub struct TextureBridge {
     handle_to_id: HashMap<HandleId, u64>,
@@ -208,7 +208,7 @@ impl TextureBridge {
         &mut self.texture_store
     }
 
-    /// Scans the Registry for Handle<Texture> assets and automatically
+    /// Scans the Registry for `Handle<Texture>` assets and automatically
     /// uploads or requests loading for any that haven't been handled yet.
     /// Prefers in-memory pixel data (Texture.data) over disk reads.
     /// Call this before flush() in the render loop.

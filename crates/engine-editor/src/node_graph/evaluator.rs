@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
-use super::graph::{NodeGraph, Node, NodeType};
+use super::graph::{Node, NodeGraph, NodeType};
 use super::types::{NodeId, NodeValue};
 
 /// Result of evaluating a node graph.
@@ -181,7 +181,11 @@ fn gather_input_values(
         }
 
         // Use default value if no connection
-        let default = node.values.get(&i).cloned().unwrap_or_else(|| pin.default_value.clone());
+        let default = node
+            .values
+            .get(&i)
+            .cloned()
+            .unwrap_or_else(|| pin.default_value.clone());
         values.push(default);
     }
 
@@ -197,11 +201,19 @@ fn evaluate_node(
     match node.node_type {
         // ── Input nodes ──
         NodeType::ConstantFloat => {
-            let val = node.values.get(&0).cloned().unwrap_or(NodeValue::Float(0.0));
+            let val = node
+                .values
+                .get(&0)
+                .cloned()
+                .unwrap_or(NodeValue::Float(0.0));
             Ok(vec![val])
         }
         NodeType::ConstantVec2 => {
-            let val = node.values.get(&0).cloned().unwrap_or(NodeValue::Vec2([0.0, 0.0]));
+            let val = node
+                .values
+                .get(&0)
+                .cloned()
+                .unwrap_or(NodeValue::Vec2([0.0, 0.0]));
             Ok(vec![val])
         }
         NodeType::ConstantVec3 => {
@@ -229,7 +241,11 @@ fn evaluate_node(
             Ok(vec![val])
         }
         NodeType::ConstantBool => {
-            let val = node.values.get(&0).cloned().unwrap_or(NodeValue::Bool(false));
+            let val = node
+                .values
+                .get(&0)
+                .cloned()
+                .unwrap_or(NodeValue::Bool(false));
             Ok(vec![val])
         }
         NodeType::ConstantInt => {
@@ -392,10 +408,7 @@ fn evaluate_node(
 }
 
 fn get_float(inputs: &[NodeValue], index: usize) -> f32 {
-    inputs
-        .get(index)
-        .map(|v| v.to_float())
-        .unwrap_or(0.0)
+    inputs.get(index).map(|v| v.to_float()).unwrap_or(0.0)
 }
 
 fn get_vec3(inputs: &[NodeValue], index: usize) -> [f32; 3] {
@@ -418,8 +431,8 @@ fn get_vec4(inputs: &[NodeValue], index: usize) -> [f32; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::node_graph::nodes::create_node;
     use crate::node_graph::graph::NodeGraph;
+    use crate::node_graph::nodes::create_node;
     use crate::node_graph::types::PinType;
     use egui::Pos2;
 
@@ -511,7 +524,11 @@ mod tests {
         graph.connect(out2, in_b).unwrap();
 
         let result = evaluate(&graph, &EvalContext::default());
-        assert!(result.errors.is_empty(), "No errors expected: {:?}", result.errors);
+        assert!(
+            result.errors.is_empty(),
+            "No errors expected: {:?}",
+            result.errors
+        );
 
         let output = result.outputs.get(&(id3, 0)).unwrap();
         assert_eq!(*output, NodeValue::Float(8.0));

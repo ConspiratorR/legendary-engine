@@ -1,11 +1,15 @@
 use crate::skin::GuiSkin;
 use egui::{Align2, Color32, Id, LayerId, Order, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 
+/// Scoped layout helper for building GUIs with horizontal/vertical containers.
 pub struct GuiLayout<'a> {
+    /// The egui context.
     pub ctx: &'a egui::Context,
+    /// The skin for widget rendering.
     pub skin: &'a GuiSkin,
 }
 
+/// A horizontal layout scope that auto-advances the cursor horizontally.
 pub struct HorizontalScope<'a> {
     ctx: &'a egui::Context,
     skin: &'a GuiSkin,

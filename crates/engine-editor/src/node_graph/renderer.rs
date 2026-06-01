@@ -1,7 +1,7 @@
 use egui::{Color32, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use serde::{Deserialize, Serialize};
 
-use super::graph::{NodeGraph, Node};
+use super::graph::{Node, NodeGraph};
 use super::types::{Connection, NodeId, PinId, PinType};
 
 /// State for the node graph renderer.
@@ -28,13 +28,8 @@ pub struct NodeGraphRenderer {
 #[derive(Debug, Clone)]
 pub enum DragState {
     None,
-    MovingNode {
-        node_id: NodeId,
-        offset: Vec2,
-    },
-    Panning {
-        last_pos: Pos2,
-    },
+    MovingNode { node_id: NodeId, offset: Vec2 },
+    Panning { last_pos: Pos2 },
 }
 
 #[derive(Debug, Clone)]
@@ -97,7 +92,9 @@ impl NodeGraphRenderer {
         self.draw_connections(&painter, rect, graph);
 
         // Draw pending connection
-        if let (Some(from_pin), Some(mouse_pos)) = (self.pending_connection, self.pending_connection_pos) {
+        if let (Some(from_pin), Some(mouse_pos)) =
+            (self.pending_connection, self.pending_connection_pos)
+        {
             self.draw_pending_connection(&painter, from_pin, mouse_pos, graph);
         }
 
@@ -192,10 +189,7 @@ impl NodeGraphRenderer {
 
         // Title bar
         let title_h = 28.0 * self.zoom;
-        let title_rect = Rect::from_min_size(
-            screen_pos,
-            Vec2::new(w, title_h),
-        );
+        let title_rect = Rect::from_min_size(screen_pos, Vec2::new(w, title_h));
         let title_color = match node.node_type.category() {
             super::graph::NodeCategory::Input => Color32::from_rgb(46, 100, 150),
             super::graph::NodeCategory::Math => Color32::from_rgb(80, 80, 120),
@@ -308,7 +302,11 @@ impl NodeGraphRenderer {
         // Input pin position
         let to_pos = Pos2::new(
             to_screen.x,
-            to_screen.y + title_h + 4.0 * self.zoom + conn.input_pin.index as f32 * pin_h + pin_h / 2.0,
+            to_screen.y
+                + title_h
+                + 4.0 * self.zoom
+                + conn.input_pin.index as f32 * pin_h
+                + pin_h / 2.0,
         );
 
         // Bezier curve
@@ -433,17 +431,15 @@ impl NodeGraphRenderer {
                     if let Some(pin_id) = self.find_pin_at(graph_pos, graph) {
                         // Output pins have index >= inputs.len()
                         if let Some(node) = graph.nodes.get(&pin_id.node_id)
-                            && pin_id.index >= node.inputs.len() {
-                                self.pending_connection = Some(pin_id);
-                            }
+                            && pin_id.index >= node.inputs.len()
+                        {
+                            self.pending_connection = Some(pin_id);
+                        }
                     } else if let Some(node_id) = self.find_node_at(graph_pos, graph) {
                         let node = &graph.nodes[&node_id];
                         let node_pos = node.position.to_pos2();
                         let offset = graph_pos - node_pos;
-                        self.drag_state = DragState::MovingNode {
-                            node_id,
-                            offset,
-                        };
+                        self.drag_state = DragState::MovingNode { node_id, offset };
                         self.selected_node = Some(node_id);
                     }
                 }
@@ -481,10 +477,11 @@ impl NodeGraphRenderer {
 
         // Handle delete key
         if ui.input(|i| i.key_pressed(egui::Key::Delete))
-            && let Some(node_id) = self.selected_node {
-                graph.remove_node(node_id);
-                self.selected_node = None;
-            }
+            && let Some(node_id) = self.selected_node
+        {
+            graph.remove_node(node_id);
+            self.selected_node = None;
+        }
     }
 
     /// Find a node at the given graph position.
@@ -616,7 +613,11 @@ mod tests {
         let start = 0.0;
         let end = 100.0;
         let mid = cubic_bezier(start, start + 50.0, end - 50.0, end, 0.5);
-        assert!((mid - 50.0).abs() < 1.0, "midpoint should be ~50, got {}", mid);
+        assert!(
+            (mid - 50.0).abs() < 1.0,
+            "midpoint should be ~50, got {}",
+            mid
+        );
     }
 
     #[test]

@@ -263,6 +263,7 @@ impl Default for EditorCamera {
     }
 }
 
+use crate::animation_editor::AnimationEditorState;
 use crate::node_graph::NodeGraphState;
 use crate::resource_browser::ResourceBrowser;
 use crate::scene_serializer::SceneManager;
@@ -350,6 +351,7 @@ pub struct EditorState {
     pub scene_manager: SceneManager,
     pub status_message: Option<String>,
     pub node_graph_state: NodeGraphState,
+    pub animation_editor: AnimationEditorState,
 }
 
 impl Default for EditorState {
@@ -407,6 +409,7 @@ impl EditorState {
             scene_manager: SceneManager::new(),
             status_message: None,
             node_graph_state: NodeGraphState::default(),
+            animation_editor: AnimationEditorState::new(),
         }
     }
 
