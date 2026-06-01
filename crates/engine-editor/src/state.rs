@@ -264,7 +264,65 @@ impl Default for EditorCamera {
 }
 
 use crate::resource_browser::ResourceBrowser;
+use crate::scene_serializer::SceneManager;
 use std::collections::HashMap;
+
+/// Light property data for the editor inspector.
+#[derive(Debug, Clone)]
+pub struct LightData {
+    pub light_type: LightType,
+    pub color: [f32; 3],
+    pub intensity: f32,
+    pub range: f32,
+    pub direction: [f32; 3],
+    pub inner_angle: f32,
+    pub outer_angle: f32,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LightType {
+    Directional,
+    Point,
+    Spot,
+}
+
+impl Default for LightData {
+    fn default() -> Self {
+        Self {
+            light_type: LightType::Directional,
+            color: [1.0, 1.0, 1.0],
+            intensity: 1.0,
+            range: 10.0,
+            direction: [0.3, -1.0, -0.5],
+            inner_angle: 15.0,
+            outer_angle: 30.0,
+            enabled: true,
+        }
+    }
+}
+
+/// PBR material property data for the editor inspector.
+#[derive(Debug, Clone)]
+pub struct MaterialData {
+    pub base_color: [f32; 4],
+    pub metallic: f32,
+    pub roughness: f32,
+    pub ao: f32,
+    pub emissive: [f32; 3],
+}
+
+impl Default for MaterialData {
+    fn default() -> Self {
+        Self {
+            base_color: [0.8, 0.8, 0.8, 1.0],
+            metallic: 0.0,
+            roughness: 0.5,
+            ao: 1.0,
+            emissive: [0.0; 3],
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct EditorState {
@@ -285,7 +343,11 @@ pub struct EditorState {
     pub node_transforms: HashMap<u64, [f32; 9]>,
     pub node_render: HashMap<u64, (String, String, bool)>,
     pub node_physics: HashMap<u64, (String, String)>,
+    pub node_lights: HashMap<u64, LightData>,
+    pub node_materials: HashMap<u64, MaterialData>,
     pub resource_browser: ResourceBrowser,
+    pub scene_manager: SceneManager,
+    pub status_message: Option<String>,
 }
 
 impl Default for EditorState {
@@ -299,11 +361,26 @@ impl EditorState {
         let mut node_transforms = HashMap::new();
         let mut node_render = HashMap::new();
         let mut node_physics = HashMap::new();
+        let mut node_lights = HashMap::new();
+        let mut node_materials = HashMap::new();
         for i in 1..=6 {
             node_transforms.insert(i, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
             node_render.insert(i, ("Default".into(), "Cube".into(), true));
             node_physics.insert(i, ("Static".into(), "Box".into()));
         }
+        // Add a directional light to the Light node (id=6)
+        node_lights.insert(6, LightData::default());
+        // Add a material to Cube (id=4) and Sphere (id=5)
+        node_materials.insert(4, MaterialData::default());
+        node_materials.insert(
+            5,
+            MaterialData {
+                base_color: [0.2, 0.6, 1.0, 1.0],
+                metallic: 0.8,
+                roughness: 0.1,
+                ..Default::default()
+            },
+        );
         Self {
             selected_nodes: Vec::new(),
             active_menu: None,
@@ -322,7 +399,11 @@ impl EditorState {
             node_transforms,
             node_render,
             node_physics,
+            node_lights,
+            node_materials,
             resource_browser: ResourceBrowser::new(),
+            scene_manager: SceneManager::new(),
+            status_message: None,
         }
     }
 

@@ -756,6 +756,25 @@ impl<'a> Gui<'a> {
             Color32::from_rgb(232, 232, 236),
         );
     }
+
+    /// Draw a labeled slider (label on left, slider on right).
+    pub fn slider_f32(&mut self, rect: Rect, label: &str, value: &mut f32, min: f32, max: f32) {
+        let painter = self.ui.painter_at(rect);
+
+        painter.text(
+            egui::pos2(rect.left(), rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            label,
+            egui::FontId::proportional(12.0),
+            Color32::from_gray(152),
+        );
+
+        let slider_rect = Rect::from_min_size(
+            egui::pos2(rect.left() + 80.0, rect.top()),
+            egui::vec2(rect.width() - 80.0, rect.height()),
+        );
+        self.slider(slider_rect, value, min, max);
+    }
 }
 
 #[cfg(test)]
