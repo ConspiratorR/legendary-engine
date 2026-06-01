@@ -272,7 +272,7 @@ fn my_system(app: &App) {
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | **关键帧动画** | ✅ | Position/Rotation/Scale 关键帧、线性/步进/三次插值、AnimationPlayer |
-| **骨骼动画** | ⏳ | 骨骼绑定、蒙皮 |
+| **骨骼动画** | ✅ | Joint/Skeleton/Skin、SkeletalAnimationPlayer、骨骼混合、矩阵调色板 |
 | **状态机** | ✅ | AnimationStateMachine、条件过渡、混合过渡、参数系统 |
 | **IK/FK** | ⏳ | 反向/正向运动学 |
 
@@ -280,7 +280,7 @@ fn my_system(app: &App) {
 
 | 项目 | 状态 | 说明 |
 |------|------|------|
-| **CI/CD** | ⏳ | GitHub Actions 自动化构建和测试 |
+| **CI/CD** | ✅ | GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵) |
 | **跨平台构建** | ⏳ | Windows/macOS/Linux/Android |
 | **基准测试** | ⏳ | ECS、渲染、物理性能基准 |
 | **文档** | ⏳ | API 文档、使用手册、教程 |
