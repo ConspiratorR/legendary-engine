@@ -229,7 +229,7 @@ fn my_system(app: &App) {
 | **物理世界 step** | ✅ | 子步模拟、Baumgarte 约束求解、摩擦力/恢复力（[world.rs](crates/engine-physics/src/world.rs), 377 行, 6 测试） |
 | **接触点求解** | ⏳ | 约束求解、摩擦模型 |
 | **连续碰撞检测** | ⏳ | CCD 支持 |
-| **关节系统** | ⏳ | 铰链、球窝、弹簧约束 |
+| **关节系统** | ✅ | 铰链、球窝、弹簧约束、JointSolver 弹簧力求解 |
 | **ECS 集成** | ✅ | `PhysicsPlugin` 已注册 physics_step_system（[plugin.rs](crates/engine-physics/src/plugin.rs), 45 行） |
 
 ### 阶段 5 — 音频系统
@@ -239,7 +239,7 @@ fn my_system(app: &App) {
 | **基础播放** | ✅ | `AudioManager` 基于 rodio，支持文件解码和播放 |
 | **音量控制** | ✅ | 主音量、音效/音乐分轨音量、播放句柄控制 |
 | **3D 空间音频** | ⏳ | 距离衰减、方向、多普勒效应 |
-| **音频混音器** | ⏳ | 分组混音、音频总线 |
+| **音频混音器** | ✅ | 命名总线、独立音量/静音、默认 6 总线（master/sfx/music/ambient/voice/ui） |
 | **流式播放** | ⏳ | 背景音乐流式加载 |
 
 ### 阶段 6 — 网络
