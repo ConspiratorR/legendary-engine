@@ -71,11 +71,7 @@ impl MessageRouter {
 
     /// Send a message to all clients in a group.
     pub fn group_send(&mut self, from: u64, group: &str, message: NetworkMessage) {
-        self.send(
-            from,
-            RoutingTarget::Group(group.to_string()),
-            message,
-        );
+        self.send(from, RoutingTarget::Group(group.to_string()), message);
     }
 
     /// Process all pending messages and distribute to per-client queues.

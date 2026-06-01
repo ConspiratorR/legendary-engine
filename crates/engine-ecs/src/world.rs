@@ -147,6 +147,14 @@ impl World {
             .get_mut(&TypeId::of::<T>())?
             .downcast_mut::<T>()
     }
+
+    /// Remove a global resource, returning it if present.
+    ///
+    /// This is useful when a system needs exclusive access to a resource
+    /// while also accessing other resources from the same world.
+    pub fn remove_resource<T: 'static>(&mut self) -> Option<T> {
+        self.resources.remove(&TypeId::of::<T>())?.downcast::<T>().ok().map(|b| *b)
+    }
 }
 
 #[cfg(test)]

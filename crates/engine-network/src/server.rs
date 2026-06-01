@@ -182,8 +182,7 @@ impl GameServer {
     pub fn send_heartbeats(&mut self) {
         let client_ids = self.sessions.client_ids();
         for client_id in client_ids {
-            self.router
-                .unicast(0, client_id, NetworkMessage::Heartbeat);
+            self.router.unicast(0, client_id, NetworkMessage::Heartbeat);
         }
     }
 
@@ -297,30 +296,39 @@ mod tests {
     #[test]
     fn test_server_send_to() {
         let mut server = GameServer::new(ServerConfig::default());
-        server.send_to(1, NetworkMessage::Chat {
-            sender: "server".to_string(),
-            text: "private".to_string(),
-        });
+        server.send_to(
+            1,
+            NetworkMessage::Chat {
+                sender: "server".to_string(),
+                text: "private".to_string(),
+            },
+        );
         assert_eq!(server.router.pending_count(), 1);
     }
 
     #[test]
     fn test_server_send_to_group() {
         let mut server = GameServer::new(ServerConfig::default());
-        server.send_to_group("team1", NetworkMessage::Chat {
-            sender: "server".to_string(),
-            text: "team msg".to_string(),
-        });
+        server.send_to_group(
+            "team1",
+            NetworkMessage::Chat {
+                sender: "server".to_string(),
+                text: "team msg".to_string(),
+            },
+        );
         assert_eq!(server.router.pending_count(), 1);
     }
 
     #[test]
     fn test_server_broadcast_except() {
         let mut server = GameServer::new(ServerConfig::default());
-        server.broadcast_except(1, NetworkMessage::Chat {
-            sender: "player1".to_string(),
-            text: "hello".to_string(),
-        });
+        server.broadcast_except(
+            1,
+            NetworkMessage::Chat {
+                sender: "player1".to_string(),
+                text: "hello".to_string(),
+            },
+        );
         assert_eq!(server.router.pending_count(), 1);
     }
 }
