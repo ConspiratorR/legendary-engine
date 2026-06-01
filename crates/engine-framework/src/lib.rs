@@ -15,4 +15,4 @@ pub use plugin::FrameworkPlugin;
 pub use resource::FrameworkResource;
 pub use stack::StateStack;
 pub use state::GameState;
-pub use states::{GameOverState, MenuState, PauseState};
+pub use states::{GameOverState, MenuState, PauseState, TitleState};

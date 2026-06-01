@@ -7,6 +7,7 @@ pub enum GameStateAction {
     PushGameOver {
         score: i32,
     },
+    PushTitle,
     Pop,
     StartGame,
     Quit,
@@ -47,6 +48,7 @@ impl GameStateAction {
             Self::PushMenu => "PushMenu",
             Self::PushPause => "PushPause",
             Self::PushGameOver { .. } => "PushGameOver",
+            Self::PushTitle => "PushTitle",
             Self::Pop => "Pop",
             Self::StartGame => "StartGame",
             Self::Quit => "Quit",

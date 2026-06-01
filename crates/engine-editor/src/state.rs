@@ -263,6 +263,7 @@ impl Default for EditorCamera {
     }
 }
 
+use crate::node_graph::NodeGraphState;
 use crate::resource_browser::ResourceBrowser;
 use crate::scene_serializer::SceneManager;
 use std::collections::HashMap;
@@ -348,6 +349,7 @@ pub struct EditorState {
     pub resource_browser: ResourceBrowser,
     pub scene_manager: SceneManager,
     pub status_message: Option<String>,
+    pub node_graph_state: NodeGraphState,
 }
 
 impl Default for EditorState {
@@ -404,6 +406,7 @@ impl EditorState {
             resource_browser: ResourceBrowser::new(),
             scene_manager: SceneManager::new(),
             status_message: None,
+            node_graph_state: NodeGraphState::default(),
         }
     }
 

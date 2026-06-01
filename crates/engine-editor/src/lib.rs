@@ -4,6 +4,7 @@ pub mod gizmo;
 pub mod hierarchy;
 pub mod inspector;
 pub mod layout;
+pub mod node_graph;
 pub mod resource_browser;
 pub mod scene_bridge;
 pub mod scene_serializer;

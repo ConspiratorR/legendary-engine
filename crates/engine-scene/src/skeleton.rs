@@ -263,6 +263,11 @@ impl SkeletalAnimationPlayer {
         &self.local_pose
     }
 
+    /// Mutable access to per-joint local transforms (used by IK solvers).
+    pub fn local_pose_mut(&mut self) -> &mut [JointTransform] {
+        &mut self.local_pose
+    }
+
     /// Advance time and sample the clip, storing per-joint local transforms.
     pub fn advance(&mut self, delta: f32, clip: &SkeletalAnimationClip) {
         if !self.playing {

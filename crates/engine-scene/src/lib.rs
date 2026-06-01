@@ -2,6 +2,7 @@
 
 pub mod animation_state;
 pub mod hierarchy;
+pub mod ik;
 pub mod keyframe;
 pub mod node;
 pub mod scene_manager;
