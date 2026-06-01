@@ -265,7 +265,7 @@ fn my_system(app: &App) {
 | **消息序列化** | ✅ | 握手、实体更新、玩家输入、聊天、断线重连 |
 | **连接管理** | ✅ | 连接状态追踪、消息队列 |
 | **底层 Socket I/O** | ✅ | UdpSocket、TcpListener、TcpConnection、PacketQueue |
-| **服务器/客户端** | ⏳ | 游戏服务器、客户端连接 |
+| **服务器/客户端** | ✅ | GameServer/GameClient、会话管理、消息路由、ECS 集成 |
 | **权威服务器** | ⏳ | 状态同步、冲突解决 |
 
 ### 阶段 7 — 编辑器 & 工具链
