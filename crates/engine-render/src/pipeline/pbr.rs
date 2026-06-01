@@ -1,7 +1,39 @@
 use crate::resource::mesh::MeshVertex;
 
+/// Camera uniform data (80 bytes: 64 VP matrix + 16 camera position).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct CameraUniform {
+    pub view_proj: [[f32; 4]; 4],
+    pub camera_pos: [f32; 3],
+    pub _pad: f32,
+}
+
+/// Light uniform data (direction + color + ambient).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct LightUniform {
+    pub direction: [f32; 3],
+    pub _pad0: f32,
+    pub color: [f32; 3],
+    pub ambient: f32,
+}
+
+impl Default for LightUniform {
+    fn default() -> Self {
+        Self {
+            direction: [0.3, -1.0, -0.5],
+            _pad0: 0.0,
+            color: [1.0, 1.0, 1.0],
+            ambient: 0.15,
+        }
+    }
+}
+
 pub struct PbrPipeline {
     pub pipeline: wgpu::RenderPipeline,
+    pub camera_bind_group_layout: wgpu::BindGroupLayout,
+    pub light_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl PbrPipeline {
@@ -15,10 +47,48 @@ impl PbrPipeline {
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!("pbr.wgsl"))),
         });
 
+        // @group(0): camera uniform (VP matrix + camera pos)
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("pbr_camera_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        // @group(1): light uniform
+        let light_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("pbr_light_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        // Push constant range: model matrix (64 bytes)
+        let push_constant_ranges = [wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::VERTEX,
+            range: 0..64,
+        }];
+
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pbr_layout"),
-            bind_group_layouts: &[],
-            push_constant_ranges: &[],
+            bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
+            push_constant_ranges: &push_constant_ranges,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -42,6 +112,8 @@ impl PbrPipeline {
             }),
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
+                cull_mode: Some(wgpu::Face::Back),
+                front_face: wgpu::FrontFace::Ccw,
                 ..Default::default()
             },
             depth_stencil: Some(wgpu::DepthStencilState {
@@ -56,6 +128,10 @@ impl PbrPipeline {
             cache: None,
         });
 
-        Self { pipeline }
+        Self {
+            pipeline,
+            camera_bind_group_layout,
+            light_bind_group_layout,
+        }
     }
 }
