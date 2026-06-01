@@ -266,7 +266,7 @@ fn my_system(app: &App) {
 | **连接管理** | ✅ | 连接状态追踪、消息队列 |
 | **底层 Socket I/O** | ✅ | UdpSocket、TcpListener、TcpConnection、PacketQueue |
 | **服务器/客户端** | ✅ | GameServer/GameClient、会话管理、消息路由、ECS 集成 |
-| **权威服务器** | ⏳ | 状态同步、冲突解决 |
+| **权威服务器** | ✅ | 权威模式、状态快照同步、输入转发、延迟补偿 |
 
 ### 阶段 7 — 编辑器 & 工具链
 
