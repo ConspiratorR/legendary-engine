@@ -5,9 +5,12 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+crossbeam-channel = "0.5"
 engine-math = { path = "../engine-math" }
+flate2 = "1"
 gltf = "1.4"
 image = "0.25"
+notify = "7"
 rodio = "0.19"
 thiserror = "2"
 

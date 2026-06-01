@@ -10,6 +10,10 @@ pub trait Loader {
 }
 
 /// Convenience function to store an asset in a registry at the given path.
-pub fn load_asset<T: Asset>(registry: &mut Registry, path: &str, asset: T) {
+pub fn load_asset<T: Asset + Send + Sync + Clone + 'static>(
+    registry: &mut Registry,
+    path: &str,
+    asset: T,
+) {
     registry.store(path, asset);
 }
