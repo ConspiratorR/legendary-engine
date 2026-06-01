@@ -1,10 +1,10 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use engine_core::transform::Transform;
 use engine_ecs::world::World;
+use engine_math::{EulerRot, Quat, Vec3};
 use engine_physics::body::RigidBody;
 use engine_physics::collider::{Collider, check_obb_obb, check_sphere_sphere};
 use engine_physics::world::PhysicsWorld;
-use engine_math::{EulerRot, Quat, Vec3};
 
 fn bench_sphere_sphere_collision(c: &mut Criterion) {
     let mut group = c.benchmark_group("sphere_sphere_collision");

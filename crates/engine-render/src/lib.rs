@@ -10,6 +10,7 @@ pub mod ibl;
 pub mod indirect;
 pub mod light;
 pub mod particle;
+pub mod particle3d;
 pub mod pipeline;
 pub mod renderer;
 pub mod resource;

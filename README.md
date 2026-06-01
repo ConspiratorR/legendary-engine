@@ -217,7 +217,7 @@ fn my_system(app: &App) {
 | **模型加载** | ✅ | glTF/GLB 几何体加载（顶点、法线、UV、索引） |
 | **环境贴图 / IBL** | ✅ | IBL 探针、GGX 重要性采样、BRDF LUT、IblUniform |
 | **延迟渲染** | ✅ | G-Buffer（albedo/normal/position/material/depth）、几何/光照双 Pass |
-| **3D 粒子** | ⏳ | GPU 粒子系统 |
+| **3D 粒子** | ✅ | Particle3DSystem（Sphere/Cone/Box 发射器、颜色/大小曲线、爆发发射） |
 
 ### 阶段 4 — 物理引擎
 
@@ -248,7 +248,7 @@ fn my_system(app: &App) {
 |------|------|------|
 | **消息序列化** | ✅ | 握手、实体更新、玩家输入、聊天、断线重连 |
 | **连接管理** | ✅ | 连接状态追踪、消息队列 |
-| **底层 Socket I/O** | ⏳ | TCP/UDP 实际通信 |
+| **底层 Socket I/O** | ✅ | UdpSocket、TcpListener、TcpConnection、PacketQueue |
 | **服务器/客户端** | ⏳ | 游戏服务器、客户端连接 |
 | **权威服务器** | ⏳ | 状态同步、冲突解决 |
 
