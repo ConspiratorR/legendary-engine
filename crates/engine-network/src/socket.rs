@@ -219,6 +219,11 @@ impl TcpConnection {
         let _ = self.stream.set_read_timeout(Some(duration));
         let _ = self.stream.set_write_timeout(Some(duration));
     }
+
+    /// Set the connection to non-blocking mode.
+    pub fn set_nonblocking(&self, nonblocking: bool) {
+        let _ = self.stream.set_nonblocking(nonblocking);
+    }
 }
 
 #[cfg(test)]
