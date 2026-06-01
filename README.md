@@ -215,7 +215,7 @@ fn my_system(app: &App) {
 | **光照** | ✅ | 方向光、点光源、聚光灯（ECS 组件 + 多光源 Shader） |
 | **阴影** | ✅ | ShadowPass、级联阴影(CSM)、深度纹理、ShadowUniform |
 | **模型加载** | ✅ | glTF/GLB 几何体加载（顶点、法线、UV、索引） |
-| **环境贴图 / IBL** | ⏳ | HDR 环境贴图、预过滤、LUT 生成 |
+| **环境贴图 / IBL** | ✅ | IBL 探针、GGX 重要性采样、BRDF LUT、IblUniform |
 | **延迟渲染** | ⏳ | G-Buffer、屏幕空间处理 |
 | **3D 粒子** | ⏳ | GPU 粒子系统 |
 
@@ -282,7 +282,7 @@ fn my_system(app: &App) {
 |------|------|------|
 | **CI/CD** | ✅ | GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵) |
 | **跨平台构建** | ⏳ | Windows/macOS/Linux/Android |
-| **基准测试** | ⏳ | ECS、渲染、物理性能基准 |
+| **基准测试** | ✅ | Criterion (ECS 11 项 + Physics 6 项) |
 | **文档** | ⏳ | API 文档、使用手册、教程 |
 | **示例游戏** | ⏳ | 完整可运行示例 |
 

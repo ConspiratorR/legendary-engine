@@ -5,6 +5,7 @@ pub mod camera;
 pub mod camera_system;
 pub mod frustum;
 pub mod graph;
+pub mod ibl;
 pub mod indirect;
 pub mod light;
 pub mod particle;

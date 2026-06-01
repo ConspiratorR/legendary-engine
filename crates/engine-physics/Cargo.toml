@@ -8,3 +8,10 @@ license.workspace = true
 engine-math = { path = "../engine-math" }
 engine-core = { path = "../engine-core" }
 engine-ecs = { path = "../engine-ecs" }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "physics_benchmarks"
+harness = false
