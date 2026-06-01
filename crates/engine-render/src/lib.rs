@@ -3,6 +3,7 @@
 pub mod animation;
 pub mod camera;
 pub mod camera_system;
+pub mod deferred;
 pub mod frustum;
 pub mod graph;
 pub mod ibl;

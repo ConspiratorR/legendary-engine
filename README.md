@@ -216,7 +216,7 @@ fn my_system(app: &App) {
 | **阴影** | ✅ | ShadowPass、级联阴影(CSM)、深度纹理、ShadowUniform |
 | **模型加载** | ✅ | glTF/GLB 几何体加载（顶点、法线、UV、索引） |
 | **环境贴图 / IBL** | ✅ | IBL 探针、GGX 重要性采样、BRDF LUT、IblUniform |
-| **延迟渲染** | ⏳ | G-Buffer、屏幕空间处理 |
+| **延迟渲染** | ✅ | G-Buffer（albedo/normal/position/material/depth）、几何/光照双 Pass |
 | **3D 粒子** | ⏳ | GPU 粒子系统 |
 
 ### 阶段 4 — 物理引擎
@@ -284,7 +284,7 @@ fn my_system(app: &App) {
 | **跨平台构建** | ⏳ | Windows/macOS/Linux/Android |
 | **基准测试** | ✅ | Criterion (ECS 11 项 + Physics 6 项) |
 | **文档** | ⏳ | API 文档、使用手册、教程 |
-| **示例游戏** | ⏳ | 完整可运行示例 |
+| **示例游戏** | ✅ | game_flow_demo — 完整游戏流程（菜单→游戏→暂停→结束）+ ECS/物理/渲染/音频演示 |
 
 ## 贡献
 
