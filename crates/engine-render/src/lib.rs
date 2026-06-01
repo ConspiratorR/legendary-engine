@@ -6,6 +6,7 @@ pub mod camera_system;
 pub mod frustum;
 pub mod graph;
 pub mod indirect;
+pub mod light;
 pub mod particle;
 pub mod pipeline;
 pub mod renderer;

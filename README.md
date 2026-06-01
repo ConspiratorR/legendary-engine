@@ -203,7 +203,7 @@ fn my_system(app: &App) {
 | **State Stack** | ✅ | 基础状态栈已完成 |
 | **Menu / Title 状态** | ⏳ | 集成 UI 的菜单系统 |
 | **Pause / GameOver 状态** | ⏳ | 游戏流程控制 |
-| **Save/Load** | ⏳ | 序列化游戏状态 |
+| **Save/Load** | ✅ | 槽位管理、JSON 序列化、分类键值存储 |
 
 ### 阶段 3 — 3D 渲染管线
 
@@ -211,8 +211,8 @@ fn my_system(app: &App) {
 |------|------|------|
 | **PBR 管线** | ✅ | Camera UBO + Model Push Constant + Blinn-Phong 光照 |
 | **Mesh 渲染** | ✅ | 顶点/索引缓冲、Camera UBO 集成、深度测试 |
-| **材质系统** | ⏳ | 基础材质已定义，需完善 PBR 参数和纹理绑定 |
-| **光照** | ⏳ | 方向光、点光源、聚光灯 |
+| **材质系统** | ✅ | PBR 材质组件（base_color, metallic, roughness, ao, emissive）、GPU Uniform |
+| **光照** | ✅ | 方向光、点光源、聚光灯（ECS 组件 + 多光源 Shader） |
 | **阴影** | ⏳ | Shadow mapping |
 | **模型加载** | ✅ | glTF/GLB 几何体加载（顶点、法线、UV、索引） |
 | **环境贴图 / IBL** | ⏳ | HDR 环境贴图、预过滤、LUT 生成 |

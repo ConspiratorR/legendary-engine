@@ -9,7 +9,7 @@ pub struct CameraUniform {
     pub _pad: f32,
 }
 
-/// Light uniform data (direction + color + ambient).
+/// Legacy single-light uniform (kept for backward compatibility).
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LightUniform {
@@ -30,11 +30,16 @@ impl Default for LightUniform {
     }
 }
 
+/// PBR pipeline with camera, lighting, and material bind groups.
 pub struct PbrPipeline {
     pub pipeline: wgpu::RenderPipeline,
     pub camera_bind_group_layout: wgpu::BindGroupLayout,
     pub light_bind_group_layout: wgpu::BindGroupLayout,
+    pub material_bind_group_layout: wgpu::BindGroupLayout,
 }
+
+/// Push constant data for the PBR pipeline (model matrix).
+pub const MODEL_PUSH_CONSTANT_SIZE: u32 = 64;
 
 impl PbrPipeline {
     pub fn new(
@@ -63,7 +68,7 @@ impl PbrPipeline {
                 }],
             });
 
-        // @group(1): light uniform
+        // @group(1): lighting uniform (multi-light packed data)
         let light_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("pbr_light_bind_group_layout"),
@@ -79,15 +84,35 @@ impl PbrPipeline {
                 }],
             });
 
+        // @group(2): material uniform (base_color, metallic, roughness, ao, emissive)
+        let material_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("pbr_material_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
         // Push constant range: model matrix (64 bytes)
         let push_constant_ranges = [wgpu::PushConstantRange {
             stages: wgpu::ShaderStages::VERTEX,
-            range: 0..64,
+            range: 0..MODEL_PUSH_CONSTANT_SIZE,
         }];
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pbr_layout"),
-            bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
+            bind_group_layouts: &[
+                &camera_bind_group_layout,
+                &light_bind_group_layout,
+                &material_bind_group_layout,
+            ],
             push_constant_ranges: &push_constant_ranges,
         });
 
@@ -132,6 +157,7 @@ impl PbrPipeline {
             pipeline,
             camera_bind_group_layout,
             light_bind_group_layout,
+            material_bind_group_layout,
         }
     }
 }
