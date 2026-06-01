@@ -209,17 +209,47 @@ impl TextureBridge {
     }
 
     /// Scans the Registry for Handle<Texture> assets and automatically
-    /// requests loading for any that haven't been requested yet.
+    /// uploads or requests loading for any that haven't been handled yet.
+    /// Prefers in-memory pixel data (Texture.data) over disk reads.
     /// Call this before flush() in the render loop.
-    pub fn auto_sync(&mut self, registry: &engine_asset::registry::Registry) {
+    pub fn auto_sync(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        registry: &engine_asset::registry::Registry,
+    ) {
         let handles = registry.get_handles_of_type::<Texture>();
         for handle in handles {
             let handle_id = HandleId::from_handle(handle);
-            if !self.states.contains_key(&handle_id) {
-                let path = &handle.get().asset_path;
-                if !path.as_os_str().is_empty() {
-                    self.request(handle, &path.to_string_lossy());
+            if self.states.contains_key(&handle_id) {
+                continue;
+            }
+            let tex = handle.get();
+            if !tex.data.is_empty() && tex.width > 0 && tex.height > 0 {
+                match self
+                    .texture_store
+                    .load_from_bytes(device, queue, &tex.data, tex.width, tex.height)
+                {
+                    Ok(texture_id) => {
+                        self.handle_to_id.insert(handle_id, texture_id);
+                        self.states.insert(handle_id, LoadState::Ready(texture_id));
+                        self.on_loaded.emit(&TextureLoaded {
+                            handle_id,
+                            result: Ok(texture_id),
+                        });
+                    }
+                    Err(e) => {
+                        let msg = e.to_string();
+                        self.states
+                            .insert(handle_id, LoadState::Failed(msg.clone()));
+                        self.on_loaded.emit(&TextureLoaded {
+                            handle_id,
+                            result: Err(msg),
+                        });
+                    }
                 }
+            } else if !tex.asset_path.as_os_str().is_empty() {
+                self.request(handle, &tex.asset_path.to_string_lossy());
             }
         }
     }
@@ -293,6 +323,53 @@ mod tests {
         };
         let handle = Handle::new(tex);
         assert_eq!(bridge.resolve(&handle), 0);
+    }
+
+    #[test]
+    fn test_auto_sync_uploads_in_memory_data() {
+        let (device, queue) = test_device();
+        let layout = test_layout(&device);
+        let mut bridge = TextureBridge::new(&device, &queue, layout);
+        let mut registry = engine_asset::registry::Registry::new();
+
+        let tex = Texture {
+            id: "inline_tex".into(),
+            width: 1,
+            height: 1,
+            data: vec![255, 0, 0, 255],
+            channels: 4,
+            asset_path: PathBuf::new(),
+        };
+        let handle = registry.store("inline_tex", tex);
+
+        bridge.auto_sync(&device, &queue, &registry);
+
+        let id = bridge.resolve(&handle);
+        assert_ne!(id, 0, "should have uploaded to GPU, not fallback");
+        assert!(matches!(bridge.state(&handle), Some(LoadState::Ready(_))));
+    }
+
+    #[test]
+    fn test_auto_sync_skips_empty_data_falls_back_to_disk() {
+        let (device, queue) = test_device();
+        let layout = test_layout(&device);
+        let mut bridge = TextureBridge::new(&device, &queue, layout);
+        let mut registry = engine_asset::registry::Registry::new();
+
+        let tex = Texture {
+            id: "disk_tex".into(),
+            width: 0,
+            height: 0,
+            data: vec![],
+            channels: 4,
+            asset_path: PathBuf::from("nonexistent.png"),
+        };
+        let handle = registry.store("disk_tex", tex);
+
+        bridge.auto_sync(&device, &queue, &registry);
+
+        assert_eq!(bridge.resolve(&handle), 0, "should still be fallback");
+        assert!(matches!(bridge.state(&handle), Some(LoadState::Pending)));
     }
 
     #[test]

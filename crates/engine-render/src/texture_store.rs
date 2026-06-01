@@ -209,6 +209,21 @@ impl TextureStore {
         Ok(id)
     }
 
+    pub fn load_from_image_data(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        image_data: &engine_asset::format::image::ImageData,
+    ) -> Result<u64, TextureLoadError> {
+        self.load_from_bytes(
+            device,
+            queue,
+            &image_data.pixels,
+            image_data.width,
+            image_data.height,
+        )
+    }
+
     pub fn get_bind_group(&self, id: u64) -> &wgpu::BindGroup {
         self.bind_groups
             .get(&id)
@@ -397,5 +412,25 @@ mod tests {
         let mut store = TextureStore::new(&device, &queue, layout);
         store.unload(0);
         assert!(store.contains(0));
+    }
+
+    #[test]
+    fn test_load_from_image_data() {
+        let (device, queue) = test_device();
+        let layout = test_layout(&device);
+        let mut store = TextureStore::new(&device, &queue, layout);
+        let image_data = engine_asset::format::image::ImageData {
+            pixels: vec![
+                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255,
+            ],
+            width: 2,
+            height: 2,
+            format: engine_asset::format::image::PixelFormat::Rgba8,
+        };
+        let id = store
+            .load_from_image_data(&device, &queue, &image_data)
+            .unwrap();
+        assert!(store.contains(id));
+        assert_eq!(store.get_size(id), (2, 2));
     }
 }

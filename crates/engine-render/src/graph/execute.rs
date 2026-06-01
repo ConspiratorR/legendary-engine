@@ -69,13 +69,15 @@ impl RenderGraph {
                 buffers: self
                     .buffers
                     .iter()
-                    .map(|b| b.as_ref().and_then(|n| n.buffer.as_ref()))
+                    .map(|b| b.as_ref().and_then(|n| n.get_buffer()))
                     .collect(),
             };
 
             let mut pass_ctx = PassContext {
                 pass: rpass,
                 resources: &resources,
+                device: ctx.device,
+                queue: ctx.queue,
             };
 
             (execute_fn)(&mut pass_ctx);

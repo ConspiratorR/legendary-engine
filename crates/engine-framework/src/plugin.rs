@@ -6,8 +6,8 @@ pub struct FrameworkPlugin;
 
 impl Plugin for FrameworkPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.insert_resource(StateStack::new());
-        app.insert_resource(FrameworkResource::new());
+        app.resources_mut().insert(StateStack::new());
+        app.resources_mut().insert(FrameworkResource::new());
         app.add_pre_update_hook(Box::new(|app: &mut App| {
             let App {
                 world, resources, ..

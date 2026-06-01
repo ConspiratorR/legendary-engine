@@ -40,6 +40,8 @@ impl RenderPassNode {
 pub struct PassContext<'a> {
     pub pass: wgpu::RenderPass<'a>,
     pub resources: &'a RenderGraphResources<'a>,
+    pub device: &'a wgpu::Device,
+    pub queue: &'a wgpu::Queue,
 }
 
 pub struct RenderGraphResources<'a> {

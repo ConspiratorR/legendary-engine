@@ -125,7 +125,7 @@ impl Renderer {
         let mut sorted: Vec<&Camera> = cameras.to_vec();
         sorted.sort_by_key(|c| c.priority);
 
-        bridge.auto_sync(registry);
+        bridge.auto_sync(&self.device, &self.queue, registry);
         bridge.flush(&self.device, &self.queue);
 
         let sprite_draws: Vec<SpriteDraw> = all_sprites
@@ -161,6 +161,22 @@ impl Renderer {
 
         self.sprite_renderer.begin_frame();
 
+        // 将精灵缓冲区注册到 Render Graph
+        self.graph.reset();
+        let buffers = self.sprite_renderer.get_buffers();
+        let _vertex_handle = self
+            .graph
+            .import_buffer_ref("sprite_vertex", buffers.vertex_buffer);
+        let _index_handle = self
+            .graph
+            .import_buffer_ref("sprite_index", buffers.index_buffer);
+        let _instance_handle = self
+            .graph
+            .import_buffer_ref("sprite_instance", buffers.instance_buffer);
+        let _indirect_handle = self
+            .graph
+            .import_buffer_ref("sprite_indirect", buffers.indirect_buffer);
+
         for camera in &sorted {
             if !camera.is_active {
                 continue;
@@ -187,24 +203,8 @@ impl Renderer {
                 batch.update_indirect_cmd();
             }
 
-            let mut vertex_offset: usize = 0;
-            let mut instance_offset: usize = 0;
-            let mut indirect_offset: usize = 0;
-
-            for batch in &batches {
-                self.sprite_renderer.upload_batch(
-                    &self.queue,
-                    batch,
-                    vertex_offset,
-                    instance_offset,
-                    indirect_offset,
-                );
-                vertex_offset += batch.vertices.len()
-                    * std::mem::size_of::<crate::pipeline::sprite::SpriteVertex>();
-                instance_offset +=
-                    batch.instance_data.len() * std::mem::size_of::<engine_math::Mat4>();
-                indirect_offset += std::mem::size_of::<crate::indirect::DrawIndexedIndirectArgs>();
-            }
+            // 合并上传：4 次 write_buffer 替代 4N 次
+            let batch_draw_infos = self.sprite_renderer.upload_batches(&self.queue, &batches);
 
             let matrix_data = vp_matrix.to_cols_array();
             self.queue
@@ -220,7 +220,6 @@ impl Renderer {
 
             let camera_bg = &self.camera_bind_group;
             let pipeline = &self.sprite_pipeline.pipeline;
-            let buffers = self.sprite_renderer.get_buffers();
 
             let clear = camera.clear_color.unwrap_or(crate::camera::Color::BLACK);
             {
@@ -245,17 +244,22 @@ impl Renderer {
                 pass.set_pipeline(pipeline);
                 pass.set_bind_group(0, camera_bg, &[]);
 
-                pass.set_vertex_buffer(0, buffers.vertex_buffer.slice(..));
-                pass.set_vertex_buffer(1, buffers.instance_buffer.slice(..));
-                pass.set_index_buffer(buffers.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                // 从图注册的缓冲区绑定顶点/索引/实例/间接缓冲
+                let graph_buffers = self.graph.get_buffers();
+                let vb = graph_buffers.first().copied().flatten();
+                let ib = graph_buffers.get(1).copied().flatten();
+                let instb = graph_buffers.get(2).copied().flatten();
+                let indb = graph_buffers.get(3).copied().flatten();
+                if let (Some(vb), Some(ib), Some(instb), Some(indb)) = (vb, ib, instb, indb) {
+                    pass.set_vertex_buffer(0, vb.slice(..));
+                    pass.set_vertex_buffer(1, instb.slice(..));
+                    pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
 
-                let mut indirect_offset: u64 = 0;
-                for batch in &batches {
-                    let bind_group = bridge.texture_store().get_bind_group(batch.texture_id);
-                    pass.set_bind_group(1, bind_group, &[]);
-                    pass.draw_indexed_indirect(buffers.indirect_buffer, indirect_offset);
-                    indirect_offset +=
-                        std::mem::size_of::<crate::indirect::DrawIndexedIndirectArgs>() as u64;
+                    for (batch, info) in batches.iter().zip(batch_draw_infos.iter()) {
+                        let bind_group = bridge.texture_store().get_bind_group(batch.texture_id);
+                        pass.set_bind_group(1, bind_group, &[]);
+                        pass.draw_indexed_indirect(indb, info.indirect_offset);
+                    }
                 }
             }
         }

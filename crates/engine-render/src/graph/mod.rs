@@ -5,7 +5,7 @@ pub mod pass;
 pub mod texture;
 
 pub use buffer::BufferDesc;
-pub use texture::{TextureDesc, TextureHandle};
+pub use texture::{BufferHandle, TextureDesc, TextureHandle};
 
 use std::collections::HashMap;
 
@@ -69,6 +69,28 @@ impl RenderGraph {
         id
     }
 
+    pub fn import_buffer(&mut self, name: &str, buffer: wgpu::Buffer) -> texture::BufferHandle {
+        let id = texture::BufferHandle(self.buffers.len() as u32);
+        self.buffer_map.insert(name.to_string(), id);
+        self.buffers
+            .push(Some(buffer::BufferNode::imported(buffer)));
+        id
+    }
+
+    /// 导入外部缓冲区引用（不转移所有权）
+    /// 调用者需确保缓冲区在图执行期间有效
+    pub fn import_buffer_ref(
+        &mut self,
+        name: &str,
+        buffer: &wgpu::Buffer,
+    ) -> texture::BufferHandle {
+        let id = texture::BufferHandle(self.buffers.len() as u32);
+        self.buffer_map.insert(name.to_string(), id);
+        self.buffers
+            .push(Some(buffer::BufferNode::imported_ref(buffer)));
+        id
+    }
+
     pub fn add_render_pass<'a>(&mut self, desc: pass::RenderPassDesc<'a>) -> pass::ExecuteFn<'a> {
         let meta = pass::PassMetadata {
             label: desc.label,
@@ -83,12 +105,21 @@ impl RenderGraph {
         self.compiled
     }
 
+    /// 获取图管理的缓冲区引用（按注册顺序）
+    pub fn get_buffers(&self) -> Vec<Option<&wgpu::Buffer>> {
+        self.buffers
+            .iter()
+            .map(|b| b.as_ref().and_then(|n| n.get_buffer()))
+            .collect()
+    }
+
     pub fn reset(&mut self) {
         self.textures
             .retain(|t| t.as_ref().is_some_and(|n| n.import));
         self.buffers
             .retain(|b| b.as_ref().is_some_and(|n| n.import));
         self.passes.clear();
+        self.compiled = false;
     }
 }
 

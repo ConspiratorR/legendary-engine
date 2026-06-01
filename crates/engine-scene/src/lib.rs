@@ -1,5 +1,6 @@
 //! Scene graph with ECS-backed hierarchy and transforms.
 
+pub mod animation_state;
 pub mod hierarchy;
 pub mod keyframe;
 pub mod node;

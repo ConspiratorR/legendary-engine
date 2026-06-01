@@ -1,6 +1,7 @@
 use crate::state::{EditorState, ToolType};
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::{Gui, GuiSkin};
+use std::path::PathBuf;
 
 pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
     let screen_rect = ctx.screen_rect();
@@ -263,11 +264,44 @@ fn draw_dropdown_menu(
         if response.clicked() {
             // Handle menu item actions
             match menu_idx {
+                0 => {
+                    // 文件菜单
+                    match i {
+                        2 => {
+                            // 保存
+                            save_scene(state);
+                        }
+                        3 => {
+                            // 另存为
+                            save_scene_as(state);
+                        }
+                        _ => {}
+                    }
+                }
                 2 => {
                     // 视图菜单
                     match i {
                         0 => state.show_left_panel = !state.show_left_panel,
                         1 => state.show_right_panel = !state.show_right_panel,
+                        _ => {}
+                    }
+                }
+                3 => {
+                    // 场景菜单
+                    match i {
+                        0 => {
+                            // 新建场景
+                            state.scene_manager.create_scene("Untitled".to_string());
+                            state.status_message = Some("New scene created".to_string());
+                        }
+                        1 => {
+                            // 保存场景
+                            save_scene(state);
+                        }
+                        2 => {
+                            // 加载场景
+                            load_scene(state);
+                        }
                         _ => {}
                     }
                 }
@@ -564,12 +598,19 @@ fn draw_status_bar(state: &EditorState, gui: &mut Gui, rect: Rect, h_scale: f32,
         Color32::from_rgb(46, 213, 115),
     );
 
+    let default_status = format!("对象: {}", state.scene_tree.nodes.len());
+    let status_text = state.status_message.as_deref().unwrap_or(&default_status);
+
     painter.text(
         egui::pos2(rect.left() + 80.0 * w_scale, rect.center().y),
         egui::Align2::LEFT_CENTER,
-        format!("对象: {}", state.scene_tree.nodes.len()),
+        status_text,
         FontId::proportional(status_font),
-        Color32::from_gray(90),
+        if state.status_message.is_some() {
+            Color32::from_rgb(0, 212, 170)
+        } else {
+            Color32::from_gray(90)
+        },
     );
 
     painter.text(
@@ -591,4 +632,70 @@ fn draw_status_bar(state: &EditorState, gui: &mut Gui, rect: Rect, h_scale: f32,
         FontId::proportional(status_font),
         Color32::from_gray(90),
     );
+}
+
+const DEFAULT_SCENE_FILE: &str = "scenes/untitled.json";
+
+fn save_scene(state: &mut EditorState) {
+    if state.scene_manager.current_scene().is_none() {
+        state.scene_manager.create_scene("Untitled".to_string());
+    }
+
+    let path = state
+        .scene_manager
+        .scene_path()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_SCENE_FILE));
+
+    match state.scene_manager.save_scene(&path) {
+        Ok(()) => {
+            state.status_message = Some(format!("Scene saved: {}", path.display()));
+        }
+        Err(e) => {
+            state.status_message = Some(format!("Save failed: {}", e));
+        }
+    }
+}
+
+fn save_scene_as(state: &mut EditorState) {
+    if state.scene_manager.current_scene().is_none() {
+        state.scene_manager.create_scene("Untitled".to_string());
+    }
+
+    let path = PathBuf::from(DEFAULT_SCENE_FILE);
+    match state.scene_manager.save_scene(&path) {
+        Ok(()) => {
+            state.status_message = Some(format!("Scene saved as: {}", path.display()));
+        }
+        Err(e) => {
+            state.status_message = Some(format!("Save failed: {}", e));
+        }
+    }
+}
+
+fn load_scene(state: &mut EditorState) {
+    let path = state
+        .scene_manager
+        .scene_path()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_SCENE_FILE));
+
+    if !path.exists() {
+        state.status_message = Some(format!("Scene file not found: {}", path.display()));
+        return;
+    }
+
+    match state.scene_manager.load_scene(&path) {
+        Ok(()) => {
+            let name = state
+                .scene_manager
+                .current_scene()
+                .map(|s| s.name.clone())
+                .unwrap_or_default();
+            state.status_message = Some(format!("Scene loaded: {}", name));
+        }
+        Err(e) => {
+            state.status_message = Some(format!("Load failed: {}", e));
+        }
+    }
 }

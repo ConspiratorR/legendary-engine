@@ -1,0 +1,22 @@
+{
+  "project_id": "43614e35-038c-44b9-9472-b0e81249b746",
+  "project_title": "RustEngine",
+  "resources": [
+    {
+      "id": "88cfb215-330b-4132-9c15-43dac9c1b292",
+      "resource_type": "local_directory",
+      "resource_ref": {
+        "label": "RustEngine",
+        "daemon_id": "019e7834-e3c1-7456-a215-7eafd0689ab6",
+        "local_path": "E:\\Documents\\Zed\\RustEngine"
+      }
+    },
+    {
+      "id": "fdf90e83-00b3-43b0-862f-ceb448412c5b",
+      "resource_type": "github_repo",
+      "resource_ref": {
+        "url": "https://github.com/ConspiratorR/legendary-engine.git"
+      }
+    }
+  ]
+}

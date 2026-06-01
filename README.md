@@ -228,7 +228,7 @@ fn my_system(app: &App) {
 | **碰撞检测** | ✅ | Sphere/AABB/OBB/Capsule 全组合碰撞（SAT 算法）、8 种碰撞对 |
 | **物理世界 step** | ✅ | 子步模拟、Baumgarte 约束求解、摩擦力/恢复力（[world.rs](crates/engine-physics/src/world.rs), 377 行, 6 测试） |
 | **接触点求解** | ✅ | ContactSolver（暖启动、累积冲量、Coulomb 摩擦约束） |
-| **连续碰撞检测** | ⏳ | CCD 支持 |
+| **连续碰撞检测** | ✅ | Sphere-Sphere/Sphere-AABB 扫掠测试、CcdBody 组件 |
 | **关节系统** | ✅ | 铰链、球窝、弹簧约束、JointSolver 弹簧力求解 |
 | **ECS 集成** | ✅ | `PhysicsPlugin` 已注册 physics_step_system（[plugin.rs](crates/engine-physics/src/plugin.rs), 45 行） |
 
@@ -273,7 +273,7 @@ fn my_system(app: &App) {
 |------|------|------|
 | **关键帧动画** | ✅ | Position/Rotation/Scale 关键帧、线性/步进/三次插值、AnimationPlayer |
 | **骨骼动画** | ⏳ | 骨骼绑定、蒙皮 |
-| **状态机** | ⏳ | 动画状态机、过渡、混合 |
+| **状态机** | ✅ | AnimationStateMachine、条件过渡、混合过渡、参数系统 |
 | **IK/FK** | ⏳ | 反向/正向运动学 |
 
 ### 阶段 9 — 发布 & 生态

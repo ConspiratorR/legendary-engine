@@ -16,6 +16,11 @@ pub enum PixelFormat {
 }
 
 impl ImageData {
+    pub fn load(path: &str) -> Result<Self, String> {
+        let img = load_image(path)?;
+        Ok(Self::from_dynamic(&img))
+    }
+
     pub fn from_dynamic(img: &DynamicImage) -> Self {
         let rgba = img.to_rgba8();
         let (w, h) = rgba.dimensions();

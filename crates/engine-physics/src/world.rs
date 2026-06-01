@@ -3,7 +3,7 @@ use crate::body::{BodyType, RigidBody};
 use crate::collider::{Collider, CollisionInfo, check_collision};
 use engine_core::transform::Transform;
 use engine_ecs::world::World;
-use engine_math::Vec3;
+use engine_math::{EulerRot, Quat, Vec3};
 
 /// Physics world configuration.
 #[derive(Debug, Clone)]
@@ -133,10 +133,25 @@ impl PhysicsWorld {
                     continue;
                 }
 
+                let rot_a = Quat::from_euler(
+                    EulerRot::XYZ,
+                    transform_a.rotation.x,
+                    transform_a.rotation.y,
+                    transform_a.rotation.z,
+                );
+                let rot_b = Quat::from_euler(
+                    EulerRot::XYZ,
+                    transform_b.rotation.x,
+                    transform_b.rotation.y,
+                    transform_b.rotation.z,
+                );
+
                 if let Some(mut info) = check_collision(
                     transform_a.position,
+                    rot_a,
                     collider_a,
                     transform_b.position,
+                    rot_b,
                     collider_b,
                 ) {
                     info.other_entity = idx_b as u64;

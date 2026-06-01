@@ -27,6 +27,7 @@ pub struct CompiledPass {
 pub struct CompiledGraph {
     pub passes: Vec<CompiledPass>,
     pub transient_textures: Vec<wgpu::Texture>,
+    pub transient_buffers: Vec<wgpu::Buffer>,
 }
 
 impl RenderGraph {
@@ -55,6 +56,27 @@ impl RenderGraph {
                     node.texture = Some(device_texture);
                 }
                 node.view = Some(view);
+            }
+        }
+
+        let mut transient_buffers = Vec::new();
+        let buffer_count = self.buffers.len();
+        for i in 0..buffer_count {
+            if let Some(ref mut node) = self.buffers[i] {
+                if node.import {
+                    continue;
+                }
+                let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: node.desc.label.as_deref(),
+                    size: node.desc.size,
+                    usage: node.desc.usage,
+                    mapped_at_creation: false,
+                });
+                if node.desc.transient {
+                    transient_buffers.push(buffer);
+                } else {
+                    node.buffer = Some(buffer);
+                }
             }
         }
 
@@ -101,6 +123,7 @@ impl RenderGraph {
         Ok(CompiledGraph {
             passes: compiled_passes,
             transient_textures,
+            transient_buffers,
         })
     }
 }
