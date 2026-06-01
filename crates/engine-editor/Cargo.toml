@@ -6,6 +6,8 @@ license.workspace = true
 
 [dependencies]
 engine-core = { path = "../engine-core" }
+engine-ecs = { path = "../engine-ecs" }
+engine-scene = { path = "../engine-scene" }
 engine-ui = { path = "../engine-ui" }
 engine-math = { path = "../engine-math" }
 engine-framework = { path = "../engine-framework" }
@@ -15,6 +17,8 @@ engine-render = { path = "../engine-render" }
 engine-window = { path = "../engine-window" }
 egui = "=0.30.0"
 anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 pollster = "0.3"
 log = "0.4"
 env_logger = "0.11"

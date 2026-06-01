@@ -188,7 +188,7 @@ fn my_system(app: &App) {
 | **Render Graph** | ✅ | 纹理/缓冲资源管理、编译（依赖图）、执行（逐 Pass 回调） |
 | **Sprite Pipeline** | ✅ | WGSL 着色器（摄像机 Uniform + 纹理采样）、Alpha 混合管线 |
 | **Sprite 组件 & 批处理** | ✅ | `Sprite` 组件、`SpriteBatch`（按纹理分组）、`collect_batches` |
-| **摄像机系统** | 🔨 | 已有 `Camera` + 透视/正交投影，需完善视锥裁剪和多摄像机支持 |
+| **摄像机系统** | ✅ | ECS 集成、优先级排序、视锥裁剪、多摄像机支持 |
 | **Sprite 示例** | ✅ | `sprite_demo` — 渲染图集成验证 |
 | **纹理加载 → Sprite** | ✅ | `EventChannel` + `TextureStore` 桥接（[texture_bridge.rs](crates/engine-render/src/texture_bridge.rs), 290 行） |
 | **Sprite 批量绘制** | ✅ | `SpriteRenderer` + `PersistentBuffer` GPU 上传（[sprite_renderer.rs](crates/engine-render/src/sprite_renderer.rs), 133 行） |
@@ -237,7 +237,7 @@ fn my_system(app: &App) {
 | 模块 | 状态 | 说明 |
 |------|------|------|
 | **基础播放** | ✅ | `AudioManager` 基于 rodio，支持文件解码和播放 |
-| **音量控制** | ⏳ | 主音量、音效音量、音乐音量 |
+| **音量控制** | ✅ | 主音量、音效/音乐分轨音量、播放句柄控制 |
 | **3D 空间音频** | ⏳ | 距离衰减、方向、多普勒效应 |
 | **音频混音器** | ⏳ | 分组混音、音频总线 |
 | **流式播放** | ⏳ | 背景音乐流式加载 |
@@ -262,7 +262,7 @@ fn my_system(app: &App) {
 | **Inspector** | 🔨 | Transform/渲染/物理属性面板 |
 | **撤销/重做** | ✅ | 命令模式 |
 | **编辑器摄像机** | ✅ | 轨道/平移/缩放 |
-| **场景序列化** | 🔨 | 数据模型已定义，序列化逻辑需完善 |
+| **场景序列化** | ✅ | JSON 序列化/反序列化、ECS ↔ Scene 双向桥接 |
 | **资源浏览器** | ✅ | 文件浏览、路径导航 |
 | **节点图编辑器** | ⏳ | 材质节点图、可视化脚本 |
 | **动画编辑器** | ⏳ | 关键帧编辑、动画曲线 |

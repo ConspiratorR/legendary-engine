@@ -2,6 +2,7 @@
 
 pub mod animation;
 pub mod camera;
+pub mod camera_system;
 pub mod frustum;
 pub mod graph;
 pub mod indirect;
