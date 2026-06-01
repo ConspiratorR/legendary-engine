@@ -281,7 +281,7 @@ fn my_system(app: &App) {
 | **场景序列化** | ✅ | JSON 序列化/反序列化、ECS ↔ Scene 双向桥接 |
 | **资源浏览器** | ✅ | 文件浏览、路径导航 |
 | **节点图编辑器** | ✅ | NodeGraph 数据结构、拓扑排序、10+ 内置节点、导出 |
-| **动画编辑器** | ⏳ | 关键帧编辑、动画曲线 |
+| **动画编辑器** | ✅ | 时间轴、关键帧编辑、贝塞尔曲线、预览、导入/导出 |
 
 ### 阶段 8 — 动画系统
 
@@ -297,9 +297,9 @@ fn my_system(app: &App) {
 | 项目 | 状态 | 说明 |
 |------|------|------|
 | **CI/CD** | ✅ | GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵) |
-| **跨平台构建** | ⏳ | Windows/macOS/Linux/Android |
+| **跨平台构建** | ✅ | justfile、CI 矩阵 (Ubuntu/Windows/macOS)、条件编译 |
 | **基准测试** | ✅ | Criterion (ECS 11 项 + Physics 6 项) |
-| **文档** | ⏳ | API 文档、使用手册、教程 |
+| **文档** | ✅ | 7 篇教程 (docs/)、全 crate 文档注释 |
 | **示例游戏** | ✅ | game_flow_demo — 完整游戏流程（菜单→游戏→暂停→结束）+ ECS/物理/渲染/音频演示 |
 
 ## 跨平台开发
