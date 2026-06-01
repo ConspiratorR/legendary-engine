@@ -227,7 +227,7 @@ fn my_system(app: &App) {
 | **Collider** | ✅ | 球体/盒体/胶囊/圆柱碰撞体、摩擦力/恢复系数/密度 |
 | **碰撞检测** | ✅ | Sphere/AABB/OBB/Capsule 全组合碰撞（SAT 算法）、8 种碰撞对 |
 | **物理世界 step** | ✅ | 子步模拟、Baumgarte 约束求解、摩擦力/恢复力（[world.rs](crates/engine-physics/src/world.rs), 377 行, 6 测试） |
-| **接触点求解** | ⏳ | 约束求解、摩擦模型 |
+| **接触点求解** | ✅ | ContactSolver（暖启动、累积冲量、Coulomb 摩擦约束） |
 | **连续碰撞检测** | ⏳ | CCD 支持 |
 | **关节系统** | ✅ | 铰链、球窝、弹簧约束、JointSolver 弹簧力求解 |
 | **ECS 集成** | ✅ | `PhysicsPlugin` 已注册 physics_step_system（[plugin.rs](crates/engine-physics/src/plugin.rs), 45 行） |
@@ -240,7 +240,7 @@ fn my_system(app: &App) {
 | **音量控制** | ✅ | 主音量、音效/音乐分轨音量、播放句柄控制 |
 | **3D 空间音频** | ⏳ | 距离衰减、方向、多普勒效应 |
 | **音频混音器** | ✅ | 命名总线、独立音量/静音、默认 6 总线（master/sfx/music/ambient/voice/ui） |
-| **流式播放** | ⏳ | 背景音乐流式加载 |
+| **流式播放** | ✅ | AudioStream 探测、StreamingConfig 配置、格式检测 |
 
 ### 阶段 6 — 网络
 
@@ -271,7 +271,7 @@ fn my_system(app: &App) {
 
 | 模块 | 状态 | 说明 |
 |------|------|------|
-| **关键帧动画** | ⏳ | Position/Rotation/Scale 关键帧 |
+| **关键帧动画** | ✅ | Position/Rotation/Scale 关键帧、线性/步进/三次插值、AnimationPlayer |
 | **骨骼动画** | ⏳ | 骨骼绑定、蒙皮 |
 | **状态机** | ⏳ | 动画状态机、过渡、混合 |
 | **IK/FK** | ⏳ | 反向/正向运动学 |

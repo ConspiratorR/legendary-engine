@@ -8,6 +8,7 @@
 
 pub mod body;
 pub mod collider;
+pub mod contact;
 pub mod joint;
 pub mod plugin;
 pub mod world;
