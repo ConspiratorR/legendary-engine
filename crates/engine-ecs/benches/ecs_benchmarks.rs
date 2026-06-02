@@ -1,9 +1,9 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use engine_ecs::access::{AccessSystem, SystemAccess};
+use engine_ecs::access::SystemAccess;
 use engine_ecs::par_iter::{par_iter, par_iter_mut};
 use engine_ecs::query::{Query, QueryPair};
 use engine_ecs::schedule::{ParallelSchedule, Schedule};
-use engine_ecs::system::IntoSystem;
+use engine_ecs::system::{AccessSystem, IntoSystem};
 use engine_ecs::world::World;
 
 #[derive(Clone, Copy)]
@@ -210,18 +210,27 @@ fn bench_parallel_schedule(c: &mut Criterion) {
                 }
 
                 let mut schedule = Schedule::new();
-                schedule.add_system(|world: &mut World| {
-                    let q = Query::<Position>::new();
-                    for _ in q.iter(world) {}
-                });
-                schedule.add_system(|world: &mut World| {
-                    let q = Query::<Position>::new();
-                    for _ in q.iter(world) {}
-                });
-                schedule.add_system(|world: &mut World| {
-                    let q = Query::<Position>::new();
-                    for _ in q.iter(world) {}
-                });
+                schedule.add_system(
+                    (|world: &mut World| {
+                        let q = Query::<Position>::new();
+                        for _ in q.iter(world) {}
+                    })
+                    .system(),
+                );
+                schedule.add_system(
+                    (|world: &mut World| {
+                        let q = Query::<Position>::new();
+                        for _ in q.iter(world) {}
+                    })
+                    .system(),
+                );
+                schedule.add_system(
+                    (|world: &mut World| {
+                        let q = Query::<Position>::new();
+                        for _ in q.iter(world) {}
+                    })
+                    .system(),
+                );
 
                 b.iter(|| {
                     schedule.run(&mut world);

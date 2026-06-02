@@ -937,6 +937,7 @@ name = "engine-ecs"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "engine-jobs",
  "rayon",
 ]
 

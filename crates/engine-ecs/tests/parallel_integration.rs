@@ -1,7 +1,7 @@
 use engine_ecs::access::SystemAccess;
 use engine_ecs::par_iter::WorldParExt;
 use engine_ecs::query::Query;
-use engine_ecs::schedule::ParallelSchedule;
+use engine_ecs::schedule::{ParallelSchedule, RayonExecutor};
 use engine_ecs::system::{AccessSystem, IntoSystem};
 use engine_ecs::world::World;
 
@@ -147,4 +147,168 @@ fn test_stage_count_mixed_read_write() {
     // System 2 writes Velocity and System 3 writes Health — different types, no conflict
     // All 3 can be in 1 stage
     assert_eq!(schedule.stage_count(), 1);
+}
+
+#[test]
+fn test_run_with_executor_rayon() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+    COUNTER.store(0, Ordering::SeqCst);
+
+    let mut schedule = ParallelSchedule::new(4);
+
+    let mut a1 = SystemAccess::new();
+    a1.read::<Position>();
+    schedule.add_system(AccessSystem::new(
+        ((|_: &mut World| {
+            COUNTER.fetch_add(1, Ordering::SeqCst);
+        }) as fn(&mut World))
+            .system(),
+        a1,
+    ));
+
+    let mut a2 = SystemAccess::new();
+    a2.read::<Velocity>();
+    schedule.add_system(AccessSystem::new(
+        ((|_: &mut World| {
+            COUNTER.fetch_add(10, Ordering::SeqCst);
+        }) as fn(&mut World))
+            .system(),
+        a2,
+    ));
+
+    let mut world = World::new();
+    schedule.run_with_executor(&mut world, &RayonExecutor);
+
+    assert_eq!(COUNTER.load(Ordering::SeqCst), 11);
+}
+
+#[cfg(feature = "jobs-backend")]
+mod job_graph_tests {
+    use super::*;
+    use engine_ecs::schedule::JobGraphExecutor;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn test_job_graph_executor_runs_systems() {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        COUNTER.store(0, Ordering::SeqCst);
+
+        let mut schedule = ParallelSchedule::new(4);
+
+        let mut a1 = SystemAccess::new();
+        a1.read::<Position>();
+        schedule.add_system(AccessSystem::new(
+            ((|_: &mut World| {
+                COUNTER.fetch_add(1, Ordering::SeqCst);
+            }) as fn(&mut World))
+                .system(),
+            a1,
+        ));
+
+        let mut a2 = SystemAccess::new();
+        a2.read::<Velocity>();
+        schedule.add_system(AccessSystem::new(
+            ((|_: &mut World| {
+                COUNTER.fetch_add(10, Ordering::SeqCst);
+            }) as fn(&mut World))
+                .system(),
+            a2,
+        ));
+
+        let mut world = World::new();
+        let pool = Arc::new(engine_jobs::ThreadPool::new(4));
+        let executor = JobGraphExecutor::new(pool);
+        schedule.run_with_executor(&mut world, &executor);
+
+        assert_eq!(COUNTER.load(Ordering::SeqCst), 11);
+    }
+
+    #[test]
+    fn test_run_with_jobs() {
+        static COUNTER: AtomicUsize = AtomicUsize::new(0);
+        COUNTER.store(0, Ordering::SeqCst);
+
+        let mut schedule = ParallelSchedule::new(4);
+
+        let mut a1 = SystemAccess::new();
+        a1.read::<Position>();
+        schedule.add_system(AccessSystem::new(
+            ((|_: &mut World| {
+                COUNTER.fetch_add(1, Ordering::SeqCst);
+            }) as fn(&mut World))
+                .system(),
+            a1,
+        ));
+
+        let mut a2 = SystemAccess::new();
+        a2.read::<Velocity>();
+        schedule.add_system(AccessSystem::new(
+            ((|_: &mut World| {
+                COUNTER.fetch_add(10, Ordering::SeqCst);
+            }) as fn(&mut World))
+                .system(),
+            a2,
+        ));
+
+        let mut world = World::new();
+        let pool = Arc::new(engine_jobs::ThreadPool::new(4));
+        schedule.run_with_jobs(&mut world, &pool);
+
+        assert_eq!(COUNTER.load(Ordering::SeqCst), 11);
+    }
+
+    #[test]
+    fn test_job_graph_executor_mixed_systems() {
+        let mut world = World::new();
+
+        for i in 0..100 {
+            let e = world.spawn();
+            world.add_component(e, Position(i as f32, 0.0, 0.0));
+            world.add_component(e, Velocity(1.0, 0.0, 0.0));
+            world.add_component(e, Health(100));
+        }
+
+        let mut schedule = ParallelSchedule::new(4);
+
+        // System 1: reads Position, writes Velocity
+        let mut access_physics = SystemAccess::new();
+        access_physics.read::<Position>();
+        access_physics.write::<Velocity>();
+        schedule.add_system(AccessSystem::new(
+            (|world: &mut World| {
+                let query = Query::<Velocity>::new();
+                for vel in query.iter_mut(world) {
+                    vel.0 *= 0.99;
+                }
+            })
+            .system(),
+            access_physics,
+        ));
+
+        // System 2: reads Health (independent of physics)
+        let mut access_ui = SystemAccess::new();
+        access_ui.read::<Health>();
+        schedule.add_system(AccessSystem::new(
+            (|world: &mut World| {
+                let query = Query::<Health>::new();
+                let _count = query.iter(world).count();
+            })
+            .system(),
+            access_ui,
+        ));
+
+        // Run multiple frames via JobGraph
+        let pool = Arc::new(engine_jobs::ThreadPool::new(4));
+        for _ in 0..10 {
+            schedule.run_with_jobs(&mut world, &pool);
+        }
+
+        // Verify velocities were damped
+        let vel = world.get_by_index::<Velocity>(0).unwrap();
+        assert!(vel.0 < 1.0, "Velocity should be damped");
+        assert!(vel.0 > 0.0, "Velocity should still be positive");
+    }
 }

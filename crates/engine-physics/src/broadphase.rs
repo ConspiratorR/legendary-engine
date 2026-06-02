@@ -7,12 +7,16 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct CellCoord(i32, i32, i32);
 
-/// An entry in the broadphase: entity index + AABB bounds.
+/// An entry in the broadphase: entity index + AABB bounds + collision layer info.
 #[derive(Debug, Clone, Copy)]
 pub struct BroadphaseEntry {
     pub entity_index: u32,
     pub center: Vec3,
     pub half_extents: Vec3,
+    /// Which collision layers this entity belongs to (bitmask).
+    pub collision_layers: u32,
+    /// Which collision layers this entity can collide with (bitmask).
+    pub collision_mask: u32,
 }
 
 impl BroadphaseEntry {
@@ -25,6 +29,12 @@ impl BroadphaseEntry {
     pub fn aabb_max(&self) -> Vec3 {
         self.center + self.half_extents
     }
+
+    /// Check if this entry can collide with another based on layer masks.
+    pub fn can_collide_with(&self, other: &BroadphaseEntry) -> bool {
+        (self.collision_layers & other.collision_mask) != 0
+            && (other.collision_layers & self.collision_mask) != 0
+    }
 }
 
 /// A candidate pair from the broadphase.
@@ -32,6 +42,21 @@ impl BroadphaseEntry {
 pub struct BroadphasePair {
     pub index_a: u32,
     pub index_b: u32,
+}
+
+/// Check if two AABBs overlap (tight AABB refinement test).
+pub fn aabb_overlap(a: &BroadphaseEntry, b: &BroadphaseEntry) -> bool {
+    let a_min = a.aabb_min();
+    let a_max = a.aabb_max();
+    let b_min = b.aabb_min();
+    let b_max = b.aabb_max();
+
+    a_min.x <= b_max.x
+        && a_max.x >= b_min.x
+        && a_min.y <= b_max.y
+        && a_max.y >= b_min.y
+        && a_min.z <= b_max.z
+        && a_max.z >= b_min.z
 }
 
 /// Spatial hash grid broadphase for collision detection.
@@ -91,6 +116,7 @@ impl SpatialHashBroadphase {
 
     /// Compute candidate pairs (entities that share at least one cell).
     ///
+    /// Applies layer mask filtering and AABB refinement to reduce false positives.
     /// Returns unique pairs — deduplication is handled internally.
     pub fn compute_pairs(&self) -> Vec<BroadphasePair> {
         let mut seen = HashSet::new();
@@ -99,16 +125,32 @@ impl SpatialHashBroadphase {
         for cell_entries in self.grid.values() {
             for i in 0..cell_entries.len() {
                 for j in (i + 1)..cell_entries.len() {
-                    let a = self.entries[cell_entries[i]].entity_index;
-                    let b = self.entries[cell_entries[j]].entity_index;
+                    let entry_a = &self.entries[cell_entries[i]];
+                    let entry_b = &self.entries[cell_entries[j]];
+
+                    let a = entry_a.entity_index;
+                    let b = entry_b.entity_index;
 
                     let (lo, hi) = if a < b { (a, b) } else { (b, a) };
-                    if seen.insert((lo, hi)) {
-                        pairs.push(BroadphasePair {
-                            index_a: lo,
-                            index_b: hi,
-                        });
+                    if seen.contains(&(lo, hi)) {
+                        continue;
                     }
+
+                    // Layer mask filtering: skip pairs that can never collide
+                    if !entry_a.can_collide_with(entry_b) {
+                        continue;
+                    }
+
+                    // AABB refinement: tight overlap test before narrowphase
+                    if !aabb_overlap(entry_a, entry_b) {
+                        continue;
+                    }
+
+                    seen.insert((lo, hi));
+                    pairs.push(BroadphasePair {
+                        index_a: lo,
+                        index_b: hi,
+                    });
                 }
             }
         }
@@ -141,19 +183,41 @@ impl SpatialHashBroadphase {
 mod tests {
     use super::*;
 
+    fn entry(idx: u32, center: Vec3, half: Vec3) -> BroadphaseEntry {
+        BroadphaseEntry {
+            entity_index: idx,
+            center,
+            half_extents: half,
+            collision_layers: 0xFFFF_FFFF,
+            collision_mask: 0xFFFF_FFFF,
+        }
+    }
+
+    fn entry_with_layers(
+        idx: u32,
+        center: Vec3,
+        half: Vec3,
+        layers: u32,
+        mask: u32,
+    ) -> BroadphaseEntry {
+        BroadphaseEntry {
+            entity_index: idx,
+            center,
+            half_extents: half,
+            collision_layers: layers,
+            collision_mask: mask,
+        }
+    }
+
     #[test]
     fn test_broadphase_no_overlap() {
         let mut bp = SpatialHashBroadphase::new(2.0);
-        bp.insert(BroadphaseEntry {
-            entity_index: 0,
-            center: Vec3::new(0.0, 0.0, 0.0),
-            half_extents: Vec3::new(0.5, 0.5, 0.5),
-        });
-        bp.insert(BroadphaseEntry {
-            entity_index: 1,
-            center: Vec3::new(10.0, 0.0, 0.0),
-            half_extents: Vec3::new(0.5, 0.5, 0.5),
-        });
+        bp.insert(entry(0, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.5, 0.5, 0.5)));
+        bp.insert(entry(
+            1,
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(0.5, 0.5, 0.5),
+        ));
 
         let pairs = bp.compute_pairs();
         assert!(pairs.is_empty());
@@ -162,16 +226,8 @@ mod tests {
     #[test]
     fn test_broadphase_same_cell() {
         let mut bp = SpatialHashBroadphase::new(2.0);
-        bp.insert(BroadphaseEntry {
-            entity_index: 0,
-            center: Vec3::new(0.0, 0.0, 0.0),
-            half_extents: Vec3::new(0.5, 0.5, 0.5),
-        });
-        bp.insert(BroadphaseEntry {
-            entity_index: 1,
-            center: Vec3::new(0.5, 0.0, 0.0),
-            half_extents: Vec3::new(0.5, 0.5, 0.5),
-        });
+        bp.insert(entry(0, Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.5, 0.5, 0.5)));
+        bp.insert(entry(1, Vec3::new(0.5, 0.0, 0.0), Vec3::new(0.5, 0.5, 0.5)));
 
         let pairs = bp.compute_pairs();
         assert_eq!(pairs.len(), 1);
@@ -182,17 +238,8 @@ mod tests {
     #[test]
     fn test_broadphase_dedup() {
         let mut bp = SpatialHashBroadphase::new(10.0);
-        // Both entries span the entire cell — should produce exactly 1 pair
-        bp.insert(BroadphaseEntry {
-            entity_index: 0,
-            center: Vec3::new(0.0, 0.0, 0.0),
-            half_extents: Vec3::new(5.0, 5.0, 5.0),
-        });
-        bp.insert(BroadphaseEntry {
-            entity_index: 1,
-            center: Vec3::new(1.0, 0.0, 0.0),
-            half_extents: Vec3::new(5.0, 5.0, 5.0),
-        });
+        bp.insert(entry(0, Vec3::new(0.0, 0.0, 0.0), Vec3::new(5.0, 5.0, 5.0)));
+        bp.insert(entry(1, Vec3::new(1.0, 0.0, 0.0), Vec3::new(5.0, 5.0, 5.0)));
 
         let pairs = bp.compute_pairs();
         assert_eq!(pairs.len(), 1);
@@ -202,28 +249,89 @@ mod tests {
     fn test_broadphase_multiple_entries() {
         let mut bp = SpatialHashBroadphase::new(2.0);
         for i in 0..10 {
-            bp.insert(BroadphaseEntry {
-                entity_index: i,
-                center: Vec3::new(i as f32 * 0.5, 0.0, 0.0),
-                half_extents: Vec3::new(0.5, 0.5, 0.5),
-            });
+            bp.insert(entry(
+                i,
+                Vec3::new(i as f32 * 0.5, 0.0, 0.0),
+                Vec3::new(0.5, 0.5, 0.5),
+            ));
         }
 
         let pairs = bp.compute_pairs();
-        // Adjacent entries should produce pairs
         assert!(!pairs.is_empty());
     }
 
     #[test]
     fn test_broadphase_clear() {
         let mut bp = SpatialHashBroadphase::new(2.0);
-        bp.insert(BroadphaseEntry {
-            entity_index: 0,
-            center: Vec3::ZERO,
-            half_extents: Vec3::ONE,
-        });
+        bp.insert(entry(0, Vec3::ZERO, Vec3::ONE));
         bp.clear();
         assert_eq!(bp.entry_count(), 0);
         assert_eq!(bp.cell_count(), 0);
+    }
+
+    #[test]
+    fn test_layer_mask_filtering() {
+        let mut bp = SpatialHashBroadphase::new(10.0);
+        // Layer 1 (bit 0) vs layer 2 (bit 1) — masks don't match
+        bp.insert(entry_with_layers(0, Vec3::ZERO, Vec3::ONE, 0x01, 0x01));
+        bp.insert(entry_with_layers(
+            1,
+            Vec3::new(0.5, 0.0, 0.0),
+            Vec3::ONE,
+            0x02,
+            0x02,
+        ));
+
+        let pairs = bp.compute_pairs();
+        assert!(pairs.is_empty(), "Layer mismatch should filter the pair");
+    }
+
+    #[test]
+    fn test_layer_mask_allows_collision() {
+        let mut bp = SpatialHashBroadphase::new(10.0);
+        // Both on layer 1, mask includes each other
+        bp.insert(entry_with_layers(0, Vec3::ZERO, Vec3::ONE, 0x01, 0x01));
+        bp.insert(entry_with_layers(
+            1,
+            Vec3::new(0.5, 0.0, 0.0),
+            Vec3::ONE,
+            0x01,
+            0x01,
+        ));
+
+        let pairs = bp.compute_pairs();
+        assert_eq!(pairs.len(), 1);
+    }
+
+    #[test]
+    fn test_aabb_refinement_same_cell_no_overlap() {
+        let mut bp = SpatialHashBroadphase::new(10.0);
+        // Large cell size forces same-cell grouping, but AABBs don't overlap
+        bp.insert(entry(
+            0,
+            Vec3::new(-10.0, 0.0, 0.0),
+            Vec3::new(1.0, 1.0, 1.0),
+        ));
+        bp.insert(entry(
+            1,
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(1.0, 1.0, 1.0),
+        ));
+
+        let pairs = bp.compute_pairs();
+        assert!(
+            pairs.is_empty(),
+            "AABB refinement should filter non-overlapping pairs"
+        );
+    }
+
+    #[test]
+    fn test_aabb_refinement_partial_overlap() {
+        let mut bp = SpatialHashBroadphase::new(10.0);
+        bp.insert(entry(0, Vec3::ZERO, Vec3::ONE));
+        bp.insert(entry(1, Vec3::new(1.5, 0.0, 0.0), Vec3::ONE));
+
+        let pairs = bp.compute_pairs();
+        assert_eq!(pairs.len(), 1, "Overlapping AABBs should produce a pair");
     }
 }

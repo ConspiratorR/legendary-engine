@@ -4,6 +4,111 @@ use crate::world::World;
 use rayon::prelude::*;
 use std::sync::atomic::AtomicPtr;
 
+/// Strategy trait for executing a batch of systems within a single stage.
+///
+/// Implementors control *how* systems are run (sequentially, rayon-parallel,
+/// job-graph, etc.) while the schedule decides *which* systems go together.
+pub trait ScheduleExecutor: Send + Sync {
+    /// Execute the given `systems` against `world`.
+    ///
+    /// All systems in the slice are guaranteed non-conflicting by the
+    /// schedule's access analysis.
+    fn execute_stage(&self, systems: &[&dyn System], world: &mut World);
+}
+
+/// Default executor that runs systems in parallel via rayon.
+///
+/// Single-system stages skip the rayon overhead and run directly.
+pub struct RayonExecutor;
+
+/// Executor that routes stage systems through the engine-jobs [`JobGraph`].
+///
+/// Each stage invocation creates a fresh `JobGraph` with one node per system.
+/// All systems in the stage are independent (no `add_after` edges), so they
+/// execute concurrently via the shared [`ThreadPool`](engine_jobs::ThreadPool).
+///
+/// Requires the `jobs-backend` feature.
+#[cfg(feature = "jobs-backend")]
+pub struct JobGraphExecutor {
+    pool: std::sync::Arc<engine_jobs::ThreadPool>,
+}
+
+#[cfg(feature = "jobs-backend")]
+impl JobGraphExecutor {
+    /// Create a new executor backed by the given thread pool.
+    ///
+    /// The pool is shared (via `Arc`) — the same pool can back both
+    /// ECS scheduling and other engine subsystems (physics, asset loading).
+    pub fn new(pool: std::sync::Arc<engine_jobs::ThreadPool>) -> Self {
+        Self { pool }
+    }
+}
+
+#[cfg(feature = "jobs-backend")]
+impl ScheduleExecutor for JobGraphExecutor {
+    fn execute_stage(&self, systems: &[&dyn System], world: &mut World) {
+        if systems.is_empty() {
+            return;
+        }
+
+        // Sort systems by priority (descending) so higher-priority systems
+        // are submitted to the job graph first and execute sooner.
+        let mut sorted: Vec<&dyn System> = systems.to_vec();
+        sorted.sort_by(|a, b| b.priority().cmp(&a.priority()));
+
+        // SAFETY: Same invariant as RayonExecutor — access analysis guarantees
+        // non-overlapping component access within a stage.
+        let world_ptr = AtomicPtr::new(world as *mut World);
+
+        if sorted.len() == 1 {
+            let world_ref = unsafe { &mut *world_ptr.load(std::sync::atomic::Ordering::Relaxed) };
+            sorted[0].run(world_ref);
+        } else {
+            let mut graph = engine_jobs::JobGraph::new();
+
+            for system in &sorted {
+                // SAFETY: see above
+                let world_ref =
+                    unsafe { &mut *world_ptr.load(std::sync::atomic::Ordering::Relaxed) };
+                // SAFETY: the 'static bound on JobGraph::add requires owned data.
+                // We transmute the lifetime of the system reference to 'static.
+                // This is safe because:
+                // 1. The World pointer is valid for the entire execute_stage call
+                // 2. graph.execute(&pool) blocks until all jobs complete
+                // 3. No job escapes this function scope
+                let system_ref: &'static dyn System = unsafe { std::mem::transmute(*system) };
+                let world_ref: &'static mut World = unsafe { std::mem::transmute(world_ref) };
+                graph.add(move || {
+                    system_ref.run(world_ref);
+                });
+            }
+
+            graph.execute(&self.pool);
+        }
+    }
+}
+
+impl ScheduleExecutor for RayonExecutor {
+    fn execute_stage(&self, systems: &[&dyn System], world: &mut World) {
+        if systems.len() == 1 {
+            systems[0].run(world);
+        } else {
+            // SAFETY: The access analysis guarantees that systems within a stage
+            // do not access the same component types. Each system gets &mut World
+            // but they operate on disjoint component sparse-sets. The AtomicPtr
+            // allows us to hand out multiple &mut World references to parallel
+            // systems without violating Rust's Send+Sync bounds.
+            // Soundness depends entirely on the correctness of SystemAccess.
+            let world_ptr = AtomicPtr::new(world as *mut World);
+            systems.par_iter().for_each(|system| {
+                let world_ref =
+                    unsafe { &mut *world_ptr.load(std::sync::atomic::Ordering::Relaxed) };
+                system.run(world_ref);
+            });
+        }
+    }
+}
+
 /// An ordered list of [`System`]s executed sequentially.
 ///
 /// Systems are run in the order they were added via [`add_system`](Self::add_system).
@@ -45,8 +150,9 @@ impl Schedule {
 /// have non-conflicting access descriptors and can run concurrently.
 /// Stages execute sequentially.
 ///
-/// Within each stage, systems execute in parallel using rayon. The
-/// access analysis ([`SystemAccess`]) guarantees that parallel systems
+/// Within each stage, the configured [`ScheduleExecutor`] runs the systems.
+/// The default executor ([`RayonExecutor`]) runs them in parallel via rayon.
+/// The access analysis ([`SystemAccess`]) guarantees that parallel systems
 /// do not read/write the same component types simultaneously.
 ///
 /// # Example
@@ -129,36 +235,44 @@ impl ParallelSchedule {
     /// Run all systems, executing non-conflicting systems within each stage in parallel.
     ///
     /// Stages execute sequentially. Within a stage, systems run concurrently
-    /// via rayon. The access analysis guarantees no data races on component storage.
+    /// via the default [`RayonExecutor`]. The access analysis guarantees
+    /// no data races on component storage.
     pub fn run(&mut self, world: &mut World) {
+        self.run_with_executor(world, &RayonExecutor);
+    }
+
+    /// Run all systems using a custom [`ScheduleExecutor`].
+    ///
+    /// This is the generic execution path. Both [`run`](Self::run) (rayon)
+    /// and [`run_with_jobs`](Self::run_with_jobs) (JobGraph) delegate here.
+    pub fn run_with_executor(&mut self, world: &mut World, executor: &dyn ScheduleExecutor) {
         if self.needs_rebuild {
             self.rebuild_stages();
         }
 
-        // SAFETY: The access analysis guarantees that systems within a stage
-        // do not access the same component types. Each system gets &mut World
-        // but they operate on disjoint component sparse-sets. The AtomicPtr
-        // allows us to hand out multiple &mut World references to parallel
-        // systems without violating Rust's Send+Sync bounds.
-        // Soundness depends entirely on the correctness of SystemAccess.
-        let world_ptr = AtomicPtr::new(world as *mut World);
-
         for stage in &self.stages {
-            if stage.len() == 1 {
-                // Single system: no parallelism overhead
-                let world_ref =
-                    unsafe { &mut *world_ptr.load(std::sync::atomic::Ordering::Relaxed) };
-                self.systems[stage[0]].run(world_ref);
-            } else {
-                // Multiple non-conflicting systems: run in parallel
-                stage.par_iter().for_each(|&idx| {
-                    // SAFETY: see above - access analysis guarantees non-overlapping types
-                    let world_ref =
-                        unsafe { &mut *world_ptr.load(std::sync::atomic::Ordering::Relaxed) };
-                    self.systems[idx].run(world_ref);
-                });
-            }
+            let refs: Vec<&dyn System> = stage.iter().map(|&idx| &*self.systems[idx]).collect();
+            executor.execute_stage(&refs, world);
         }
+    }
+
+    /// Run all systems using the engine-jobs [`JobGraph`] backend.
+    ///
+    /// Requires the `jobs-backend` feature. Each stage is converted into
+    /// a `JobGraph` and executed via the provided [`ThreadPool`](engine_jobs::ThreadPool).
+    /// The pool is shared — the same instance can back physics, asset loading, etc.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `jobs-backend` feature is not enabled.
+    #[cfg(feature = "jobs-backend")]
+    pub fn run_with_jobs(
+        &mut self,
+        world: &mut World,
+        pool: &std::sync::Arc<engine_jobs::ThreadPool>,
+    ) {
+        let executor = JobGraphExecutor::new(std::sync::Arc::clone(pool));
+        self.run_with_executor(world, &executor);
     }
 
     /// Return the number of systems in the schedule.

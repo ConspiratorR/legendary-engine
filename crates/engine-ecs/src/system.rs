@@ -1,6 +1,24 @@
 use crate::access::SystemAccess;
 use crate::world::World;
 
+/// Scheduling priority for a system.
+///
+/// Higher-priority systems are scheduled first within a stage.
+/// The default priority is [`Normal`](Self::Normal).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub enum JobPriority {
+    /// Reserved for systems that must run before everything else
+    /// (e.g. transform propagation, animation skinning).
+    Critical = 3,
+    /// High-priority systems that should run early (e.g. physics, input).
+    High = 2,
+    /// Default priority for most game logic.
+    #[default]
+    Normal = 1,
+    /// Low-priority systems that can run last (e.g. debug overlays, stats).
+    Low = 0,
+}
+
 /// A system that operates on a [`World`].
 ///
 /// Systems are the primary way to express game logic. They receive
@@ -20,6 +38,14 @@ pub trait System: Send + Sync {
     /// Human-readable name for debugging and profiling.
     fn name(&self) -> &str {
         std::any::type_name::<Self>()
+    }
+
+    /// Scheduling priority for this system.
+    ///
+    /// Higher-priority systems are scheduled first within a stage.
+    /// Defaults to [`JobPriority::Normal`].
+    fn priority(&self) -> JobPriority {
+        JobPriority::Normal
     }
 }
 
@@ -83,6 +109,10 @@ impl<S: System> System for AccessSystem<S> {
 
     fn name(&self) -> &str {
         self.inner.name()
+    }
+
+    fn priority(&self) -> JobPriority {
+        self.inner.priority()
     }
 }
 

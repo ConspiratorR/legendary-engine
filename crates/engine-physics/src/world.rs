@@ -3,11 +3,12 @@ use crate::body::{BodyType, RigidBody};
 use crate::broadphase::{BroadphaseEntry, SpatialHashBroadphase};
 use crate::ccd::{CcdBody, sweep_sphere_aabb, sweep_sphere_sphere};
 use crate::collider::{Collider, ColliderShape, CollisionInfo, check_collision};
+use crate::contact::{ContactManifold, ContactPoint, ContactSolver};
 use engine_core::transform::Transform;
 use engine_ecs::world::World;
 use engine_math::{EulerRot, Quat, Vec3};
 use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicPtr;
 
 /// Union-Find data structure for grouping collision pairs into independent islands.
@@ -60,6 +61,38 @@ impl UnionFind {
     }
 }
 
+/// A collision event for gameplay systems.
+#[derive(Debug, Clone)]
+pub struct CollisionEvent {
+    pub entity_a: u32,
+    pub entity_b: u32,
+    pub normal: Vec3,
+    pub depth: f32,
+    pub point: Vec3,
+    /// Whether this is a new collision (enter) or ongoing.
+    pub is_enter: bool,
+}
+
+/// A sensor overlap event.
+#[derive(Debug, Clone)]
+pub struct SensorEvent {
+    pub sensor_entity: u32,
+    pub other_entity: u32,
+    pub overlapping: bool,
+    /// Whether this is a new overlap (enter) or continuing.
+    pub is_enter: bool,
+}
+
+/// Key for identifying a collision pair (order-independent).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PairKey(u32, u32);
+
+impl PairKey {
+    fn new(a: u32, b: u32) -> Self {
+        if a < b { Self(a, b) } else { Self(b, a) }
+    }
+}
+
 /// Physics world configuration.
 pub struct PhysicsWorld {
     pub gravity: Vec3,
@@ -74,24 +107,14 @@ pub struct PhysicsWorld {
     /// Sensor overlap events emitted this frame.
     pub sensor_events: Vec<SensorEvent>,
     broadphase: SpatialHashBroadphase,
-}
-
-/// A collision event for gameplay systems.
-#[derive(Debug, Clone)]
-pub struct CollisionEvent {
-    pub entity_a: u32,
-    pub entity_b: u32,
-    pub normal: Vec3,
-    pub depth: f32,
-    pub point: Vec3,
-}
-
-/// A sensor overlap event.
-#[derive(Debug, Clone)]
-pub struct SensorEvent {
-    pub sensor_entity: u32,
-    pub other_entity: u32,
-    pub overlapping: bool,
+    /// Cached contact manifolds for warm-starting (pair key → manifold).
+    contact_cache: HashMap<PairKey, ContactManifold>,
+    /// Contact solver for iterative constraint solving.
+    contact_solver: ContactSolver,
+    /// Set of pairs that were colliding last frame (for enter/exit tracking).
+    previous_collision_pairs: HashSet<PairKey>,
+    /// Set of sensor pairs that were overlapping last frame.
+    previous_sensor_pairs: HashSet<PairKey>,
 }
 
 impl Default for PhysicsWorld {
@@ -106,6 +129,10 @@ impl Default for PhysicsWorld {
             collision_events: Vec::new(),
             sensor_events: Vec::new(),
             broadphase: SpatialHashBroadphase::new(2.0),
+            contact_cache: HashMap::new(),
+            contact_solver: ContactSolver::new(),
+            previous_collision_pairs: HashSet::new(),
+            previous_sensor_pairs: HashSet::new(),
         }
     }
 }
@@ -140,7 +167,7 @@ impl PhysicsWorld {
             self.integrate_bodies(world, dt);
             self.detect_collisions(world);
             self.wake_colliding_bodies(world);
-            self.resolve_collisions(world);
+            self.resolve_collisions_with_warm_start(world);
         }
 
         // Update sleep states once per frame
@@ -184,11 +211,12 @@ impl PhysicsWorld {
                     let desired_pos = transform.position + vel * dt;
 
                     // CCD: sweep if body has CcdBody and speed exceeds threshold
-                    let has_ccd = world
-                        .get_by_index::<CcdBody>(idx)
-                        .is_some_and(|c| c.enabled);
+                    let ccd = world.get_by_index::<CcdBody>(idx);
+                    let has_ccd = ccd.is_some_and(|c| c.enabled);
+                    let threshold = ccd.map_or(1.0, |c| c.activation_threshold);
+                    let speed_sq = vel.length_squared();
 
-                    if has_ccd && vel.length_squared() > 0.01 {
+                    if has_ccd && speed_sq > threshold * threshold {
                         let safe_pos = self.ccd_sweep(world, idx, transform.position, desired_pos);
                         updates.push((idx, safe_pos));
                     } else {
@@ -342,8 +370,16 @@ impl PhysicsWorld {
 
         let collider_indices = world.component_entities::<Collider>();
 
-        // Insert all colliders into broadphase
+        // Insert all non-sleeping colliders into broadphase
         for &idx in &collider_indices {
+            // Skip sleeping bodies — they don't need broadphase testing
+            let is_sleeping = world
+                .get_by_index::<RigidBody>(idx)
+                .is_some_and(|b| b.is_sleeping);
+            if is_sleeping {
+                continue;
+            }
+
             if let Some(transform) = world.get_by_index::<Transform>(idx)
                 && let Some(collider) = world.get_by_index::<Collider>(idx)
             {
@@ -361,11 +397,13 @@ impl PhysicsWorld {
                     entity_index: idx,
                     center: transform.position,
                     half_extents,
+                    collision_layers: collider.collision_layers,
+                    collision_mask: collider.collision_mask,
                 });
             }
         }
 
-        // Get candidate pairs from broadphase
+        // Get candidate pairs from broadphase (already filtered by layer mask + AABB)
         let pairs = self.broadphase.compute_pairs();
 
         // Parallel narrow-phase: check each pair concurrently
@@ -385,7 +423,8 @@ impl PhysicsWorld {
                 let collider_a = world.get_by_index::<Collider>(idx_a)?;
                 let collider_b = world.get_by_index::<Collider>(idx_b)?;
 
-                // Layer mask filtering
+                // Layer mask filtering is already done in broadphase,
+                // but double-check for safety
                 if !collider_a.can_collide_with(collider_b) {
                     return None;
                 }
@@ -432,43 +471,153 @@ impl PhysicsWorld {
             })
             .collect();
 
-        // Split results into collisions and sensor events
+        // Split results into collisions and sensor events with enter/exit tracking
         self.collisions.clear();
         self.sensor_events.clear();
+
+        let mut current_collision_pairs = HashSet::new();
+        let mut current_sensor_pairs = HashSet::new();
+
         for result in results {
             match result {
                 NarrowResult::Collision(a, b, info) => {
+                    let key = PairKey::new(a, b);
+                    let is_enter = !self.previous_collision_pairs.contains(&key);
+                    current_collision_pairs.insert(key);
+
                     self.collision_events.push(CollisionEvent {
                         entity_a: a,
                         entity_b: b,
                         normal: info.normal,
                         depth: info.depth,
                         point: info.point,
+                        is_enter,
                     });
                     self.collisions.push((a, b, info));
                 }
                 NarrowResult::Sensor(a, b) => {
+                    let key = PairKey::new(a, b);
+                    let is_enter = !self.previous_sensor_pairs.contains(&key);
+                    current_sensor_pairs.insert(key);
+
+                    // Determine which is the sensor
+                    let (sensor_e, other_e) = {
+                        let a_is_sensor = world
+                            .get_by_index::<Collider>(a)
+                            .is_some_and(|c| c.is_sensor);
+                        if a_is_sensor { (a, b) } else { (b, a) }
+                    };
+
                     self.sensor_events.push(SensorEvent {
-                        sensor_entity: a,
-                        other_entity: b,
+                        sensor_entity: sensor_e,
+                        other_entity: other_e,
                         overlapping: true,
+                        is_enter,
                     });
                 }
             }
         }
+
+        // Emit exit events for pairs that are no longer colliding
+        for &key in &self.previous_collision_pairs {
+            if !current_collision_pairs.contains(&key) {
+                self.collision_events.push(CollisionEvent {
+                    entity_a: key.0,
+                    entity_b: key.1,
+                    normal: Vec3::ZERO,
+                    depth: 0.0,
+                    point: Vec3::ZERO,
+                    is_enter: false,
+                });
+            }
+        }
+        for &key in &self.previous_sensor_pairs {
+            if !current_sensor_pairs.contains(&key) {
+                let (sensor_e, other_e) = {
+                    let a_is_sensor = world
+                        .get_by_index::<Collider>(key.0)
+                        .is_some_and(|c| c.is_sensor);
+                    if a_is_sensor {
+                        (key.0, key.1)
+                    } else {
+                        (key.1, key.0)
+                    }
+                };
+                self.sensor_events.push(SensorEvent {
+                    sensor_entity: sensor_e,
+                    other_entity: other_e,
+                    overlapping: false,
+                    is_enter: false,
+                });
+            }
+        }
+
+        self.previous_collision_pairs = current_collision_pairs;
+        self.previous_sensor_pairs = current_sensor_pairs;
     }
 
-    /// Resolve detected collisions using parallel impulse-based response.
+    /// Resolve detected collisions with warm-starting from cached contacts.
     ///
     /// Collisions are grouped into independent "islands" via union-find on
     /// shared entities. Islands are resolved in parallel; within each island
     /// constraints are solved sequentially since they share bodies.
-    fn resolve_collisions(&mut self, world: &mut World) {
+    fn resolve_collisions_with_warm_start(&mut self, world: &mut World) {
         let dt = self.delta_time / self.sub_steps as f32;
 
         if self.collisions.is_empty() {
+            // Decay stale contact cache entries
+            self.contact_cache.clear();
             return;
         }
+
+        // Build/update contact manifolds from current collisions
+        let mut manifolds: Vec<ContactManifold> = Vec::new();
+        let mut seen_keys: HashSet<PairKey> = HashSet::new();
+
+        for &(idx_a, idx_b, ref info) in &self.collisions {
+            let key = PairKey::new(idx_a, idx_b);
+            seen_keys.insert(key);
+
+            let restitution_a = world
+                .get_by_index::<Collider>(idx_a)
+                .map_or(0.3, |c| c.restitution);
+            let restitution_b = world
+                .get_by_index::<Collider>(idx_b)
+                .map_or(0.3, |c| c.restitution);
+            let friction_a = world
+                .get_by_index::<Collider>(idx_a)
+                .map_or(0.5, |c| c.friction);
+            let friction_b = world
+                .get_by_index::<Collider>(idx_b)
+                .map_or(0.5, |c| c.friction);
+
+            // Try to reuse cached manifold for warm-starting
+            let mut manifold = if let Some(cached) = self.contact_cache.remove(&key) {
+                cached
+            } else {
+                ContactManifold::new(idx_a, idx_b)
+            };
+
+            manifold.restitution = (restitution_a + restitution_b) * 0.5;
+            manifold.friction = (friction_a + friction_b) * 0.5;
+
+            // Update contact points (keep accumulated impulses for warm start)
+            let contact = ContactPoint::new(info.point, info.normal, info.depth);
+            if manifold.contacts.is_empty() {
+                manifold.add_contact(contact);
+            } else {
+                // Update the first contact point position/normal/depth,
+                // preserve accumulated impulses
+                manifold.contacts[0].position = contact.position;
+                manifold.contacts[0].normal = contact.normal;
+                manifold.contacts[0].depth = contact.depth;
+            }
+
+            manifolds.push(manifold);
+        }
+
+        // Prune stale cache entries
+        self.contact_cache.retain(|key, _| seen_keys.contains(key));
 
         // Union-Find: group collisions that share entities into islands
         let mut uf = UnionFind::new();
@@ -476,135 +625,102 @@ impl PhysicsWorld {
             uf.union(idx_a as usize, idx_b as usize);
         }
 
-        // Group collision indices by island root
+        // Group manifold indices by island root
         let mut islands: HashMap<usize, Vec<usize>> = HashMap::new();
-        for (i, &(idx_a, _, _)) in self.collisions.iter().enumerate() {
-            let root = uf.find(idx_a as usize);
+        for (i, manifold) in manifolds.iter().enumerate() {
+            let root = uf.find(manifold.body_a as usize);
             islands.entry(root).or_default().push(i);
         }
 
-        // Resolve each island in parallel
+        // Resolve each island in parallel using the contact solver
         // SAFETY: Islands are disjoint sets of entities - no two islands share
         // an entity, so concurrent mutable access to different entity components
         // is safe. Within an island, collisions are processed sequentially.
-        let collisions = &self.collisions;
+        let solver = &self.contact_solver;
         let world_ptr = AtomicPtr::new(world as *mut World);
 
-        islands.par_iter().for_each(|(_, collision_indices)| {
+        islands.par_iter().for_each(|(_, manifold_indices)| {
             let world_ref = unsafe { &mut *world_ptr.load(std::sync::atomic::Ordering::Relaxed) };
-            for &ci in collision_indices {
-                let (idx_a, idx_b, ref collision) = collisions[ci];
-                Self::resolve_single_collision(world_ref, idx_a, idx_b, collision, dt);
+            for &mi in manifold_indices {
+                let manifold = &manifolds[mi];
+                let idx_a = manifold.body_a;
+                let idx_b = manifold.body_b;
+
+                let is_dynamic_a = world_ref
+                    .get_by_index::<RigidBody>(idx_a)
+                    .is_some_and(|b| b.body_type == BodyType::Dynamic);
+                let is_dynamic_b = world_ref
+                    .get_by_index::<RigidBody>(idx_b)
+                    .is_some_and(|b| b.body_type == BodyType::Dynamic);
+
+                let inv_mass_a = if is_dynamic_a {
+                    world_ref
+                        .get_by_index::<RigidBody>(idx_a)
+                        .map_or(1.0, |b| if b.mass > 0.0 { 1.0 / b.mass } else { 1.0 })
+                } else {
+                    0.0
+                };
+                let inv_mass_b = if is_dynamic_b {
+                    world_ref
+                        .get_by_index::<RigidBody>(idx_b)
+                        .map_or(1.0, |b| if b.mass > 0.0 { 1.0 / b.mass } else { 1.0 })
+                } else {
+                    0.0
+                };
+
+                let mut vel_a = world_ref
+                    .get_by_index::<RigidBody>(idx_a)
+                    .map_or(Vec3::ZERO, |b| b.linear_velocity);
+                let mut vel_b = world_ref
+                    .get_by_index::<RigidBody>(idx_b)
+                    .map_or(Vec3::ZERO, |b| b.linear_velocity);
+
+                // Use the contact solver with warm-starting
+                let mut manifold_clone = manifold.clone();
+                solver.solve_manifold(
+                    &mut manifold_clone,
+                    &mut vel_a,
+                    &mut vel_b,
+                    inv_mass_a,
+                    inv_mass_b,
+                    dt,
+                );
+
+                // Apply velocity corrections
+                if is_dynamic_a && let Some(body) = world_ref.get_by_index_mut::<RigidBody>(idx_a) {
+                    body.linear_velocity = vel_a;
+                }
+                if is_dynamic_b && let Some(body) = world_ref.get_by_index_mut::<RigidBody>(idx_b) {
+                    body.linear_velocity = vel_b;
+                }
+
+                // Position correction (Baumgarte stabilization)
+                if let Some(contact) = manifold_clone.contacts.first() {
+                    let slop = 0.005;
+                    let percent = 0.4;
+                    let correction = (contact.depth - slop).max(0.0)
+                        / (inv_mass_a + inv_mass_b).max(f32::EPSILON)
+                        * percent
+                        * contact.normal;
+
+                    if is_dynamic_a
+                        && let Some(transform) = world_ref.get_by_index_mut::<Transform>(idx_a)
+                    {
+                        transform.position -= correction * inv_mass_a;
+                    }
+                    if is_dynamic_b
+                        && let Some(transform) = world_ref.get_by_index_mut::<Transform>(idx_b)
+                    {
+                        transform.position += correction * inv_mass_b;
+                    }
+                }
             }
         });
-    }
 
-    fn resolve_single_collision(
-        world: &mut World,
-        idx_a: u32,
-        idx_b: u32,
-        collision: &CollisionInfo,
-        dt: f32,
-    ) {
-        let restitution_a = world
-            .get_by_index::<Collider>(idx_a)
-            .map_or(0.3, |c| c.restitution);
-        let restitution_b = world
-            .get_by_index::<Collider>(idx_b)
-            .map_or(0.3, |c| c.restitution);
-        let restitution = (restitution_a + restitution_b) * 0.5;
-
-        let friction_a = world
-            .get_by_index::<Collider>(idx_a)
-            .map_or(0.5, |c| c.friction);
-        let friction_b = world
-            .get_by_index::<Collider>(idx_b)
-            .map_or(0.5, |c| c.friction);
-        let friction = (friction_a + friction_b) * 0.5;
-
-        let vel_a = world
-            .get_by_index::<RigidBody>(idx_a)
-            .map_or(Vec3::ZERO, |b| b.linear_velocity);
-        let vel_b = world
-            .get_by_index::<RigidBody>(idx_b)
-            .map_or(Vec3::ZERO, |b| b.linear_velocity);
-
-        let is_dynamic_a = world
-            .get_by_index::<RigidBody>(idx_a)
-            .is_some_and(|b| b.body_type == BodyType::Dynamic);
-        let is_dynamic_b = world
-            .get_by_index::<RigidBody>(idx_b)
-            .is_some_and(|b| b.body_type == BodyType::Dynamic);
-
-        let inv_mass_a = if is_dynamic_a {
-            world
-                .get_by_index::<RigidBody>(idx_a)
-                .map_or(1.0, |b| if b.mass > 0.0 { 1.0 / b.mass } else { 1.0 })
-        } else {
-            0.0
-        };
-
-        let inv_mass_b = if is_dynamic_b {
-            world
-                .get_by_index::<RigidBody>(idx_b)
-                .map_or(1.0, |b| if b.mass > 0.0 { 1.0 / b.mass } else { 1.0 })
-        } else {
-            0.0
-        };
-
-        let total_inv_mass = inv_mass_a + inv_mass_b;
-        if total_inv_mass <= 0.0 {
-            return;
-        }
-
-        let relative_vel = vel_b - vel_a;
-        let vel_along_normal = relative_vel.dot(collision.normal);
-
-        let baumgarte = 0.2;
-        let slop = 0.005;
-        let bias = baumgarte * (collision.depth - slop).max(0.0) / dt;
-
-        if vel_along_normal > bias && vel_along_normal > 0.0 {
-            return;
-        }
-
-        let j = -(vel_along_normal - bias) / total_inv_mass;
-        let j_restitution = -(1.0 + restitution) * vel_along_normal / total_inv_mass;
-        let j = j.max(j_restitution);
-        let impulse = collision.normal * j;
-
-        if is_dynamic_a && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_a) {
-            body.linear_velocity -= impulse * inv_mass_a;
-        }
-        if is_dynamic_b && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_b) {
-            body.linear_velocity += impulse * inv_mass_b;
-        }
-
-        let percent = 0.4;
-        let correction =
-            (collision.depth - slop).max(0.0) / total_inv_mass * percent * collision.normal;
-
-        if is_dynamic_a && let Some(transform) = world.get_by_index_mut::<Transform>(idx_a) {
-            transform.position -= correction * inv_mass_a;
-        }
-        if is_dynamic_b && let Some(transform) = world.get_by_index_mut::<Transform>(idx_b) {
-            transform.position += correction * inv_mass_b;
-        }
-
-        let tangent = relative_vel - collision.normal * vel_along_normal;
-        let tangent_len_sq = tangent.length_squared();
-        if tangent_len_sq > f32::EPSILON {
-            let tangent = tangent / tangent_len_sq.sqrt();
-            let jt = -relative_vel.dot(tangent) / total_inv_mass;
-            let jt = jt.clamp(-j * friction, j * friction);
-            let friction_impulse = tangent * jt;
-
-            if is_dynamic_a && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_a) {
-                body.linear_velocity -= friction_impulse * inv_mass_a;
-            }
-            if is_dynamic_b && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_b) {
-                body.linear_velocity += friction_impulse * inv_mass_b;
-            }
+        // Store updated manifolds in contact cache for next frame warm-starting
+        for manifold in manifolds {
+            let key = PairKey::new(manifold.body_a, manifold.body_b);
+            self.contact_cache.insert(key, manifold);
         }
     }
 }
@@ -717,5 +833,63 @@ mod tests {
         let mut pw = PhysicsWorld::new();
         pw.set_broadphase_cell_size(5.0);
         assert_eq!(pw.broadphase.cell_size(), 5.0);
+    }
+
+    #[test]
+    fn test_collision_enter_event() {
+        let mut world = World::new();
+
+        let a = world.spawn();
+        world.add_component(a, Transform::from_xyz(0.0, 0.0, 0.0));
+        world.add_component(a, RigidBody::new_dynamic());
+        world.add_component(a, Collider::sphere(1.0));
+
+        let b = world.spawn();
+        world.add_component(b, Transform::from_xyz(1.5, 0.0, 0.0));
+        world.add_component(b, RigidBody::new_static());
+        world.add_component(b, Collider::sphere(1.0));
+
+        let mut pw = PhysicsWorld::new();
+        pw.sub_steps = 1;
+
+        // First frame: should be a collision enter
+        pw.step(&mut world);
+
+        let enter_events: Vec<_> = pw.collision_events.iter().filter(|e| e.is_enter).collect();
+        assert!(
+            !enter_events.is_empty(),
+            "Should have at least one collision enter event"
+        );
+    }
+
+    #[test]
+    fn test_layer_mask_filtering_in_world() {
+        let mut world = World::new();
+
+        let a = world.spawn();
+        world.add_component(a, Transform::from_xyz(0.0, 0.0, 0.0));
+        world.add_component(a, RigidBody::new_dynamic());
+        let mut col_a = Collider::sphere(1.0);
+        col_a.collision_layers = 0x01;
+        col_a.collision_mask = 0x01;
+        world.add_component(a, col_a);
+
+        let b = world.spawn();
+        world.add_component(b, Transform::from_xyz(0.5, 0.0, 0.0));
+        world.add_component(b, RigidBody::new_static());
+        let mut col_b = Collider::sphere(1.0);
+        col_b.collision_layers = 0x02;
+        col_b.collision_mask = 0x02;
+        world.add_component(b, col_b);
+
+        let mut pw = PhysicsWorld::new();
+        pw.sub_steps = 1;
+
+        pw.step(&mut world);
+
+        assert!(
+            pw.collisions.is_empty(),
+            "Layer mismatch should prevent collision"
+        );
     }
 }
