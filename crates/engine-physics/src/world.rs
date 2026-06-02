@@ -1,7 +1,8 @@
 //! Physics world for managing and simulating physics.
 use crate::body::{BodyType, RigidBody};
 use crate::broadphase::{BroadphaseEntry, SpatialHashBroadphase};
-use crate::collider::{Collider, CollisionInfo, check_collision};
+use crate::ccd::{CcdBody, sweep_sphere_aabb, sweep_sphere_sphere};
+use crate::collider::{Collider, ColliderShape, CollisionInfo, check_collision};
 use engine_core::transform::Transform;
 use engine_ecs::world::World;
 use engine_math::{EulerRot, Quat, Vec3};
@@ -68,7 +69,29 @@ pub struct PhysicsWorld {
     pub collider_count: usize,
     /// Current frame collisions (entity_index_a, entity_index_b, info)
     pub collisions: Vec<(u32, u32, CollisionInfo)>,
+    /// Collision events emitted this frame (for gameplay systems to read).
+    pub collision_events: Vec<CollisionEvent>,
+    /// Sensor overlap events emitted this frame.
+    pub sensor_events: Vec<SensorEvent>,
     broadphase: SpatialHashBroadphase,
+}
+
+/// A collision event for gameplay systems.
+#[derive(Debug, Clone)]
+pub struct CollisionEvent {
+    pub entity_a: u32,
+    pub entity_b: u32,
+    pub normal: Vec3,
+    pub depth: f32,
+    pub point: Vec3,
+}
+
+/// A sensor overlap event.
+#[derive(Debug, Clone)]
+pub struct SensorEvent {
+    pub sensor_entity: u32,
+    pub other_entity: u32,
+    pub overlapping: bool,
 }
 
 impl Default for PhysicsWorld {
@@ -80,6 +103,8 @@ impl Default for PhysicsWorld {
             body_count: 0,
             collider_count: 0,
             collisions: Vec::new(),
+            collision_events: Vec::new(),
+            sensor_events: Vec::new(),
             broadphase: SpatialHashBroadphase::new(2.0),
         }
     }
@@ -114,8 +139,12 @@ impl PhysicsWorld {
         for _ in 0..self.sub_steps {
             self.integrate_bodies(world, dt);
             self.detect_collisions(world);
+            self.wake_colliding_bodies(world);
             self.resolve_collisions(world);
         }
+
+        // Update sleep states once per frame
+        self.update_sleep_states(world, self.delta_time);
     }
 
     /// Apply gravity to all dynamic bodies.
@@ -139,11 +168,11 @@ impl PhysicsWorld {
         }
     }
 
-    /// Semi-implicit Euler integration of body positions.
+    /// Semi-implicit Euler integration of body positions with CCD support.
     fn integrate_bodies(&self, world: &mut World, dt: f32) {
         let indices = world.component_entities::<RigidBody>();
 
-        // Phase 1: compute new positions
+        // Phase 1: compute new positions (with CCD if enabled)
         let mut updates: Vec<(u32, Vec3)> = Vec::new();
         for &idx in &indices {
             if let Some(body) = world.get_by_index::<RigidBody>(idx) {
@@ -152,8 +181,19 @@ impl PhysicsWorld {
                 }
                 let vel = body.linear_velocity;
                 if let Some(transform) = world.get_by_index::<Transform>(idx) {
-                    let new_pos = transform.position + vel * dt;
-                    updates.push((idx, new_pos));
+                    let desired_pos = transform.position + vel * dt;
+
+                    // CCD: sweep if body has CcdBody and speed exceeds threshold
+                    let has_ccd = world
+                        .get_by_index::<CcdBody>(idx)
+                        .is_some_and(|c| c.enabled);
+
+                    if has_ccd && vel.length_squared() > 0.01 {
+                        let safe_pos = self.ccd_sweep(world, idx, transform.position, desired_pos);
+                        updates.push((idx, safe_pos));
+                    } else {
+                        updates.push((idx, desired_pos));
+                    }
                 }
             }
         }
@@ -166,9 +206,138 @@ impl PhysicsWorld {
         }
     }
 
+    /// CCD sweep: find the safest position along the trajectory by testing
+    /// against all static colliders.
+    fn ccd_sweep(&self, world: &World, entity_idx: u32, start: Vec3, end: Vec3) -> Vec3 {
+        let collider = match world.get_by_index::<Collider>(entity_idx) {
+            Some(c) => c.clone(),
+            None => return end,
+        };
+
+        let direction = end - start;
+        let dist = direction.length();
+        if dist < f32::EPSILON {
+            return end;
+        }
+
+        let radius = collider.shape.get_bounding_sphere();
+        let mut earliest_toi = 1.0f32;
+
+        // Test against all static colliders
+        let all_indices = world.component_entities::<Collider>();
+        for &other_idx in &all_indices {
+            if other_idx == entity_idx {
+                continue;
+            }
+            let other_body = world.get_by_index::<RigidBody>(other_idx);
+            let is_static =
+                other_body.is_none() || other_body.is_some_and(|b| b.body_type == BodyType::Static);
+            if !is_static {
+                continue;
+            }
+
+            let other_collider = match world.get_by_index::<Collider>(other_idx) {
+                Some(c) => c,
+                None => continue,
+            };
+            let other_transform = match world.get_by_index::<Transform>(other_idx) {
+                Some(t) => t,
+                None => continue,
+            };
+
+            let other_radius = other_collider.shape.get_bounding_sphere();
+
+            let result = match &other_collider.shape {
+                ColliderShape::Sphere { .. } => {
+                    sweep_sphere_sphere(start, end, radius, other_transform.position, other_radius)
+                }
+                ColliderShape::Box { half_extents } => {
+                    let aabb_min = other_transform.position - *half_extents;
+                    let aabb_max = other_transform.position + *half_extents;
+                    sweep_sphere_aabb(start, end, radius, aabb_min, aabb_max)
+                }
+                _ => {
+                    // Capsule/Cylinder: approximate as sphere sweep
+                    sweep_sphere_sphere(start, end, radius, other_transform.position, other_radius)
+                }
+            };
+
+            if result.hit && result.toi < earliest_toi {
+                earliest_toi = result.toi;
+            }
+        }
+
+        // Stop slightly before the impact point
+        let safe_toi = (earliest_toi - 0.01).max(0.0);
+        start + direction * safe_toi
+    }
+
+    /// Update sleep states: put bodies to sleep if they've been at rest,
+    /// wake them up if they receive a collision impulse.
+    fn update_sleep_states(&self, world: &mut World, dt: f32) {
+        let sleep_threshold = 0.1; // velocity threshold
+        let sleep_time = 0.5; // seconds at rest before sleeping
+
+        let indices = world.component_entities::<RigidBody>();
+        for &idx in &indices {
+            if let Some(body) = world.get_by_index::<RigidBody>(idx) {
+                if body.body_type != BodyType::Dynamic {
+                    continue;
+                }
+
+                let speed_sq =
+                    body.linear_velocity.length_squared() + body.angular_velocity.length_squared();
+
+                if speed_sq < sleep_threshold * sleep_threshold {
+                    // Accumulate rest time
+                    let rest_time = body.rest_time + dt;
+                    if rest_time >= sleep_time {
+                        // Put to sleep
+                        if let Some(body) = world.get_by_index_mut::<RigidBody>(idx) {
+                            body.is_sleeping = true;
+                            body.linear_velocity = Vec3::ZERO;
+                            body.angular_velocity = Vec3::ZERO;
+                            body.rest_time = rest_time;
+                        }
+                    } else if let Some(body) = world.get_by_index_mut::<RigidBody>(idx) {
+                        body.rest_time = rest_time;
+                    }
+                } else {
+                    // Moving — reset rest time and ensure awake
+                    if let Some(body) = world.get_by_index_mut::<RigidBody>(idx) {
+                        body.rest_time = 0.0;
+                        body.is_sleeping = false;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Wake up sleeping bodies that are involved in a collision.
+    fn wake_colliding_bodies(&self, world: &mut World) {
+        for &(idx_a, idx_b, _) in &self.collisions {
+            if let Some(body) = world.get_by_index::<RigidBody>(idx_a)
+                && body.is_sleeping
+                && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_a)
+            {
+                body.is_sleeping = false;
+                body.rest_time = 0.0;
+            }
+            if let Some(body) = world.get_by_index::<RigidBody>(idx_b)
+                && body.is_sleeping
+                && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_b)
+            {
+                body.is_sleeping = false;
+                body.rest_time = 0.0;
+            }
+        }
+    }
+
     /// Detect collisions using spatial hash broadphase + parallel narrow-phase.
     fn detect_collisions(&mut self, world: &World) {
         self.collisions.clear();
+        self.collision_events.clear();
+        self.sensor_events.clear();
         self.broadphase.clear();
 
         let collider_indices = world.component_entities::<Collider>();
@@ -200,7 +369,12 @@ impl PhysicsWorld {
         let pairs = self.broadphase.compute_pairs();
 
         // Parallel narrow-phase: check each pair concurrently
-        let collisions: Vec<(u32, u32, CollisionInfo)> = pairs
+        enum NarrowResult {
+            Collision(u32, u32, CollisionInfo),
+            Sensor(u32, u32),
+        }
+
+        let results: Vec<NarrowResult> = pairs
             .par_iter()
             .filter_map(|pair| {
                 let idx_a = pair.index_a;
@@ -211,7 +385,8 @@ impl PhysicsWorld {
                 let collider_a = world.get_by_index::<Collider>(idx_a)?;
                 let collider_b = world.get_by_index::<Collider>(idx_b)?;
 
-                if collider_a.is_sensor || collider_b.is_sensor {
+                // Layer mask filtering
+                if !collider_a.can_collide_with(collider_b) {
                     return None;
                 }
 
@@ -228,6 +403,22 @@ impl PhysicsWorld {
                     transform_b.rotation.z,
                 );
 
+                // Sensor pairs: overlap test only
+                if collider_a.is_sensor || collider_b.is_sensor {
+                    let overlap = check_collision(
+                        transform_a.position,
+                        rot_a,
+                        collider_a,
+                        transform_b.position,
+                        rot_b,
+                        collider_b,
+                    );
+                    if overlap.is_some() {
+                        return Some(NarrowResult::Sensor(idx_a, idx_b));
+                    }
+                    return None;
+                }
+
                 let mut info = check_collision(
                     transform_a.position,
                     rot_a,
@@ -237,11 +428,34 @@ impl PhysicsWorld {
                     collider_b,
                 )?;
                 info.other_entity = idx_b as u64;
-                Some((idx_a, idx_b, info))
+                Some(NarrowResult::Collision(idx_a, idx_b, info))
             })
             .collect();
 
-        self.collisions = collisions;
+        // Split results into collisions and sensor events
+        self.collisions.clear();
+        self.sensor_events.clear();
+        for result in results {
+            match result {
+                NarrowResult::Collision(a, b, info) => {
+                    self.collision_events.push(CollisionEvent {
+                        entity_a: a,
+                        entity_b: b,
+                        normal: info.normal,
+                        depth: info.depth,
+                        point: info.point,
+                    });
+                    self.collisions.push((a, b, info));
+                }
+                NarrowResult::Sensor(a, b) => {
+                    self.sensor_events.push(SensorEvent {
+                        sensor_entity: a,
+                        other_entity: b,
+                        overlapping: true,
+                    });
+                }
+            }
+        }
     }
 
     /// Resolve detected collisions using parallel impulse-based response.

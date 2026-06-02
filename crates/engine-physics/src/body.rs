@@ -23,6 +23,8 @@ pub struct RigidBody {
     pub angular_damping: f32,
     pub gravity_scale: f32,
     pub is_sleeping: bool,
+    /// Time the body has been at rest (for sleep system).
+    pub rest_time: f32,
 }
 
 impl Default for RigidBody {
@@ -36,6 +38,7 @@ impl Default for RigidBody {
             angular_damping: 0.0,
             gravity_scale: 1.0,
             is_sleeping: false,
+            rest_time: 0.0,
         }
     }
 }

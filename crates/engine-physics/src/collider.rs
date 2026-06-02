@@ -38,6 +38,10 @@ pub struct Collider {
     pub restitution: f32,
     pub density: f32,
     pub offset: Vec3,
+    /// Which collision layers this collider belongs to (bitmask).
+    pub collision_layers: u32,
+    /// Which collision layers this collider can collide with (bitmask).
+    pub collision_mask: u32,
 }
 
 impl Default for Collider {
@@ -51,6 +55,8 @@ impl Default for Collider {
             restitution: 0.3,
             density: 1.0,
             offset: Vec3::new(0.0, 0.0, 0.0),
+            collision_layers: 0xFFFF_FFFF,
+            collision_mask: 0xFFFF_FFFF,
         }
     }
 }
@@ -84,6 +90,12 @@ impl Collider {
             shape: ColliderShape::Cylinder { radius, height },
             ..Default::default()
         }
+    }
+
+    /// Check if this collider can collide with another based on layer masks.
+    pub fn can_collide_with(&self, other: &Collider) -> bool {
+        (self.collision_layers & other.collision_mask) != 0
+            && (other.collision_layers & self.collision_mask) != 0
     }
 }
 
