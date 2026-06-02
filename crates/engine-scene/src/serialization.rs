@@ -114,7 +114,7 @@ pub struct SceneEntityData {
 }
 
 /// Serializable transform data using raw arrays for portability.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransformData {
     /// Position `[x, y, z]`.
     pub translation: [f32; 3],

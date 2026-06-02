@@ -33,12 +33,14 @@
 pub mod bridge;
 pub mod hot_reload;
 pub mod system;
+pub mod wasm;
 
 /// Prelude module for convenient imports.
 pub mod prelude {
     pub use crate::bridge::ComponentBridge;
     pub use crate::hot_reload::HotReloader;
     pub use crate::system::ScriptSystem;
+    pub use crate::wasm::{WasmComponentBridge, WasmRuntime, WasmSandbox, WasmSystem};
 }
 
 #[cfg(test)]
