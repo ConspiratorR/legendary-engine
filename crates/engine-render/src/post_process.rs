@@ -312,6 +312,226 @@ impl TonemappingPass {
     }
 }
 
+/// Compositing blend mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompositeMode {
+    /// Multiply destination by source red channel (SSAO application).
+    Multiply = 0,
+    /// Replace destination with source color (TAA/fog resolve).
+    Copy = 1,
+    /// Add source * intensity to destination (SSR/volumetric blend).
+    Additive = 2,
+}
+
+/// GPU uniform for compositing parameters (16 bytes).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct CompositeUniform {
+    pub mode: u32,
+    pub intensity: f32,
+    pub _pad: [f32; 2],
+}
+
+/// General-purpose compositing pass for applying post-processing results
+/// back to the active HDR buffer.
+///
+/// Supports multiply (SSAO), copy (TAA/fog), and additive (SSR/volumetric) modes.
+pub struct CompositePass {
+    pub pipeline: wgpu::RenderPipeline,
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub uniform_buffer: wgpu::Buffer,
+    pub sampler: wgpu::Sampler,
+}
+
+impl CompositePass {
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        output_format: wgpu::TextureFormat,
+    ) -> Self {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("composite_shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "pipeline/composite.wgsl"
+            ))),
+        });
+
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("composite_bind_group_layout"),
+            entries: &[
+                // @binding(0): source texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // @binding(1): destination texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // @binding(2): sampler
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                // @binding(3): uniform params
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("composite_pipeline_layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("composite_pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_fullscreen"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_composite"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: output_format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        let uniform = CompositeUniform {
+            mode: 0,
+            intensity: 1.0,
+            _pad: [0.0; 2],
+        };
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("composite_uniform"),
+            size: std::mem::size_of::<CompositeUniform>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        queue.write_buffer(&uniform_buffer, 0, bytemuck::bytes_of(&uniform));
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("composite_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        Self {
+            pipeline,
+            bind_group_layout,
+            uniform_buffer,
+            sampler,
+        }
+    }
+
+    /// Execute a compositing pass.
+    ///
+    /// Reads from `src_view` and `dst_view`, writes composited result to `output_view`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn execute(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        src_view: &wgpu::TextureView,
+        dst_view: &wgpu::TextureView,
+        output_view: &wgpu::TextureView,
+        mode: CompositeMode,
+        intensity: f32,
+        queue: &wgpu::Queue,
+        device: &wgpu::Device,
+    ) {
+        let uniform = CompositeUniform {
+            mode: mode as u32,
+            intensity,
+            _pad: [0.0; 2],
+        };
+        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniform));
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("composite_bind_group"),
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(src_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(dst_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: self.uniform_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("composite_pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: output_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &bind_group, &[]);
+        pass.draw(0..3, 0..1);
+    }
+}
+
 /// G-Buffer inputs for post-processing passes that need scene geometry data.
 ///
 /// Optional — passes requiring G-Buffer data (SSAO, SSR, height fog, volumetric)
@@ -370,6 +590,7 @@ impl HeightFogEffect {
 pub struct PostProcessChain {
     pub hdr_framebuffer: HdrFramebuffer,
     pub tonemapping: TonemappingPass,
+    pub composite: CompositePass,
     pub ssao: Option<SsaoEffect>,
     pub bloom: Option<BloomEffect>,
     pub taa: Option<TaaEffect>,
@@ -395,6 +616,7 @@ impl PostProcessChain {
         let hdr_framebuffer = HdrFramebuffer::new(device, width, height);
         let hdr_aux = HdrFramebuffer::new(device, width, height);
         let tonemapping = TonemappingPass::new(device, queue, output_format);
+        let composite = CompositePass::new(device, queue, wgpu::TextureFormat::Rgba16Float);
 
         let ssao = SsaoEffect::new(device, queue, width, height);
         let bloom = BloomEffect::new(device, queue, width, height);
@@ -406,6 +628,7 @@ impl PostProcessChain {
         Self {
             hdr_framebuffer,
             tonemapping,
+            composite,
             ssao: Some(ssao),
             bloom: Some(bloom),
             taa: Some(taa),
@@ -430,10 +653,12 @@ impl PostProcessChain {
         let hdr_framebuffer = HdrFramebuffer::new(device, width, height);
         let hdr_aux = HdrFramebuffer::new(device, width, height);
         let tonemapping = TonemappingPass::new(device, queue, output_format);
+        let composite = CompositePass::new(device, queue, wgpu::TextureFormat::Rgba16Float);
 
         Self {
             hdr_framebuffer,
             tonemapping,
+            composite,
             ssao: None,
             bloom: None,
             taa: None,
@@ -498,6 +723,7 @@ impl PostProcessChain {
         let mut current_is_primary = true;
 
         // ── SSAO ──────────────────────────────────────────────
+        // Compute occlusion, then composite (multiply) onto the active HDR buffer.
         if let (Some(ssao), Some(gb)) = (&self.ssao, gbuffer) {
             ssao.execute(
                 encoder,
@@ -507,6 +733,23 @@ impl PostProcessChain {
                 queue,
                 device,
             );
+            // Apply SSAO: multiply scene by occlusion factor.
+            let (dst, tmp) = if current_is_primary {
+                (&self.hdr_framebuffer.view, &self.hdr_aux.view)
+            } else {
+                (&self.hdr_aux.view, &self.hdr_framebuffer.view)
+            };
+            self.composite.execute(
+                encoder,
+                &ssao.target.output_view,
+                dst,
+                tmp,
+                CompositeMode::Multiply,
+                1.0,
+                queue,
+                device,
+            );
+            current_is_primary = !current_is_primary;
         }
 
         // ── Bloom ─────────────────────────────────────────────
@@ -521,31 +764,40 @@ impl PostProcessChain {
         }
 
         // ── TAA ───────────────────────────────────────────────
-        if let (Some(taa), Some(gb)) = (&mut self.taa, gbuffer) {
+        // Resolve temporal blend, then copy result back to the active HDR buffer.
+        let mut taa_resolved = false;
+        if let (Some(taa), Some(gb)) = (&self.taa, gbuffer) {
             let src = if current_is_primary {
                 &self.hdr_framebuffer.view
             } else {
                 &self.hdr_aux.view
             };
             taa.execute(encoder, src, gb.depth_view, device);
-            // TAA writes to its own resolved target — swap it into the primary buffer.
-            // For now, we skip the copy and let TAA's internal target be used downstream.
-            // A future optimization would be to copy TAA output into the active HDR buffer.
-        }
-
-        // ── Height Fog ────────────────────────────────────────
-        if let (Some(fog), Some(gb)) = (&self.height_fog, gbuffer) {
-            let src = if current_is_primary {
-                &self.hdr_framebuffer.view
+            // Copy TAA resolved output to the active buffer.
+            let (dst, tmp) = if current_is_primary {
+                (&self.hdr_framebuffer.view, &self.hdr_aux.view)
             } else {
-                &self.hdr_aux.view
+                (&self.hdr_aux.view, &self.hdr_framebuffer.view)
             };
-            fog.execute(encoder, src, gb.position_view, device);
-            // Height fog writes to its own target — swap reference.
+            self.composite.execute(
+                encoder,
+                &taa.target.resolved_view,
+                dst,
+                tmp,
+                CompositeMode::Copy,
+                1.0,
+                queue,
+                device,
+            );
             current_is_primary = !current_is_primary;
+            taa_resolved = true;
+        }
+        if taa_resolved {
+            self.taa.as_mut().unwrap().target.swap();
         }
 
         // ── SSR ───────────────────────────────────────────────
+        // Compute reflections, then composite (additive) onto the active HDR buffer.
         if let (Some(ssr), Some(gb)) = (&self.ssr, gbuffer) {
             let scene_view = if current_is_primary {
                 &self.hdr_framebuffer.view
@@ -560,13 +812,74 @@ impl PostProcessChain {
                 gb.position_view,
                 device,
             );
-            // SSR writes to its own reflection target — no buffer swap needed.
+            // Add reflections to the scene.
+            let (dst, tmp) = if current_is_primary {
+                (&self.hdr_framebuffer.view, &self.hdr_aux.view)
+            } else {
+                (&self.hdr_aux.view, &self.hdr_framebuffer.view)
+            };
+            self.composite.execute(
+                encoder,
+                &ssr.target.reflection_view,
+                dst,
+                tmp,
+                CompositeMode::Additive,
+                1.0,
+                queue,
+                device,
+            );
+            current_is_primary = !current_is_primary;
+        }
+
+        // ── Height Fog ────────────────────────────────────────
+        // Apply fog, then copy result back to the active HDR buffer.
+        if let (Some(fog), Some(gb)) = (&self.height_fog, gbuffer) {
+            let src = if current_is_primary {
+                &self.hdr_framebuffer.view
+            } else {
+                &self.hdr_aux.view
+            };
+            fog.execute(encoder, src, gb.position_view, device);
+            // Copy fogged scene to the active buffer.
+            let (dst, tmp) = if current_is_primary {
+                (&self.hdr_framebuffer.view, &self.hdr_aux.view)
+            } else {
+                (&self.hdr_aux.view, &self.hdr_framebuffer.view)
+            };
+            self.composite.execute(
+                encoder,
+                &fog.target.view,
+                dst,
+                tmp,
+                CompositeMode::Copy,
+                1.0,
+                queue,
+                device,
+            );
+            current_is_primary = !current_is_primary;
         }
 
         // ── Volumetric ────────────────────────────────────────
+        // Compute volumetric lighting, then composite (additive) onto the active HDR buffer.
         if let (Some(vol), Some(gb)) = (&self.volumetric, gbuffer) {
             vol.execute(encoder, gb.depth_view, gb.position_view, device);
-            // Volumetric writes to its own target — no buffer swap needed.
+            // Add volumetric lighting to the scene.
+            let (dst, tmp) = if current_is_primary {
+                (&self.hdr_framebuffer.view, &self.hdr_aux.view)
+            } else {
+                (&self.hdr_aux.view, &self.hdr_framebuffer.view)
+            };
+            self.composite.execute(
+                encoder,
+                &vol.target.view,
+                dst,
+                tmp,
+                CompositeMode::Additive,
+                1.0,
+                queue,
+                device,
+            );
+            current_is_primary = !current_is_primary;
         }
 
         // ── Tonemapping ───────────────────────────────────────
@@ -849,5 +1162,24 @@ mod tests {
         assert_eq!(chain.hdr_aux.width, 1920);
         assert_eq!(chain.width, 1920);
         assert_eq!(chain.height, 1080);
+    }
+
+    #[test]
+    fn test_composite_uniform_size() {
+        assert_eq!(std::mem::size_of::<CompositeUniform>(), 16);
+    }
+
+    #[test]
+    fn test_composite_pass_creation() {
+        let (device, queue) = create_test_device();
+        let pass = CompositePass::new(&device, &queue, wgpu::TextureFormat::Rgba16Float);
+        let _ = pass.pipeline;
+    }
+
+    #[test]
+    fn test_composite_mode_values() {
+        assert_eq!(CompositeMode::Multiply as u32, 0);
+        assert_eq!(CompositeMode::Copy as u32, 1);
+        assert_eq!(CompositeMode::Additive as u32, 2);
     }
 }
