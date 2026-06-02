@@ -116,6 +116,10 @@ impl<'a, A: 'static, B: 'static> Iterator for QueryPairIterMut<'a, A, B> {
         self.index += 1;
         if idx < self.indices.len() {
             let entity_idx = self.indices[idx];
+            // SAFETY: self.world is a raw pointer borrowed from the World reference
+            // that created this iterator. A and B are different types, so their
+            // sparse-set storage does not alias. The iterator yields each entity index
+            // exactly once, so no double-mutable-borrow occurs.
             unsafe {
                 let a = (*self.world).get_by_index_mut::<A>(entity_idx)?;
                 let b = (*self.world).get_by_index_mut::<B>(entity_idx)?;
@@ -143,6 +147,7 @@ impl<'a, A: 'static> Iterator for QueryIterMut<'a, A> {
         self.index += 1;
         if idx < self.indices.len() {
             let entity_idx = self.indices[idx];
+            // SAFETY: Same as QueryPairIterMut — borrowed from World, unique indices.
             unsafe { (*self.world).get_by_index_mut::<A>(entity_idx) }
         } else {
             None
@@ -154,7 +159,9 @@ impl<'a, A: 'static> Iterator for QueryIterMut<'a, A> {
 mod tests {
     use crate::{query::Query, query::QueryPair, world::World};
 
+    #[allow(dead_code)]
     struct Pos(f32, f32);
+    #[allow(dead_code)]
     struct Vel(f32, f32);
 
     #[test]

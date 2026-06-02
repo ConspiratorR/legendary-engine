@@ -5,8 +5,11 @@ use engine_ecs::schedule::ParallelSchedule;
 use engine_ecs::system::{AccessSystem, IntoSystem};
 use engine_ecs::world::World;
 
+#[allow(dead_code)]
 struct Position(f32, f32, f32);
+#[allow(dead_code)]
 struct Velocity(f32, f32, f32);
+#[allow(dead_code)]
 struct Health(i32);
 
 #[test]

@@ -441,7 +441,7 @@ mod tests {
         let mut tree = SceneTree::new();
         let root_id = tree.root_ids[0];
         let child = tree.add_node("Child", Some(root_id));
-        let grandchild = tree.add_node("Grandchild", Some(child));
+        let _grandchild = tree.add_node("Grandchild", Some(child));
         let n_before = tree.nodes.len();
         tree.remove_node(child);
         assert_eq!(tree.nodes.len(), n_before - 2);

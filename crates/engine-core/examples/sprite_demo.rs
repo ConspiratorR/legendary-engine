@@ -85,6 +85,7 @@ fn main() {
 
     let registry = Registry::new();
     let mut renderer = renderer;
+    #[allow(deprecated)]
     event_loop
         .run(move |event, elwt| {
             elwt.set_control_flow(ControlFlow::Poll);

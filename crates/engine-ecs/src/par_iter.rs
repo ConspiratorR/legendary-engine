@@ -74,6 +74,7 @@ mod tests {
     use super::*;
 
     #[derive(Clone)]
+    #[allow(dead_code)]
     struct Position(f32, f32, f32);
 
     #[test]

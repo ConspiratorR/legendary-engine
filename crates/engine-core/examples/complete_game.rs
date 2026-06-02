@@ -18,6 +18,7 @@ struct Player;
 struct Enemy;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Health {
     current: f32,
     max: f32,

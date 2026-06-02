@@ -39,6 +39,7 @@ impl RigidBody {
 struct Position(Vec3);
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Collider {
     half_extents: Vec3,
 }

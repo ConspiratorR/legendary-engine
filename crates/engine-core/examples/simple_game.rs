@@ -22,6 +22,7 @@ struct Player;
 struct Enemy;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Health {
     current: f32,
     max: f32,
@@ -202,7 +203,7 @@ fn score_system() -> impl IntoSystem {
 
         // Update score (mutable borrow, released before next immutable borrows)
         let should_print = {
-            let mut query = QueryPair::<&mut Score, ()>::new();
+            let query = QueryPair::<&mut Score, ()>::new();
             let mut printed = false;
             for (score, _) in query.iter_mut(world) {
                 score.value += 1;

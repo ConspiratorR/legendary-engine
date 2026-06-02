@@ -121,13 +121,8 @@ impl Renderer {
     }
 
     /// Update tone mapping settings.
-    pub fn set_tonemapping(&self, queue: &wgpu::Queue, config: TonemappingConfig) {
-        // Interior mutability: TonemappingPass::set_config only writes to the uniform buffer
-        unsafe {
-            let ptr = &self.post_process.tonemapping as *const crate::post_process::TonemappingPass
-                as *mut crate::post_process::TonemappingPass;
-            (*ptr).set_config(queue, config);
-        }
+    pub fn set_tonemapping(&mut self, queue: &wgpu::Queue, config: TonemappingConfig) {
+        self.post_process.set_tonemapping(queue, config);
     }
 
     pub fn render_frame(
@@ -217,6 +212,9 @@ impl Renderer {
             .map(|b| b as *const wgpu::Buffer);
         drop(graph_buffers);
 
+        // SAFETY: All pointers reference buffers owned by self.graph, which outlives
+        // this function. The graph_buffers guard was dropped, but the underlying
+        // Buffer objects are still alive in self.graph.
         let vb = vb_ptr.map(|p| unsafe { &*p });
         let ib = ib_ptr.map(|p| unsafe { &*p });
         let instb = instb_ptr.map(|p| unsafe { &*p });

@@ -69,6 +69,8 @@ impl BufferNode {
         if let Some(ref buf) = self.buffer {
             Some(buf)
         } else if let Some(ptr) = self.ref_ptr {
+            // SAFETY: ref_ptr is set only via import_buffer_ref, which borrows an
+            // external Buffer. The caller guarantees the Buffer outlives this graph node.
             Some(unsafe { &*ptr })
         } else {
             None

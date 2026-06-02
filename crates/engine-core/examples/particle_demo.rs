@@ -3,11 +3,11 @@ use engine_core::color::Color;
 use engine_core::plugin::Plugin;
 use engine_core::plugins::CorePlugins;
 use engine_core::time::Time;
-use engine_ecs::system::IntoSystem;
-use engine_ecs::world::World;
+
 use engine_math::Vec2;
 use std::collections::VecDeque;
 
+#[allow(dead_code)]
 struct Particle {
     position: Vec2,
     velocity: Vec2,
@@ -98,7 +98,7 @@ pub fn main() {
 
         // Spawn particles
         if let Some(system) = app.world.get_resource_mut::<ParticleSystem>() {
-            let dt = system.spawn_timer;
+            let _dt = system.spawn_timer;
             system.spawn_timer += 0.016;
 
             let spawn_interval = 1.0 / system.spawn_rate;

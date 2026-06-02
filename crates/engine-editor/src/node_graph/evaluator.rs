@@ -446,7 +446,7 @@ mod tests {
 
         let id1 = graph.add_node(n1);
         let id2 = graph.add_node(n2);
-        let id3 = graph.add_node(n3);
+        let _id3 = graph.add_node(n3);
 
         // float -> add.in[0]
         let out1 = super::super::types::PinId::new(id1, 0);

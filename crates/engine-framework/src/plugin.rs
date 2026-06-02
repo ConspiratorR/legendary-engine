@@ -21,6 +21,10 @@ impl Plugin for FrameworkPlugin {
                 .get_mut::<StateStack>()
                 .map(|s| s as *mut StateStack);
             if let Some(stack_ptr) = stack_ptr {
+                // SAFETY: stack_ptr was derived from resources.get_mut::<StateStack>()
+                // in the same closure. The closure has exclusive &mut App access, so
+                // no aliasing occurs. The raw pointer is needed to work around the
+                // borrow split between resources and the stack reference.
                 let stack = unsafe { &mut *stack_ptr };
                 stack.update_top(world, resources, 0.016);
             }
@@ -33,6 +37,7 @@ impl Plugin for FrameworkPlugin {
                 .get_mut::<StateStack>()
                 .map(|s| s as *mut StateStack);
             if let Some(stack_ptr) = stack_ptr {
+                // SAFETY: Same as above — exclusive &mut App access, no aliasing.
                 let stack = unsafe { &mut *stack_ptr };
                 stack.flush(world, resources);
             }
