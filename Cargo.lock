@@ -1330,12 +1330,15 @@ name = "engine-script"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "criterion",
  "engine-core",
  "engine-ecs",
+ "engine-math",
  "mlua",
  "notify 8.2.0",
  "notify-debouncer-mini",
  "tempfile",
+ "thiserror 2.0.18",
  "wasmtime",
  "wat",
 ]

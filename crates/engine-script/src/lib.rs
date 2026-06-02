@@ -4,6 +4,9 @@
 //! - **[`ComponentBridge`]**: Register Rust component types for Lua access
 //! - **[`ScriptSystem`]**: Execute Lua scripts as ECS systems
 //! - **[`HotReloader`]**: Watch `.lua` files for automatic reloading
+//! - **[`TypeRegistry`]**: Unified Rust ↔ Lua/WASM type mapping for engine math types
+//! - **[`CallbackRegistry`]**: Register Rust callbacks callable from scripts
+//! - **[`ScriptEventBus`]**: Bridge engine events to/from scripts
 //!
 //! # Quick Start
 //!
@@ -31,15 +34,23 @@
 //! ```
 
 pub mod bridge;
+pub mod callback;
+pub mod error;
+pub mod event_bridge;
 pub mod hot_reload;
 pub mod system;
+pub mod type_registry;
 pub mod wasm;
 
 /// Prelude module for convenient imports.
 pub mod prelude {
     pub use crate::bridge::ComponentBridge;
+    pub use crate::callback::{CallbackArg, CallbackRegistry, CallbackResult};
+    pub use crate::error::{BridgeError, BridgeResult};
+    pub use crate::event_bridge::{EventData, ScriptEventBus};
     pub use crate::hot_reload::HotReloader;
     pub use crate::system::ScriptSystem;
+    pub use crate::type_registry::TypeRegistry;
     pub use crate::wasm::{WasmComponentBridge, WasmRuntime, WasmSandbox, WasmSystem};
 }
 

@@ -11,8 +11,15 @@ notify = "8"
 notify-debouncer-mini = "0.6"
 engine-ecs = { path = "../engine-ecs" }
 engine-core = { path = "../engine-core" }
+engine-math = { path = "../engine-math" }
 anyhow = "1"
+thiserror = "2"
 
 [dev-dependencies]
 tempfile = "3"
 wat = "1"
+criterion = { workspace = true }
+
+[[bench]]
+name = "bridge_overhead"
+harness = false

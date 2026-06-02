@@ -11,6 +11,7 @@
 //! property overrides, and nested prefab support.
 
 pub mod animation_state;
+pub mod diff;
 pub mod hierarchy;
 pub mod ik;
 pub mod keyframe;
