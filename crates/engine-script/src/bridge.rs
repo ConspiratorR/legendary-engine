@@ -18,7 +18,7 @@ pub type AddFn = Box<dyn Fn(&Lua, &mut World, u32, &LuaValue) -> LuaResult<()> +
 /// Registry mapping human-readable component names to their Lua bridge closures.
 ///
 /// Register each component type you want to expose to Lua with
-/// [`register`], [`register_set`], and optionally [`register_add`].
+/// [`register_get`](Self::register_get), [`register_set`](Self::register_set), and optionally [`register_add`](Self::register_add).
 pub struct ComponentBridge {
     getters: HashMap<String, GetFn>,
     setters: HashMap<String, SetFn>,

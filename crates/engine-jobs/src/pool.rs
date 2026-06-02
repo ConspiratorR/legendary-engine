@@ -96,7 +96,7 @@ impl ThreadPool {
         }
     }
 
-    /// Submit a task for execution. Returns a [`TaskId`].
+    /// Submit a task for execution. Returns a [`TaskId`](crate::task::TaskId).
     pub fn submit<F: FnOnce() + Send + 'static>(&self, work: F) -> crate::task::TaskId {
         let task = Task::new(work);
         let id = task.id;

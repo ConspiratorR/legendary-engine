@@ -11,6 +11,7 @@ use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 const CAMERA_UNIFORM_SIZE: u64 = 64;
 const DEFAULT_SPRITE_CAPACITY: usize = 10000;
 
+/// Thread-safe wrapper around [`wgpu::Device`].
 #[derive(Clone)]
 pub struct GpuDevice(pub Arc<Device>);
 
@@ -21,6 +22,7 @@ impl Deref for GpuDevice {
     }
 }
 
+/// Thread-safe wrapper around [`wgpu::Queue`].
 #[derive(Clone)]
 pub struct GpuQueue(pub Arc<Queue>);
 
@@ -31,6 +33,10 @@ impl Deref for GpuQueue {
     }
 }
 
+/// Main renderer owning the wgpu device, queue, surface, and render pipelines.
+///
+/// Created via [`Renderer::new`] with a window handle. Manages the render graph,
+/// sprite pipeline, camera uniforms, and post-processing chain.
 pub struct Renderer {
     pub device: GpuDevice,
     pub queue: GpuQueue,
@@ -45,6 +51,10 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    /// Create a new renderer for the given window.
+    ///
+    /// Initializes the wgpu adapter, device, queue, and surface. Returns an
+    /// error if no suitable GPU adapter is found.
     pub fn new(
         window: std::sync::Arc<winit::window::Window>,
     ) -> Result<Self, Box<dyn std::error::Error>> {

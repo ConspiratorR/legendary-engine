@@ -5,7 +5,7 @@ use super::graph::{NodeGraph, NodeType};
 use super::types::{NodeId, NodeValue};
 
 /// Material parameters extracted from the node graph.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct MaterialParams {
     pub base_color: [f32; 4],
     pub metallic: f32,
@@ -132,6 +132,38 @@ pub fn generate_wgsl(graph: &NodeGraph) -> String {
         let var_name = format!("n{}", node_id);
 
         match node.node_type {
+            // Blueprint nodes don't produce WGSL — skip them
+            NodeType::EventBeginPlay
+            | NodeType::EventTick
+            | NodeType::EventCustom(_)
+            | NodeType::Branch
+            | NodeType::ForLoop
+            | NodeType::ForEachLoop
+            | NodeType::Sequence
+            | NodeType::FlipFlop
+            | NodeType::DoOnce
+            | NodeType::Delay
+            | NodeType::VariableGet
+            | NodeType::VariableSet
+            | NodeType::BooleanAnd
+            | NodeType::BooleanOr
+            | NodeType::BooleanNot
+            | NodeType::Equal
+            | NodeType::NotEqual
+            | NodeType::GreaterThan
+            | NodeType::LessThan
+            | NodeType::GreaterEqual
+            | NodeType::LessEqual
+            | NodeType::FunctionCall
+            | NodeType::PrintString
+            | NodeType::BlueprintAdd
+            | NodeType::BlueprintSubtract
+            | NodeType::BlueprintMultiply
+            | NodeType::BlueprintDivide
+            | NodeType::BlueprintClamp
+            | NodeType::BlueprintAbs
+            | NodeType::BlueprintMin
+            | NodeType::BlueprintMax => continue,
             NodeType::ConstantFloat => {
                 let val = node.values.get(&0).map(|v| v.to_float()).unwrap_or(0.0);
                 let _ = writeln!(wgsl, "    let {} = {};", var_name, val);
@@ -282,6 +314,42 @@ pub fn generate_wgsl(graph: &NodeGraph) -> String {
                     var_name
                 );
             }
+            NodeType::NormalMap => {
+                let normal = get_input_var(graph, node, 0, &result);
+                let strength = get_input_var(graph, node, 1, &result);
+                let _ = writeln!(
+                    wgsl,
+                    "    let {} = normalize(vec3<f32>({}.xy * {}, max({}.z, 0.001)));",
+                    var_name, normal, strength, normal
+                );
+            }
+            NodeType::Flipbook => {
+                let uv = get_input_var(graph, node, 0, &result);
+                let cols = get_input_var(graph, node, 1, &result);
+                let rows = get_input_var(graph, node, 2, &result);
+                let index = get_input_var(graph, node, 3, &result);
+                let _ = writeln!(
+                    wgsl,
+                    "    let {} = vec2<f32>(({}.x / {}) + (floor({} / {}) * (1.0 / {})), ({}.y / {}) + (floor({} / {}) * (1.0 / {})));",
+                    var_name, uv, cols, index, cols, cols, uv, rows, index, rows, rows
+                );
+            }
+            NodeType::Mix => {
+                let a = get_input_var(graph, node, 0, &result);
+                let b = get_input_var(graph, node, 1, &result);
+                let t = get_input_var(graph, node, 2, &result);
+                let _ = writeln!(wgsl, "    let {} = mix({}, {}, {});", var_name, a, b, t);
+            }
+            NodeType::Fresnel => {
+                let normal = get_input_var(graph, node, 0, &result);
+                let view_dir = get_input_var(graph, node, 1, &result);
+                let power = get_input_var(graph, node, 2, &result);
+                let _ = writeln!(
+                    wgsl,
+                    "    let {} = pow(1.0 - abs(dot({}, {})), {});",
+                    var_name, normal, view_dir, power
+                );
+            }
             NodeType::MaterialOutput => {
                 // Assign to output params
                 let base_color = get_input_var(graph, node, 0, &result);
@@ -306,6 +374,31 @@ pub fn generate_wgsl(graph: &NodeGraph) -> String {
     wgsl.push_str("}\n");
 
     wgsl
+}
+
+/// Convert MaterialParams to engine PbrMaterial.
+///
+/// This provides integration between the material graph system and the
+/// engine's PbrMaterial component used for mesh rendering.
+pub fn to_pbr_material(params: &MaterialParams) -> engine_render::resource::material::PbrMaterial {
+    engine_render::resource::material::PbrMaterial {
+        base_color: params.base_color,
+        metallic: params.metallic,
+        roughness: params.roughness,
+        ao: params.ao,
+        emissive: params.emissive,
+        base_color_texture: None,
+        normal_texture: None,
+        metallic_roughness_texture: None,
+    }
+}
+
+/// Extract PbrMaterial directly from a material graph.
+///
+/// Convenience function that evaluates the graph and converts to PbrMaterial.
+pub fn extract_pbr_material(graph: &NodeGraph) -> engine_render::resource::material::PbrMaterial {
+    let params = extract_material_params(graph);
+    to_pbr_material(&params)
 }
 
 /// Get the variable name for a node's input, either from a connection or default.

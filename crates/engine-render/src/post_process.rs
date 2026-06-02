@@ -69,7 +69,7 @@ impl From<&TonemappingConfig> for TonemappingUniform {
 /// HDR floating-point framebuffer (Rgba16Float).
 ///
 /// Serves as the intermediate render target between the lighting pass
-/// and post-processing passes. Format supports values beyond [0,1].
+/// and post-processing passes. Format supports values beyond \[0,1\].
 pub struct HdrFramebuffer {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,

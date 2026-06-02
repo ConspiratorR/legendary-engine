@@ -48,7 +48,7 @@ impl HotReloader {
     /// Start watching a directory for `.lua` file changes.
     ///
     /// When a `.lua` file is modified, it will be flagged for reload
-    /// on the next [`check_reloads`] call.
+    /// on the next [`check_reloads`](Self::check_reloads) call.
     pub fn start_watching(&mut self, dir: impl AsRef<Path>) -> notify::Result<()> {
         let pending = self.pending_reloads.clone();
         let mut debouncer = new_debouncer(
@@ -78,7 +78,7 @@ impl HotReloader {
     /// Check for pending reloads and return the script names that need reloading.
     ///
     /// Call this each frame before running systems. For each returned name,
-    /// call [`reload_script`] to apply the changes.
+    /// call [`reload_script`](Self::reload_script) to apply the changes.
     pub fn check_reloads(&self) -> Vec<String> {
         let mut result = Vec::new();
         if let Ok(mut pending) = self.pending_reloads.write() {

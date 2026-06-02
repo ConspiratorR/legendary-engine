@@ -33,10 +33,16 @@ pub fn create_node(node_type: NodeType, position: Pos2) -> Node {
 
         // ── Texture nodes ──
         NodeType::TextureSample => create_texture_sample(position),
+        NodeType::NormalMap => create_normal_map(position),
+        NodeType::Flipbook => create_flipbook(position),
 
         // ── Color nodes ──
         NodeType::CombineRgb => create_combine_rgb(position),
         NodeType::SplitRgb => create_split_rgb(position),
+        NodeType::Mix => create_mix(position),
+
+        // ── PBR helper nodes ──
+        NodeType::Fresnel => create_fresnel(position),
 
         // ── Vector nodes ──
         NodeType::DotProduct => create_dot_product(position),
@@ -45,6 +51,39 @@ pub fn create_node(node_type: NodeType, position: Pos2) -> Node {
 
         // ── Output ──
         NodeType::MaterialOutput => create_material_output(position),
+
+        // ── Blueprint nodes ──
+        NodeType::EventBeginPlay => create_event_begin_play(position),
+        NodeType::EventTick => create_event_tick(position),
+        NodeType::EventCustom(ref name) => create_event_custom(position, name),
+        NodeType::Branch => create_branch(position),
+        NodeType::ForLoop => create_for_loop(position),
+        NodeType::ForEachLoop => create_for_each_loop(position),
+        NodeType::Sequence => create_sequence(position),
+        NodeType::FlipFlop => create_flip_flop(position),
+        NodeType::DoOnce => create_do_once(position),
+        NodeType::Delay => create_delay_node(position),
+        NodeType::VariableGet => create_variable_get(position),
+        NodeType::VariableSet => create_variable_set(position),
+        NodeType::BooleanAnd => create_boolean_and(position),
+        NodeType::BooleanOr => create_boolean_or(position),
+        NodeType::BooleanNot => create_boolean_not(position),
+        NodeType::Equal => create_equal(position),
+        NodeType::NotEqual => create_not_equal(position),
+        NodeType::GreaterThan => create_greater_than(position),
+        NodeType::LessThan => create_less_than(position),
+        NodeType::GreaterEqual => create_greater_equal(position),
+        NodeType::LessEqual => create_less_equal(position),
+        NodeType::FunctionCall => create_function_call(position),
+        NodeType::PrintString => create_print_string(position),
+        NodeType::BlueprintAdd => create_bp_add(position),
+        NodeType::BlueprintSubtract => create_bp_subtract(position),
+        NodeType::BlueprintMultiply => create_bp_multiply(position),
+        NodeType::BlueprintDivide => create_bp_divide(position),
+        NodeType::BlueprintClamp => create_bp_clamp(position),
+        NodeType::BlueprintAbs => create_bp_abs(position),
+        NodeType::BlueprintMin => create_bp_min(position),
+        NodeType::BlueprintMax => create_bp_max(position),
 
         NodeType::Custom(ref name) => {
             let name_clone = name.clone();
@@ -84,15 +123,54 @@ pub fn builtin_node_types() -> Vec<NodeType> {
         NodeType::Negate,
         // Texture
         NodeType::TextureSample,
+        NodeType::NormalMap,
+        NodeType::Flipbook,
         // Color
         NodeType::CombineRgb,
         NodeType::SplitRgb,
+        NodeType::Mix,
+        // PBR helper
+        NodeType::Fresnel,
         // Vector
         NodeType::DotProduct,
         NodeType::Normalize,
         NodeType::CrossProduct,
         // Output
         NodeType::MaterialOutput,
+        // Blueprint - Flow Control
+        NodeType::EventBeginPlay,
+        NodeType::EventTick,
+        NodeType::Branch,
+        NodeType::ForLoop,
+        NodeType::Sequence,
+        NodeType::FlipFlop,
+        NodeType::DoOnce,
+        NodeType::Delay,
+        // Blueprint - Variable
+        NodeType::VariableGet,
+        NodeType::VariableSet,
+        // Blueprint - Logic
+        NodeType::BooleanAnd,
+        NodeType::BooleanOr,
+        NodeType::BooleanNot,
+        NodeType::Equal,
+        NodeType::NotEqual,
+        NodeType::GreaterThan,
+        NodeType::LessThan,
+        NodeType::GreaterEqual,
+        NodeType::LessEqual,
+        // Blueprint - Function
+        NodeType::FunctionCall,
+        NodeType::PrintString,
+        // Blueprint - Math
+        NodeType::BlueprintAdd,
+        NodeType::BlueprintSubtract,
+        NodeType::BlueprintMultiply,
+        NodeType::BlueprintDivide,
+        NodeType::BlueprintClamp,
+        NodeType::BlueprintAbs,
+        NodeType::BlueprintMin,
+        NodeType::BlueprintMax,
     ]
 }
 
@@ -252,6 +330,30 @@ fn create_texture_sample(position: Pos2) -> Node {
     node.add_output("G", PinType::Float);
     node.add_output("B", PinType::Float);
     node.add_output("A", PinType::Float);
+    node.values
+        .insert(100, NodeValue::Vec4([0.0, 0.0, 0.0, 0.0])); // texture path placeholder
+    node
+}
+
+fn create_normal_map(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::NormalMap, "Normal Map", position);
+    node.add_input("Normal", PinType::Vec3);
+    node.add_input("Strength", PinType::Float);
+    node.add_output("Normal", PinType::Vec3);
+    node.values.insert(1, NodeValue::Float(1.0));
+    node
+}
+
+fn create_flipbook(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::Flipbook, "Flipbook", position);
+    node.add_input("UV", PinType::Vec2);
+    node.add_input("Columns", PinType::Int);
+    node.add_input("Rows", PinType::Int);
+    node.add_input("Index", PinType::Int);
+    node.add_output("UV", PinType::Vec2);
+    node.values.insert(1, NodeValue::Int(4));
+    node.values.insert(2, NodeValue::Int(4));
+    node.values.insert(3, NodeValue::Int(0));
     node
 }
 
@@ -276,6 +378,26 @@ fn create_split_rgb(position: Pos2) -> Node {
     node.add_output("G", PinType::Float);
     node.add_output("B", PinType::Float);
     node.add_output("A", PinType::Float);
+    node
+}
+
+fn create_mix(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::Mix, "Mix", position);
+    node.add_input("A", PinType::Color);
+    node.add_input("B", PinType::Color);
+    node.add_input("Factor", PinType::Float);
+    node.add_output("Result", PinType::Color);
+    node.values.insert(2, NodeValue::Float(0.5));
+    node
+}
+
+fn create_fresnel(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::Fresnel, "Fresnel", position);
+    node.add_input("Normal", PinType::Vec3);
+    node.add_input("ViewDir", PinType::Vec3);
+    node.add_input("Power", PinType::Float);
+    node.add_output("Result", PinType::Float);
+    node.values.insert(2, NodeValue::Float(5.0));
     node
 }
 
@@ -318,6 +440,242 @@ fn create_material_output(position: Pos2) -> Node {
     node.values.insert(2, NodeValue::Float(0.5));
     node.values.insert(5, NodeValue::Float(1.0));
     node
+}
+
+// ── Blueprint flow control factories ──
+
+fn create_event_begin_play(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::EventBeginPlay, "BeginPlay", position);
+    node.add_output("Exec", PinType::Execution);
+    node
+}
+
+fn create_event_tick(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::EventTick, "Tick", position);
+    node.add_output("Exec", PinType::Execution);
+    node.add_output("Delta Time", PinType::Float);
+    node
+}
+
+fn create_event_custom(position: Pos2, name: &str) -> Node {
+    let mut node = Node::new(0, NodeType::EventCustom(name.to_string()), name, position);
+    node.add_output("Exec", PinType::Execution);
+    node
+}
+
+fn create_branch(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::Branch, "Branch", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_input("Condition", PinType::Bool);
+    node.add_output("True", PinType::Execution);
+    node.add_output("False", PinType::Execution);
+    node
+}
+
+fn create_for_loop(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::ForLoop, "For Loop", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_input("First Index", PinType::Int);
+    node.add_input("Last Index", PinType::Int);
+    node.add_output("Loop Body", PinType::Execution);
+    node.add_output("Index", PinType::Int);
+    node.add_output("Completed", PinType::Execution);
+    node.values.insert(1, NodeValue::Int(0));
+    node.values.insert(2, NodeValue::Int(10));
+    node
+}
+
+fn create_for_each_loop(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::ForEachLoop, "For Each Loop", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_input("Array", PinType::Wildcard);
+    node.add_output("Loop Body", PinType::Execution);
+    node.add_output("Element", PinType::Wildcard);
+    node.add_output("Index", PinType::Int);
+    node.add_output("Completed", PinType::Execution);
+    node
+}
+
+fn create_sequence(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::Sequence, "Sequence", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_output("Then 0", PinType::Execution);
+    node.add_output("Then 1", PinType::Execution);
+    node.add_output("Then 2", PinType::Execution);
+    node
+}
+
+fn create_flip_flop(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::FlipFlop, "Flip Flop", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_output("A", PinType::Execution);
+    node.add_output("B", PinType::Execution);
+    node.add_output("Is A", PinType::Bool);
+    node
+}
+
+fn create_do_once(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::DoOnce, "Do Once", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_input("Reset", PinType::Execution);
+    node.add_output("Out", PinType::Execution);
+    node
+}
+
+fn create_delay_node(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::Delay, "Delay", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_input("Duration", PinType::Float);
+    node.add_output("Out", PinType::Execution);
+    node.values.insert(1, NodeValue::Float(1.0));
+    node
+}
+
+// ── Blueprint variable factories ──
+
+fn create_variable_get(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::VariableGet, "Get Variable", position);
+    node.add_input("Name", PinType::Wildcard);
+    node.add_output("Value", PinType::Wildcard);
+    node.values.insert(0, NodeValue::Vec4([0.0, 0.0, 0.0, 0.0])); // placeholder
+    node
+}
+
+fn create_variable_set(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::VariableSet, "Set Variable", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_input("Name", PinType::Wildcard);
+    node.add_input("Value", PinType::Wildcard);
+    node.add_output("Exec", PinType::Execution);
+    node.add_output("Value", PinType::Wildcard);
+    node
+}
+
+// ── Blueprint logic factories ──
+
+fn create_boolean_and(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::BooleanAnd, "AND", position);
+    node.add_input("A", PinType::Bool);
+    node.add_input("B", PinType::Bool);
+    node.add_output("Result", PinType::Bool);
+    node
+}
+
+fn create_boolean_or(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::BooleanOr, "OR", position);
+    node.add_input("A", PinType::Bool);
+    node.add_input("B", PinType::Bool);
+    node.add_output("Result", PinType::Bool);
+    node
+}
+
+fn create_boolean_not(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::BooleanNot, "NOT", position);
+    node.add_input("Value", PinType::Bool);
+    node.add_output("Result", PinType::Bool);
+    node
+}
+
+fn create_comparison_node(position: Pos2, node_type: NodeType, name: &str) -> Node {
+    let mut node = Node::new(0, node_type, name, position);
+    node.add_input("A", PinType::Float);
+    node.add_input("B", PinType::Float);
+    node.add_output("Result", PinType::Bool);
+    node
+}
+
+fn create_equal(position: Pos2) -> Node {
+    create_comparison_node(position, NodeType::Equal, "Equal")
+}
+
+fn create_not_equal(position: Pos2) -> Node {
+    create_comparison_node(position, NodeType::NotEqual, "Not Equal")
+}
+
+fn create_greater_than(position: Pos2) -> Node {
+    create_comparison_node(position, NodeType::GreaterThan, "Greater Than")
+}
+
+fn create_less_than(position: Pos2) -> Node {
+    create_comparison_node(position, NodeType::LessThan, "Less Than")
+}
+
+fn create_greater_equal(position: Pos2) -> Node {
+    create_comparison_node(position, NodeType::GreaterEqual, "Greater Equal")
+}
+
+fn create_less_equal(position: Pos2) -> Node {
+    create_comparison_node(position, NodeType::LessEqual, "Less Equal")
+}
+
+// ── Blueprint function factories ──
+
+fn create_function_call(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::FunctionCall, "Function Call", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_output("Exec", PinType::Execution);
+    node.add_output("Return", PinType::Wildcard);
+    node
+}
+
+fn create_print_string(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::PrintString, "Print String", position);
+    node.add_input("Exec", PinType::Execution);
+    node.add_input("String", PinType::Wildcard);
+    node.add_output("Exec", PinType::Execution);
+    node
+}
+
+// ── Blueprint math factories ──
+
+fn create_bp_binary_op(position: Pos2, node_type: NodeType, name: &str) -> Node {
+    let mut node = Node::new(0, node_type, name, position);
+    node.add_input("A", PinType::Float);
+    node.add_input("B", PinType::Float);
+    node.add_output("Result", PinType::Float);
+    node
+}
+
+fn create_bp_add(position: Pos2) -> Node {
+    create_bp_binary_op(position, NodeType::BlueprintAdd, "Add")
+}
+
+fn create_bp_subtract(position: Pos2) -> Node {
+    create_bp_binary_op(position, NodeType::BlueprintSubtract, "Subtract")
+}
+
+fn create_bp_multiply(position: Pos2) -> Node {
+    create_bp_binary_op(position, NodeType::BlueprintMultiply, "Multiply")
+}
+
+fn create_bp_divide(position: Pos2) -> Node {
+    create_bp_binary_op(position, NodeType::BlueprintDivide, "Divide")
+}
+
+fn create_bp_clamp(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::BlueprintClamp, "Clamp", position);
+    node.add_input("Value", PinType::Float);
+    node.add_input("Min", PinType::Float);
+    node.add_input("Max", PinType::Float);
+    node.add_output("Result", PinType::Float);
+    node.values.insert(1, NodeValue::Float(0.0));
+    node.values.insert(2, NodeValue::Float(1.0));
+    node
+}
+
+fn create_bp_abs(position: Pos2) -> Node {
+    let mut node = Node::new(0, NodeType::BlueprintAbs, "Abs", position);
+    node.add_input("Value", PinType::Float);
+    node.add_output("Result", PinType::Float);
+    node
+}
+
+fn create_bp_min(position: Pos2) -> Node {
+    create_bp_binary_op(position, NodeType::BlueprintMin, "Min")
+}
+
+fn create_bp_max(position: Pos2) -> Node {
+    create_bp_binary_op(position, NodeType::BlueprintMax, "Max")
 }
 
 #[cfg(test)]

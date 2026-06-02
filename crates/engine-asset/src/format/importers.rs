@@ -40,7 +40,7 @@ impl AssetImporter for ImageImporter {
 /// Collection of meshes from a single glTF/GLB file.
 ///
 /// A glTF file can contain multiple meshes — this wrapper holds them all
-/// and implements [`Asset`] so it can be stored in the registry.
+/// and implements [`Asset`](crate::asset::Asset) so it can be stored in the registry.
 #[derive(Debug, Clone)]
 pub struct MeshCollection {
     pub id: String,

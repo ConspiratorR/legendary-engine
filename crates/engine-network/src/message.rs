@@ -62,6 +62,133 @@ pub enum NetworkMessage {
         /// Corrected entity states: (entity_index, [(type_hash, data_bytes)]).
         entities: EntityComponentData,
     },
+    /// Full world snapshot for reconnection (server → client).
+    ReconnectSnapshot {
+        /// Client ID this snapshot is for.
+        client_id: u64,
+        /// Server tick when this snapshot was taken.
+        tick: u64,
+        /// Serialized world state.
+        entities: EntityComponentData,
+        /// Entity indices despawned since client disconnected.
+        despawned: Vec<u32>,
+        /// Number of ticks the client missed.
+        missed_ticks: u64,
+    },
+    /// Client reconnection request with token (client → server).
+    ReconnectRequest {
+        /// Client ID requesting reconnection.
+        client_id: u64,
+        /// Token from the original session.
+        reconnect_token: u64,
+        /// Last tick the client received.
+        last_tick: u64,
+    },
+    /// Server acknowledgment of reconnection (server → client).
+    ReconnectAck {
+        /// Client ID.
+        client_id: u64,
+        /// Server tick at reconnection time.
+        server_tick: u64,
+    },
+    /// Client prediction input with tick for reconciliation (client → server).
+    PredictedInput {
+        /// Client-side tick when input was captured.
+        client_tick: u64,
+        /// Serialized input data.
+        input_data: Vec<u8>,
+        /// Whether this is a predicted input.
+        is_predicted: bool,
+    },
+    /// Create a room (client → server).
+    CreateRoom {
+        /// Room name.
+        name: String,
+        /// Max players.
+        max_players: u32,
+        /// Game mode identifier.
+        game_mode: String,
+    },
+    /// Join a room (client → server).
+    JoinRoom {
+        /// Room ID to join.
+        room_id: u64,
+    },
+    /// Leave current room (client → server).
+    LeaveRoom,
+    /// Room list response (server → client).
+    RoomList {
+        /// Serialized room list.
+        rooms: Vec<RoomInfo>,
+    },
+    /// Match found notification (server → client).
+    MatchFound {
+        /// Room ID assigned to.
+        room_id: u64,
+        /// Players in the match.
+        player_ids: Vec<u64>,
+    },
+    /// Lobby state update (server → client).
+    LobbyUpdate {
+        /// Room ID.
+        room_id: u64,
+        /// Players in lobby.
+        player_ids: Vec<u64>,
+        /// Ready states per player.
+        ready_states: Vec<bool>,
+    },
+    /// Player ready toggle (client → server).
+    ReadyUp {
+        /// Whether the player is ready.
+        ready: bool,
+    },
+    /// Rendezvous registration (client → rendezvous server).
+    RendezvousRegister {
+        /// Client identifier.
+        client_id: u64,
+    },
+    /// Rendezvous pair info (rendezvous server → client).
+    RendezvousPair {
+        /// Peer's public address.
+        peer_addr: String,
+        /// Peer's client ID.
+        peer_id: u64,
+    },
+    /// Rendezvous result (rendezvous server → client).
+    RendezvousResult {
+        /// Whether hole punching succeeded.
+        success: bool,
+        /// Public address discovered.
+        public_addr: String,
+    },
+}
+
+/// Room information for room list messages.
+#[derive(Debug, Clone)]
+pub struct RoomInfo {
+    /// Unique room ID.
+    pub id: u64,
+    /// Room name.
+    pub name: String,
+    /// Current player count.
+    pub player_count: u32,
+    /// Maximum players.
+    pub max_players: u32,
+    /// Game mode.
+    pub game_mode: String,
+    /// Room state.
+    pub state: RoomState,
+}
+
+/// State of a game room.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoomState {
+    /// Waiting for players.
+    Waiting,
+    /// Game in progress.
+    InGame,
+    /// Room closed.
+    Closed,
 }
 
 /// Reliability mode for messages.
@@ -257,6 +384,150 @@ impl NetworkMessage {
                 serialize_entity_components(&mut bytes, entities);
                 bytes
             }
+            NetworkMessage::ReconnectSnapshot {
+                client_id,
+                tick,
+                entities,
+                despawned,
+                missed_ticks,
+            } => {
+                let mut bytes = vec![10];
+                bytes.extend(&client_id.to_le_bytes());
+                bytes.extend(&tick.to_le_bytes());
+                serialize_entity_components(&mut bytes, entities);
+                serialize_despawned(&mut bytes, despawned);
+                bytes.extend(&missed_ticks.to_le_bytes());
+                bytes
+            }
+            NetworkMessage::ReconnectRequest {
+                client_id,
+                reconnect_token,
+                last_tick,
+            } => {
+                let mut bytes = vec![11];
+                bytes.extend(&client_id.to_le_bytes());
+                bytes.extend(&reconnect_token.to_le_bytes());
+                bytes.extend(&last_tick.to_le_bytes());
+                bytes
+            }
+            NetworkMessage::ReconnectAck {
+                client_id,
+                server_tick,
+            } => {
+                let mut bytes = vec![12];
+                bytes.extend(&client_id.to_le_bytes());
+                bytes.extend(&server_tick.to_le_bytes());
+                bytes
+            }
+            NetworkMessage::PredictedInput {
+                client_tick,
+                input_data,
+                is_predicted,
+            } => {
+                let mut bytes = vec![13];
+                bytes.extend(&client_tick.to_le_bytes());
+                bytes.extend(&(input_data.len() as u32).to_le_bytes());
+                bytes.extend(input_data);
+                bytes.push(if *is_predicted { 1 } else { 0 });
+                bytes
+            }
+            NetworkMessage::CreateRoom {
+                name,
+                max_players,
+                game_mode,
+            } => {
+                let mut bytes = vec![14];
+                let name_bytes = name.as_bytes();
+                bytes.extend(&(name_bytes.len() as u32).to_le_bytes());
+                bytes.extend(name_bytes);
+                bytes.extend(&max_players.to_le_bytes());
+                let mode_bytes = game_mode.as_bytes();
+                bytes.extend(&(mode_bytes.len() as u32).to_le_bytes());
+                bytes.extend(mode_bytes);
+                bytes
+            }
+            NetworkMessage::JoinRoom { room_id } => {
+                let mut bytes = vec![15];
+                bytes.extend(&room_id.to_le_bytes());
+                bytes
+            }
+            NetworkMessage::LeaveRoom => vec![16],
+            NetworkMessage::RoomList { rooms } => {
+                let mut bytes = vec![17];
+                bytes.extend(&(rooms.len() as u32).to_le_bytes());
+                for room in rooms {
+                    bytes.extend(&room.id.to_le_bytes());
+                    let name_bytes = room.name.as_bytes();
+                    bytes.extend(&(name_bytes.len() as u32).to_le_bytes());
+                    bytes.extend(name_bytes);
+                    bytes.extend(&room.player_count.to_le_bytes());
+                    bytes.extend(&room.max_players.to_le_bytes());
+                    let mode_bytes = room.game_mode.as_bytes();
+                    bytes.extend(&(mode_bytes.len() as u32).to_le_bytes());
+                    bytes.extend(mode_bytes);
+                    bytes.push(match room.state {
+                        RoomState::Waiting => 0,
+                        RoomState::InGame => 1,
+                        RoomState::Closed => 2,
+                    });
+                }
+                bytes
+            }
+            NetworkMessage::MatchFound {
+                room_id,
+                player_ids,
+            } => {
+                let mut bytes = vec![18];
+                bytes.extend(&room_id.to_le_bytes());
+                bytes.extend(&(player_ids.len() as u32).to_le_bytes());
+                for id in player_ids {
+                    bytes.extend(&id.to_le_bytes());
+                }
+                bytes
+            }
+            NetworkMessage::LobbyUpdate {
+                room_id,
+                player_ids,
+                ready_states,
+            } => {
+                let mut bytes = vec![19];
+                bytes.extend(&room_id.to_le_bytes());
+                bytes.extend(&(player_ids.len() as u32).to_le_bytes());
+                for id in player_ids {
+                    bytes.extend(&id.to_le_bytes());
+                }
+                for ready in ready_states {
+                    bytes.push(if *ready { 1 } else { 0 });
+                }
+                bytes
+            }
+            NetworkMessage::ReadyUp { ready } => {
+                vec![20, if *ready { 1 } else { 0 }]
+            }
+            NetworkMessage::RendezvousRegister { client_id } => {
+                let mut bytes = vec![21];
+                bytes.extend(&client_id.to_le_bytes());
+                bytes
+            }
+            NetworkMessage::RendezvousPair { peer_addr, peer_id } => {
+                let mut bytes = vec![22];
+                let addr_bytes = peer_addr.as_bytes();
+                bytes.extend(&(addr_bytes.len() as u32).to_le_bytes());
+                bytes.extend(addr_bytes);
+                bytes.extend(&peer_id.to_le_bytes());
+                bytes
+            }
+            NetworkMessage::RendezvousResult {
+                success,
+                public_addr,
+            } => {
+                let mut bytes = vec![23];
+                bytes.push(if *success { 1 } else { 0 });
+                let addr_bytes = public_addr.as_bytes();
+                bytes.extend(&(addr_bytes.len() as u32).to_le_bytes());
+                bytes.extend(addr_bytes);
+                bytes
+            }
         }
     }
 
@@ -405,6 +676,298 @@ impl NetworkMessage {
                 let entities = deserialize_entity_components(bytes, &mut offset)?;
 
                 Some(NetworkMessage::Correction { tick, entities })
+            }
+            10 => {
+                let mut offset = 1;
+                if bytes.len() < offset + 8 {
+                    return None;
+                }
+                let client_id = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+                offset += 8;
+                if bytes.len() < offset + 8 {
+                    return None;
+                }
+                let tick = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+                offset += 8;
+                let entities = deserialize_entity_components(bytes, &mut offset)?;
+                let despawned = deserialize_despawned(bytes, &mut offset)?;
+                if bytes.len() < offset + 8 {
+                    return None;
+                }
+                let missed_ticks = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+                Some(NetworkMessage::ReconnectSnapshot {
+                    client_id,
+                    tick,
+                    entities,
+                    despawned,
+                    missed_ticks,
+                })
+            }
+            11 => {
+                if bytes.len() < 1 + 8 + 8 + 8 {
+                    return None;
+                }
+                let client_id = u64::from_le_bytes(bytes[1..9].try_into().ok()?);
+                let reconnect_token = u64::from_le_bytes(bytes[9..17].try_into().ok()?);
+                let last_tick = u64::from_le_bytes(bytes[17..25].try_into().ok()?);
+                Some(NetworkMessage::ReconnectRequest {
+                    client_id,
+                    reconnect_token,
+                    last_tick,
+                })
+            }
+            12 => {
+                if bytes.len() < 1 + 8 + 8 {
+                    return None;
+                }
+                let client_id = u64::from_le_bytes(bytes[1..9].try_into().ok()?);
+                let server_tick = u64::from_le_bytes(bytes[9..17].try_into().ok()?);
+                Some(NetworkMessage::ReconnectAck {
+                    client_id,
+                    server_tick,
+                })
+            }
+            13 => {
+                if bytes.len() < 1 + 8 + 4 {
+                    return None;
+                }
+                let client_tick = u64::from_le_bytes(bytes[1..9].try_into().ok()?);
+                let len = u32::from_le_bytes(bytes[9..13].try_into().ok()?) as usize;
+                if bytes.len() < 13 + len + 1 {
+                    return None;
+                }
+                let input_data = bytes[13..13 + len].to_vec();
+                let is_predicted = bytes[13 + len] != 0;
+                Some(NetworkMessage::PredictedInput {
+                    client_tick,
+                    input_data,
+                    is_predicted,
+                })
+            }
+            14 => {
+                let mut offset = 1;
+                if bytes.len() < offset + 4 {
+                    return None;
+                }
+                let name_len =
+                    u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+                offset += 4;
+                if bytes.len() < offset + name_len {
+                    return None;
+                }
+                let name = String::from_utf8_lossy(&bytes[offset..offset + name_len]).to_string();
+                offset += name_len;
+                if bytes.len() < offset + 4 {
+                    return None;
+                }
+                let max_players = u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?);
+                offset += 4;
+                if bytes.len() < offset + 4 {
+                    return None;
+                }
+                let mode_len =
+                    u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+                offset += 4;
+                if bytes.len() < offset + mode_len {
+                    return None;
+                }
+                let game_mode =
+                    String::from_utf8_lossy(&bytes[offset..offset + mode_len]).to_string();
+                Some(NetworkMessage::CreateRoom {
+                    name,
+                    max_players,
+                    game_mode,
+                })
+            }
+            15 => {
+                if bytes.len() < 1 + 8 {
+                    return None;
+                }
+                let room_id = u64::from_le_bytes(bytes[1..9].try_into().ok()?);
+                Some(NetworkMessage::JoinRoom { room_id })
+            }
+            16 => Some(NetworkMessage::LeaveRoom),
+            17 => {
+                let mut offset = 1;
+                if bytes.len() < offset + 4 {
+                    return None;
+                }
+                let room_count =
+                    u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+                offset += 4;
+                let mut rooms = Vec::with_capacity(room_count);
+                for _ in 0..room_count {
+                    if bytes.len() < offset + 8 {
+                        return None;
+                    }
+                    let id = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+                    offset += 8;
+                    if bytes.len() < offset + 4 {
+                        return None;
+                    }
+                    let name_len =
+                        u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+                    offset += 4;
+                    if bytes.len() < offset + name_len {
+                        return None;
+                    }
+                    let name =
+                        String::from_utf8_lossy(&bytes[offset..offset + name_len]).to_string();
+                    offset += name_len;
+                    if bytes.len() < offset + 8 {
+                        return None;
+                    }
+                    let player_count =
+                        u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?);
+                    offset += 4;
+                    let max_players =
+                        u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?);
+                    offset += 4;
+                    if bytes.len() < offset + 4 {
+                        return None;
+                    }
+                    let mode_len =
+                        u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+                    offset += 4;
+                    if bytes.len() < offset + mode_len + 1 {
+                        return None;
+                    }
+                    let game_mode =
+                        String::from_utf8_lossy(&bytes[offset..offset + mode_len]).to_string();
+                    offset += mode_len;
+                    let state = match bytes[offset] {
+                        0 => RoomState::Waiting,
+                        1 => RoomState::InGame,
+                        _ => RoomState::Closed,
+                    };
+                    offset += 1;
+                    rooms.push(RoomInfo {
+                        id,
+                        name,
+                        player_count,
+                        max_players,
+                        game_mode,
+                        state,
+                    });
+                }
+                Some(NetworkMessage::RoomList { rooms })
+            }
+            18 => {
+                let mut offset = 1;
+                if bytes.len() < offset + 8 {
+                    return None;
+                }
+                let room_id = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+                offset += 8;
+                if bytes.len() < offset + 4 {
+                    return None;
+                }
+                let count = u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+                offset += 4;
+                let mut player_ids = Vec::with_capacity(count);
+                for _ in 0..count {
+                    if bytes.len() < offset + 8 {
+                        return None;
+                    }
+                    player_ids.push(u64::from_le_bytes(
+                        bytes[offset..offset + 8].try_into().ok()?,
+                    ));
+                    offset += 8;
+                }
+                Some(NetworkMessage::MatchFound {
+                    room_id,
+                    player_ids,
+                })
+            }
+            19 => {
+                let mut offset = 1;
+                if bytes.len() < offset + 8 {
+                    return None;
+                }
+                let room_id = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+                offset += 8;
+                if bytes.len() < offset + 4 {
+                    return None;
+                }
+                let count = u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+                offset += 4;
+                let mut player_ids = Vec::with_capacity(count);
+                for _ in 0..count {
+                    if bytes.len() < offset + 8 {
+                        return None;
+                    }
+                    player_ids.push(u64::from_le_bytes(
+                        bytes[offset..offset + 8].try_into().ok()?,
+                    ));
+                    offset += 8;
+                }
+                let mut ready_states = Vec::with_capacity(count);
+                for _ in 0..count {
+                    if bytes.len() < offset + 1 {
+                        return None;
+                    }
+                    ready_states.push(bytes[offset] != 0);
+                    offset += 1;
+                }
+                Some(NetworkMessage::LobbyUpdate {
+                    room_id,
+                    player_ids,
+                    ready_states,
+                })
+            }
+            20 => {
+                if bytes.len() < 2 {
+                    return None;
+                }
+                Some(NetworkMessage::ReadyUp {
+                    ready: bytes[1] != 0,
+                })
+            }
+            21 => {
+                if bytes.len() < 1 + 8 {
+                    return None;
+                }
+                let client_id = u64::from_le_bytes(bytes[1..9].try_into().ok()?);
+                Some(NetworkMessage::RendezvousRegister { client_id })
+            }
+            22 => {
+                let mut offset = 1;
+                if bytes.len() < offset + 4 {
+                    return None;
+                }
+                let addr_len =
+                    u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+                offset += 4;
+                if bytes.len() < offset + addr_len + 8 {
+                    return None;
+                }
+                let peer_addr =
+                    String::from_utf8_lossy(&bytes[offset..offset + addr_len]).to_string();
+                offset += addr_len;
+                let peer_id = u64::from_le_bytes(bytes[offset..offset + 8].try_into().ok()?);
+                Some(NetworkMessage::RendezvousPair { peer_addr, peer_id })
+            }
+            23 => {
+                if bytes.len() < 2 {
+                    return None;
+                }
+                let success = bytes[1] != 0;
+                let mut offset = 2;
+                if bytes.len() < offset + 4 {
+                    return None;
+                }
+                let addr_len =
+                    u32::from_le_bytes(bytes[offset..offset + 4].try_into().ok()?) as usize;
+                offset += 4;
+                if bytes.len() < offset + addr_len {
+                    return None;
+                }
+                let public_addr =
+                    String::from_utf8_lossy(&bytes[offset..offset + addr_len]).to_string();
+                Some(NetworkMessage::RendezvousResult {
+                    success,
+                    public_addr,
+                })
             }
             _ => None,
         }

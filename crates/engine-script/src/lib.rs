@@ -1,12 +1,12 @@
 //! Lua scripting integration for the RustEngine ECS.
 //!
 //! This crate provides:
-//! - **[`ComponentBridge`]**: Register Rust component types for Lua access
-//! - **[`ScriptSystem`]**: Execute Lua scripts as ECS systems
-//! - **[`HotReloader`]**: Watch `.lua` files for automatic reloading
-//! - **[`TypeRegistry`]**: Unified Rust ↔ Lua/WASM type mapping for engine math types
-//! - **[`CallbackRegistry`]**: Register Rust callbacks callable from scripts
-//! - **[`ScriptEventBus`]**: Bridge engine events to/from scripts
+//! - **[`ComponentBridge`](bridge::ComponentBridge)**: Register Rust component types for Lua access
+//! - **[`ScriptSystem`](system::ScriptSystem)**: Execute Lua scripts as ECS systems
+//! - **[`HotReloader`](hot_reload::HotReloader)**: Watch `.lua` files for automatic reloading
+//! - **[`TypeRegistry`](type_registry::TypeRegistry)**: Unified Rust ↔ Lua/WASM type mapping for engine math types
+//! - **[`CallbackRegistry`](callback::CallbackRegistry)**: Register Rust callbacks callable from scripts
+//! - **[`ScriptEventBus`](event_bridge::ScriptEventBus)**: Bridge engine events to/from scripts
 //!
 //! # Quick Start
 //!

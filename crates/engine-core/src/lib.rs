@@ -8,6 +8,7 @@ pub mod engine;
 pub mod event;
 pub mod logger;
 pub mod math_utils;
+pub mod memory;
 pub mod plugin;
 pub mod plugins;
 pub mod profiler;

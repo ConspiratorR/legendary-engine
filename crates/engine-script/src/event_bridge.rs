@@ -1,6 +1,6 @@
 //! Event system integration for script ↔ Rust interop.
 //!
-//! The [`ScriptEventBus`] bridges the engine's [`EventChannel`] system with
+//! The [`ScriptEventBus`] bridges the engine's `EventChannel` system with
 //! scripts. Scripts can:
 //!
 //! - **Subscribe** to named event channels
@@ -148,7 +148,7 @@ impl ScriptEventBus {
     /// Queue an event on a named channel for script dispatch.
     ///
     /// This is the Rust-side entry point: scripts will receive the event
-    /// the next time [`drain_pending`] is called.
+    /// the next time [`drain_pending`](Self::drain_pending) is called.
     pub fn queue_event(&self, channel: impl Into<String>, data: EventData) {
         let mut channels = self.channels.lock().unwrap();
         let channel_name = channel.into();

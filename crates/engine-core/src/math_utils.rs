@@ -1,39 +1,51 @@
 use std::f32::consts::PI;
 
+/// Linearly interpolate between `a` and `b` by factor `t` (0.0 = a, 1.0 = b).
 pub fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
+/// Linearly interpolate between two 2D points.
 pub fn lerp_vec2(a: (f32, f32), b: (f32, f32), t: f32) -> (f32, f32) {
     (lerp(a.0, b.0, t), lerp(a.1, b.1, t))
 }
 
+/// Linearly interpolate between two 3D points.
 pub fn lerp_vec3(a: (f32, f32, f32), b: (f32, f32, f32), t: f32) -> (f32, f32, f32) {
     (lerp(a.0, b.0, t), lerp(a.1, b.1, t), lerp(a.2, b.2, t))
 }
 
+/// Clamp `value` to the range `[min, max]`.
 pub fn clamp(value: f32, min: f32, max: f32) -> f32 {
     value.max(min).min(max)
 }
 
+/// Hermite interpolation (smooth step) between `edge0` and `edge1`.
+///
+/// Returns 0.0 when `x <= edge0`, 1.0 when `x >= edge1`, and a
+/// smooth cubic interpolation in between.
 pub fn smooth_step(edge0: f32, edge1: f32, x: f32) -> f32 {
     let t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
 }
 
+/// Ken Perlin's improved smoother step (C2 continuous) between `edge0` and `edge1`.
 pub fn smoother_step(edge0: f32, edge1: f32, x: f32) -> f32 {
     let t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
     t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
 }
 
+/// Quadratic ease-in (slow start, fast end).
 pub fn ease_in_quad(t: f32) -> f32 {
     t * t
 }
 
+/// Quadratic ease-out (fast start, slow end).
 pub fn ease_out_quad(t: f32) -> f32 {
     -t * (t - 2.0)
 }
 
+/// Quadratic ease-in-out (slow start and end).
 pub fn ease_in_out_quad(t: f32) -> f32 {
     if t < 0.5 {
         2.0 * t * t
@@ -42,15 +54,18 @@ pub fn ease_in_out_quad(t: f32) -> f32 {
     }
 }
 
+/// Cubic ease-in.
 pub fn ease_in_cubic(t: f32) -> f32 {
     t * t * t
 }
 
+/// Cubic ease-out.
 pub fn ease_out_cubic(t: f32) -> f32 {
     let t = t - 1.0;
     t * t * t + 1.0
 }
 
+/// Cubic ease-in-out.
 pub fn ease_in_out_cubic(t: f32) -> f32 {
     if t < 0.5 {
         4.0 * t * t * t
@@ -60,6 +75,7 @@ pub fn ease_in_out_cubic(t: f32) -> f32 {
     }
 }
 
+/// Bounce ease-out effect.
 pub fn bounce_out(t: f32) -> f32 {
     let n1 = 7.5625;
     let d1 = 2.75;
@@ -78,14 +94,17 @@ pub fn bounce_out(t: f32) -> f32 {
     }
 }
 
+/// Convert degrees to radians.
 pub fn deg_to_rad(degrees: f32) -> f32 {
     degrees * PI / 180.0
 }
 
+/// Convert radians to degrees.
 pub fn rad_to_deg(radians: f32) -> f32 {
     radians * 180.0 / PI
 }
 
+/// Return the sign of `value`: 1.0, -1.0, or 0.0.
 pub fn sign(value: f32) -> f32 {
     if value > 0.0 {
         1.0
@@ -96,6 +115,9 @@ pub fn sign(value: f32) -> f32 {
     }
 }
 
+/// Inverse linear interpolation: given a value in `[a, b]`, return the `t` factor.
+///
+/// Returns 0.0 if `a == b` to avoid division by zero.
 pub fn inverse_lerp(a: f32, b: f32, value: f32) -> f32 {
     if (b - a).abs() < f32::EPSILON {
         0.0
@@ -104,20 +126,24 @@ pub fn inverse_lerp(a: f32, b: f32, value: f32) -> f32 {
     }
 }
 
+/// Remap `value` from the range `[in_min, in_max]` to `[out_min, out_max]`.
 pub fn remap(value: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f32 {
     let t = inverse_lerp(in_min, in_max, value);
     lerp(out_min, out_max, t)
 }
 
+/// Ping-pong: oscillate `t` back and forth within `[0, length]`.
 pub fn ping_pong(t: f32, length: f32) -> f32 {
     let t = t % (length * 2.0);
     if t <= length { t } else { length * 2.0 - t }
 }
 
+/// Repeat `t` within `[0, length]` (wrapping modulo).
 pub fn repeat(t: f32, length: f32) -> f32 {
     t % length
 }
 
+/// Move `current` towards `target` by at most `delta`, clamping at the target.
 pub fn approach(current: f32, target: f32, delta: f32) -> f32 {
     if current < target {
         (current + delta).min(target)
@@ -126,6 +152,7 @@ pub fn approach(current: f32, target: f32, delta: f32) -> f32 {
     }
 }
 
+/// Move `current` towards `target` by at most `max_delta`, snapping exactly to target.
 pub fn move_towards(current: f32, target: f32, max_delta: f32) -> f32 {
     if (target - current).abs() <= max_delta {
         target
@@ -134,12 +161,14 @@ pub fn move_towards(current: f32, target: f32, max_delta: f32) -> f32 {
     }
 }
 
+/// Squared distance between two 2D points (avoids sqrt for comparisons).
 pub fn distance_squared_2d(ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
     let dx = bx - ax;
     let dy = by - ay;
     dx * dx + dy * dy
 }
 
+/// Euclidean distance between two 2D points.
 pub fn distance_2d(ax: f32, ay: f32, bx: f32, by: f32) -> f32 {
     distance_squared_2d(ax, ay, bx, by).sqrt()
 }

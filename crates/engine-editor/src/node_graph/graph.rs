@@ -74,6 +74,7 @@ pub enum NodeCategory {
     Color,
     Vector,
     Output,
+    Blueprint,
     Custom(String),
 }
 
@@ -86,6 +87,7 @@ impl NodeCategory {
             NodeCategory::Color => "Color",
             NodeCategory::Vector => "Vector",
             NodeCategory::Output => "Output",
+            NodeCategory::Blueprint => "Blueprint",
             NodeCategory::Custom(name) => name,
         }
     }
@@ -121,10 +123,16 @@ pub enum NodeType {
 
     // Texture nodes
     TextureSample,
+    NormalMap,
 
     // Color nodes
     CombineRgb,
     SplitRgb,
+    Mix,
+
+    // PBR helper nodes
+    Fresnel,
+    Flipbook,
 
     // Vector nodes
     DotProduct,
@@ -133,6 +141,48 @@ pub enum NodeType {
 
     // Output
     MaterialOutput,
+
+    // ── Blueprint nodes ──
+    // Flow control
+    EventBeginPlay,
+    EventTick,
+    EventCustom(String),
+    Branch,
+    ForLoop,
+    ForEachLoop,
+    Sequence,
+    FlipFlop,
+    DoOnce,
+    Delay,
+
+    // Variable
+    VariableGet,
+    VariableSet,
+
+    // Logic
+    BooleanAnd,
+    BooleanOr,
+    BooleanNot,
+    Equal,
+    NotEqual,
+    GreaterThan,
+    LessThan,
+    GreaterEqual,
+    LessEqual,
+
+    // Function
+    FunctionCall,
+    PrintString,
+
+    // Math (blueprint-style)
+    BlueprintAdd,
+    BlueprintSubtract,
+    BlueprintMultiply,
+    BlueprintDivide,
+    BlueprintClamp,
+    BlueprintAbs,
+    BlueprintMin,
+    BlueprintMax,
 
     Custom(String),
 }
@@ -162,12 +212,48 @@ impl NodeType {
             NodeType::Saturate => "Saturate",
             NodeType::Negate => "Negate",
             NodeType::TextureSample => "Texture Sample",
+            NodeType::NormalMap => "Normal Map",
             NodeType::CombineRgb => "Combine RGB",
             NodeType::SplitRgb => "Split RGB",
+            NodeType::Mix => "Mix",
+            NodeType::Fresnel => "Fresnel",
+            NodeType::Flipbook => "Flipbook",
             NodeType::DotProduct => "Dot Product",
             NodeType::Normalize => "Normalize",
             NodeType::CrossProduct => "Cross Product",
             NodeType::MaterialOutput => "Material Output",
+            // Blueprint
+            NodeType::EventBeginPlay => "Event BeginPlay",
+            NodeType::EventTick => "Event Tick",
+            NodeType::EventCustom(name) => name,
+            NodeType::Branch => "Branch",
+            NodeType::ForLoop => "For Loop",
+            NodeType::ForEachLoop => "For Each Loop",
+            NodeType::Sequence => "Sequence",
+            NodeType::FlipFlop => "Flip Flop",
+            NodeType::DoOnce => "Do Once",
+            NodeType::Delay => "Delay",
+            NodeType::VariableGet => "Get Variable",
+            NodeType::VariableSet => "Set Variable",
+            NodeType::BooleanAnd => "Boolean AND",
+            NodeType::BooleanOr => "Boolean OR",
+            NodeType::BooleanNot => "Boolean NOT",
+            NodeType::Equal => "Equal",
+            NodeType::NotEqual => "Not Equal",
+            NodeType::GreaterThan => "Greater Than",
+            NodeType::LessThan => "Less Than",
+            NodeType::GreaterEqual => "Greater Equal",
+            NodeType::LessEqual => "Less Equal",
+            NodeType::FunctionCall => "Function Call",
+            NodeType::PrintString => "Print String",
+            NodeType::BlueprintAdd => "Add",
+            NodeType::BlueprintSubtract => "Subtract",
+            NodeType::BlueprintMultiply => "Multiply",
+            NodeType::BlueprintDivide => "Divide",
+            NodeType::BlueprintClamp => "Clamp",
+            NodeType::BlueprintAbs => "Abs",
+            NodeType::BlueprintMin => "Min",
+            NodeType::BlueprintMax => "Max",
             NodeType::Custom(name) => name,
         }
     }
@@ -197,16 +283,55 @@ impl NodeType {
             | NodeType::Saturate
             | NodeType::Negate => NodeCategory::Math,
 
-            NodeType::TextureSample => NodeCategory::Texture,
+            NodeType::TextureSample | NodeType::NormalMap | NodeType::Flipbook => {
+                NodeCategory::Texture
+            }
 
-            NodeType::CombineRgb | NodeType::SplitRgb => NodeCategory::Color,
+            NodeType::CombineRgb | NodeType::SplitRgb | NodeType::Mix => NodeCategory::Color,
 
             NodeType::DotProduct | NodeType::Normalize | NodeType::CrossProduct => {
                 NodeCategory::Vector
             }
 
+            NodeType::Fresnel => NodeCategory::Input,
+
             NodeType::MaterialOutput => NodeCategory::Output,
             NodeType::Custom(_) => NodeCategory::Custom("Custom".to_string()),
+
+            // Blueprint categories
+            NodeType::EventBeginPlay
+            | NodeType::EventTick
+            | NodeType::EventCustom(_)
+            | NodeType::Branch
+            | NodeType::ForLoop
+            | NodeType::ForEachLoop
+            | NodeType::Sequence
+            | NodeType::FlipFlop
+            | NodeType::DoOnce
+            | NodeType::Delay => NodeCategory::Blueprint,
+
+            NodeType::VariableGet | NodeType::VariableSet => NodeCategory::Blueprint,
+
+            NodeType::BooleanAnd
+            | NodeType::BooleanOr
+            | NodeType::BooleanNot
+            | NodeType::Equal
+            | NodeType::NotEqual
+            | NodeType::GreaterThan
+            | NodeType::LessThan
+            | NodeType::GreaterEqual
+            | NodeType::LessEqual => NodeCategory::Blueprint,
+
+            NodeType::FunctionCall | NodeType::PrintString => NodeCategory::Blueprint,
+
+            NodeType::BlueprintAdd
+            | NodeType::BlueprintSubtract
+            | NodeType::BlueprintMultiply
+            | NodeType::BlueprintDivide
+            | NodeType::BlueprintClamp
+            | NodeType::BlueprintAbs
+            | NodeType::BlueprintMin
+            | NodeType::BlueprintMax => NodeCategory::Math,
         }
     }
 }

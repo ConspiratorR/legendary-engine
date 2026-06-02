@@ -244,7 +244,7 @@ impl ParallelSchedule {
     /// Run all systems using a custom [`ScheduleExecutor`].
     ///
     /// This is the generic execution path. Both [`run`](Self::run) (rayon)
-    /// and [`run_with_jobs`](Self::run_with_jobs) (JobGraph) delegate here.
+    /// and `run_with_jobs` (JobGraph) delegate here.
     pub fn run_with_executor(&mut self, world: &mut World, executor: &dyn ScheduleExecutor) {
         if self.needs_rebuild {
             self.rebuild_stages();

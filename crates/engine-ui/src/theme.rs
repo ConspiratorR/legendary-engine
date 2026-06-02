@@ -1,7 +1,7 @@
 //! Theme management for the GUI system.
 //!
 //! Provides [`Theme`] enumeration, [`ThemeManager`] for runtime theme switching,
-//! and CSS-like style cascading with [`resolve_style`]. Supports dark/light
+//! and CSS-like style cascading with [`ThemeManager::resolve_style`]. Supports dark/light
 //! built-in themes, custom user themes, and transition hooks for cross-fade
 //! animation.
 
@@ -89,7 +89,7 @@ impl ThemeTransition {
 
 /// Identifies a single widget whose style should be overridden.
 ///
-/// Used as the key in [`ThemeManager::style_overrides`].
+/// Used as the key in `ThemeManager::style_overrides`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WidgetStyleKey {
     /// Optional widget instance name (e.g. `"my_button"`).

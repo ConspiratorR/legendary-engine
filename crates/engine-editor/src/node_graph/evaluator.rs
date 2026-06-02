@@ -346,6 +346,48 @@ fn evaluate_node(
                 NodeValue::Float(v4[3]),
             ])
         }
+        NodeType::NormalMap => {
+            let normal = get_vec3(inputs, 0);
+            let strength = get_float(inputs, 1);
+            // Perturb normal by strength factor
+            let perturbed = [
+                normal[0] * strength,
+                normal[1] * strength,
+                normal[2].max(0.001),
+            ];
+            let len = (perturbed[0] * perturbed[0]
+                + perturbed[1] * perturbed[1]
+                + perturbed[2] * perturbed[2])
+                .sqrt();
+            if len > f32::EPSILON {
+                Ok(vec![NodeValue::Vec3([
+                    perturbed[0] / len,
+                    perturbed[1] / len,
+                    perturbed[2] / len,
+                ])])
+            } else {
+                Ok(vec![NodeValue::Vec3([0.0, 0.0, 1.0])])
+            }
+        }
+        NodeType::Flipbook => {
+            let uv = inputs
+                .first()
+                .map(|v| {
+                    let v4 = v.to_vec4();
+                    [v4[0], v4[1]]
+                })
+                .unwrap_or([0.0, 0.0]);
+            let cols = get_int(inputs, 1).max(1);
+            let rows = get_int(inputs, 2).max(1);
+            let index = get_int(inputs, 3).max(0);
+            let col = index % cols;
+            let row = index / cols;
+            let cell_w = 1.0 / cols as f32;
+            let cell_h = 1.0 / rows as f32;
+            let u = (uv[0] * cell_w) + col as f32 * cell_w;
+            let v = (uv[1] * cell_h) + row as f32 * cell_h;
+            Ok(vec![NodeValue::Vec2([u, v])])
+        }
 
         // ── Color nodes ──
         NodeType::CombineRgb => {
@@ -362,6 +404,17 @@ fn evaluate_node(
                 NodeValue::Float(v[2]),
                 NodeValue::Float(v[3]),
             ])
+        }
+        NodeType::Mix => {
+            let a = get_vec4(inputs, 0);
+            let b = get_vec4(inputs, 1);
+            let t = get_float(inputs, 2).clamp(0.0, 1.0);
+            Ok(vec![NodeValue::Color([
+                a[0] + (b[0] - a[0]) * t,
+                a[1] + (b[1] - a[1]) * t,
+                a[2] + (b[2] - a[2]) * t,
+                a[3] + (b[3] - a[3]) * t,
+            ])])
         }
 
         // ── Vector nodes ──
@@ -390,6 +443,17 @@ fn evaluate_node(
             ])])
         }
 
+        // ── PBR helper nodes ──
+        NodeType::Fresnel => {
+            let normal = get_vec3(inputs, 0);
+            let view_dir = get_vec3(inputs, 1);
+            let power = get_float(inputs, 2);
+            let ndotv =
+                (normal[0] * view_dir[0] + normal[1] * view_dir[1] + normal[2] * view_dir[2]).abs();
+            let fresnel = (1.0 - ndotv).powf(power);
+            Ok(vec![NodeValue::Float(fresnel)])
+        }
+
         // ── Output ──
         NodeType::MaterialOutput => {
             // Material output doesn't produce values, it consumes them
@@ -404,11 +468,25 @@ fn evaluate_node(
                 Ok(vec![NodeValue::Float(0.0)])
             }
         }
+
+        // Blueprint nodes are not evaluated by the data-flow evaluator.
+        // Use BlueprintExecutor for blueprint execution.
+        _ => Ok(vec![]),
     }
 }
 
 fn get_float(inputs: &[NodeValue], index: usize) -> f32 {
     inputs.get(index).map(|v| v.to_float()).unwrap_or(0.0)
+}
+
+fn get_int(inputs: &[NodeValue], index: usize) -> i32 {
+    inputs
+        .get(index)
+        .map(|v| match v {
+            NodeValue::Int(i) => *i,
+            other => other.to_float() as i32,
+        })
+        .unwrap_or(0)
 }
 
 fn get_vec3(inputs: &[NodeValue], index: usize) -> [f32; 3] {

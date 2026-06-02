@@ -9,6 +9,10 @@ default:
 build:
     cargo build
 
+# Build with minimal features (no audio, physics, network, script)
+build-minimal:
+    cargo build --no-default-features
+
 # Build the project in release mode
 build-release:
     cargo build --release
@@ -82,3 +86,11 @@ info:
     @echo "========================================"
     @echo "Workspace members:"
     @cargo metadata --no-deps --format-version 1 | ConvertFrom-Json | Select-Object -ExpandProperty packages | ForEach-Object { $_.name }
+
+# Show dependency tree
+deps:
+    cargo tree --depth 1
+
+# Check for duplicate dependencies
+dedup:
+    cargo tree --duplicates

@@ -12,6 +12,14 @@ pub trait Storage: Any + Send + Sync {
     fn as_any_ref(&self) -> &dyn Any;
     /// Borrow as `&mut dyn Any` for downcasting.
     fn as_any_mut(&mut self) -> &mut dyn Any;
+    /// Compact the sparse storage, returning the number of freed slots.
+    fn compact(&mut self) -> usize;
+    /// Return the number of occupied entries in this storage.
+    fn len(&self) -> usize;
+    /// Return `true` if this storage has no entries.
+    fn is_empty(&self) -> bool;
+    /// Return the number of wasted (empty) sparse slots.
+    fn wasted_slots(&self) -> usize;
 }
 
 /// A sparse-set backed component storage.
@@ -86,6 +94,53 @@ impl<T> SparseSet<T> {
     pub fn entities(&self) -> &[u32] {
         &self.entities
     }
+
+    /// Defragment the sparse array by shrinking it to fit only occupied slots.
+    ///
+    /// After many spawn/despawn cycles the sparse Vec can grow large with
+    /// mostly `None` slots. This method rebuilds it to the minimum size
+    /// needed, reclaiming memory.
+    ///
+    /// Returns the number of `None` slots that were removed.
+    pub fn compact(&mut self) -> usize {
+        if self.entities.is_empty() {
+            let freed = self.sparse.len();
+            self.sparse.clear();
+            self.sparse.shrink_to_fit();
+            return freed;
+        }
+
+        let max_index = *self.entities.iter().max().unwrap() as usize;
+        let old_len = self.sparse.len();
+
+        if max_index + 1 >= old_len {
+            return 0; // already minimal
+        }
+
+        self.sparse.truncate(max_index + 1);
+        self.sparse.shrink_to_fit();
+        old_len - self.sparse.len()
+    }
+
+    /// Return the length of the sparse array (including empty slots).
+    pub fn sparse_len(&self) -> usize {
+        self.sparse.len()
+    }
+
+    /// Return the number of occupied entries.
+    pub fn len(&self) -> usize {
+        self.entities.len()
+    }
+
+    /// Return `true` if this storage has no entries.
+    pub fn is_empty(&self) -> bool {
+        self.entities.is_empty()
+    }
+
+    /// Return the number of empty slots in the sparse array.
+    pub fn wasted_slots(&self) -> usize {
+        self.sparse.len().saturating_sub(self.entities.len())
+    }
 }
 
 impl<T: Send + Sync + 'static> Storage for SparseSet<T> {
@@ -102,6 +157,22 @@ impl<T: Send + Sync + 'static> Storage for SparseSet<T> {
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn compact(&mut self) -> usize {
+        SparseSet::compact(self)
+    }
+
+    fn len(&self) -> usize {
+        SparseSet::len(self)
+    }
+
+    fn is_empty(&self) -> bool {
+        SparseSet::is_empty(self)
+    }
+
+    fn wasted_slots(&self) -> usize {
+        SparseSet::wasted_slots(self)
     }
 }
 
@@ -162,6 +233,19 @@ impl ComponentRegistry {
             storage.remove_index(index);
         }
     }
+
+    /// Compact all storages, returning total freed slots.
+    pub fn compact_all(&mut self) -> usize {
+        self.storages.values_mut().map(|s| s.compact()).sum()
+    }
+
+    /// Return a summary of memory usage per component type.
+    pub fn memory_summary(&self) -> Vec<(std::any::TypeId, usize, usize)> {
+        self.storages
+            .iter()
+            .map(|(&tid, s)| (tid, s.len(), s.wasted_slots()))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -195,5 +279,46 @@ mod tests {
         set.insert(5, "a");
         set.insert(3, "b");
         assert_eq!(set.entities(), &[5, 3]);
+    }
+
+    #[test]
+    fn test_sparse_set_compact() {
+        let mut set = SparseSet::<i32>::new();
+        // Insert at high index to grow sparse vec
+        set.insert(100, 1);
+        set.insert(200, 2);
+        assert!(set.sparse_len() > 200);
+
+        // Remove the high-index entry
+        set.remove(200);
+        assert!(set.wasted_slots() > 0);
+
+        let freed = set.compact();
+        assert!(freed > 0);
+        // After compaction, sparse should shrink to fit index 100
+        assert!(set.sparse_len() <= 101);
+        // The remaining entry should still be accessible
+        assert_eq!(set.get(100), Some(&1));
+    }
+
+    #[test]
+    fn test_sparse_set_compact_empty() {
+        let mut set = SparseSet::<i32>::new();
+        set.insert(50, 1);
+        set.remove(50);
+        let freed = set.compact();
+        assert!(freed > 0);
+        assert_eq!(set.sparse_len(), 0);
+    }
+
+    #[test]
+    fn test_sparse_set_len() {
+        let mut set = SparseSet::<i32>::new();
+        assert_eq!(set.len(), 0);
+        set.insert(0, 1);
+        set.insert(1, 2);
+        assert_eq!(set.len(), 2);
+        set.remove(0);
+        assert_eq!(set.len(), 1);
     }
 }

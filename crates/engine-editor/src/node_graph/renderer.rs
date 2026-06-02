@@ -197,6 +197,7 @@ impl NodeGraphRenderer {
             super::graph::NodeCategory::Color => Color32::from_rgb(120, 100, 40),
             super::graph::NodeCategory::Vector => Color32::from_rgb(80, 120, 80),
             super::graph::NodeCategory::Output => Color32::from_rgb(150, 50, 50),
+            super::graph::NodeCategory::Blueprint => Color32::from_rgb(60, 130, 60),
             super::graph::NodeCategory::Custom(_) => Color32::from_rgb(80, 80, 80),
         };
         painter.add(Shape::rect_filled(

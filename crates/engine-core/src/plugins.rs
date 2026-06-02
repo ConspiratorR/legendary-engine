@@ -1,6 +1,8 @@
 use crate::app::AppBuilder;
 use crate::logger::Logger;
+use crate::memory::MemoryTracker;
 use crate::plugin::Plugin;
+use crate::profiler::Profiler;
 use crate::time::Time;
 use engine_input::action::ActionMap;
 
@@ -72,5 +74,56 @@ impl Plugin for CorePlugins {
         app.add_plugin(TimePlugin);
         app.add_plugin(ActionPlugin);
         // InputManager is already added by AppBuilder::new()
+    }
+}
+
+/// Profiler plugin, adds a [`Profiler`] resource and updates it each frame.
+///
+/// Automatically calls `begin_frame`/`end_frame` around the update phase.
+pub struct ProfilerPlugin {
+    max_frames: usize,
+}
+
+impl ProfilerPlugin {
+    pub fn new(max_frames: usize) -> Self {
+        Self { max_frames }
+    }
+}
+
+impl Default for ProfilerPlugin {
+    fn default() -> Self {
+        Self::new(120)
+    }
+}
+
+impl Plugin for ProfilerPlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        app.insert_resource(Profiler::new(self.max_frames));
+
+        // Pre-update: begin frame profiling
+        app.add_pre_update_hook(Box::new(|app| {
+            if let Some(profiler) = app.world_mut().get_resource_mut::<Profiler>() {
+                profiler.begin_frame();
+            }
+        }));
+
+        // Post-update: end frame profiling
+        app.add_post_update_hook(Box::new(|app| {
+            if let Some(profiler) = app.world_mut().get_resource_mut::<Profiler>() {
+                profiler.end_frame();
+            }
+        }));
+    }
+}
+
+/// Memory tracker plugin, hooks into the frame lifecycle to collect
+/// per-frame memory snapshots.
+pub struct MemoryTrackerPlugin;
+
+impl Plugin for MemoryTrackerPlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        app.add_post_update_hook(Box::new(|_app| {
+            MemoryTracker::take_frame_snapshot();
+        }));
     }
 }

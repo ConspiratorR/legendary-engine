@@ -3,6 +3,11 @@ use crate::pipeline::sprite::SpriteVertex;
 use engine_asset::asset::Handle;
 use engine_asset::types::Texture;
 use engine_math::{Mat4, Vec2};
+
+/// A 2D sprite with texture, color, size, and transform.
+///
+/// Sprites are collected into [`SpriteBatch`]es for efficient GPU rendering.
+/// Use `uv_region` for sprite sheet sub-regions.
 pub struct Sprite {
     pub texture: Handle<Texture>,
     pub color: [f32; 4],
@@ -15,6 +20,10 @@ pub struct Sprite {
     pub uv_region: [f32; 4],
 }
 
+/// Prepared sprite data ready for batching.
+///
+/// Contains the final world matrix, color, size, texture ID, and UV region
+/// after all transforms and flip operations have been applied.
 #[derive(Clone)]
 pub struct SpriteDraw {
     pub world_matrix: Mat4,
@@ -28,6 +37,10 @@ pub struct SpriteDraw {
     pub uv_region: [f32; 4],
 }
 
+/// A batch of sprites sharing the same texture, ready for GPU upload.
+///
+/// Sprites are grouped by texture ID to minimize bind group switches.
+/// Each batch contains vertex/index data and an indirect draw command.
 pub struct SpriteBatch {
     pub texture_id: u64,
     pub vertices: Vec<SpriteVertex>,
@@ -38,6 +51,7 @@ pub struct SpriteBatch {
 }
 
 impl SpriteBatch {
+    /// Create a new empty batch for the given texture.
     pub fn new(texture_id: u64) -> Self {
         Self {
             texture_id,
@@ -49,6 +63,7 @@ impl SpriteBatch {
         }
     }
 
+    /// Add a sprite draw to this batch, generating vertices and indices.
     pub fn push(&mut self, draw: &SpriteDraw) {
         let base = self.vertices.len() as u16;
         let w = draw.size.x * 0.5;

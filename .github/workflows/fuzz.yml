@@ -1,0 +1,143 @@
+name: Fuzz Testing
+
+on:
+  schedule:
+    # Run nightly fuzz campaigns at 2 AM UTC
+    - cron: '0 2 * * *'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/engine-ecs/**'
+      - 'crates/engine-asset/**'
+      - 'crates/engine-physics/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fuzz-ecs:
+    name: Fuzz ECS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Fuzz World Operations (60s)
+        working-directory: crates/engine-ecs
+        run: cargo fuzz run fuzz_world_operations -- -max_total_time=60
+
+      - name: Fuzz SparseSet (60s)
+        working-directory: crates/engine-ecs
+        run: cargo fuzz run fuzz_sparse_set -- -max_total_time=60
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecs-fuzz-crashes
+          path: crates/engine-ecs/fuzz/artifacts/
+
+  fuzz-asset:
+    name: Fuzz Asset
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Fuzz Material Importer (60s)
+        working-directory: crates/engine-asset
+        run: cargo fuzz run fuzz_material_importer -- -max_total_time=60
+
+      - name: Fuzz Image Importer (60s)
+        working-directory: crates/engine-asset
+        run: cargo fuzz run fuzz_image_importer -- -max_total_time=60
+
+      - name: Fuzz Audio Importer (60s)
+        working-directory: crates/engine-asset
+        run: cargo fuzz run fuzz_audio_importer -- -max_total_time=60
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asset-fuzz-crashes
+          path: crates/engine-asset/fuzz/artifacts/
+
+  fuzz-physics:
+    name: Fuzz Physics
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Fuzz Collision Detection (60s)
+        working-directory: crates/engine-physics
+        run: cargo fuzz run fuzz_collision_detection -- -max_total_time=60
+
+      - name: Fuzz Broadphase (60s)
+        working-directory: crates/engine-physics
+        run: cargo fuzz run fuzz_broadphase -- -max_total_time=60
+
+      - name: Fuzz Contact Solver (60s)
+        working-directory: crates/engine-physics
+        run: cargo fuzz run fuzz_contact_solver -- -max_total_time=60
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: physics-fuzz-crashes
+          path: crates/engine-physics/fuzz/artifacts/
+
+  fuzz-nightly:
+    name: Fuzz Nightly (Extended)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { crate: engine-ecs, name: fuzz_world_operations }
+          - { crate: engine-ecs, name: fuzz_sparse_set }
+          - { crate: engine-asset, name: fuzz_material_importer }
+          - { crate: engine-asset, name: fuzz_image_importer }
+          - { crate: engine-asset, name: fuzz_audio_importer }
+          - { crate: engine-physics, name: fuzz_collision_detection }
+          - { crate: engine-physics, name: fuzz_broadphase }
+          - { crate: engine-physics, name: fuzz_contact_solver }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Run extended fuzz (1 hour)
+        working-directory: crates/${{ matrix.target.crate }}
+        run: cargo fuzz run ${{ matrix.target.name }} -- -max_total_time=3600
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-fuzz-crashes-${{ matrix.target.name }}
+          path: crates/${{ matrix.target.crate }}/fuzz/artifacts/

@@ -56,7 +56,7 @@ impl WorldSnapshot {
         self.despawned.push(entity_index);
     }
 
-    /// Convert to the wire format used by [`NetworkMessage::StateSnapshot`].
+    /// Convert to the wire format used by [`NetworkMessage::StateSnapshot`](crate::message::NetworkMessage::StateSnapshot).
     pub fn to_wire_format(&self) -> (u64, EntityComponentData, Vec<u32>) {
         let entities: EntityComponentData = self
             .entities

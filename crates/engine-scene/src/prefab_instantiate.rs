@@ -1,4 +1,4 @@
-//! Prefab instantiation into an ECS [`World`](engine_ecs::world::World).
+//! Prefab instantiation into an ECS [`World`].
 //!
 //! This module handles spawning entity hierarchies from [`PrefabDef`]s,
 //! applying component templates and per-instance overrides. Nested prefab

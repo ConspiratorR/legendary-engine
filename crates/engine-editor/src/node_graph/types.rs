@@ -14,6 +14,10 @@ pub enum PinType {
     Sampler,
     Bool,
     Int,
+    /// Execution flow pin — carries control flow, not data.
+    Execution,
+    /// Generic wildcard for blueprint variable pins.
+    Wildcard,
 }
 
 impl PinType {
@@ -29,6 +33,8 @@ impl PinType {
             PinType::Sampler => "Sampler",
             PinType::Bool => "Bool",
             PinType::Int => "Int",
+            PinType::Execution => "Exec",
+            PinType::Wildcard => "Wildcard",
         }
     }
 
@@ -44,6 +50,8 @@ impl PinType {
             PinType::Sampler => Color32::from_rgb(150, 100, 50),
             PinType::Bool => Color32::from_rgb(255, 150, 150),
             PinType::Int => Color32::from_rgb(100, 200, 200),
+            PinType::Execution => Color32::from_rgb(255, 255, 255),
+            PinType::Wildcard => Color32::from_rgb(180, 180, 180),
         }
     }
 
@@ -51,6 +59,14 @@ impl PinType {
     pub fn is_compatible_with(&self, other: &PinType) -> bool {
         if self == other {
             return true;
+        }
+        // Wildcard connects to anything
+        if matches!(self, PinType::Wildcard) || matches!(other, PinType::Wildcard) {
+            return true;
+        }
+        // Execution pins only connect to execution pins
+        if matches!(self, PinType::Execution) || matches!(other, PinType::Execution) {
+            return false;
         }
         // Allow implicit conversions between numeric types
         matches!(
@@ -136,6 +152,7 @@ impl NodeValue {
             PinType::Bool => NodeValue::Bool(false),
             PinType::Int => NodeValue::Int(0),
             PinType::Texture | PinType::Sampler => NodeValue::Float(0.0),
+            PinType::Execution | PinType::Wildcard => NodeValue::Float(0.0),
         }
     }
 }

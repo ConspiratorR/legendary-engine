@@ -1,0 +1,33 @@
+[package]
+name = "engine-ecs-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+[dependencies.engine-ecs]
+path = ".."
+
+[[bin]]
+name = "fuzz_world_operations"
+path = "fuzz_targets/fuzz_world_operations.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "fuzz_sparse_set"
+path = "fuzz_targets/fuzz_sparse_set.rs"
+test = false
+doc = false
+
+[profile.release]
+opt-level = 3
+debug = false

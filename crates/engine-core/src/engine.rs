@@ -2,15 +2,25 @@ use crate::app::AppBuilder;
 use engine_window::window::{WindowConfig, create_window};
 use std::sync::Arc;
 
+/// High-level engine entry point.
+///
+/// Provides a convenient way to create an [`AppBuilder`] with default settings.
+/// For more control, use `AppBuilder::new()` directly.
 pub struct Engine;
 
 #[allow(clippy::new_ret_no_self)]
 impl Engine {
+    /// Create a new [`AppBuilder`].
     pub fn new() -> AppBuilder {
         AppBuilder::new()
     }
 }
 
+/// Run the application with a default window and renderer.
+///
+/// This creates a window, initializes the wgpu renderer, and enters the
+/// winit event loop. Input events are forwarded to the app's input system.
+/// The app's `run()` method is called each frame.
 #[allow(deprecated)]
 pub fn run_default(app_builder: AppBuilder) {
     let mut app = app_builder.build();
