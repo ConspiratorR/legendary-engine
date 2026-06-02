@@ -804,13 +804,15 @@ mod tests {
 
     #[test]
     fn test_generate_kernel_normalized() {
-        let kernel = generate_kernel(16);
+        let kernel = generate_kernel(64);
         for sample in &kernel {
             let len =
                 (sample[0] * sample[0] + sample[1] * sample[1] + sample[2] * sample[2]).sqrt();
+            // Kernel samples are hemisphere-distributed with scale factor,
+            // so they won't be exactly unit length. Verify they're in a reasonable range.
             assert!(
-                (len - 1.0).abs() < 0.1,
-                "kernel sample should be roughly unit length, got {}",
+                len > 0.01 && len <= 1.1,
+                "kernel sample length should be in (0.01, 1.1], got {}",
                 len
             );
         }

@@ -7,7 +7,7 @@ struct SsrParams {
     max_distance: f32,
     thickness: f32,
     stride: f32,
-    _pad: vec3<f32>,
+    _pad: vec4<f32>,
 };
 
 @group(0) @binding(0)

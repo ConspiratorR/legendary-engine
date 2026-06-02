@@ -252,8 +252,13 @@ impl Renderer {
             }
 
             // Tone mapping: HDR framebuffer → swapchain
-            self.post_process
-                .execute(&mut encoder, &swapchain_view, &self.device);
+            self.post_process.execute(
+                &mut encoder,
+                &swapchain_view,
+                &self.device,
+                &self.queue,
+                None,
+            );
 
             self.queue.submit([encoder.finish()]);
         } else {
@@ -299,8 +304,13 @@ impl Renderer {
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("post_process_encoder"),
                 });
-            self.post_process
-                .execute(&mut encoder, &swapchain_view, &self.device);
+            self.post_process.execute(
+                &mut encoder,
+                &swapchain_view,
+                &self.device,
+                &self.queue,
+                None,
+            );
 
             let mut submits = batcher.finish();
             submits.push(encoder.finish());

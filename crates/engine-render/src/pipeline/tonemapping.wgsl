@@ -4,7 +4,7 @@
 
 struct TonemappingParams {
     exposure: f32,
-    operator: u32,   // 0 = Reinhard, 1 = ACES, 2 = Exponential, 3 = Linear
+    tonemap_op: u32,   // 0 = Reinhard, 1 = ACES, 2 = Exponential, 3 = Linear
     gamma: f32,
     _pad: f32,
 };
@@ -68,7 +68,7 @@ fn fs_tonemapping(input: VertexOutput) -> @location(0) vec4<f32> {
 
     let exposed = hdr_color.rgb * params.exposure;
 
-    switch (params.operator) {
+    switch (params.tonemap_op) {
         case 0u: {
             mapped = reinhard(exposed);
         }

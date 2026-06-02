@@ -280,6 +280,17 @@ impl TaaPass {
         }
     }
 
+    /// Update TAA configuration and upload to GPU.
+    pub fn set_config(&mut self, queue: &wgpu::Queue, config: TaaConfig) {
+        self.config = config;
+        let uniform = TaaUniform {
+            blend_factor: self.config.blend_factor,
+            jitter_scale: self.config.jitter_scale,
+            _pad: [0.0; 2],
+        };
+        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniform));
+    }
+
     pub fn execute(
         &self,
         encoder: &mut wgpu::CommandEncoder,

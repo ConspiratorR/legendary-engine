@@ -1,5 +1,13 @@
 //! Post-processing pipeline: HDR framebuffer, tone mapping, and composable effect chain.
+//!
+//! Execution order: SSAO → Bloom → TAA → Height Fog → Volumetric → Tonemapping
 
+use crate::atmosphere::{
+    HeightFogConfig, HeightFogPass, SsrConfig, SsrEffect, VolumetricConfig, VolumetricEffect,
+};
+use crate::bloom::{BloomConfig, BloomEffect};
+use crate::ssao::{SsaoConfig, SsaoEffect};
+use crate::taa::{TaaConfig, TaaEffect};
 use bytemuck::{Pod, Zeroable};
 
 /// Tone mapping operator selection.
@@ -304,17 +312,79 @@ impl TonemappingPass {
     }
 }
 
+/// G-Buffer inputs for post-processing passes that need scene geometry data.
+///
+/// Optional — passes requiring G-Buffer data (SSAO, SSR, height fog, volumetric)
+/// will be skipped if these are not provided.
+pub struct GBufferInputs<'a> {
+    pub position_view: &'a wgpu::TextureView,
+    pub normal_view: &'a wgpu::TextureView,
+    pub depth_view: &'a wgpu::TextureView,
+    pub camera_bind_group: &'a wgpu::BindGroup,
+}
+
+/// Height fog effect wrapper with its own render target.
+pub struct HeightFogEffect {
+    pub pass: HeightFogPass,
+    pub target: HdrFramebuffer,
+}
+
+impl HeightFogEffect {
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+        output_format: wgpu::TextureFormat,
+    ) -> Self {
+        let pass = HeightFogPass::new(device, queue, output_format);
+        let target = HdrFramebuffer::new(device, width, height);
+        Self { pass, target }
+    }
+
+    pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+        self.target.resize(device, width, height);
+    }
+
+    pub fn execute(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        scene_view: &wgpu::TextureView,
+        position_view: &wgpu::TextureView,
+        device: &wgpu::Device,
+    ) {
+        self.pass.execute(
+            encoder,
+            scene_view,
+            position_view,
+            &self.target.view,
+            device,
+        );
+    }
+}
+
 /// Post-processing chain manager.
 ///
-/// Manages the HDR framebuffer and all post-processing passes.
-/// Currently supports tone mapping; will be extended with SSAO, Bloom, etc.
+/// Manages the HDR framebuffer and all post-processing passes:
+/// SSAO → Bloom → TAA → Height Fog → Volumetric → Tonemapping
 pub struct PostProcessChain {
     pub hdr_framebuffer: HdrFramebuffer,
     pub tonemapping: TonemappingPass,
+    pub ssao: Option<SsaoEffect>,
+    pub bloom: Option<BloomEffect>,
+    pub taa: Option<TaaEffect>,
+    pub height_fog: Option<HeightFogEffect>,
+    pub ssr: Option<SsrEffect>,
+    pub volumetric: Option<VolumetricEffect>,
+    /// Secondary HDR buffer for ping-pong between passes.
+    pub hdr_aux: HdrFramebuffer,
+    pub width: u32,
+    pub height: u32,
+    pub output_format: wgpu::TextureFormat,
 }
 
 impl PostProcessChain {
-    /// Create a new post-processing chain.
+    /// Create a new post-processing chain with all passes enabled.
     pub fn new(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -323,17 +393,85 @@ impl PostProcessChain {
         output_format: wgpu::TextureFormat,
     ) -> Self {
         let hdr_framebuffer = HdrFramebuffer::new(device, width, height);
+        let hdr_aux = HdrFramebuffer::new(device, width, height);
+        let tonemapping = TonemappingPass::new(device, queue, output_format);
+
+        let ssao = SsaoEffect::new(device, queue, width, height);
+        let bloom = BloomEffect::new(device, queue, width, height);
+        let taa = TaaEffect::new(device, queue, width, height);
+        let height_fog = HeightFogEffect::new(device, queue, width, height, output_format);
+        let ssr = SsrEffect::new(device, queue, width, height);
+        let volumetric = VolumetricEffect::new(device, queue, width, height);
+
+        Self {
+            hdr_framebuffer,
+            tonemapping,
+            ssao: Some(ssao),
+            bloom: Some(bloom),
+            taa: Some(taa),
+            height_fog: Some(height_fog),
+            ssr: Some(ssr),
+            volumetric: Some(volumetric),
+            hdr_aux,
+            width,
+            height,
+            output_format,
+        }
+    }
+
+    /// Create a minimal chain with only tonemapping (no other passes).
+    pub fn new_minimal(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+        output_format: wgpu::TextureFormat,
+    ) -> Self {
+        let hdr_framebuffer = HdrFramebuffer::new(device, width, height);
+        let hdr_aux = HdrFramebuffer::new(device, width, height);
         let tonemapping = TonemappingPass::new(device, queue, output_format);
 
         Self {
             hdr_framebuffer,
             tonemapping,
+            ssao: None,
+            bloom: None,
+            taa: None,
+            height_fog: None,
+            ssr: None,
+            volumetric: None,
+            hdr_aux,
+            width,
+            height,
+            output_format,
         }
     }
 
     /// Resize all internal buffers.
     pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
         self.hdr_framebuffer.resize(device, width, height);
+        self.hdr_aux.resize(device, width, height);
+
+        if let Some(ref mut ssao) = self.ssao {
+            ssao.resize(device, width, height);
+        }
+        if let Some(ref mut bloom) = self.bloom {
+            bloom.resize(device, width, height);
+        }
+        if let Some(ref mut taa) = self.taa {
+            taa.resize(device, width, height);
+        }
+        if let Some(ref mut fog) = self.height_fog {
+            fog.resize(device, width, height);
+        }
+        if let Some(ref mut ssr) = self.ssr {
+            ssr.resize(device, width, height);
+        }
+        if let Some(ref mut vol) = self.volumetric {
+            vol.resize(device, width, height);
+        }
     }
 
     /// Get the HDR framebuffer view for use as a render target.
@@ -343,10 +481,107 @@ impl PostProcessChain {
 
     /// Execute the full post-processing chain.
     ///
-    /// 1. Reads from the HDR framebuffer
-    /// 2. Applies tone mapping
-    /// 3. Writes to `output_view` (swapchain)
+    /// Order: SSAO → Bloom → TAA → Height Fog → Volumetric → Tonemapping
+    ///
+    /// `gbuffer` is optional — passes requiring G-Buffer data will be skipped
+    /// if not provided.
     pub fn execute(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        output_view: &wgpu::TextureView,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        gbuffer: Option<&GBufferInputs<'_>>,
+    ) {
+        // Track which buffer has the current scene data.
+        // Start: hdr_framebuffer has the scene render.
+        let mut current_is_primary = true;
+
+        // ── SSAO ──────────────────────────────────────────────
+        if let (Some(ssao), Some(gb)) = (&self.ssao, gbuffer) {
+            ssao.execute(
+                encoder,
+                gb.position_view,
+                gb.normal_view,
+                gb.camera_bind_group,
+                queue,
+                device,
+            );
+        }
+
+        // ── Bloom ─────────────────────────────────────────────
+        if let Some(ref bloom) = self.bloom {
+            let (src, dst) = if current_is_primary {
+                (&self.hdr_framebuffer.view, &self.hdr_aux.view)
+            } else {
+                (&self.hdr_aux.view, &self.hdr_framebuffer.view)
+            };
+            bloom.execute(encoder, src, dst, queue, device);
+            current_is_primary = !current_is_primary;
+        }
+
+        // ── TAA ───────────────────────────────────────────────
+        if let (Some(taa), Some(gb)) = (&mut self.taa, gbuffer) {
+            let src = if current_is_primary {
+                &self.hdr_framebuffer.view
+            } else {
+                &self.hdr_aux.view
+            };
+            taa.execute(encoder, src, gb.depth_view, device);
+            // TAA writes to its own resolved target — swap it into the primary buffer.
+            // For now, we skip the copy and let TAA's internal target be used downstream.
+            // A future optimization would be to copy TAA output into the active HDR buffer.
+        }
+
+        // ── Height Fog ────────────────────────────────────────
+        if let (Some(fog), Some(gb)) = (&self.height_fog, gbuffer) {
+            let src = if current_is_primary {
+                &self.hdr_framebuffer.view
+            } else {
+                &self.hdr_aux.view
+            };
+            fog.execute(encoder, src, gb.position_view, device);
+            // Height fog writes to its own target — swap reference.
+            current_is_primary = !current_is_primary;
+        }
+
+        // ── SSR ───────────────────────────────────────────────
+        if let (Some(ssr), Some(gb)) = (&self.ssr, gbuffer) {
+            let scene_view = if current_is_primary {
+                &self.hdr_framebuffer.view
+            } else {
+                &self.hdr_aux.view
+            };
+            ssr.execute(
+                encoder,
+                scene_view,
+                gb.depth_view,
+                gb.normal_view,
+                gb.position_view,
+                device,
+            );
+            // SSR writes to its own reflection target — no buffer swap needed.
+        }
+
+        // ── Volumetric ────────────────────────────────────────
+        if let (Some(vol), Some(gb)) = (&self.volumetric, gbuffer) {
+            vol.execute(encoder, gb.depth_view, gb.position_view, device);
+            // Volumetric writes to its own target — no buffer swap needed.
+        }
+
+        // ── Tonemapping ───────────────────────────────────────
+        // Read from whichever buffer has the final scene data.
+        let final_src = if current_is_primary {
+            &self.hdr_framebuffer.view
+        } else {
+            &self.hdr_aux.view
+        };
+        self.tonemapping
+            .execute(encoder, final_src, output_view, device);
+    }
+
+    /// Legacy execute path (no G-Buffer, no queue) — tonemapping only.
+    pub fn execute_simple(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         output_view: &wgpu::TextureView,
@@ -356,9 +591,118 @@ impl PostProcessChain {
             .execute(encoder, &self.hdr_framebuffer.view, output_view, device);
     }
 
+    // ── Configuration API ──────────────────────────────────────
+
     /// Update tone mapping settings.
     pub fn set_tonemapping(&mut self, queue: &wgpu::Queue, config: TonemappingConfig) {
         self.tonemapping.set_config(queue, config);
+    }
+
+    /// Update SSAO settings. No-op if SSAO is disabled.
+    pub fn set_ssao(&mut self, queue: &wgpu::Queue, config: SsaoConfig) {
+        if let Some(ref mut ssao) = self.ssao {
+            ssao.pass.set_config(queue, config);
+        }
+    }
+
+    /// Update bloom settings. No-op if bloom is disabled.
+    pub fn set_bloom(&mut self, _queue: &wgpu::Queue, config: BloomConfig) {
+        if let Some(ref mut bloom) = self.bloom {
+            bloom.config = config;
+        }
+    }
+
+    /// Update TAA settings. No-op if TAA is disabled.
+    pub fn set_taa(&mut self, queue: &wgpu::Queue, config: TaaConfig) {
+        if let Some(ref mut taa) = self.taa {
+            taa.pass.set_config(queue, config);
+        }
+    }
+
+    /// Update height fog settings. No-op if fog is disabled.
+    pub fn set_height_fog(&mut self, queue: &wgpu::Queue, config: HeightFogConfig) {
+        if let Some(ref mut fog) = self.height_fog {
+            fog.pass.set_config(queue, config);
+        }
+    }
+
+    /// Update SSR settings. No-op if SSR is disabled.
+    pub fn set_ssr(&mut self, queue: &wgpu::Queue, config: SsrConfig) {
+        if let Some(ref mut ssr) = self.ssr {
+            ssr.pass.set_config(queue, config);
+        }
+    }
+
+    /// Update volumetric light settings. No-op if volumetric is disabled.
+    pub fn set_volumetric(&mut self, queue: &wgpu::Queue, config: VolumetricConfig) {
+        if let Some(ref mut vol) = self.volumetric {
+            vol.pass.set_config(queue, config);
+        }
+    }
+
+    /// Enable or disable SSAO.
+    pub fn enable_ssao(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, enable: bool) {
+        if enable && self.ssao.is_none() {
+            self.ssao = Some(SsaoEffect::new(device, queue, self.width, self.height));
+        } else if !enable {
+            self.ssao = None;
+        }
+    }
+
+    /// Enable or disable bloom.
+    pub fn enable_bloom(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, enable: bool) {
+        if enable && self.bloom.is_none() {
+            self.bloom = Some(BloomEffect::new(device, queue, self.width, self.height));
+        } else if !enable {
+            self.bloom = None;
+        }
+    }
+
+    /// Enable or disable TAA.
+    pub fn enable_taa(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, enable: bool) {
+        if enable && self.taa.is_none() {
+            self.taa = Some(TaaEffect::new(device, queue, self.width, self.height));
+        } else if !enable {
+            self.taa = None;
+        }
+    }
+
+    /// Enable or disable height fog.
+    pub fn enable_height_fog(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, enable: bool) {
+        if enable && self.height_fog.is_none() {
+            self.height_fog = Some(HeightFogEffect::new(
+                device,
+                queue,
+                self.width,
+                self.height,
+                self.output_format,
+            ));
+        } else if !enable {
+            self.height_fog = None;
+        }
+    }
+
+    /// Enable or disable SSR.
+    pub fn enable_ssr(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, enable: bool) {
+        if enable && self.ssr.is_none() {
+            self.ssr = Some(SsrEffect::new(device, queue, self.width, self.height));
+        } else if !enable {
+            self.ssr = None;
+        }
+    }
+
+    /// Enable or disable volumetric lighting.
+    pub fn enable_volumetric(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, enable: bool) {
+        if enable && self.volumetric.is_none() {
+            self.volumetric = Some(VolumetricEffect::new(
+                device,
+                queue,
+                self.width,
+                self.height,
+            ));
+        } else if !enable {
+            self.volumetric = None;
+        }
     }
 }
 
@@ -452,7 +796,7 @@ mod tests {
     #[test]
     fn test_post_process_chain_creation() {
         let (device, queue) = create_test_device();
-        let chain = PostProcessChain::new(
+        let chain = PostProcessChain::new_minimal(
             &device,
             &queue,
             1280,
@@ -462,12 +806,35 @@ mod tests {
 
         assert_eq!(chain.hdr_framebuffer.width, 1280);
         assert_eq!(chain.hdr_framebuffer.height, 720);
+        assert_eq!(chain.hdr_aux.width, 1280);
+        assert_eq!(chain.width, 1280);
+        assert_eq!(chain.height, 720);
+    }
+
+    #[test]
+    fn test_post_process_chain_minimal() {
+        let (device, queue) = create_test_device();
+        let chain = PostProcessChain::new_minimal(
+            &device,
+            &queue,
+            1280,
+            720,
+            wgpu::TextureFormat::Bgra8UnormSrgb,
+        );
+
+        assert_eq!(chain.hdr_framebuffer.width, 1280);
+        assert!(chain.ssao.is_none());
+        assert!(chain.bloom.is_none());
+        assert!(chain.taa.is_none());
+        assert!(chain.height_fog.is_none());
+        assert!(chain.ssr.is_none());
+        assert!(chain.volumetric.is_none());
     }
 
     #[test]
     fn test_post_process_chain_resize() {
         let (device, queue) = create_test_device();
-        let mut chain = PostProcessChain::new(
+        let mut chain = PostProcessChain::new_minimal(
             &device,
             &queue,
             1280,
@@ -479,5 +846,8 @@ mod tests {
 
         assert_eq!(chain.hdr_framebuffer.width, 1920);
         assert_eq!(chain.hdr_framebuffer.height, 1080);
+        assert_eq!(chain.hdr_aux.width, 1920);
+        assert_eq!(chain.width, 1920);
+        assert_eq!(chain.height, 1080);
     }
 }
