@@ -1,7 +1,7 @@
 use egui::{Color32, Margin, Rounding};
 
 /// Visual theme for the GUI, defining styles for each widget type.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GuiSkin {
     /// Style for labels.
     pub label: GuiStyle,
@@ -118,7 +118,7 @@ impl Default for GuiSkin {
 }
 
 /// Style configuration for a single widget type.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct GuiStyle {
     /// Colors for the normal (idle) state.
     pub normal: ColorBlock,
@@ -167,7 +167,7 @@ impl Default for GuiStyle {
 }
 
 /// A set of colors for a single widget state (background, text, optional border).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ColorBlock {
     /// Fill color.
     pub background: Color32,
