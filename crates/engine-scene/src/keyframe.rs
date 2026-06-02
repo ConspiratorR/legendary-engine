@@ -1,7 +1,8 @@
 use engine_math::{Quat, Vec3};
+use serde::{Deserialize, Serialize};
 
 /// Interpolation method between keyframes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Interpolation {
     /// Linear interpolation.
     Linear,
@@ -12,7 +13,7 @@ pub enum Interpolation {
 }
 
 /// A single keyframe for a float value.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct FloatKeyframe {
     pub time: f32,
     pub value: f32,
@@ -56,7 +57,7 @@ impl FloatKeyframe {
 }
 
 /// A single keyframe for a Vec3 value.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Vec3Keyframe {
     pub time: f32,
     pub value: Vec3,
@@ -88,7 +89,7 @@ impl Vec3Keyframe {
 }
 
 /// A single keyframe for a rotation (quaternion).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct RotationKeyframe {
     pub time: f32,
     pub value: Quat,
@@ -116,7 +117,7 @@ impl RotationKeyframe {
 /// A transform animation clip containing position, rotation, and scale tracks.
 ///
 /// Each track is optional — only the tracks that are present will be applied.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationClip {
     pub name: String,
     pub duration: f32,
@@ -181,7 +182,7 @@ impl AnimationClip {
 }
 
 /// Animation player component — tracks playback state for an entity.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationPlayer {
     pub clip_name: String,
     pub time: f32,

@@ -1,8 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 /// A lightweight handle identifying an object in the [`World`](super::world::World).
 ///
 /// Entities are versioned: when an entity is despawned its generation increments,
 /// so a stale `Entity` value will never accidentally refer to a newly-spawned one.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Entity(u64);
 
 impl Entity {

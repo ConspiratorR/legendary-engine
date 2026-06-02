@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 rayon = "1.10"
+serde = { version = "1.0", features = ["derive"] }
 engine-jobs = { path = "../engine-jobs", optional = true }
 
 [features]

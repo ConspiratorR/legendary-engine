@@ -1,0 +1,16 @@
+[package]
+name = "engine-script"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+mlua = { version = "0.11", features = ["lua54", "vendored", "send"] }
+notify = "8"
+notify-debouncer-mini = "0.6"
+engine-ecs = { path = "../engine-ecs" }
+engine-core = { path = "../engine-core" }
+anyhow = "1"
+
+[dev-dependencies]
+tempfile = "3"

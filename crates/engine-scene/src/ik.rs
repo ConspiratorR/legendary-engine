@@ -7,6 +7,7 @@
 //! - [`ik_solve_system`]: ECS system entry point.
 
 use engine_math::{Mat4, Quat, Vec3};
+use serde::{Deserialize, Serialize};
 
 use crate::skeleton::{JointTransform, SkeletalAnimationPlayer, Skeleton};
 
@@ -63,9 +64,9 @@ impl FKSolver {
 
 /// Defines a chain of joints for IK solving.
 ///
-/// Joints are ordered from **root to effector** (end-effector is the last element).
+/// Joints are ordered from **root to effector** (last = end-effector).
 /// The solver adjusts rotations of all joints in the chain to reach the target.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IKChain {
     /// Joint indices from root to effector (last = end-effector).
     pub joint_indices: Vec<usize>,
@@ -104,7 +105,7 @@ impl IKChain {
 }
 
 /// Target for IK solving in world space.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct IKTarget {
     /// World-space position the effector should reach.
     pub position: Vec3,

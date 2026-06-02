@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
 use engine_math::{Mat4, Quat, Vec3};
+use serde::{Deserialize, Serialize};
 
 use crate::keyframe::{RotationKeyframe, Vec3Keyframe};
 
 /// A single joint (bone) in a skeleton.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Joint {
     pub id: u32,
     pub name: String,
@@ -18,7 +19,7 @@ pub struct Joint {
 }
 
 /// A hierarchical collection of joints forming a skeleton.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skeleton {
     joints: Vec<Joint>,
     joint_names: HashMap<String, usize>,
@@ -63,7 +64,7 @@ impl Skeleton {
 }
 
 /// Per-vertex skinning data referencing a skeleton.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Skin {
     /// Name of the skeleton this skin references.
     pub skeleton_name: String,
@@ -88,7 +89,7 @@ impl Skin {
 }
 
 /// Local transform for a single joint (position, rotation, scale).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct JointTransform {
     pub translation: Vec3,
     pub rotation: Quat,
@@ -131,7 +132,7 @@ impl JointTransform {
 }
 
 /// A per-joint animation clip mapping joint names to animation tracks.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkeletalAnimationClip {
     pub name: String,
     pub duration: f32,
@@ -217,7 +218,7 @@ impl SkeletalAnimationClip {
 }
 
 /// Player that advances a skeletal animation and produces a joint matrix palette.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkeletalAnimationPlayer {
     pub clip_name: String,
     pub time: f32,

@@ -1,7 +1,8 @@
 use engine_math::{Mat4, Quat, Vec3};
+use serde::{Deserialize, Serialize};
 
 /// Local transform of a scene node (translation, rotation, scale).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transform {
     /// Position relative to the parent.
     pub translation: Vec3,
@@ -38,7 +39,7 @@ impl Transform {
 
 /// The world-space transform of a scene node, computed by
 /// [`SceneManager::sync_transforms`](super::scene_manager::SceneManager::sync_transforms).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalTransform(pub Mat4);
 
 impl Default for GlobalTransform {

@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 /// A state in an animation state machine.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationState {
     pub name: String,
     pub clip_name: String,
@@ -31,7 +33,7 @@ impl AnimationState {
 }
 
 /// A transition between two animation states.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationTransition {
     pub from: String,
     pub to: String,
@@ -42,7 +44,7 @@ pub struct AnimationTransition {
 }
 
 /// Condition that triggers a transition.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TransitionCondition {
     /// Always transition immediately.
     Always,
@@ -62,7 +64,7 @@ pub enum TransitionCondition {
 ///
 /// Controls which animation clip plays based on state transitions
 /// and parameter conditions.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AnimationStateMachine {
     pub current_state: String,
     pub states: HashMap<String, AnimationState>,
@@ -77,7 +79,7 @@ pub struct AnimationStateMachine {
 }
 
 /// Parameters used to evaluate transition conditions.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AnimationParameters {
     pub bools: HashMap<String, bool>,
     pub floats: HashMap<String, f32>,
