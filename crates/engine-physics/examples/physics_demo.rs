@@ -72,11 +72,7 @@ fn main() {
         app.run();
 
         if frame % 60 == 0 {
-            let pw = app
-                .world
-                .get_resource::<PhysicsWorld>()
-                .cloned()
-                .unwrap_or_default();
+            let pw = app.world.get_resource::<PhysicsWorld>().unwrap();
             let sec = frame as f32 / 60.0;
             println!(
                 "t={:.1}s | Bodies: {} | Colliders: {} | Collisions: {}",

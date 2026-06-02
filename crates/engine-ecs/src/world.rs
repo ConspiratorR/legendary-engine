@@ -31,7 +31,7 @@ pub struct World {
     free_list: Vec<u32>,
     generations: Vec<u32>,
     components: ComponentRegistry,
-    resources: HashMap<TypeId, Box<dyn std::any::Any>>,
+    resources: HashMap<TypeId, Box<dyn std::any::Any + Send + Sync>>,
 }
 
 impl Default for World {
@@ -80,7 +80,7 @@ impl World {
     }
 
     /// Attach a component to an entity.
-    pub fn add_component<T: 'static>(&mut self, entity: Entity, component: T) {
+    pub fn add_component<T: Send + Sync + 'static>(&mut self, entity: Entity, component: T) {
         self.components
             .storage::<T>()
             .insert(entity.index(), component);
@@ -132,7 +132,7 @@ impl World {
     }
 
     /// Insert a global resource (singleton) of type `T`.
-    pub fn insert_resource<T: 'static>(&mut self, resource: T) {
+    pub fn insert_resource<T: Send + Sync + 'static>(&mut self, resource: T) {
         self.resources.insert(TypeId::of::<T>(), Box::new(resource));
     }
 
@@ -153,7 +153,11 @@ impl World {
     /// This is useful when a system needs exclusive access to a resource
     /// while also accessing other resources from the same world.
     pub fn remove_resource<T: 'static>(&mut self) -> Option<T> {
-        self.resources.remove(&TypeId::of::<T>())?.downcast::<T>().ok().map(|b| *b)
+        self.resources
+            .remove(&TypeId::of::<T>())?
+            .downcast::<T>()
+            .ok()
+            .map(|b| *b)
     }
 }
 

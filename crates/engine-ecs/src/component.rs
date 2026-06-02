@@ -5,7 +5,7 @@ use std::collections::HashMap;
 ///
 /// Implementors store components for a single concrete type and expose
 /// them through [`Any`] downcasting.
-pub trait Storage: Any {
+pub trait Storage: Any + Send + Sync {
     /// Remove the component at the given entity `index`.
     fn remove_index(&mut self, index: u32);
     /// Borrow as `&dyn Any` for downcasting.
@@ -88,7 +88,7 @@ impl<T> SparseSet<T> {
     }
 }
 
-impl<T: 'static> Storage for SparseSet<T> {
+impl<T: Send + Sync + 'static> Storage for SparseSet<T> {
     fn remove_index(&mut self, index: u32) {
         self.entities.retain(|e| *e != index);
         if let Some(slot) = self.sparse.get_mut(index as usize) {
@@ -128,7 +128,7 @@ impl ComponentRegistry {
     }
 
     /// Get (or create) the sparse-set storage for type `T`.
-    pub fn storage<T: 'static>(&mut self) -> &mut SparseSet<T> {
+    pub fn storage<T: Send + Sync + 'static>(&mut self) -> &mut SparseSet<T> {
         let tid = TypeId::of::<T>();
         self.storages
             .entry(tid)

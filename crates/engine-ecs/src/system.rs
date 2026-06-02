@@ -1,17 +1,31 @@
+use crate::access::SystemAccess;
 use crate::world::World;
 
 /// A system that operates on a [`World`].
 ///
 /// Systems are the primary way to express game logic. They receive
 /// mutable access to the world and can read/write components and resources.
-pub trait System {
+pub trait System: Send + Sync {
     /// Execute this system against the given `world`.
     fn run(&self, world: &mut World);
+
+    /// Return the access descriptor for this system.
+    ///
+    /// The default implementation returns empty access (no declared dependencies).
+    /// Override this to enable parallel scheduling.
+    fn access(&self) -> SystemAccess {
+        SystemAccess::new()
+    }
+
+    /// Human-readable name for debugging and profiling.
+    fn name(&self) -> &str {
+        std::any::type_name::<Self>()
+    }
 }
 
 /// Conversion trait from closures/functions into [`System`] instances.
 ///
-/// Any `Fn(&mut World)` automatically implements this trait.
+/// Any `Fn(&mut World) + Send + Sync` automatically implements this trait.
 pub trait IntoSystem {
     /// The concrete `System` type produced.
     type System: System;
@@ -21,7 +35,7 @@ pub trait IntoSystem {
 
 impl<F> IntoSystem for F
 where
-    F: Fn(&mut World),
+    F: Fn(&mut World) + Send + Sync,
 {
     type System = FnSystem<F>;
 
@@ -35,10 +49,40 @@ pub struct FnSystem<F>(F);
 
 impl<F> System for FnSystem<F>
 where
-    F: Fn(&mut World),
+    F: Fn(&mut World) + Send + Sync,
 {
     fn run(&self, world: &mut World) {
         (self.0)(world);
+    }
+}
+
+/// A system with explicitly declared access.
+///
+/// Wraps any system and overrides its access descriptor with
+/// user-provided read/write declarations.
+pub struct AccessSystem<S: System> {
+    inner: S,
+    access: SystemAccess,
+}
+
+impl<S: System> AccessSystem<S> {
+    /// Wrap a system with explicit access declarations.
+    pub fn new(inner: S, access: SystemAccess) -> Self {
+        Self { inner, access }
+    }
+}
+
+impl<S: System> System for AccessSystem<S> {
+    fn run(&self, world: &mut World) {
+        self.inner.run(world);
+    }
+
+    fn access(&self) -> SystemAccess {
+        self.access.clone()
+    }
+
+    fn name(&self) -> &str {
+        self.inner.name()
     }
 }
 

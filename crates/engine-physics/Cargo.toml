@@ -8,6 +8,7 @@ license.workspace = true
 engine-math = { path = "../engine-math" }
 engine-core = { path = "../engine-core" }
 engine-ecs = { path = "../engine-ecs" }
+rayon = "1.10"
 
 [dev-dependencies]
 criterion = { workspace = true }

@@ -1,8 +1,11 @@
 //! Rendering pipeline with wgpu.
 
 pub mod animation;
+pub mod atmosphere;
+pub mod bloom;
 pub mod camera;
 pub mod camera_system;
+pub mod command_batch;
 pub mod deferred;
 pub mod frustum;
 pub mod graph;
@@ -12,11 +15,14 @@ pub mod light;
 pub mod particle;
 pub mod particle3d;
 pub mod pipeline;
+pub mod post_process;
 pub mod renderer;
 pub mod resource;
 pub mod shadow;
 pub mod sprite;
 pub mod sprite_renderer;
+pub mod ssao;
+pub mod taa;
 pub mod texture_bridge;
 pub mod texture_store;
 pub mod tilemap;

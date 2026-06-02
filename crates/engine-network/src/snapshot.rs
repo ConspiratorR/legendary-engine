@@ -128,7 +128,7 @@ impl SnapshotRegistry {
     }
 
     /// Register a component type for network synchronization.
-    pub fn register<T: NetworkSync>(&mut self) {
+    pub fn register<T: NetworkSync + Send + Sync>(&mut self) {
         let type_id = TypeId::of::<T>();
         if self.by_type.contains_key(&type_id) {
             return;

@@ -15,6 +15,7 @@ members = [
     "crates/engine-editor",
     "crates/engine-physics",
     "crates/engine-network",
+    "crates/engine-jobs",
 ]
 
 [workspace.package]

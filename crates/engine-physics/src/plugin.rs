@@ -4,15 +4,14 @@ use engine_core::app::AppBuilder;
 use engine_core::plugin::Plugin;
 
 fn physics_step_system(world: &mut engine_ecs::world::World) {
-    if let Some(mut pw) = world.get_resource_mut::<PhysicsWorld>().cloned() {
-        pw.step(world);
-        // Store updated counts back
-        if let Some(res) = world.get_resource_mut::<PhysicsWorld>() {
-            res.body_count = pw.body_count;
-            res.collider_count = pw.collider_count;
-            res.collisions = pw.collisions;
-        }
-    }
+    // Remove PhysicsWorld from resources so we can call step() with &mut World
+    let mut pw = match world.remove_resource::<PhysicsWorld>() {
+        Some(pw) => pw,
+        None => return,
+    };
+    pw.step(world);
+    // Put it back
+    world.insert_resource(pw);
 }
 
 /// Plugin that adds physics simulation capabilities.
@@ -38,7 +37,6 @@ mod tests {
     fn test_physics_plugin_registers_system() {
         let mut app = AppBuilder::new();
         app.add_plugin(PhysicsPlugin);
-        // PhysicsWorld resource should exist
         let pw = app.world_mut().get_resource::<PhysicsWorld>();
         assert!(pw.is_some());
     }

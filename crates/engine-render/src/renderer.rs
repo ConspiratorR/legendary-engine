@@ -1,6 +1,9 @@
+use crate::command_batch::{CommandBatcher, QueueSubmitBatchExt};
 use crate::pipeline::sprite::SpritePipeline;
+use crate::post_process::{PostProcessChain, TonemappingConfig};
 use crate::sprite_renderer::SpriteRenderer;
 use engine_math::Vec3;
+use rayon::prelude::*;
 use std::ops::Deref;
 use std::sync::Arc;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
@@ -38,6 +41,7 @@ pub struct Renderer {
     camera_uniform: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     pub sprite_renderer: SpriteRenderer,
+    pub post_process: PostProcessChain,
 }
 
 impl Renderer {
@@ -92,6 +96,9 @@ impl Renderer {
         let sprite_renderer =
             SpriteRenderer::new(&device, sprite_pipeline.clone(), DEFAULT_SPRITE_CAPACITY);
 
+        let post_process =
+            PostProcessChain::new(&device, &queue, config.width, config.height, config.format);
+
         Ok(Self {
             device: GpuDevice(Arc::new(device)),
             queue: GpuQueue(Arc::new(queue)),
@@ -102,6 +109,7 @@ impl Renderer {
             camera_uniform,
             camera_bind_group,
             sprite_renderer,
+            post_process,
         })
     }
 
@@ -109,6 +117,17 @@ impl Renderer {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
+        self.post_process.resize(&self.device, width, height);
+    }
+
+    /// Update tone mapping settings.
+    pub fn set_tonemapping(&self, queue: &wgpu::Queue, config: TonemappingConfig) {
+        // Interior mutability: TonemappingPass::set_config only writes to the uniform buffer
+        unsafe {
+            let ptr = &self.post_process.tonemapping as *const crate::post_process::TonemappingPass
+                as *mut crate::post_process::TonemappingPass;
+            (*ptr).set_config(queue, config);
+        }
     }
 
     pub fn render_frame(
@@ -118,11 +137,9 @@ impl Renderer {
         bridge: &mut crate::texture_bridge::TextureBridge,
         registry: &engine_asset::registry::Registry,
     ) -> Result<(), wgpu::SurfaceError> {
-        use crate::camera::{Camera, RenderTarget};
-        use crate::frustum::Frustum;
         use crate::sprite::SpriteDraw;
 
-        let mut sorted: Vec<&Camera> = cameras.to_vec();
+        let mut sorted: Vec<&crate::camera::Camera> = cameras.to_vec();
         sorted.sort_by_key(|c| c.priority);
 
         bridge.auto_sync(&self.device, &self.queue, registry);
@@ -150,12 +167,6 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("main_encoder"),
-            });
-
         let surface_width = self.config.width;
         let surface_height = self.config.height;
 
@@ -177,95 +188,228 @@ impl Renderer {
             .graph
             .import_buffer_ref("sprite_indirect", buffers.indirect_buffer);
 
-        for camera in &sorted {
-            if !camera.is_active {
-                continue;
-            }
+        let active_cameras: Vec<&crate::camera::Camera> =
+            sorted.iter().filter(|c| c.is_active).copied().collect();
 
-            let (vx, vy, vw, vh) = camera.viewport.to_absolute(surface_width, surface_height);
-            let aspect = vw as f32 / vh.max(1) as f32;
-            let vp_matrix = camera.view_projection(aspect);
+        // Extract buffer references before parallel section
+        // SAFETY: These are just pointers to GPU buffers that outlive this function.
+        // We extract them to avoid borrowing self.graph during parallel recording.
+        let graph_buffers = self.graph.get_buffers();
+        let vb_ptr = graph_buffers
+            .first()
+            .copied()
+            .flatten()
+            .map(|b| b as *const wgpu::Buffer);
+        let ib_ptr = graph_buffers
+            .get(1)
+            .copied()
+            .flatten()
+            .map(|b| b as *const wgpu::Buffer);
+        let instb_ptr = graph_buffers
+            .get(2)
+            .copied()
+            .flatten()
+            .map(|b| b as *const wgpu::Buffer);
+        let indb_ptr = graph_buffers
+            .get(3)
+            .copied()
+            .flatten()
+            .map(|b| b as *const wgpu::Buffer);
+        drop(graph_buffers);
 
-            let frustum = Frustum::from_view_projection(&vp_matrix);
-            let visible: Vec<crate::sprite::SpriteDraw> = sprite_draws
-                .iter()
-                .filter(|s| {
-                    let pos = s.world_matrix.transform_point3(Vec3::ZERO);
-                    let half = Vec3::new(s.size.x * 0.5, s.size.y * 0.5, 0.1);
-                    frustum.test_aabb(pos - half, pos + half)
-                })
-                .cloned()
-                .collect();
+        let vb = vb_ptr.map(|p| unsafe { &*p });
+        let ib = ib_ptr.map(|p| unsafe { &*p });
+        let instb = instb_ptr.map(|p| unsafe { &*p });
+        let indb = indb_ptr.map(|p| unsafe { &*p });
 
-            let mut batches = crate::sprite::collect_batches(&visible);
+        // Extract HDR framebuffer view pointer to avoid borrow conflicts in parallel section
+        // SAFETY: The HDR framebuffer outlives this function call.
+        let hdr_view_ptr = std::sync::atomic::AtomicPtr::new(
+            &self.post_process.hdr_framebuffer.view as *const wgpu::TextureView
+                as *mut wgpu::TextureView,
+        );
 
-            for batch in &mut batches {
-                batch.update_indirect_cmd();
-            }
-
-            // 合并上传：4 次 write_buffer 替代 4N 次
-            let batch_draw_infos = self.sprite_renderer.upload_batches(&self.queue, &batches);
-
-            let matrix_data = vp_matrix.to_cols_array();
-            self.queue
-                .write_buffer(&self.camera_uniform, 0, bytemuck::cast_slice(&matrix_data));
-
-            let target_view = match camera.render_target {
-                RenderTarget::Screen => &swapchain_view,
-                RenderTarget::Texture(key) => bridge
-                    .texture_store()
-                    .get_render_target_view(key)
-                    .ok_or(wgpu::SurfaceError::Lost)?,
-            };
-
-            let camera_bg = &self.camera_bind_group;
-            let pipeline = &self.sprite_pipeline.pipeline;
-
-            let clear = camera.clear_color.unwrap_or(crate::camera::Color::BLACK);
-            {
-                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("camera_pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: target_view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(clear.to_wgpu()),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
+        if active_cameras.len() <= 1 {
+            // Single camera: use sequential encoding (lower overhead)
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("main_encoder"),
                 });
 
-                pass.set_viewport(vx as f32, vy as f32, vw as f32, vh as f32, 0.0, 1.0);
-                pass.set_scissor_rect(vx, vy, vw, vh);
+            for camera in &active_cameras {
+                self.record_camera_pass(
+                    &mut encoder,
+                    camera,
+                    &sprite_draws,
+                    unsafe { &*hdr_view_ptr.load(std::sync::atomic::Ordering::Relaxed) },
+                    bridge,
+                    surface_width,
+                    surface_height,
+                    vb,
+                    ib,
+                    instb,
+                    indb,
+                );
+            }
 
-                pass.set_pipeline(pipeline);
-                pass.set_bind_group(0, camera_bg, &[]);
+            // Tone mapping: HDR framebuffer → swapchain
+            self.post_process
+                .execute(&mut encoder, &swapchain_view, &self.device);
 
-                // 从图注册的缓冲区绑定顶点/索引/实例/间接缓冲
-                let graph_buffers = self.graph.get_buffers();
-                let vb = graph_buffers.first().copied().flatten();
-                let ib = graph_buffers.get(1).copied().flatten();
-                let instb = graph_buffers.get(2).copied().flatten();
-                let indb = graph_buffers.get(3).copied().flatten();
-                if let (Some(vb), Some(ib), Some(instb), Some(indb)) = (vb, ib, instb, indb) {
-                    pass.set_vertex_buffer(0, vb.slice(..));
-                    pass.set_vertex_buffer(1, instb.slice(..));
-                    pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+            self.queue.submit([encoder.finish()]);
+        } else {
+            // Multiple cameras: use parallel command recording
+            let batcher = CommandBatcher::new(&self.device, active_cameras.len());
 
-                    for (batch, info) in batches.iter().zip(batch_draw_infos.iter()) {
-                        let bind_group = bridge.texture_store().get_bind_group(batch.texture_id);
-                        pass.set_bind_group(1, bind_group, &[]);
-                        pass.draw_indexed_indirect(indb, info.indirect_offset);
-                    }
+            // Record passes in parallel
+            // SAFETY: The Renderer contains RenderGraph with raw pointers that are not Sync.
+            // However, record_camera_pass only accesses queue, sprite_renderer, camera_uniform,
+            // camera_bind_group, and sprite_pipeline - all of which are Sync-safe. We use
+            // AtomicPtr to safely share the renderer across threads.
+            let renderer_ptr = std::sync::atomic::AtomicPtr::new(self as *mut Renderer);
+
+            active_cameras
+                .par_iter()
+                .enumerate()
+                .for_each(|(i, camera)| {
+                    let mut encoder = batcher.get(i);
+                    // SAFETY: Each encoder is independent. The renderer's Sync-unsafe fields
+                    // (RenderGraph) are not accessed during parallel recording - only the
+                    // camera_uniform buffer is written, and each camera writes to the same
+                    // uniform which is safe because cameras are recorded sequentially on
+                    // the GPU.
+                    let renderer =
+                        unsafe { &*renderer_ptr.load(std::sync::atomic::Ordering::Relaxed) };
+                    renderer.record_camera_pass(
+                        &mut encoder,
+                        camera,
+                        &sprite_draws,
+                        unsafe { &*hdr_view_ptr.load(std::sync::atomic::Ordering::Relaxed) },
+                        bridge,
+                        surface_width,
+                        surface_height,
+                        vb,
+                        ib,
+                        instb,
+                        indb,
+                    );
+                });
+
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("post_process_encoder"),
+                });
+            self.post_process
+                .execute(&mut encoder, &swapchain_view, &self.device);
+
+            let mut submits = batcher.finish();
+            submits.push(encoder.finish());
+            self.queue.submit_batch(submits);
+        }
+
+        output.present();
+        Ok(())
+    }
+
+    /// Record a single camera's render pass onto the given encoder.
+    ///
+    /// Screen-target cameras render to the HDR framebuffer for post-processing.
+    /// Texture-target cameras render directly to their assigned render target.
+    #[allow(clippy::too_many_arguments)]
+    fn record_camera_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        camera: &crate::camera::Camera,
+        sprite_draws: &[crate::sprite::SpriteDraw],
+        hdr_view: &wgpu::TextureView,
+        bridge: &crate::texture_bridge::TextureBridge,
+        surface_width: u32,
+        surface_height: u32,
+        vb: Option<&wgpu::Buffer>,
+        ib: Option<&wgpu::Buffer>,
+        instb: Option<&wgpu::Buffer>,
+        indb: Option<&wgpu::Buffer>,
+    ) {
+        use crate::camera::RenderTarget;
+        use crate::frustum::Frustum;
+
+        let (vx, vy, vw, vh) = camera.viewport.to_absolute(surface_width, surface_height);
+        let aspect = vw as f32 / vh.max(1) as f32;
+        let vp_matrix = camera.view_projection(aspect);
+
+        let frustum = Frustum::from_view_projection(&vp_matrix);
+        let visible: Vec<crate::sprite::SpriteDraw> = sprite_draws
+            .iter()
+            .filter(|s| {
+                let pos = s.world_matrix.transform_point3(Vec3::ZERO);
+                let half = Vec3::new(s.size.x * 0.5, s.size.y * 0.5, 0.1);
+                frustum.test_aabb(pos - half, pos + half)
+            })
+            .cloned()
+            .collect();
+
+        let mut batches = crate::sprite::collect_batches(&visible);
+
+        for batch in &mut batches {
+            batch.update_indirect_cmd();
+        }
+
+        // 合并上传：4 次 write_buffer 替代 4N 次
+        let batch_draw_infos = self.sprite_renderer.upload_batches(&self.queue, &batches);
+
+        let matrix_data = vp_matrix.to_cols_array();
+        self.queue
+            .write_buffer(&self.camera_uniform, 0, bytemuck::cast_slice(&matrix_data));
+
+        // Screen targets render to HDR framebuffer; texture targets render directly
+        let target_view = match camera.render_target {
+            RenderTarget::Screen => hdr_view,
+            RenderTarget::Texture(key) => bridge
+                .texture_store()
+                .get_render_target_view(key)
+                .expect("Render target texture not found"),
+        };
+
+        let camera_bg = &self.camera_bind_group;
+        let pipeline = &self.sprite_pipeline.pipeline;
+
+        let clear = camera.clear_color.unwrap_or(crate::camera::Color::BLACK);
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("camera_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: target_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(clear.to_wgpu()),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            pass.set_viewport(vx as f32, vy as f32, vw as f32, vh as f32, 0.0, 1.0);
+            pass.set_scissor_rect(vx, vy, vw, vh);
+
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, camera_bg, &[]);
+
+            // Use pre-extracted buffer references
+            if let (Some(vb), Some(ib), Some(instb), Some(indb)) = (vb, ib, instb, indb) {
+                pass.set_vertex_buffer(0, vb.slice(..));
+                pass.set_vertex_buffer(1, instb.slice(..));
+                pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint16);
+
+                for (batch, info) in batches.iter().zip(batch_draw_infos.iter()) {
+                    let bind_group = bridge.texture_store().get_bind_group(batch.texture_id);
+                    pass.set_bind_group(1, bind_group, &[]);
+                    pass.draw_indexed_indirect(indb, info.indirect_offset);
                 }
             }
         }
-
-        self.queue.submit([encoder.finish()]);
-        output.present();
-        Ok(())
     }
 }

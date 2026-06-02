@@ -1,6 +1,6 @@
 use crate::plugin::Plugin;
 use crate::resource::ResourceRegistry;
-use engine_ecs::schedule::Schedule;
+use engine_ecs::schedule::{ParallelSchedule, Schedule};
 use engine_ecs::world::World;
 use engine_input::input_manager::InputManager;
 
@@ -21,6 +21,7 @@ type Hook = Box<dyn FnMut(&mut App)>;
 pub struct AppBuilder {
     world: World,
     schedule: Schedule,
+    parallel_schedule: Option<ParallelSchedule>,
     resources: ResourceRegistry,
     pre_update_hooks: Vec<Hook>,
     post_update_hooks: Vec<Hook>,
@@ -41,11 +42,22 @@ impl AppBuilder {
         Self {
             world,
             schedule: Schedule::new(),
+            parallel_schedule: None,
             resources: ResourceRegistry::new(),
             pre_update_hooks: Vec::new(),
             post_update_hooks: Vec::new(),
             post_render_hooks: Vec::new(),
         }
+    }
+
+    /// Enable parallel scheduling with the given number of threads.
+    ///
+    /// When enabled, `add_system` adds to the parallel schedule instead
+    /// of the sequential schedule. Systems with non-conflicting access
+    /// descriptors are grouped into parallel stages.
+    pub fn with_parallel_schedule(&mut self, threads: usize) -> &mut Self {
+        self.parallel_schedule = Some(ParallelSchedule::new(threads));
+        self
     }
 
     /// Register a plugin.
@@ -54,17 +66,21 @@ impl AppBuilder {
         self
     }
 
-    /// Add a system to the update schedule.
+    /// Add a system to the update schedule (parallel if enabled, sequential otherwise).
     pub fn add_system(
         &mut self,
         system: impl engine_ecs::system::IntoSystem + 'static,
     ) -> &mut Self {
-        self.schedule.add_system(system.system());
+        if let Some(ref mut ps) = self.parallel_schedule {
+            ps.add_system(system.system());
+        } else {
+            self.schedule.add_system(system.system());
+        }
         self
     }
 
     /// Insert a global resource into the ECS world.
-    pub fn insert_resource<T: 'static>(&mut self, resource: T) -> &mut Self {
+    pub fn insert_resource<T: Send + Sync + 'static>(&mut self, resource: T) -> &mut Self {
         self.world.insert_resource(resource);
         self
     }
@@ -120,8 +136,10 @@ impl AppBuilder {
 pub struct App {
     /// The ECS world.
     pub world: World,
-    /// The system schedule.
+    /// The system schedule (used when parallel schedule is not set).
     pub schedule: Schedule,
+    /// The parallel schedule (if enabled).
+    pub parallel_schedule: Option<ParallelSchedule>,
     /// The resource registry.
     pub resources: ResourceRegistry,
     renderer: Option<engine_render::renderer::Renderer>,
@@ -147,6 +165,7 @@ impl App {
         Self {
             world,
             schedule: Schedule::new(),
+            parallel_schedule: None,
             resources: ResourceRegistry::new(),
             renderer: None,
             pre_update_hooks: Vec::new(),
@@ -165,7 +184,11 @@ impl App {
         if let Some(input) = self.world.get_resource_mut::<InputManager>() {
             input.update_frame();
         }
-        self.schedule.run(&mut self.world);
+        if let Some(ref mut ps) = self.parallel_schedule {
+            ps.run(&mut self.world);
+        } else {
+            self.schedule.run(&mut self.world);
+        }
         let mut post_hooks = std::mem::take(&mut self.post_update_hooks);
         for hook in &mut post_hooks {
             hook(self);
@@ -180,7 +203,11 @@ impl App {
 
     /// Run only the systems (no hooks, no input update).
     pub fn run_old(&mut self) {
-        self.schedule.run(&mut self.world);
+        if let Some(ref mut ps) = self.parallel_schedule {
+            ps.run(&mut self.world);
+        } else {
+            self.schedule.run(&mut self.world);
+        }
     }
 
     /// Get mutable access to the [`InputManager`] resource.
@@ -246,6 +273,7 @@ impl From<AppBuilder> for App {
         Self {
             world: b.world,
             schedule: b.schedule,
+            parallel_schedule: b.parallel_schedule,
             resources: b.resources,
             renderer: None,
             pre_update_hooks: b.pre_update_hooks,
@@ -259,6 +287,7 @@ impl From<AppBuilder> for App {
 mod tests {
     use crate::app::AppBuilder;
     use crate::plugin::Plugin;
+    use engine_ecs::world::World;
 
     struct CounterPlugin(u32);
 
@@ -279,5 +308,13 @@ mod tests {
         assert_eq!(entities.len(), 1);
         let val = world.get_by_index::<u32>(entities[0]).unwrap();
         assert_eq!(*val, 42);
+    }
+
+    #[test]
+    fn test_parallel_schedule_builder() {
+        let mut app = AppBuilder::new();
+        app.with_parallel_schedule(4);
+        app.add_system(|_world: &mut World| {});
+        assert!(app.build().parallel_schedule.is_some());
     }
 }

@@ -37,6 +37,13 @@ pub struct AudioManager {
     channel_volumes: HashMap<AudioChannel, f32>,
 }
 
+// SAFETY: OutputStream is !Send+!Sync on some platforms due to cpal's platform-specific types.
+// However, `_stream` is only held to keep the audio device alive — it's never accessed after
+// construction. All actual audio operations go through `stream_handle` which IS Send+Sync.
+// The remaining fields (sounds, volumes) are standard Send+Sync types.
+unsafe impl Send for AudioManager {}
+unsafe impl Sync for AudioManager {}
+
 impl Default for AudioManager {
     fn default() -> Self {
         Self::new()

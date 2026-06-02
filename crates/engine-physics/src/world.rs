@@ -1,12 +1,65 @@
 //! Physics world for managing and simulating physics.
 use crate::body::{BodyType, RigidBody};
+use crate::broadphase::{BroadphaseEntry, SpatialHashBroadphase};
 use crate::collider::{Collider, CollisionInfo, check_collision};
 use engine_core::transform::Transform;
 use engine_ecs::world::World;
 use engine_math::{EulerRot, Quat, Vec3};
+use rayon::prelude::*;
+use std::collections::HashMap;
+use std::sync::atomic::AtomicPtr;
+
+/// Union-Find data structure for grouping collision pairs into independent islands.
+struct UnionFind {
+    parent: Vec<usize>,
+    rank: Vec<u8>,
+}
+
+impl UnionFind {
+    fn new() -> Self {
+        Self {
+            parent: Vec::new(),
+            rank: Vec::new(),
+        }
+    }
+
+    fn ensure(&mut self, idx: usize) {
+        while self.parent.len() <= idx {
+            let n = self.parent.len();
+            self.parent.push(n);
+            self.rank.push(0);
+        }
+    }
+
+    fn find(&mut self, mut x: usize) -> usize {
+        self.ensure(x);
+        // Path compression
+        while self.parent[x] != x {
+            self.parent[x] = self.parent[self.parent[x]];
+            x = self.parent[x];
+        }
+        x
+    }
+
+    fn union(&mut self, a: usize, b: usize) {
+        let ra = self.find(a);
+        let rb = self.find(b);
+        if ra == rb {
+            return;
+        }
+        // Union by rank
+        if self.rank[ra] < self.rank[rb] {
+            self.parent[ra] = rb;
+        } else if self.rank[ra] > self.rank[rb] {
+            self.parent[rb] = ra;
+        } else {
+            self.parent[rb] = ra;
+            self.rank[ra] += 1;
+        }
+    }
+}
 
 /// Physics world configuration.
-#[derive(Debug, Clone)]
 pub struct PhysicsWorld {
     pub gravity: Vec3,
     pub delta_time: f32,
@@ -15,6 +68,7 @@ pub struct PhysicsWorld {
     pub collider_count: usize,
     /// Current frame collisions (entity_index_a, entity_index_b, info)
     pub collisions: Vec<(u32, u32, CollisionInfo)>,
+    broadphase: SpatialHashBroadphase,
 }
 
 impl Default for PhysicsWorld {
@@ -26,6 +80,7 @@ impl Default for PhysicsWorld {
             body_count: 0,
             collider_count: 0,
             collisions: Vec::new(),
+            broadphase: SpatialHashBroadphase::new(2.0),
         }
     }
 }
@@ -37,6 +92,11 @@ impl PhysicsWorld {
 
     pub fn set_gravity(&mut self, gravity: Vec3) {
         self.gravity = gravity;
+    }
+
+    /// Set the broadphase cell size. Should be >= the largest collider diameter.
+    pub fn set_broadphase_cell_size(&mut self, size: f32) {
+        self.broadphase.set_cell_size(size);
     }
 
     /// Step the physics simulation.
@@ -106,31 +166,53 @@ impl PhysicsWorld {
         }
     }
 
-    /// Detect collisions between all collider pairs (brute-force for now).
+    /// Detect collisions using spatial hash broadphase + parallel narrow-phase.
     fn detect_collisions(&mut self, world: &World) {
         self.collisions.clear();
+        self.broadphase.clear();
 
         let collider_indices = world.component_entities::<Collider>();
 
-        // Build a list of entities that have both Transform and Collider
-        let entities: Vec<u32> = collider_indices
-            .iter()
-            .copied()
-            .filter(|idx| world.get_by_index::<Transform>(*idx).is_some())
-            .collect();
+        // Insert all colliders into broadphase
+        for &idx in &collider_indices {
+            if let Some(transform) = world.get_by_index::<Transform>(idx)
+                && let Some(collider) = world.get_by_index::<Collider>(idx)
+            {
+                let half_extents = match &collider.shape {
+                    crate::collider::ColliderShape::Sphere { radius } => Vec3::splat(*radius),
+                    crate::collider::ColliderShape::Box { half_extents } => *half_extents,
+                    crate::collider::ColliderShape::Capsule { radius, height } => {
+                        Vec3::new(*radius, radius + height * 0.5, *radius)
+                    }
+                    crate::collider::ColliderShape::Cylinder { radius, height } => {
+                        Vec3::new(*radius, height * 0.5, *radius)
+                    }
+                };
+                self.broadphase.insert(BroadphaseEntry {
+                    entity_index: idx,
+                    center: transform.position,
+                    half_extents,
+                });
+            }
+        }
 
-        for i in 0..entities.len() {
-            for j in (i + 1)..entities.len() {
-                let idx_a = entities[i];
-                let idx_b = entities[j];
+        // Get candidate pairs from broadphase
+        let pairs = self.broadphase.compute_pairs();
 
-                let transform_a = world.get_by_index::<Transform>(idx_a).unwrap();
-                let transform_b = world.get_by_index::<Transform>(idx_b).unwrap();
-                let collider_a = world.get_by_index::<Collider>(idx_a).unwrap();
-                let collider_b = world.get_by_index::<Collider>(idx_b).unwrap();
+        // Parallel narrow-phase: check each pair concurrently
+        let collisions: Vec<(u32, u32, CollisionInfo)> = pairs
+            .par_iter()
+            .filter_map(|pair| {
+                let idx_a = pair.index_a;
+                let idx_b = pair.index_b;
+
+                let transform_a = world.get_by_index::<Transform>(idx_a)?;
+                let transform_b = world.get_by_index::<Transform>(idx_b)?;
+                let collider_a = world.get_by_index::<Collider>(idx_a)?;
+                let collider_b = world.get_by_index::<Collider>(idx_b)?;
 
                 if collider_a.is_sensor || collider_b.is_sensor {
-                    continue;
+                    return None;
                 }
 
                 let rot_a = Quat::from_euler(
@@ -146,136 +228,168 @@ impl PhysicsWorld {
                     transform_b.rotation.z,
                 );
 
-                if let Some(mut info) = check_collision(
+                let mut info = check_collision(
                     transform_a.position,
                     rot_a,
                     collider_a,
                     transform_b.position,
                     rot_b,
                     collider_b,
-                ) {
-                    info.other_entity = idx_b as u64;
-                    self.collisions.push((idx_a, idx_b, info));
-                }
-            }
-        }
+                )?;
+                info.other_entity = idx_b as u64;
+                Some((idx_a, idx_b, info))
+            })
+            .collect();
+
+        self.collisions = collisions;
     }
 
-    /// Resolve detected collisions using impulse-based response.
+    /// Resolve detected collisions using parallel impulse-based response.
+    ///
+    /// Collisions are grouped into independent "islands" via union-find on
+    /// shared entities. Islands are resolved in parallel; within each island
+    /// constraints are solved sequentially since they share bodies.
     fn resolve_collisions(&mut self, world: &mut World) {
-        // Read sub_steps to compute dt for bias
         let dt = self.delta_time / self.sub_steps as f32;
 
-        for &(idx_a, idx_b, ref collision) in &self.collisions {
-            // Read restitution
-            let restitution_a = world
-                .get_by_index::<Collider>(idx_a)
-                .map_or(0.3, |c| c.restitution);
-            let restitution_b = world
-                .get_by_index::<Collider>(idx_b)
-                .map_or(0.3, |c| c.restitution);
-            let restitution = (restitution_a + restitution_b) * 0.5;
+        if self.collisions.is_empty() {
+            return;
+        }
 
-            // Read friction
-            let friction_a = world
-                .get_by_index::<Collider>(idx_a)
-                .map_or(0.5, |c| c.friction);
-            let friction_b = world
-                .get_by_index::<Collider>(idx_b)
-                .map_or(0.5, |c| c.friction);
-            let friction = (friction_a + friction_b) * 0.5;
+        // Union-Find: group collisions that share entities into islands
+        let mut uf = UnionFind::new();
+        for &(idx_a, idx_b, _) in &self.collisions {
+            uf.union(idx_a as usize, idx_b as usize);
+        }
 
-            // Read velocities and masses
-            let vel_a = world
-                .get_by_index::<RigidBody>(idx_a)
-                .map_or(Vec3::ZERO, |b| b.linear_velocity);
-            let vel_b = world
-                .get_by_index::<RigidBody>(idx_b)
-                .map_or(Vec3::ZERO, |b| b.linear_velocity);
+        // Group collision indices by island root
+        let mut islands: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (i, &(idx_a, _, _)) in self.collisions.iter().enumerate() {
+            let root = uf.find(idx_a as usize);
+            islands.entry(root).or_default().push(i);
+        }
 
-            let is_dynamic_a = world
-                .get_by_index::<RigidBody>(idx_a)
-                .is_some_and(|b| b.body_type == BodyType::Dynamic);
-            let is_dynamic_b = world
-                .get_by_index::<RigidBody>(idx_b)
-                .is_some_and(|b| b.body_type == BodyType::Dynamic);
+        // Resolve each island in parallel
+        // SAFETY: Islands are disjoint sets of entities - no two islands share
+        // an entity, so concurrent mutable access to different entity components
+        // is safe. Within an island, collisions are processed sequentially.
+        let collisions = &self.collisions;
+        let world_ptr = AtomicPtr::new(world as *mut World);
 
-            let inv_mass_a = if is_dynamic_a {
-                world
-                    .get_by_index::<RigidBody>(idx_a)
-                    .map_or(1.0, |b| if b.mass > 0.0 { 1.0 / b.mass } else { 1.0 })
-            } else {
-                0.0
-            };
-
-            let inv_mass_b = if is_dynamic_b {
-                world
-                    .get_by_index::<RigidBody>(idx_b)
-                    .map_or(1.0, |b| if b.mass > 0.0 { 1.0 / b.mass } else { 1.0 })
-            } else {
-                0.0
-            };
-
-            let total_inv_mass = inv_mass_a + inv_mass_b;
-            if total_inv_mass <= 0.0 {
-                continue;
+        islands.par_iter().for_each(|(_, collision_indices)| {
+            let world_ref = unsafe { &mut *world_ptr.load(std::sync::atomic::Ordering::Relaxed) };
+            for &ci in collision_indices {
+                let (idx_a, idx_b, ref collision) = collisions[ci];
+                Self::resolve_single_collision(world_ref, idx_a, idx_b, collision, dt);
             }
+        });
+    }
 
-            let relative_vel = vel_b - vel_a;
-            let vel_along_normal = relative_vel.dot(collision.normal);
+    fn resolve_single_collision(
+        world: &mut World,
+        idx_a: u32,
+        idx_b: u32,
+        collision: &CollisionInfo,
+        dt: f32,
+    ) {
+        let restitution_a = world
+            .get_by_index::<Collider>(idx_a)
+            .map_or(0.3, |c| c.restitution);
+        let restitution_b = world
+            .get_by_index::<Collider>(idx_b)
+            .map_or(0.3, |c| c.restitution);
+        let restitution = (restitution_a + restitution_b) * 0.5;
 
-            // Baumgarte stabilization: bias to push overlapping bodies apart
-            let baumgarte = 0.2;
-            let slop = 0.005;
-            let bias = baumgarte * (collision.depth - slop).max(0.0) / dt;
+        let friction_a = world
+            .get_by_index::<Collider>(idx_a)
+            .map_or(0.5, |c| c.friction);
+        let friction_b = world
+            .get_by_index::<Collider>(idx_b)
+            .map_or(0.5, |c| c.friction);
+        let friction = (friction_a + friction_b) * 0.5;
 
-            // Skip if already separating fast enough (bias handles resting contacts)
-            if vel_along_normal > bias && vel_along_normal > 0.0 {
-                continue;
-            }
+        let vel_a = world
+            .get_by_index::<RigidBody>(idx_a)
+            .map_or(Vec3::ZERO, |b| b.linear_velocity);
+        let vel_b = world
+            .get_by_index::<RigidBody>(idx_b)
+            .map_or(Vec3::ZERO, |b| b.linear_velocity);
 
-            // Impulse magnitude (including bias for position correction)
-            let j = -(vel_along_normal - bias) / total_inv_mass;
-            // Clamp: at minimum, apply restitution for separating velocity
-            let j_restitution = -(1.0 + restitution) * vel_along_normal / total_inv_mass;
-            let j = j.max(j_restitution);
-            let impulse = collision.normal * j;
+        let is_dynamic_a = world
+            .get_by_index::<RigidBody>(idx_a)
+            .is_some_and(|b| b.body_type == BodyType::Dynamic);
+        let is_dynamic_b = world
+            .get_by_index::<RigidBody>(idx_b)
+            .is_some_and(|b| b.body_type == BodyType::Dynamic);
 
-            // Apply impulses
+        let inv_mass_a = if is_dynamic_a {
+            world
+                .get_by_index::<RigidBody>(idx_a)
+                .map_or(1.0, |b| if b.mass > 0.0 { 1.0 / b.mass } else { 1.0 })
+        } else {
+            0.0
+        };
+
+        let inv_mass_b = if is_dynamic_b {
+            world
+                .get_by_index::<RigidBody>(idx_b)
+                .map_or(1.0, |b| if b.mass > 0.0 { 1.0 / b.mass } else { 1.0 })
+        } else {
+            0.0
+        };
+
+        let total_inv_mass = inv_mass_a + inv_mass_b;
+        if total_inv_mass <= 0.0 {
+            return;
+        }
+
+        let relative_vel = vel_b - vel_a;
+        let vel_along_normal = relative_vel.dot(collision.normal);
+
+        let baumgarte = 0.2;
+        let slop = 0.005;
+        let bias = baumgarte * (collision.depth - slop).max(0.0) / dt;
+
+        if vel_along_normal > bias && vel_along_normal > 0.0 {
+            return;
+        }
+
+        let j = -(vel_along_normal - bias) / total_inv_mass;
+        let j_restitution = -(1.0 + restitution) * vel_along_normal / total_inv_mass;
+        let j = j.max(j_restitution);
+        let impulse = collision.normal * j;
+
+        if is_dynamic_a && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_a) {
+            body.linear_velocity -= impulse * inv_mass_a;
+        }
+        if is_dynamic_b && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_b) {
+            body.linear_velocity += impulse * inv_mass_b;
+        }
+
+        let percent = 0.4;
+        let correction =
+            (collision.depth - slop).max(0.0) / total_inv_mass * percent * collision.normal;
+
+        if is_dynamic_a && let Some(transform) = world.get_by_index_mut::<Transform>(idx_a) {
+            transform.position -= correction * inv_mass_a;
+        }
+        if is_dynamic_b && let Some(transform) = world.get_by_index_mut::<Transform>(idx_b) {
+            transform.position += correction * inv_mass_b;
+        }
+
+        let tangent = relative_vel - collision.normal * vel_along_normal;
+        let tangent_len_sq = tangent.length_squared();
+        if tangent_len_sq > f32::EPSILON {
+            let tangent = tangent / tangent_len_sq.sqrt();
+            let jt = -relative_vel.dot(tangent) / total_inv_mass;
+            let jt = jt.clamp(-j * friction, j * friction);
+            let friction_impulse = tangent * jt;
+
             if is_dynamic_a && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_a) {
-                body.linear_velocity -= impulse * inv_mass_a;
+                body.linear_velocity -= friction_impulse * inv_mass_a;
             }
             if is_dynamic_b && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_b) {
-                body.linear_velocity += impulse * inv_mass_b;
-            }
-
-            // Additional positional correction for deep penetrations
-            let percent = 0.4;
-            let correction =
-                (collision.depth - slop).max(0.0) / total_inv_mass * percent * collision.normal;
-
-            if is_dynamic_a && let Some(transform) = world.get_by_index_mut::<Transform>(idx_a) {
-                transform.position -= correction * inv_mass_a;
-            }
-            if is_dynamic_b && let Some(transform) = world.get_by_index_mut::<Transform>(idx_b) {
-                transform.position += correction * inv_mass_b;
-            }
-
-            // Friction impulse (tangential)
-            let tangent = relative_vel - collision.normal * vel_along_normal;
-            let tangent_len_sq = tangent.length_squared();
-            if tangent_len_sq > f32::EPSILON {
-                let tangent = tangent / tangent_len_sq.sqrt();
-                let jt = -relative_vel.dot(tangent) / total_inv_mass;
-                let jt = jt.clamp(-j * friction, j * friction);
-                let friction_impulse = tangent * jt;
-
-                if is_dynamic_a && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_a) {
-                    body.linear_velocity -= friction_impulse * inv_mass_a;
-                }
-                if is_dynamic_b && let Some(body) = world.get_by_index_mut::<RigidBody>(idx_b) {
-                    body.linear_velocity += friction_impulse * inv_mass_b;
-                }
+                body.linear_velocity += friction_impulse * inv_mass_b;
             }
         }
     }
@@ -308,7 +422,6 @@ mod tests {
         pw.step(&mut world);
 
         let body = world.get_by_index::<RigidBody>(e.index()).unwrap();
-        // Velocity should have decreased (gravity is negative Y)
         assert!(body.linear_velocity.y < 0.0);
     }
 
@@ -337,7 +450,6 @@ mod tests {
         assert!(result.is_some());
         let info = result.unwrap();
         assert!(info.depth > 0.0);
-        // Normal should point from pos1 toward pos2
         assert!(info.normal.x > 0.0);
     }
 
@@ -357,13 +469,11 @@ mod tests {
     fn test_collision_resolution() {
         let mut world = World::new();
 
-        // Static floor
         let floor = world.spawn();
         world.add_component(floor, Transform::from_xyz(0.0, -0.5, 0.0));
         world.add_component(floor, RigidBody::new_static());
         world.add_component(floor, Collider::cuboid(50.0, 0.5, 50.0));
 
-        // Dynamic sphere falling onto floor
         let sphere = world.spawn();
         world.add_component(sphere, Transform::from_xyz(0.0, 0.3, 0.0));
         let mut body = RigidBody::new_dynamic();
@@ -376,17 +486,22 @@ mod tests {
         pw.sub_steps = 4;
         pw.delta_time = 1.0 / 60.0;
 
-        // Run several frames
         for _ in 0..10 {
             pw.step(&mut world);
         }
 
-        // Sphere should have bounced (velocity.y should be positive after hitting floor)
         let body = world.get_by_index::<RigidBody>(sphere.index()).unwrap();
         assert!(
             body.linear_velocity.y > 0.0,
             "Sphere should bounce, got velocity.y = {}",
             body.linear_velocity.y
         );
+    }
+
+    #[test]
+    fn test_broadphase_integration() {
+        let mut pw = PhysicsWorld::new();
+        pw.set_broadphase_cell_size(5.0);
+        assert_eq!(pw.broadphase.cell_size(), 5.0);
     }
 }

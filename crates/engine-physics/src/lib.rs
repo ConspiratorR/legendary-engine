@@ -7,6 +7,7 @@
 //! - Gravity and other forces
 
 pub mod body;
+pub mod broadphase;
 pub mod ccd;
 pub mod collider;
 pub mod contact;
