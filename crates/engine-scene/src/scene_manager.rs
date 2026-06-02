@@ -1,5 +1,6 @@
 use crate::hierarchy::{Children, Parent};
 use crate::node::SceneNode;
+use crate::scene_layer::SceneLayer;
 use crate::transform::{GlobalTransform, Transform};
 use engine_ecs::world::World;
 use engine_math::Mat4;
@@ -14,6 +15,8 @@ pub struct SceneManager {
     world: World,
     root: SceneNode,
     names: Vec<String>,
+    layers: SceneLayer,
+    namespace: Option<String>,
 }
 
 impl SceneManager {
@@ -26,7 +29,13 @@ impl SceneManager {
         world.add_component(root_entity, GlobalTransform::default());
         let root = SceneNode::new(root_entity);
         let names = vec!["root".to_string()];
-        Self { world, root, names }
+        Self {
+            world,
+            root,
+            names,
+            layers: SceneLayer::DEFAULT,
+            namespace: None,
+        }
     }
 
     /// Return the root node of the scene.
@@ -105,6 +114,26 @@ impl SceneManager {
     /// Get mutable access to the underlying ECS world.
     pub fn world_mut(&mut self) -> &mut World {
         &mut self.world
+    }
+
+    /// Get the scene layer mask.
+    pub fn layers(&self) -> SceneLayer {
+        self.layers
+    }
+
+    /// Set the scene layer mask.
+    pub fn set_layers(&mut self, layers: SceneLayer) {
+        self.layers = layers;
+    }
+
+    /// Get the entity namespace, if any.
+    pub fn namespace(&self) -> Option<&str> {
+        self.namespace.as_deref()
+    }
+
+    /// Set the entity namespace.
+    pub fn set_namespace(&mut self, namespace: Option<String>) {
+        self.namespace = namespace;
     }
 
     /// Recompute all [`GlobalTransform`]s from the local transform hierarchy.

@@ -65,15 +65,17 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
                 ),
             );
 
-            let mut gui = Gui::new(ui, skin);
-            draw_menu_bar(state, &mut gui, menu_rect, w_scale, h_scale);
-            draw_toolbar(state, &mut gui, toolbar_rect, w_scale, h_scale);
-            if state.show_left_panel {
-                crate::hierarchy::draw(state, &mut gui, hierarchy_rect);
-            }
-            crate::viewport::draw(state, &mut gui, viewport_rect);
-            if state.show_right_panel {
-                crate::inspector::draw(state, &mut gui, inspector_rect);
+            {
+                let mut gui = Gui::new(ui, skin);
+                draw_menu_bar(state, &mut gui, menu_rect, w_scale, h_scale);
+                draw_toolbar(state, &mut gui, toolbar_rect, w_scale, h_scale);
+                if state.show_left_panel {
+                    crate::hierarchy::draw(state, &mut gui, hierarchy_rect);
+                }
+                crate::viewport::draw(state, &mut gui, viewport_rect);
+                if state.show_right_panel {
+                    crate::inspector::draw(state, &mut gui, inspector_rect);
+                }
             }
             draw_bottom_panel(state, ui, bottom_rect, h_scale, w_scale);
             if state.animation_editor.visible {
@@ -84,7 +86,10 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
                 );
                 crate::animation_editor::draw_animation_editor(state, ui, anim_rect);
             }
-            draw_status_bar(state, &mut gui, status_rect, h_scale, w_scale);
+            {
+                let mut gui = Gui::new(ui, skin);
+                draw_status_bar(state, &mut gui, status_rect, h_scale, w_scale);
+            }
         });
 }
 
@@ -200,7 +205,7 @@ fn draw_dropdown_menu(
         3 => vec!["新建场景", "保存场景", "加载场景"],               // 场景
         4 => vec!["导入资源", "刷新资源"],                           // 资源
         5 => vec!["构建项目", "运行项目"],                           // 构建
-        6 => vec!["控制台", "性能", "资源浏览器", "动画编辑器"],     // 窗口
+        6 => vec!["控制台", "性能", "资源浏览器", "动画编辑器", "脚本编辑器"], // 窗口
         7 => vec!["关于", "文档"],                                   // 帮助
         _ => vec![],
     };
@@ -320,6 +325,7 @@ fn draw_dropdown_menu(
                         1 => state.active_bottom_tab = 1, // 性能
                         2 => state.active_bottom_tab = 2, // 资源
                         3 => state.animation_editor.visible = !state.animation_editor.visible, // 动画编辑器
+                        4 => state.active_bottom_tab = 5, // 脚本编辑器
                         _ => {}
                     }
                 }
@@ -431,7 +437,7 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
 
 fn draw_bottom_panel(
     state: &mut EditorState,
-    ui: &egui::Ui,
+    ui: &mut egui::Ui,
     rect: Rect,
     h_scale: f32,
     w_scale: f32,
@@ -452,7 +458,7 @@ fn draw_bottom_panel(
 
     let tab_h = 32.0 * h_scale;
     let tab_bar_rect = Rect::from_min_size(rect.left_top(), Vec2::new(rect.width(), tab_h));
-    let tabs = &["日志", "性能", "资源", "音频", "网络"];
+    let tabs = &["日志", "性能", "资源", "音频", "网络", "脚本"];
     let tab_font = 12.0 * h_scale;
     let char_w = 8.0 * w_scale;
     let mut tx = rect.left() + 8.0 * w_scale;
@@ -568,6 +574,9 @@ fn draw_bottom_panel(
             let skin_default = engine_ui::GuiSkin::default();
             let mut gui = Gui::new(ui, &skin_default);
             crate::resource_browser::draw(state, &mut gui, content_rect);
+        }
+        5 => {
+            crate::script_editor::draw_script_editor(state, ui, content_rect);
         }
         _ => {
             painter.text(

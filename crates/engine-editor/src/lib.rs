@@ -15,6 +15,7 @@ pub mod node_graph;
 pub mod resource_browser;
 pub mod scene_bridge;
 pub mod scene_serializer;
+pub mod script_editor;
 pub mod shortcuts;
 pub mod state;
 pub mod viewport;

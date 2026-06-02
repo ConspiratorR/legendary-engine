@@ -267,6 +267,7 @@ use crate::animation_editor::AnimationEditorState;
 use crate::node_graph::NodeGraphState;
 use crate::resource_browser::ResourceBrowser;
 use crate::scene_serializer::SceneManager;
+use crate::script_editor::ScriptEditorState;
 use std::collections::HashMap;
 
 /// Light property data for the editor inspector.
@@ -352,6 +353,7 @@ pub struct EditorState {
     pub status_message: Option<String>,
     pub node_graph_state: NodeGraphState,
     pub animation_editor: AnimationEditorState,
+    pub script_editor: ScriptEditorState,
 }
 
 impl Default for EditorState {
@@ -410,6 +412,7 @@ impl EditorState {
             status_message: None,
             node_graph_state: NodeGraphState::default(),
             animation_editor: AnimationEditorState::new(),
+            script_editor: ScriptEditorState::new(),
         }
     }
 

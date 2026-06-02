@@ -71,6 +71,12 @@ pub struct SceneDiff {
     pub entity_changes: Vec<EntityChange>,
     /// Changes to global scene settings, if any.
     pub settings_change: Option<SceneSettingsChange>,
+    /// New layers value, if changed.
+    #[serde(default)]
+    pub layers_change: Option<Option<u32>>,
+    /// New namespace value, if changed.
+    #[serde(default)]
+    pub namespace_change: Option<Option<String>>,
 }
 
 /// A change to a single entity.
@@ -160,10 +166,26 @@ pub fn diff_scenes(base: &SceneData, modified: &SceneData) -> SceneDiff {
     // Settings diff
     let settings_change = diff_settings(&base.settings, &modified.settings);
 
+    // Layers diff
+    let layers_change = if base.layers != modified.layers {
+        Some(modified.layers)
+    } else {
+        None
+    };
+
+    // Namespace diff
+    let namespace_change = if base.namespace != modified.namespace {
+        Some(modified.namespace.clone())
+    } else {
+        None
+    };
+
     SceneDiff {
         scene_name: modified.name.clone(),
         entity_changes,
         settings_change,
+        layers_change,
+        namespace_change,
     }
 }
 
@@ -395,6 +417,14 @@ pub fn apply_diff(base: &SceneData, diff: &SceneDiff) -> Result<SceneData, DiffE
         if let Some(v) = sc.fog_far {
             result.settings.fog_far = v;
         }
+    }
+
+    if let Some(layers) = &diff.layers_change {
+        result.layers = *layers;
+    }
+
+    if let Some(namespace) = &diff.namespace_change {
+        result.namespace = namespace.clone();
     }
 
     Ok(result)

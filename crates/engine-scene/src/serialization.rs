@@ -92,6 +92,18 @@ pub struct SceneData {
     pub entities: Vec<SceneEntityData>,
     /// Global scene settings.
     pub settings: SceneSettings,
+    /// Scene layer mask (bitfield). Used by the multi-scene system to
+    /// categorize scenes for rendering and filtering.
+    ///
+    /// Defaults to `None` (layer 0 / default) when not set.
+    #[serde(default)]
+    pub layers: Option<u32>,
+    /// Entity namespace prefix. When multiple scenes are loaded
+    /// simultaneously, this prefix is used to avoid entity ID collisions.
+    ///
+    /// Defaults to `None` (no namespace / single-scene mode) when not set.
+    #[serde(default)]
+    pub namespace: Option<String>,
 }
 
 /// Serializable representation of a single entity.
@@ -194,7 +206,21 @@ impl SceneData {
             name: name.into(),
             entities: Vec::new(),
             settings: SceneSettings::default(),
+            layers: None,
+            namespace: None,
         }
+    }
+
+    /// Set the scene layer mask.
+    pub fn with_layers(mut self, layers: u32) -> Self {
+        self.layers = Some(layers);
+        self
+    }
+
+    /// Set the entity namespace.
+    pub fn with_namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = Some(namespace.into());
+        self
     }
 
     /// Add an entity to the scene.
