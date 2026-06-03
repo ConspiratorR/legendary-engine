@@ -86,10 +86,21 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
                 );
                 crate::animation_editor::draw_animation_editor(state, ui, anim_rect);
             }
+            if state.material_editor.visible {
+                let mat_h = (screen.height() * 450.0 / 1080.0).clamp(300.0, 700.0);
+                let mat_rect = Rect::from_min_size(
+                    Pos2::new(screen.left(), status_rect.top() - mat_h),
+                    Vec2::new(screen.width(), mat_h),
+                );
+                crate::material_editor::draw_material_editor(state, ui, mat_rect);
+            }
             {
                 let mut gui = Gui::new(ui, skin);
                 draw_status_bar(state, &mut gui, status_rect, h_scale, w_scale);
             }
+            // Real-time performance overlay
+            state.performance_overlay.tick();
+            state.performance_overlay.draw(ctx);
         });
 }
 
@@ -205,7 +216,15 @@ fn draw_dropdown_menu(
         3 => vec!["新建场景", "保存场景", "加载场景"],               // 场景
         4 => vec!["导入资源", "刷新资源"],                           // 资源
         5 => vec!["构建项目", "运行项目"],                           // 构建
-        6 => vec!["控制台", "性能", "资源浏览器", "动画编辑器", "脚本编辑器"], // 窗口
+        6 => vec![
+            "控制台",
+            "性能",
+            "资源浏览器",
+            "动画编辑器",
+            "材质编辑器",
+            "脚本编辑器",
+            "性能叠加层",
+        ], // 窗口
         7 => vec!["关于", "文档"],                                   // 帮助
         _ => vec![],
     };
@@ -325,7 +344,13 @@ fn draw_dropdown_menu(
                         1 => state.active_bottom_tab = 1, // 性能
                         2 => state.active_bottom_tab = 2, // 资源
                         3 => state.animation_editor.visible = !state.animation_editor.visible, // 动画编辑器
-                        4 => state.active_bottom_tab = 5, // 脚本编辑器
+                        4 => state.material_editor.visible = !state.material_editor.visible, // 材质编辑器
+                        5 => state.active_bottom_tab = 5, // 脚本编辑器
+                        6 => {
+                            // 性能叠加层
+                            state.performance_overlay.config.visible =
+                                !state.performance_overlay.config.visible;
+                        }
                         _ => {}
                     }
                 }
@@ -367,12 +392,13 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
     let mut x = rect.left() + pad;
     let cy = rect.top() + (rect.height() - btn_size) / 2.0;
 
-    let tools = &["↖", "↔", "⟳", "⤢"];
+    let tools = &["↖", "↔", "⟳", "⤢", "⛰"];
     let tool_types = [
         ToolType::Select,
         ToolType::Translate,
         ToolType::Rotate,
         ToolType::Scale,
+        ToolType::Terrain,
     ];
     for (i, tool) in tools.iter().enumerate() {
         let btn_rect = Rect::from_min_size(
@@ -383,7 +409,7 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
             state.active_tool = tool_types[i];
         }
     }
-    x += 4.0 * (btn_size + gap) + pad;
+    x += 5.0 * (btn_size + gap) + pad;
     draw_separator(&painter, x, rect.top(), rect.bottom(), h_scale);
     x += pad;
 
@@ -551,24 +577,7 @@ fn draw_bottom_panel(
             }
         }
         1 => {
-            let perf_data = [
-                "Draw Calls: 128",
-                "Triangles: 45.2K",
-                "Vertices: 22.8K",
-                "GPU: 32ms",
-                "Memory: 256MB / 2GB",
-            ];
-            let mut y = content_rect.top() + 8.0 * h_scale;
-            for line in &perf_data {
-                painter.text(
-                    egui::pos2(content_rect.left() + 12.0 * w_scale, y),
-                    egui::Align2::LEFT_CENTER,
-                    *line,
-                    FontId::proportional(log_font),
-                    Color32::from_rgb(232, 232, 236),
-                );
-                y += log_step;
-            }
+            crate::performance_profiler::draw(&mut state.performance_profiler, ui, content_rect);
         }
         2 => {
             let skin_default = engine_ui::GuiSkin::default();

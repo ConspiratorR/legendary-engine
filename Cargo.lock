@@ -1223,6 +1223,7 @@ dependencies = [
  "engine-math",
  "engine-render",
  "engine-scene",
+ "engine-terrain",
  "engine-ui",
  "engine-window",
  "env_logger",
@@ -1341,6 +1342,18 @@ dependencies = [
  "thiserror 2.0.18",
  "wasmtime",
  "wat",
+]
+
+[[package]]
+name = "engine-terrain"
+version = "0.1.0"
+dependencies = [
+ "engine-core",
+ "engine-ecs",
+ "engine-math",
+ "engine-render",
+ "log",
+ "rand",
 ]
 
 [[package]]

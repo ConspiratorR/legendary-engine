@@ -56,6 +56,7 @@ pub enum EditorAction {
     TranslateTool,
     RotateTool,
     ScaleTool,
+    TerrainTool,
     Play,
     Pause,
     Stop,
@@ -129,6 +130,7 @@ impl ShortcutManager {
         self.bind(EditorAction::TranslateTool, KeyBinding::new(KeyCode::KeyW));
         self.bind(EditorAction::RotateTool, KeyBinding::new(KeyCode::KeyE));
         self.bind(EditorAction::ScaleTool, KeyBinding::new(KeyCode::KeyR));
+        self.bind(EditorAction::TerrainTool, KeyBinding::new(KeyCode::KeyT));
         self.bind(
             EditorAction::Play,
             KeyBinding::new(KeyCode::KeyP).with_ctrl(),

@@ -323,6 +323,35 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         return;
     }
 
+    // Terrain sculpting mode
+    if state.active_tool == crate::state::ToolType::Terrain {
+        if ctx.input(|i| i.pointer.primary_down()) {
+            if let Some(pos) = ctx.pointer_interact_pos() {
+                state.terrain_sculpt_active = true;
+                state.terrain_sculpt_screen_pos =
+                    Some((pos.x - canvas_rect.left(), pos.y - canvas_rect.top()));
+            }
+        } else {
+            state.terrain_sculpt_active = false;
+            state.terrain_sculpt_screen_pos = None;
+        }
+
+        // Still allow camera orbit with right-click
+        let canvas_id = egui::Id::new("terrain_viewport");
+        let response = gui
+            .ui
+            .interact(canvas_rect, canvas_id, egui::Sense::click_and_drag());
+        if response.dragged_by(egui::PointerButton::Secondary) {
+            let delta = response.drag_delta();
+            state.camera.orbit(delta.x, -delta.y);
+        }
+        let scroll = ctx.input(|i| i.raw_scroll_delta);
+        if scroll.y != 0.0 {
+            state.camera.zoom(scroll.y / 120.0);
+        }
+        return;
+    }
+
     let canvas_id = egui::Id::new("viewport_canvas");
     let canvas_response = gui
         .ui

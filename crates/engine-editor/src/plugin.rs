@@ -11,6 +11,7 @@ pub struct EditorPlugin;
 impl Plugin for EditorPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.insert_resource(EditorState::new());
+        app.add_plugin(engine_terrain::plugin::TerrainPlugin);
         app.add_post_update_hook(Box::new(|app: &mut App| {
             let skin = app.resources.get::<GuiSkin>().cloned().unwrap_or_default();
             let ctx = match app.resources.get::<EguiState>() {

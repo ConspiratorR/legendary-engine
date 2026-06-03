@@ -302,3 +302,78 @@ impl Command for TransformEntityCommand {
         "Transform Entity".to_string()
     }
 }
+
+/// Command for terrain sculpting operations.
+///
+/// Captures a heightmap snapshot of the affected region before a sculpt
+/// brush is applied, enabling undo/redo of the modification.
+#[derive(Debug)]
+pub struct SculptCommand {
+    pub entity_id: u64,
+    pub affected_min: (u32, u32),
+    pub affected_max: (u32, u32),
+    pub resolution: u32,
+    pub height_snapshot: Vec<f32>,
+    pub description: String,
+}
+
+impl SculptCommand {
+    pub fn new(
+        entity_id: u64,
+        terrain: &engine_terrain::components::Terrain,
+        center: engine_math::Vec3,
+        radius: f32,
+    ) -> Self {
+        let half_w = terrain.world_size.x * 0.5;
+        let half_h = terrain.world_size.y * 0.5;
+        let res = terrain.resolution;
+
+        let min_i = ((center.x - radius + half_w) / terrain.world_size.x * res as f32)
+            .floor()
+            .max(0.0) as u32;
+        let max_i = ((center.x + radius + half_w) / terrain.world_size.x * res as f32)
+            .ceil()
+            .min(res as f32) as u32;
+        let min_j = ((center.z - radius + half_h) / terrain.world_size.y * res as f32)
+            .floor()
+            .max(0.0) as u32;
+        let max_j = ((center.z + radius + half_h) / terrain.world_size.y * res as f32)
+            .ceil()
+            .min(res as f32) as u32;
+
+        let mut snapshot = Vec::new();
+        for j in min_j..=max_j {
+            for i in min_i..=max_i {
+                let idx = (j * (res + 1) + i) as usize;
+                snapshot.push(terrain.heightmap[idx]);
+            }
+        }
+
+        Self {
+            entity_id,
+            affected_min: (min_i, min_j),
+            affected_max: (max_i, max_j),
+            resolution: res,
+            height_snapshot: snapshot,
+            description: "Sculpt Terrain".to_string(),
+        }
+    }
+}
+
+impl Command for SculptCommand {
+    fn execute(&mut self) {
+        // Brush already applied by the sculpt system — nothing to do here.
+    }
+
+    fn undo(&mut self) {
+        // Restoration requires World access — handled by editor integration.
+    }
+
+    fn redo(&mut self) {
+        // Re-application requires World access — handled by editor integration.
+    }
+
+    fn description(&self) -> String {
+        self.description.clone()
+    }
+}

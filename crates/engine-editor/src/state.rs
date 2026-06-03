@@ -8,6 +8,7 @@ pub enum ToolType {
     Translate,
     Rotate,
     Scale,
+    Terrain,
 }
 
 #[derive(Debug, Clone)]
@@ -264,7 +265,10 @@ impl Default for EditorCamera {
 }
 
 use crate::animation_editor::AnimationEditorState;
+use crate::material_editor::MaterialEditorState;
 use crate::node_graph::NodeGraphState;
+use crate::performance_overlay::PerformanceOverlay;
+use crate::performance_profiler::PerformanceProfilerState;
 use crate::resource_browser::ResourceBrowser;
 use crate::scene_serializer::SceneManager;
 use crate::script_editor::ScriptEditorState;
@@ -352,8 +356,14 @@ pub struct EditorState {
     pub scene_manager: SceneManager,
     pub status_message: Option<String>,
     pub node_graph_state: NodeGraphState,
+    pub material_editor: MaterialEditorState,
     pub animation_editor: AnimationEditorState,
     pub script_editor: ScriptEditorState,
+    pub performance_profiler: PerformanceProfilerState,
+    pub performance_overlay: PerformanceOverlay,
+    pub terrain_panel: crate::terrain_panel::TerrainPanel,
+    pub terrain_sculpt_active: bool,
+    pub terrain_sculpt_screen_pos: Option<(f32, f32)>,
 }
 
 impl Default for EditorState {
@@ -411,8 +421,14 @@ impl EditorState {
             scene_manager: SceneManager::new(),
             status_message: None,
             node_graph_state: NodeGraphState::default(),
+            material_editor: MaterialEditorState::new(),
             animation_editor: AnimationEditorState::new(),
             script_editor: ScriptEditorState::new(),
+            performance_profiler: PerformanceProfilerState::new(),
+            performance_overlay: PerformanceOverlay::new(),
+            terrain_panel: crate::terrain_panel::TerrainPanel::default(),
+            terrain_sculpt_active: false,
+            terrain_sculpt_screen_pos: None,
         }
     }
 

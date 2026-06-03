@@ -17,6 +17,7 @@ members = [
     "crates/engine-network",
     "crates/engine-jobs",
     "crates/engine-script",
+    "crates/engine-terrain",
 ]
 exclude = [
     "crates/engine-ecs/fuzz",

@@ -30,7 +30,7 @@ pub fn draw(
         }
         ToolType::Rotate => draw_rotate_gizmo(painter, gizmo_center, gizmo_size),
         ToolType::Scale => draw_scale_gizmo(painter, gizmo_center, gizmo_size),
-        ToolType::Select => {}
+        ToolType::Select | ToolType::Terrain => {}
     }
 }
 

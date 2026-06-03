@@ -15,6 +15,7 @@ engine-input = { path = "../engine-input" }
 engine-asset = { path = "../engine-asset" }
 engine-render = { path = "../engine-render" }
 engine-window = { path = "../engine-window" }
+engine-terrain = { path = "../engine-terrain" }
 egui = "=0.30.0"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }

@@ -1,3 +1,4 @@
+use crate::material_editor::MaterialEditorState;
 use crate::state::{EditorState, LightType};
 use egui::{Color32, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::Gui;
@@ -67,6 +68,37 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             egui::FontId::proportional(12.0),
             Color32::from_gray(90),
         );
+    }
+
+    // Terrain panel (shown when Terrain tool is active)
+    if state.active_tool == crate::state::ToolType::Terrain {
+        egui::Area::new(egui::Id::new("terrain_panel"))
+            .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-10.0, 50.0))
+            .show(gui.ui.ctx(), |ui| {
+                egui::Frame::default()
+                    .fill(egui::Color32::from_rgb(30, 30, 35))
+                    .rounding(egui::Rounding::same(4.0))
+                    .inner_margin(egui::Margin::same(8.0))
+                    .show(ui, |ui| {
+                        ui.set_min_width(250.0);
+                        let mut terrain = engine_terrain::components::Terrain::new(
+                            128,
+                            64,
+                            engine_math::Vec2::new(100.0, 100.0),
+                            50.0,
+                        );
+                        let mut texture_layers =
+                            engine_terrain::components::TerrainTextureLayers::default();
+                        let mut vegetation_data =
+                            engine_terrain::components::VegetationData::default();
+                        state.terrain_panel.draw(
+                            ui,
+                            &mut terrain,
+                            &mut texture_layers,
+                            &mut vegetation_data,
+                        );
+                    });
+            });
     }
 }
 
@@ -163,7 +195,37 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
         // AO slider
         let ar = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
         gui.slider_f32(ar, "环境光遮蔽", &mut mat.ao, 0.0, 1.0);
-        y += 16.0;
+        y += row_h + 6.0;
+
+        // Edit Material Graph button
+        let btn_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, 28.0));
+        let btn_painter = gui.ui.painter_at(btn_rect);
+        let btn_id = egui::Id::new("edit_mat_graph_btn").with(id);
+        let btn_resp = gui.ui.interact(btn_rect, btn_id, egui::Sense::click());
+        btn_painter.add(Shape::rect_filled(
+            btn_rect,
+            Rounding::same(4.0),
+            if btn_resp.hovered() {
+                Color32::from_rgb(0, 120, 180)
+            } else {
+                Color32::from_rgb(0, 90, 140)
+            },
+        ));
+        btn_painter.text(
+            btn_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "编辑材质图",
+            egui::FontId::proportional(11.0),
+            Color32::WHITE,
+        );
+        if btn_resp.clicked() {
+            // Build a graph from the current material data and open the editor
+            let graph = MaterialEditorState::graph_from_material(mat);
+            state.node_graph_state.graph = graph;
+            state.material_editor.open();
+            state.material_editor.material_name = format!("材质 #{}", id);
+        }
+        y += 36.0;
     }
 
     // ── Render ──
