@@ -13,6 +13,8 @@ pub struct NodeGraphRenderer {
     pub zoom: f32,
     /// Currently selected node.
     pub selected_node: Option<NodeId>,
+    /// Multi-selected nodes (for box select).
+    pub selected_nodes: Vec<NodeId>,
     /// Drag state for moving nodes.
     pub drag_state: DragState,
     /// Connection being drawn (from output pin).
@@ -23,13 +25,25 @@ pub struct NodeGraphRenderer {
     pub context_menu: Option<ContextMenuState>,
     /// Whether the graph panel is visible.
     pub visible: bool,
+    /// Box selection state.
+    pub box_select: Option<BoxSelectState>,
 }
 
 #[derive(Debug, Clone)]
 pub enum DragState {
     None,
     MovingNode { node_id: NodeId, offset: Vec2 },
+    MovingSelection { offset: Vec2 },
     Panning { last_pos: Pos2 },
+}
+
+/// State for box selection.
+#[derive(Debug, Clone)]
+pub struct BoxSelectState {
+    /// Start position in graph coordinates.
+    pub start: Pos2,
+    /// Current end position in graph coordinates.
+    pub end: Pos2,
 }
 
 #[derive(Debug, Clone)]
@@ -44,11 +58,13 @@ impl Default for NodeGraphRenderer {
             pan_offset: Vec2::ZERO,
             zoom: 1.0,
             selected_node: None,
+            selected_nodes: Vec::new(),
             drag_state: DragState::None,
             pending_connection: None,
             pending_connection_pos: None,
             context_menu: None,
             visible: false,
+            box_select: None,
         }
     }
 }
@@ -101,10 +117,16 @@ impl NodeGraphRenderer {
         // Draw nodes
         let node_ids: Vec<NodeId> = graph.nodes.keys().copied().collect();
         for node_id in &node_ids {
-            let is_selected = self.selected_node == Some(*node_id);
+            let is_selected =
+                self.selected_node == Some(*node_id) || self.selected_nodes.contains(node_id);
             if let Some(node) = graph.nodes.get(node_id) {
                 self.draw_node(&painter, rect, node, is_selected);
             }
+        }
+
+        // Draw box selection
+        if let Some(ref box_sel) = self.box_select {
+            self.draw_box_select(&painter, box_sel);
         }
 
         // Handle interactions
@@ -376,6 +398,154 @@ impl NodeGraphRenderer {
         painter.add(Shape::line(points, stroke));
     }
 
+    /// Draw box selection rectangle.
+    fn draw_box_select(&self, painter: &egui::Painter, box_sel: &BoxSelectState) {
+        let start_screen = self.graph_to_screen(box_sel.start);
+        let end_screen = self.graph_to_screen(box_sel.end);
+
+        let min_x = start_screen.x.min(end_screen.x);
+        let min_y = start_screen.y.min(end_screen.y);
+        let max_x = start_screen.x.max(end_screen.x);
+        let max_y = start_screen.y.max(end_screen.y);
+
+        let rect = Rect::from_min_max(Pos2::new(min_x, min_y), Pos2::new(max_x, max_y));
+
+        // Fill
+        painter.add(Shape::rect_filled(
+            rect,
+            Rounding::same(2.0),
+            Color32::from_rgba_premultiplied(0, 120, 215, 30),
+        ));
+
+        // Border
+        painter.add(Shape::rect_stroke(
+            rect,
+            Rounding::same(2.0),
+            Stroke::new(1.5_f32, Color32::from_rgba_premultiplied(0, 120, 215, 150)),
+        ));
+    }
+
+    /// Auto-layout nodes using a simple topological sort.
+    pub fn auto_layout(&self, graph: &mut NodeGraph) {
+        use std::collections::{HashMap, HashSet, VecDeque};
+
+        if graph.nodes.is_empty() {
+            return;
+        }
+
+        // Build adjacency and in-degree
+        let mut in_degree: HashMap<NodeId, usize> = HashMap::new();
+        let mut adjacency: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+
+        for &id in graph.nodes.keys() {
+            in_degree.entry(id).or_insert(0);
+            adjacency.entry(id).or_default();
+        }
+
+        for conn in &graph.connections {
+            let from = conn.output_pin.node_id;
+            let to = conn.input_pin.node_id;
+            *in_degree.entry(to).or_insert(0) += 1;
+            adjacency.entry(from).or_default().push(to);
+        }
+
+        // Kahn's algorithm for topological order
+        let mut queue: VecDeque<NodeId> = VecDeque::new();
+        for (&id, &deg) in &in_degree {
+            if deg == 0 {
+                queue.push_back(id);
+            }
+        }
+
+        let mut order: Vec<NodeId> = Vec::new();
+        let mut visited: HashSet<NodeId> = HashSet::new();
+
+        while let Some(current) = queue.pop_front() {
+            if !visited.insert(current) {
+                continue;
+            }
+            order.push(current);
+
+            if let Some(neighbors) = adjacency.get(&current) {
+                for &next in neighbors {
+                    if let Some(deg) = in_degree.get_mut(&next) {
+                        *deg = deg.saturating_sub(1);
+                        if *deg == 0 {
+                            queue.push_back(next);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add any remaining nodes (disconnected or cycles)
+        for &id in graph.nodes.keys() {
+            if !visited.contains(&id) {
+                order.push(id);
+            }
+        }
+
+        // Assign positions in layers
+        let x_spacing = 250.0;
+        let y_spacing = 120.0;
+        let start_x = 50.0;
+        let start_y = 50.0;
+
+        // Compute layer using BFS from roots
+        let mut layers: HashMap<NodeId, usize> = HashMap::new();
+
+        // Initialize roots (nodes with no inputs) at layer 0
+        for &id in &order {
+            if in_degree.get(&id).copied().unwrap_or(0) == 0 {
+                layers.insert(id, 0);
+            }
+        }
+
+        // Propagate layers through connections
+        for &id in &order {
+            let current_layer = layers.get(&id).copied().unwrap_or(0);
+            if let Some(neighbors) = adjacency.get(&id) {
+                for &next in neighbors {
+                    let entry = layers.entry(next).or_insert(0);
+                    *entry = (*entry).max(current_layer + 1);
+                }
+            }
+        }
+
+        // Group by layer
+        let mut layer_groups: HashMap<usize, Vec<NodeId>> = HashMap::new();
+        for &id in &order {
+            let layer = layers.get(&id).copied().unwrap_or(0);
+            layer_groups.entry(layer).or_default().push(id);
+        }
+
+        // Assign positions
+        for (layer, nodes) in &layer_groups {
+            let x = start_x + *layer as f32 * x_spacing;
+            for (i, node_id) in nodes.iter().enumerate() {
+                let y = start_y + i as f32 * y_spacing;
+                graph.move_node(*node_id, Pos2::new(x, y));
+            }
+        }
+    }
+
+    /// Get all selected node IDs (primary + multi-select).
+    pub fn get_selected_nodes(&self) -> Vec<NodeId> {
+        let mut selected = self.selected_nodes.clone();
+        if let Some(primary) = self.selected_node
+            && !selected.contains(&primary)
+        {
+            selected.push(primary);
+        }
+        selected
+    }
+
+    /// Clear selection.
+    pub fn clear_selection(&mut self) {
+        self.selected_node = None;
+        self.selected_nodes.clear();
+    }
+
     /// Handle all interactions (click, drag, connect, context menu).
     fn handle_interactions(&mut self, ui: &mut egui::Ui, rect: Rect, graph: &mut NodeGraph) {
         let response = ui.interact(
@@ -440,13 +610,42 @@ impl NodeGraphRenderer {
                         let node = &graph.nodes[&node_id];
                         let node_pos = node.position.to_pos2();
                         let offset = graph_pos - node_pos;
-                        self.drag_state = DragState::MovingNode { node_id, offset };
-                        self.selected_node = Some(node_id);
+
+                        // If node is already in multi-selection, move all
+                        if self.selected_nodes.contains(&node_id) {
+                            self.drag_state = DragState::MovingSelection { offset };
+                        } else {
+                            // Clear multi-select if clicking unselected node
+                            if !ui.input(|i| i.modifiers.shift) {
+                                self.selected_nodes.clear();
+                            }
+                            self.drag_state = DragState::MovingNode { node_id, offset };
+                            self.selected_node = Some(node_id);
+                        }
+                    } else {
+                        // Start box selection
+                        self.box_select = Some(BoxSelectState {
+                            start: graph_pos,
+                            end: graph_pos,
+                        });
                     }
                 }
                 DragState::MovingNode { node_id, offset } => {
                     let new_pos = graph_pos - *offset;
                     graph.move_node(*node_id, new_pos);
+                }
+                DragState::MovingSelection { offset } => {
+                    // Move all selected nodes
+                    let delta = graph_pos - *offset;
+                    let delta_vec = Vec2::new(delta.x, delta.y);
+                    let selected = self.get_selected_nodes();
+                    for node_id in &selected {
+                        if let Some(node) = graph.nodes.get(node_id) {
+                            let current_pos = node.position.to_pos2();
+                            let new_pos = current_pos + delta_vec;
+                            graph.move_node(*node_id, new_pos);
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -460,6 +659,36 @@ impl NodeGraphRenderer {
                 self.pending_connection = None;
                 self.pending_connection_pos = None;
             }
+
+            // Finalize box selection
+            if let Some(ref box_sel) = self.box_select {
+                let min_x = box_sel.start.x.min(box_sel.end.x);
+                let min_y = box_sel.start.y.min(box_sel.end.y);
+                let max_x = box_sel.start.x.max(box_sel.end.x);
+                let max_y = box_sel.start.y.max(box_sel.end.y);
+                let sel_rect = Rect::from_min_max(Pos2::new(min_x, min_y), Pos2::new(max_x, max_y));
+
+                // Select all nodes within the box
+                self.selected_nodes.clear();
+                for (id, node) in &graph.nodes {
+                    let node_rect = Rect::from_min_size(
+                        node.position.to_pos2(),
+                        Vec2::new(node.width(), node.height()),
+                    );
+                    if sel_rect.intersects(node_rect) {
+                        self.selected_nodes.push(*id);
+                    }
+                }
+
+                if self.selected_nodes.len() == 1 {
+                    self.selected_node = Some(self.selected_nodes[0]);
+                    self.selected_nodes.clear();
+                } else if self.selected_nodes.is_empty() {
+                    self.selected_node = None;
+                }
+            }
+
+            self.box_select = None;
             self.drag_state = DragState::None;
         }
 
@@ -477,11 +706,25 @@ impl NodeGraphRenderer {
         }
 
         // Handle delete key
-        if ui.input(|i| i.key_pressed(egui::Key::Delete))
-            && let Some(node_id) = self.selected_node
-        {
-            graph.remove_node(node_id);
+        if ui.input(|i| i.key_pressed(egui::Key::Delete)) {
+            let selected = self.get_selected_nodes();
+            for node_id in selected {
+                graph.remove_node(node_id);
+            }
+            self.clear_selection();
+        }
+
+        // Handle Ctrl+A to select all
+        if ui.input(|i| i.key_pressed(egui::Key::A) && i.modifiers.ctrl) {
+            self.selected_nodes = graph.nodes.keys().copied().collect();
             self.selected_node = None;
+        }
+
+        // Update box selection end position
+        if self.box_select.is_some()
+            && let Some(ref mut box_sel) = self.box_select
+        {
+            box_sel.end = graph_pos;
         }
     }
 
@@ -586,6 +829,8 @@ impl NodeGraphState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::node_graph::graph::{Node, NodeType};
+    use crate::node_graph::types::{PinId, PinType};
 
     #[test]
     fn test_renderer_default() {
@@ -627,5 +872,71 @@ mod tests {
         let json = state.to_json().unwrap();
         let restored = NodeGraphState::from_json(&json).unwrap();
         assert_eq!(restored.zoom, 1.0);
+    }
+
+    #[test]
+    fn test_renderer_multi_select() {
+        let mut renderer = NodeGraphRenderer::new();
+        renderer.selected_nodes = vec![1, 2, 3];
+        assert_eq!(renderer.selected_nodes.len(), 3);
+        assert!(renderer.selected_nodes.contains(&1));
+        assert!(renderer.selected_nodes.contains(&2));
+        assert!(renderer.selected_nodes.contains(&3));
+    }
+
+    #[test]
+    fn test_renderer_clear_selection() {
+        let mut renderer = NodeGraphRenderer::new();
+        renderer.selected_node = Some(1);
+        renderer.selected_nodes = vec![2, 3];
+        renderer.clear_selection();
+        assert!(renderer.selected_node.is_none());
+        assert!(renderer.selected_nodes.is_empty());
+    }
+
+    #[test]
+    fn test_renderer_get_selected_nodes() {
+        let mut renderer = NodeGraphRenderer::new();
+        renderer.selected_node = Some(1);
+        renderer.selected_nodes = vec![2, 3];
+        let selected = renderer.get_selected_nodes();
+        assert_eq!(selected.len(), 3);
+        assert!(selected.contains(&1));
+        assert!(selected.contains(&2));
+        assert!(selected.contains(&3));
+    }
+
+    #[test]
+    fn test_renderer_box_select_state() {
+        let mut renderer = NodeGraphRenderer::new();
+        assert!(renderer.box_select.is_none());
+        renderer.box_select = Some(BoxSelectState {
+            start: Pos2::new(0.0, 0.0),
+            end: Pos2::new(100.0, 100.0),
+        });
+        assert!(renderer.box_select.is_some());
+    }
+
+    #[test]
+    fn test_auto_layout() {
+        let mut graph = NodeGraph::new();
+        let mut node1 = Node::new(0, NodeType::ConstantFloat, "Float", Pos2::new(0.0, 0.0));
+        node1.add_output("Value", PinType::Float);
+        let mut node2 = Node::new(0, NodeType::Add, "Add", Pos2::new(0.0, 0.0));
+        node2.add_input("A", PinType::Float);
+        node2.add_output("Result", PinType::Float);
+        let id1 = graph.add_node(node1);
+        let id2 = graph.add_node(node2);
+        graph
+            .connect(PinId::new(id1, 0), PinId::new(id2, 0))
+            .unwrap();
+
+        let renderer = NodeGraphRenderer::new();
+        renderer.auto_layout(&mut graph);
+
+        // After layout, nodes should have different positions
+        let pos1 = graph.nodes[&id1].position.to_pos2();
+        let pos2 = graph.nodes[&id2].position.to_pos2();
+        assert!(pos1.x < pos2.x, "Input node should be left of output node");
     }
 }

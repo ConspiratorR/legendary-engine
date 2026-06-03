@@ -356,12 +356,102 @@ pub struct RenderStats {
     pub pipeline_switches: u32,
     /// Number of vertices processed.
     pub vertices: u64,
+    /// Number of buffer binds (vertex/index/instance).
+    pub buffer_binds: u32,
+    /// Number of shader state changes.
+    pub shader_switches: u32,
 }
 
 impl RenderStats {
     /// Reset all counters for a new frame.
     pub fn reset(&mut self) {
         *self = Self::default();
+    }
+}
+
+/// A snapshot of per-frame performance data for history tracking.
+#[derive(Debug, Clone)]
+pub struct FrameSnapshot {
+    pub frame_number: u64,
+    pub cpu_frame_time: Duration,
+    pub gpu_frame_time: Duration,
+    pub render_stats: RenderStats,
+    pub pass_timings: HashMap<String, Duration>,
+}
+
+/// Ring-buffer history of frame performance snapshots.
+#[derive(Debug, Clone)]
+pub struct FrameHistory {
+    frames: Vec<FrameSnapshot>,
+    max_frames: usize,
+}
+
+impl FrameHistory {
+    pub fn new(max_frames: usize) -> Self {
+        Self {
+            frames: Vec::with_capacity(max_frames),
+            max_frames,
+        }
+    }
+
+    /// Push a new frame snapshot, evicting the oldest if at capacity.
+    pub fn push(&mut self, snapshot: FrameSnapshot) {
+        if self.frames.len() >= self.max_frames {
+            self.frames.remove(0);
+        }
+        self.frames.push(snapshot);
+    }
+
+    /// All recorded frames.
+    pub fn frames(&self) -> &[FrameSnapshot] {
+        &self.frames
+    }
+
+    /// The most recent frame, if any.
+    pub fn latest(&self) -> Option<&FrameSnapshot> {
+        self.frames.last()
+    }
+
+    /// Average CPU frame time over history.
+    pub fn avg_cpu_frame_time(&self) -> Duration {
+        if self.frames.is_empty() {
+            return Duration::ZERO;
+        }
+        let total: Duration = self.frames.iter().map(|f| f.cpu_frame_time).sum();
+        total / self.frames.len() as u32
+    }
+
+    /// Average GPU frame time over history.
+    pub fn avg_gpu_frame_time(&self) -> Duration {
+        if self.frames.is_empty() {
+            return Duration::ZERO;
+        }
+        let total: Duration = self.frames.iter().map(|f| f.gpu_frame_time).sum();
+        total / self.frames.len() as u32
+    }
+
+    /// Peak CPU frame time over history.
+    pub fn peak_cpu_frame_time(&self) -> Duration {
+        self.frames
+            .iter()
+            .map(|f| f.cpu_frame_time)
+            .max()
+            .unwrap_or(Duration::ZERO)
+    }
+
+    /// Peak GPU frame time over history.
+    pub fn peak_gpu_frame_time(&self) -> Duration {
+        self.frames
+            .iter()
+            .map(|f| f.gpu_frame_time)
+            .max()
+            .unwrap_or(Duration::ZERO)
+    }
+}
+
+impl Default for FrameHistory {
+    fn default() -> Self {
+        Self::new(300)
     }
 }
 
@@ -403,10 +493,14 @@ mod tests {
         let mut stats = RenderStats::default();
         stats.draw_calls = 100;
         stats.triangles = 50000;
+        stats.buffer_binds = 20;
+        stats.shader_switches = 5;
         stats.reset();
 
         assert_eq!(stats.draw_calls, 0);
         assert_eq!(stats.triangles, 0);
+        assert_eq!(stats.buffer_binds, 0);
+        assert_eq!(stats.shader_switches, 0);
     }
 
     #[test]
@@ -429,5 +523,54 @@ mod tests {
             peak_time: Duration::ZERO,
         };
         assert_eq!(stats.average_time(), Duration::ZERO);
+    }
+
+    #[test]
+    fn test_frame_history_push_and_evict() {
+        let mut history = FrameHistory::new(3);
+        for i in 0..5 {
+            history.push(FrameSnapshot {
+                frame_number: i,
+                cpu_frame_time: Duration::from_millis(16),
+                gpu_frame_time: Duration::from_millis(8),
+                render_stats: RenderStats::default(),
+                pass_timings: HashMap::new(),
+            });
+        }
+        assert_eq!(history.frames().len(), 3);
+        assert_eq!(history.frames()[0].frame_number, 2);
+        assert_eq!(history.latest().unwrap().frame_number, 4);
+    }
+
+    #[test]
+    fn test_frame_history_averages() {
+        let mut history = FrameHistory::new(100);
+        history.push(FrameSnapshot {
+            frame_number: 0,
+            cpu_frame_time: Duration::from_millis(10),
+            gpu_frame_time: Duration::from_millis(6),
+            render_stats: RenderStats::default(),
+            pass_timings: HashMap::new(),
+        });
+        history.push(FrameSnapshot {
+            frame_number: 1,
+            cpu_frame_time: Duration::from_millis(20),
+            gpu_frame_time: Duration::from_millis(10),
+            render_stats: RenderStats::default(),
+            pass_timings: HashMap::new(),
+        });
+        assert_eq!(history.avg_cpu_frame_time(), Duration::from_millis(15));
+        assert_eq!(history.avg_gpu_frame_time(), Duration::from_millis(8));
+        assert_eq!(history.peak_cpu_frame_time(), Duration::from_millis(20));
+        assert_eq!(history.peak_gpu_frame_time(), Duration::from_millis(10));
+    }
+
+    #[test]
+    fn test_frame_history_empty() {
+        let history = FrameHistory::new(100);
+        assert!(history.frames().is_empty());
+        assert!(history.latest().is_none());
+        assert_eq!(history.avg_cpu_frame_time(), Duration::ZERO);
+        assert_eq!(history.peak_gpu_frame_time(), Duration::ZERO);
     }
 }

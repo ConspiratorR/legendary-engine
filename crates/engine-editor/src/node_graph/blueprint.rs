@@ -85,9 +85,10 @@ impl VariableStore {
 // ───────────────────────────────────────────────
 
 /// State of a single blueprint execution.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum BlueprintState {
     /// Execution has not started.
+    #[default]
     Idle,
     /// Currently executing nodes.
     Running,

@@ -8,6 +8,7 @@ use super::graph::NodeGraph;
 const PREVIEW_SIZE: u32 = 128;
 
 /// A CPU-side material preview renderer using ray-sphere intersection.
+#[derive(Debug, Clone)]
 pub struct MaterialPreview {
     /// Cached preview pixels (RGBA).
     pixels: Vec<u8>,
