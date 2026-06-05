@@ -14,10 +14,10 @@
 
 pub mod animation;
 pub mod atmosphere;
-pub mod collect_system;
 pub mod bloom;
 pub mod camera;
 pub mod camera_system;
+pub mod collect_system;
 pub mod command_batch;
 pub mod culling;
 pub mod culling_system;

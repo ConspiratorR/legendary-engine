@@ -1,14 +1,21 @@
 use crate::command_batch::{CommandBatcher, QueueSubmitBatchExt};
+use crate::deferred::{DeferredPass, GBuffer, GeometryPassUniform};
+use crate::instancing::InstanceBatch;
+use crate::light::LightingUniform;
+use crate::pipeline::pbr::CameraUniform;
 use crate::pipeline::sprite::SpritePipeline;
-use crate::post_process::{PostProcessChain, TonemappingConfig};
+use crate::post_process::{GBufferInputs, PostProcessChain, TonemappingConfig};
+use crate::resource::material::MaterialStore;
+use crate::resource::mesh::MeshStore;
+use crate::shadow::{ShadowMapConfig, ShadowPass, ShadowUniform};
 use crate::sprite_renderer::SpriteRenderer;
-use engine_math::Vec3;
+use engine_math::{Mat4, Vec3};
 use rayon::prelude::*;
 use std::ops::Deref;
 use std::sync::Arc;
 use wgpu::{Device, Queue, Surface, SurfaceConfiguration};
 
-const CAMERA_UNIFORM_SIZE: u64 = 64;
+const CAMERA_UNIFORM_SIZE: u64 = std::mem::size_of::<CameraUniform>() as u64;
 const DEFAULT_SPRITE_CAPACITY: usize = 10000;
 
 /// Thread-safe wrapper around [`wgpu::Device`].
@@ -48,6 +55,14 @@ pub struct Renderer {
     camera_bind_group: wgpu::BindGroup,
     pub sprite_renderer: SpriteRenderer,
     pub post_process: PostProcessChain,
+    // 3D deferred rendering resources (lazy-initialized on first use)
+    deferred_pass: Option<DeferredPass>,
+    gbuffer: Option<GBuffer>,
+    shadow_pass: Option<ShadowPass>,
+    deferred_camera_uniform: Option<wgpu::Buffer>,
+    deferred_camera_bind_group: Option<wgpu::BindGroup>,
+    light_uniform_buffer: Option<wgpu::Buffer>,
+    light_bind_group: Option<wgpu::BindGroup>,
 }
 
 impl Renderer {
@@ -120,6 +135,13 @@ impl Renderer {
             camera_bind_group,
             sprite_renderer,
             post_process,
+            deferred_pass: None,
+            gbuffer: None,
+            shadow_pass: None,
+            deferred_camera_uniform: None,
+            deferred_camera_bind_group: None,
+            light_uniform_buffer: None,
+            light_bind_group: None,
         })
     }
 
@@ -128,6 +150,9 @@ impl Renderer {
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
         self.post_process.resize(&self.device, width, height);
+        if let Some(ref mut gb) = self.gbuffer {
+            gb.resize(&self.device, width, height);
+        }
     }
 
     /// Update tone mapping settings.
@@ -429,5 +454,418 @@ impl Renderer {
                 }
             }
         }
+    }
+}
+
+/// Input data for the 3D deferred rendering path.
+///
+/// Contains all resources needed to render a 3D scene through the deferred
+/// pipeline: meshes, materials, lighting, camera, and visible geometry batches.
+pub struct Scene3d<'a> {
+    pub mesh_store: &'a MeshStore,
+    pub material_store: &'a MaterialStore,
+    pub lighting_uniform: &'a LightingUniform,
+    pub camera_vp: &'a Mat4,
+    pub camera_pos: &'a [f32; 3],
+    pub light_direction: &'a [f32; 3],
+    pub batches: &'a [InstanceBatch],
+    pub scene_aabb_min: Vec3,
+    pub scene_aabb_max: Vec3,
+    pub shadow_config: ShadowMapConfig,
+}
+
+impl Renderer {
+    /// Initialize deferred rendering resources (G-Buffer, deferred pass, shadow pass).
+    ///
+    /// Called lazily on first use of `render_frame_3d`. Safe to call multiple times;
+    /// subsequent calls are no-ops.
+    fn init_deferred_resources(&mut self) {
+        if self.deferred_pass.is_some() {
+            return;
+        }
+
+        let device = &*self.device;
+        let _queue = &*self.queue;
+        let w = self.config.width.max(1);
+        let h = self.config.height.max(1);
+
+        // Deferred pass (geometry + lighting pipelines)
+        let deferred_pass = DeferredPass::new(device, self.config.format);
+
+        // Camera uniform for deferred path (80 bytes)
+        let deferred_camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("deferred_camera_uniform"),
+            size: CAMERA_UNIFORM_SIZE,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let deferred_camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("deferred_camera_bind_group"),
+            layout: &deferred_pass.camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: deferred_camera_uniform.as_entire_binding(),
+            }],
+        });
+
+        // Lighting uniform buffer
+        let light_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("light_uniform_buffer"),
+            size: std::mem::size_of::<LightingUniform>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("light_bind_group"),
+            layout: &deferred_pass.light_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: light_uniform_buffer.as_entire_binding(),
+            }],
+        });
+
+        // G-Buffer
+        let gbuffer = GBuffer::new(device, w, h);
+
+        // Shadow pass
+        let shadow_pass = ShadowPass::new(device, ShadowMapConfig::default());
+
+        self.deferred_pass = Some(deferred_pass);
+        self.gbuffer = Some(gbuffer);
+        self.shadow_pass = Some(shadow_pass);
+        self.deferred_camera_uniform = Some(deferred_camera_uniform);
+        self.deferred_camera_bind_group = Some(deferred_camera_bind_group);
+        self.light_uniform_buffer = Some(light_uniform_buffer);
+        self.light_bind_group = Some(light_bind_group);
+    }
+
+    /// Render a 3D scene through the deferred rendering pipeline.
+    ///
+    /// Pipeline order:
+    /// 1. Shadow pass — render scene depth from light's perspective
+    /// 2. Deferred geometry pass — render scene to G-Buffer (4 MRT + depth)
+    /// 3. Deferred lighting pass — full-screen triangle, sample G-Buffer + shadows + lights
+    /// 4. Post-process — SSAO/Bloom/TAA/etc. using G-Buffer data
+    /// 5. Tonemapping — HDR → swapchain
+    ///
+    /// The existing 2D sprite path in [`render_frame`] remains unaffected.
+    pub fn render_frame_3d(&mut self, scene: &Scene3d<'_>) -> Result<(), wgpu::SurfaceError> {
+        self.init_deferred_resources();
+
+        let device = &*self.device;
+        let queue = &*self.queue;
+
+        let _deferred_pass = self.deferred_pass.as_ref().unwrap();
+        let gbuffer = self.gbuffer.as_ref().unwrap();
+        let _shadow_pass = self.shadow_pass.as_ref().unwrap();
+        let cam_buf = self.deferred_camera_uniform.as_ref().unwrap();
+        let cam_bg = self.deferred_camera_bind_group.as_ref().unwrap();
+        let light_buf = self.light_uniform_buffer.as_ref().unwrap();
+
+        // Update camera uniform
+        let camera_uniform = CameraUniform {
+            view_proj: scene.camera_vp.to_cols_array_2d(),
+            camera_pos: *scene.camera_pos,
+            _pad: 0.0,
+        };
+        queue.write_buffer(cam_buf, 0, bytemuck::bytes_of(&camera_uniform));
+
+        // Update lighting uniform
+        queue.write_buffer(light_buf, 0, bytemuck::bytes_of(scene.lighting_uniform));
+
+        // Compute light VP for shadow mapping
+        let light_vp = ShadowPass::compute_light_matrices(
+            Vec3::from_array(*scene.light_direction),
+            crate::shadow::AABB::new(scene.scene_aabb_min, scene.scene_aabb_max),
+        );
+
+        let shadow_uniform = ShadowUniform {
+            light_vp: light_vp.to_cols_array_2d(),
+            shadow_bias: scene.shadow_config.shadow_bias,
+            normal_bias: scene.shadow_config.normal_bias,
+            cascade_count: scene.shadow_config.cascade_count,
+            _pad: 0.0,
+        };
+
+        let output = self.surface.get_current_texture()?;
+        let swapchain_view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("deferred_encoder"),
+        });
+
+        // ── Shadow Pass ─────────────────────────────────────
+        self.record_shadow_pass(&mut encoder, scene.batches, &light_vp, scene.mesh_store);
+
+        // ── Deferred Geometry Pass ──────────────────────────
+        self.record_deferred_geometry_pass(
+            &mut encoder,
+            scene.batches,
+            scene.material_store,
+            scene.mesh_store,
+        );
+
+        // ── Deferred Lighting Pass ──────────────────────────
+        self.record_deferred_lighting_pass(&mut encoder, &shadow_uniform);
+
+        // ── Post-process (with G-Buffer inputs) ─────────────
+        let gbuffer_inputs = GBufferInputs {
+            position_view: &gbuffer.textures.position_view,
+            normal_view: &gbuffer.textures.normal_view,
+            depth_view: &gbuffer.textures.depth_view,
+            camera_bind_group: cam_bg,
+        };
+        self.post_process.execute(
+            &mut encoder,
+            &swapchain_view,
+            device,
+            queue,
+            Some(&gbuffer_inputs),
+        );
+
+        queue.submit([encoder.finish()]);
+        output.present();
+        Ok(())
+    }
+
+    /// Record the shadow pass: render scene depth from the light's perspective.
+    fn record_shadow_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        batches: &[InstanceBatch],
+        light_vp: &Mat4,
+        mesh_store: &MeshStore,
+    ) {
+        let shadow = self.shadow_pass.as_ref().unwrap();
+
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("shadow_pass"),
+            color_attachments: &[],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &shadow.depth_texture_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        let res = shadow.config.resolution;
+        pass.set_viewport(0.0, 0.0, res as f32, res as f32, 0.0, 1.0);
+        pass.set_scissor_rect(0, 0, res, res);
+        pass.set_pipeline(&shadow.pipeline);
+
+        for batch in batches {
+            let Some(mesh) = mesh_store.get(batch.key.mesh_id) else {
+                continue;
+            };
+
+            for transform in &batch.transforms {
+                let mvp = *light_vp * *transform;
+                let pc_data = mvp.to_cols_array();
+                pass.set_push_constants(
+                    wgpu::ShaderStages::VERTEX,
+                    0,
+                    bytemuck::cast_slice(&pc_data),
+                );
+
+                pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                if let Some(ref ib) = mesh.index_buffer {
+                    pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+                } else {
+                    pass.draw(0..mesh.num_vertices, 0..1);
+                }
+            }
+        }
+    }
+
+    /// Record the deferred geometry pass: render scene to G-Buffer (4 MRT + depth).
+    fn record_deferred_geometry_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        batches: &[InstanceBatch],
+        material_store: &MaterialStore,
+        mesh_store: &MeshStore,
+    ) {
+        let deferred = self.deferred_pass.as_ref().unwrap();
+        let gb = self.gbuffer.as_ref().unwrap();
+        let cam_bg = self.deferred_camera_bind_group.as_ref().unwrap();
+        let light_bg = self.light_bind_group.as_ref().unwrap();
+
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("deferred_geometry_pass"),
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &gb.textures.albedo_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &gb.textures.normal_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &gb.textures.position_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &gb.textures.material_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+            ],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &gb.textures.depth_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        pass.set_viewport(0.0, 0.0, gb.width as f32, gb.height as f32, 0.0, 1.0);
+        pass.set_scissor_rect(0, 0, gb.width, gb.height);
+        pass.set_pipeline(&deferred.geometry_pipeline);
+
+        // Bind groups: camera (0), light (1)
+        pass.set_bind_group(0, cam_bg, &[]);
+        pass.set_bind_group(1, light_bg, &[]);
+
+        for batch in batches {
+            // Material bind group (group 2)
+            if let Some(mat_bg) = material_store.get_bind_group(batch.key.material_id) {
+                pass.set_bind_group(2, mat_bg, &[]);
+            }
+
+            let Some(mesh) = mesh_store.get(batch.key.mesh_id) else {
+                continue;
+            };
+
+            for transform in &batch.transforms {
+                let normal_matrix = Self::compute_normal_matrix(transform);
+                let pc = GeometryPassUniform {
+                    model_matrix: transform.to_cols_array_2d(),
+                    normal_matrix: normal_matrix.to_cols_array_2d(),
+                };
+                pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, bytemuck::bytes_of(&pc));
+
+                pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                if let Some(ref ib) = mesh.index_buffer {
+                    pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+                } else {
+                    pass.draw(0..mesh.num_vertices, 0..1);
+                }
+            }
+        }
+    }
+
+    /// Record the deferred lighting pass: full-screen triangle lighting computation.
+    fn record_deferred_lighting_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        _shadow_uniform: &ShadowUniform,
+    ) {
+        let deferred = self.deferred_pass.as_ref().unwrap();
+        let gb = self.gbuffer.as_ref().unwrap();
+        let cam_bg = self.deferred_camera_bind_group.as_ref().unwrap();
+        let light_bg = self.light_bind_group.as_ref().unwrap();
+        let device = &*self.device;
+
+        // Create G-Buffer bind group for the lighting pass
+        let gbuffer_bg_layout = &deferred.gbuffer_bind_group_layout;
+        let gbuffer_bg = gb.create_bind_group(device, gbuffer_bg_layout);
+
+        let hdr_view = &self.post_process.hdr_framebuffer.view;
+
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("deferred_lighting_pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: hdr_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+
+        pass.set_pipeline(&deferred.lighting_pipeline);
+        pass.set_bind_group(0, cam_bg, &[]);
+        pass.set_bind_group(1, light_bg, &[]);
+        pass.set_bind_group(2, &gbuffer_bg, &[]);
+
+        // Shadow map sampling is not yet wired into the lighting shader.
+        // The shadow depth texture and uniform are prepared but the lighting
+        // pipeline layout does not include a shadow bind group. This will be
+        // integrated when the deferred_lighting.wgsl shader is updated to
+        // sample the shadow map.
+
+        pass.draw(0..3, 0..1);
+    }
+
+    /// Compute the normal matrix (inverse-transpose of the upper-left 3x3 of the model matrix).
+    fn compute_normal_matrix(model: &Mat4) -> Mat4 {
+        // For orthonormal transforms (rotation only), the normal matrix equals the model matrix.
+        // For non-uniform scales, we need the inverse-transpose. Use a general approach.
+        let m = model.to_cols_array();
+        // Extract upper-left 3x3
+        let a00 = m[0];
+        let a01 = m[1];
+        let a02 = m[2];
+        let a10 = m[4];
+        let a11 = m[5];
+        let a12 = m[6];
+        let a20 = m[8];
+        let a21 = m[9];
+        let a22 = m[10];
+        // Determinant of 3x3
+        let det = a00 * (a11 * a22 - a12 * a21) - a01 * (a10 * a22 - a12 * a20)
+            + a02 * (a10 * a21 - a11 * a20);
+        if det.abs() < 1e-10 {
+            return Mat4::IDENTITY;
+        }
+        let inv_det = 1.0 / det;
+        // Inverse-transpose of 3x3 (transpose of cofactor matrix / det)
+        let n00 = (a11 * a22 - a12 * a21) * inv_det;
+        let n01 = (a10 * a22 - a12 * a20) * inv_det;
+        let n02 = (a10 * a21 - a11 * a20) * inv_det;
+        let n10 = (a01 * a22 - a02 * a21) * inv_det;
+        let n11 = (a00 * a22 - a02 * a20) * inv_det;
+        let n12 = (a00 * a21 - a01 * a20) * inv_det;
+        let n20 = (a01 * a12 - a02 * a11) * inv_det;
+        let n21 = (a00 * a12 - a02 * a10) * inv_det;
+        let n22 = (a00 * a11 - a01 * a10) * inv_det;
+        // Note: these are the cofactors / det, which is the inverse. We need the
+        // transpose of the inverse, so we swap indices.
+        Mat4::from_cols_array(&[
+            n00, n10, n20, 0.0, n01, n11, n21, 0.0, n02, n12, n22, 0.0, 0.0, 0.0, 0.0, 1.0,
+        ])
     }
 }
