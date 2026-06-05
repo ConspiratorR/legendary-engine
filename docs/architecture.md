@@ -2,109 +2,187 @@
 
 RustEngine is a modular game engine built in Rust with 16 crates organized in layers. This document describes the high-level architecture, crate relationships, and data flow.
 
+## Validated Dependency Layers
+
+All inter-crate dependencies flow downward only. No circular or upward dependencies exist (verified via `cargo tree`).
+
+```
+Layer 0 (Leaf):           engine-math, engine-jobs, engine-window
+Layer 1 (Foundation):     engine-audio, engine-asset, engine-ecs
+Layer 2 (Infrastructure): engine-scene, engine-input
+Layer 3 (Rendering):      engine-render
+Layer 4 (Core):           engine-core
+Layer 5 (Systems):        engine-framework, engine-physics, engine-network,
+                          engine-script, engine-ui, engine-terrain
+Layer 6 (Application):    engine-editor
+```
+
 ## Crate Dependency Graph
 
 ```mermaid
 graph TD
-    subgraph Foundation["Foundation Layer"]
+    subgraph L0["Layer 0 — Leaf"]
         MATH[engine-math<br/>Glam re-exports]
         JOBS[engine-jobs<br/>Thread pool & job graphs]
-    end
-
-    subgraph Core["Core Layer"]
-        ECS[engine-ecs<br/>Entity Component System]
         WINDOW[engine-window<br/>winit windowing]
-        INPUT[engine-input<br/>Keyboard/mouse/action mapping]
-        ASSET[engine-asset<br/>Asset loading & management]
     end
 
-    subgraph Systems["Systems Layer"]
-        SCENE[engine-scene<br/>Scene graph & hierarchy]
-        RENDER[engine-render<br/>wgpu rendering pipeline]
-        PHYSICS[engine-physics<br/>Rigid body dynamics]
+    subgraph L1["Layer 1 — Foundation"]
         AUDIO[engine-audio<br/>rodio audio playback]
-        NETWORK[engine-network<br/>Client/server networking]
-        UI[engine-ui<br/>egui integration]
-        SCRIPT[engine-script<br/>Lua/WASM scripting]
+        ASSET[engine-asset<br/>Asset loading & management]
+        ECS[engine-ecs<br/>Entity Component System]
     end
 
-    subgraph App["Application Layer"]
-        FRAMEWORK[engine-framework<br/>Game states & flow]
-        EDITOR[engine-editor<br/>Scene editor & tools]
+    subgraph L2["Layer 2 — Infrastructure"]
+        SCENE[engine-scene<br/>Scene graph & hierarchy]
+        INPUT[engine-input<br/>Keyboard/mouse/action mapping]
+    end
+
+    subgraph L3["Layer 3 — Rendering"]
+        RENDER[engine-render<br/>wgpu rendering pipeline]
+    end
+
+    subgraph L4["Layer 4 — Core"]
         CORE[engine-core<br/>App builder & plugin system]
     end
 
-    ECS --> MATH
-    RENDER --> MATH
-    RENDER --> ECS
-    RENDER --> ASSET
-    RENDER --> WINDOW
+    subgraph L5["Layer 5 — Systems"]
+        FRAMEWORK[engine-framework<br/>Game states & flow]
+        PHYSICS[engine-physics<br/>Rigid body dynamics]
+        NETWORK[engine-network<br/>Client/server networking]
+        SCRIPT[engine-script<br/>Lua/WASM scripting]
+        UI[engine-ui<br/>egui integration]
+        TERRAIN[engine-terrain<br/>Terrain generation]
+    end
+
+    subgraph L6["Layer 6 — Application"]
+        EDITOR[engine-editor<br/>Scene editor & tools]
+    end
+
+    AUDIO --> MATH
+    ASSET --> MATH
+    ECS -.->|optional| JOBS
+
     SCENE --> ECS
     SCENE --> MATH
+    INPUT --> ECS
     INPUT --> WINDOW
-    PHYSICS --> ECS
-    PHYSICS --> MATH
-    AUDIO --> MATH
-    NETWORK --> ECS
-    UI --> ECS
-    UI --> RENDER
-    SCRIPT --> ECS
-    SCRIPT --> ASSET
 
-    CORE --> ECS
-    CORE --> SCENE
-    CORE --> RENDER
-    CORE --> INPUT
+    RENDER --> ASSET
+    RENDER --> ECS
+    RENDER --> MATH
+    RENDER --> SCENE
+    RENDER --> WINDOW
+
     CORE --> ASSET
-    CORE --> WINDOW
-    CORE --> MATH
     CORE --> AUDIO
+    CORE --> ECS
+    CORE --> INPUT
+    CORE --> MATH
+    CORE --> RENDER
+    CORE --> SCENE
+    CORE --> WINDOW
 
     FRAMEWORK --> CORE
-    EDITOR --> CORE
-    EDITOR --> UI
-    EDITOR --> SCENE
+    FRAMEWORK --> ECS
+    FRAMEWORK --> INPUT
+    FRAMEWORK --> SCENE
+    PHYSICS --> CORE
+    PHYSICS --> ECS
+    PHYSICS --> MATH
+    NETWORK --> CORE
+    NETWORK --> ECS
+    SCRIPT --> CORE
+    SCRIPT --> ECS
+    SCRIPT --> MATH
+    UI --> CORE
+    UI --> INPUT
+    UI --> RENDER
+    TERRAIN --> CORE
+    TERRAIN --> ECS
+    TERRAIN --> MATH
+    TERRAIN --> RENDER
 
-    ECS -.->|optional| JOBS
+    EDITOR --> ASSET
+    EDITOR --> CORE
+    EDITOR --> ECS
+    EDITOR --> FRAMEWORK
+    EDITOR --> INPUT
+    EDITOR --> MATH
+    EDITOR --> RENDER
+    EDITOR --> SCENE
+    EDITOR --> TERRAIN
+    EDITOR --> UI
+    EDITOR --> WINDOW
 ```
 
 ## Layer Descriptions
 
-### Foundation Layer
+### Layer 0 — Leaf
+
+No engine-* dependencies. Pure utility crates.
 
 | Crate | Purpose | Key Dependencies |
 |-------|---------|-----------------|
 | **engine-math** | Re-exports `glam` types (`Vec2/3/4`, `Mat4`, `Quat`) with extension traits | `glam` |
 | **engine-jobs** | Thread pool, job graphs, task scheduling | `crossbeam`, `rayon` |
-
-### Core Layer
-
-| Crate | Purpose | Key Dependencies |
-|-------|---------|-----------------|
-| **engine-ecs** | Sparse-set ECS: entities, components, queries, schedules | `rayon`, optional `engine-jobs` |
 | **engine-window** | Window creation via winit 0.30 | `winit` |
-| **engine-input** | Keyboard/mouse state tracking, action maps, input bindings | `engine-window` |
-| **engine-asset** | Asset handles (`Arc` ref-counting), type registry, file watcher, loaders (image, glTF, audio) | `notify`, `image`, `gltf` |
 
-### Systems Layer
+### Layer 1 — Foundation
 
-| Crate | Purpose | Key Dependencies |
-|-------|---------|-----------------|
-| **engine-scene** | Scene nodes, parent-child hierarchy, Transform/GlobalTransform sync, prefabs, animation state | `engine-ecs`, `engine-math` |
-| **engine-render** | wgpu renderer, render graph, sprite/PBR pipelines, camera, lighting, shadows, particles, tilemap | `wgpu`, `engine-ecs`, `engine-asset` |
-| **engine-physics** | Rigid bodies, colliders, collision detection (SAT), contact solving, joints, CCD | `engine-ecs`, `engine-math` |
-| **engine-audio** | Audio playback via rodio, mixer buses, spatial audio, streaming | `rodio`, `engine-math` |
-| **engine-network** | Message serialization, client/server, authoritative mode, snapshot sync, NAT traversal | `engine-ecs`, `serde` |
-| **engine-ui** | egui integration, theming, layout, retained mode widgets, animations | `egui`, `engine-ecs` |
-| **engine-script** | Lua (mlua) and WASM scripting, component bridge, hot-reload, event bus | `mlua`, `engine-ecs` |
-
-### Application Layer
+Depend only on Layer 0 crates.
 
 | Crate | Purpose | Key Dependencies |
 |-------|---------|-----------------|
-| **engine-core** | `AppBuilder`, plugin system, time management, config, logging, profiler | All core + systems crates |
-| **engine-framework** | Game state stack, standard game flow (title→menu→game→pause→gameover), save system | `engine-core` |
-| **engine-editor** | Scene editor UI, hierarchy panel, inspector, gizmos, undo/redo, scene serialization | `engine-core`, `engine-ui`, `engine-scene` |
+| **engine-audio** | Audio playback via rodio, mixer buses, spatial audio, streaming | `rodio`, engine-math |
+| **engine-asset** | Asset handles (`Arc` ref-counting), type registry, file watcher, loaders (image, glTF, audio) | `notify`, `image`, `gltf`, engine-math |
+| **engine-ecs** | Sparse-set ECS: entities, components, queries, schedules | `rayon`, optional engine-jobs |
+
+### Layer 2 — Infrastructure
+
+Depend on Layers 0–1.
+
+| Crate | Purpose | Key Dependencies |
+|-------|---------|-----------------|
+| **engine-scene** | Scene nodes, parent-child hierarchy, Transform/GlobalTransform sync, prefabs, animation state | engine-ecs, engine-math |
+| **engine-input** | Keyboard/mouse state tracking, action maps, input bindings | engine-ecs, engine-window |
+
+### Layer 3 — Rendering
+
+Depend on Layers 0–2.
+
+| Crate | Purpose | Key Dependencies |
+|-------|---------|-----------------|
+| **engine-render** | wgpu renderer, render graph, sprite/PBR pipelines, camera, lighting, shadows, particles, tilemap | `wgpu`, engine-asset, engine-ecs, engine-math, engine-scene, engine-window |
+
+### Layer 4 — Core
+
+Depend on Layers 0–3. Central integration point.
+
+| Crate | Purpose | Key Dependencies |
+|-------|---------|-----------------|
+| **engine-core** | `AppBuilder`, plugin system, time management, config, logging, profiler | engine-asset, engine-audio, engine-ecs, engine-input, engine-math, engine-render, engine-scene, engine-window |
+
+### Layer 5 — Systems
+
+Depend on engine-core (Layer 4) and lower layers.
+
+| Crate | Purpose | Key Dependencies |
+|-------|---------|-----------------|
+| **engine-framework** | Game state stack, standard game flow (title→menu→game→pause→gameover), save system | engine-core, engine-ecs, engine-input, engine-scene |
+| **engine-physics** | Rigid bodies, colliders, collision detection (SAT), contact solving, joints, CCD | engine-core, engine-ecs, engine-math |
+| **engine-network** | Message serialization, client/server, authoritative mode, snapshot sync, NAT traversal | engine-core, engine-ecs |
+| **engine-script** | Lua (mlua) and WASM scripting, component bridge, hot-reload, event bus | `mlua`, `wasmtime`, engine-core, engine-ecs, engine-math |
+| **engine-ui** | egui integration, theming, layout, retained mode widgets, animations | `egui`, engine-core, engine-input, engine-render |
+| **engine-terrain** | Terrain generation, LOD, chunking | engine-core, engine-ecs, engine-math, engine-render |
+
+### Layer 6 — Application
+
+Depend on all lower layers.
+
+| Crate | Purpose | Key Dependencies |
+|-------|---------|-----------------|
+| **engine-editor** | Scene editor UI, hierarchy panel, inspector, gizmos, undo/redo, scene serialization | engine-asset, engine-core, engine-ecs, engine-framework, engine-input, engine-math, engine-render, engine-scene, engine-terrain, engine-ui, engine-window |
 
 ## Data Flow
 
