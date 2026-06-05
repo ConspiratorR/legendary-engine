@@ -12,42 +12,60 @@
 //! Controls: WASD to move, Mouse to look, Escape to pause
 //! Goal: Collect treasures, avoid enemies, find the exit
 
+// AppBuilder bootstraps the engine: registers plugins, systems, and resources.
 use engine_core::app::AppBuilder;
 use engine_core::plugins::CorePlugins;
 use engine_core::time::Time;
+// Transform is the spatial component — position, rotation, scale in world space.
 use engine_core::transform::Transform;
+// ECS World holds all entities and their components; systems query it each frame.
 use engine_ecs::world::World;
+// FrameworkPlugin provides game-state stack (pause, game over screens).
 use engine_framework::{FrameworkPlugin, GameStateAction};
+// InputManager is a resource polled by systems to read keyboard/mouse state.
 use engine_input::input_manager::InputManager;
 use engine_input::keyboard::KeyCode;
 use engine_math::Vec3;
-use engine_physics::collider::Collider;
+// RigidBody + Collider are the physics components; PhysicsWorld is the runtime resource.
 use engine_physics::body::RigidBody;
+use engine_physics::collider::Collider;
 use engine_physics::{PhysicsPlugin, PhysicsWorld};
+// Camera defines the viewpoint — perspective projection with fov, near/far planes.
 use engine_render::camera::Camera;
+// Lighting types: DirectionalLight (sun/ambient), PointLight (torches).
 use engine_render::light::{DirectionalLight, PointLight};
+// MeshRenderer is the bridge component that tells the render pipeline to draw an entity.
+// Each entity with Transform + PbrMaterial + MeshRenderer becomes a renderable object.
 use engine_render::mesh_bridge::MeshRenderer;
+// PBR material: albedo color, metallic, roughness — drives the deferred shading model.
 use engine_render::resource::material::PbrMaterial;
 
 // ---------------------------------------------------------------------------
-// Constants
+// Constants — tune these to change dungeon scale and player feel
 // ---------------------------------------------------------------------------
 
+/// World-space size of one dungeon tile (used for both floor and wall meshes).
 const TILE_SIZE: f32 = 2.0;
+/// Player movement speed in units/second.
 const MOVE_SPEED: f32 = 8.0;
+/// Radians of rotation per pixel of mouse movement.
 const MOUSE_SENSITIVITY: f32 = 0.003;
+/// Dungeon grid dimensions (in tiles).
 const DUNGEON_WIDTH: usize = 64;
 const DUNGEON_HEIGHT: usize = 64;
 
+// Tile type IDs for the procedural dungeon grid.
 const TILE_EMPTY: u8 = 0;
 const TILE_WALL: u8 = 1;
 const TILE_FLOOR: u8 = 2;
 const TILE_CORRIDOR: u8 = 3;
 
 // ---------------------------------------------------------------------------
-// Dungeon data structures
+// Dungeon data structures — procedural generation via room placement + corridors
 // ---------------------------------------------------------------------------
 
+/// 2D grid of tile IDs. The generator fills this, then `spawn_dungeon` converts
+/// each tile into an ECS entity with mesh + collider.
 struct Dungeon {
     tiles: [[u8; DUNGEON_WIDTH]; DUNGEON_HEIGHT],
     rooms: Vec<Room>,
@@ -69,8 +87,10 @@ impl Dungeon {
         }
     }
 
+    /// Generate the dungeon: place rooms, connect with corridors, fill walls.
+    /// Uses a simple BSP-like approach: try random placements, reject overlaps.
     fn generate(&mut self) {
-        // Place 6 non-overlapping rooms
+        // Phase 1: Place up to 6 non-overlapping rooms (random size 5-10 tiles)
         for _ in 0..20 {
             if self.rooms.len() >= 6 {
                 break;
@@ -79,21 +99,27 @@ impl Dungeon {
             let h = 5 + (rand_usize() % 6);
             let x = 1 + (rand_usize() % (DUNGEON_WIDTH.saturating_sub(w + 2)));
             let y = 1 + (rand_usize() % (DUNGEON_HEIGHT.saturating_sub(h + 2)));
-            let room = Room { x, y, width: w, height: h };
+            let room = Room {
+                x,
+                y,
+                width: w,
+                height: h,
+            };
             if !self.rooms.iter().any(|r| self.rooms_overlap(&room, r)) {
                 self.carve_room(&room);
                 self.rooms.push(room);
             }
         }
 
-        // Connect adjacent rooms with corridors
+        // Phase 2: Connect adjacent rooms with L-shaped corridors
         for i in 1..self.rooms.len() {
             let (ax, ay) = self.room_center(&self.rooms[i - 1]);
             let (bx, by) = self.room_center(&self.rooms[i]);
             self.carve_corridor(ax, ay, bx, by);
         }
 
-        // Fill walls around non-empty tiles
+        // Phase 3: Auto-tile walls — any empty tile adjacent to a non-empty tile becomes a wall.
+        // This ensures the dungeon has proper boundaries for collision and occlusion.
         self.fill_walls();
 
         println!("Dungeon generated: {} rooms", self.rooms.len());
@@ -189,14 +215,18 @@ fn rand_usize() -> usize {
 }
 
 // ---------------------------------------------------------------------------
-// ECS Components
+// ECS Components — each struct is a component attached to entities via World
 // ---------------------------------------------------------------------------
 
+/// Player-specific state: health, score, look direction, inventory.
+/// Attached to the player entity alongside Transform, Camera, RigidBody, Collider.
 #[derive(Debug, Clone)]
 struct PlayerState {
     lives: i32,
     score: i32,
+    /// Horizontal look angle (radians, rotates around Y axis).
     yaw: f32,
+    /// Vertical look angle (radians, clamped to prevent flipping).
     pitch: f32,
     has_key: bool,
 }
@@ -213,6 +243,8 @@ impl PlayerState {
     }
 }
 
+/// Marker component for pickup-able items. The `collectible_system` reads
+/// collision events to detect when the player touches one.
 #[derive(Debug, Clone)]
 struct Collectible {
     kind: CollectibleKind,
@@ -225,6 +257,8 @@ enum CollectibleKind {
     Treasure,
 }
 
+/// Enemy AI state: patrol between waypoints, or chase the player when detected.
+/// Uses a finite state machine — transitions are distance-based.
 #[derive(Debug, Clone)]
 struct EnemyAI {
     state: EnemyState,
@@ -248,9 +282,15 @@ struct ExitDoor;
 struct DungeonTile;
 
 // ---------------------------------------------------------------------------
-// Entity spawning
+// Entity spawning — each tile becomes an ECS entity with rendering + physics
 // ---------------------------------------------------------------------------
 
+/// Convert the 2D tile grid into 3D entities.
+///
+/// Each tile spawns an entity with the **rendering triplet**:
+///   Transform (where in world space) + PbrMaterial (how it looks) + MeshRenderer (draw call).
+/// Walls also get `cast_shadow: true` so the shadow map includes them.
+/// All tiles get static RigidBody + Collider for physics collision.
 fn spawn_dungeon(world: &mut World, dungeon: &Dungeon) {
     let mut wall_count = 0u32;
     let mut floor_count = 0u32;
@@ -261,46 +301,46 @@ fn spawn_dungeon(world: &mut World, dungeon: &Dungeon) {
             if tile == TILE_EMPTY {
                 continue;
             }
+            // Convert grid coords to world-space position (XZ plane, Y is up).
             let px = x as f32 * TILE_SIZE;
             let pz = y as f32 * TILE_SIZE;
 
             if tile == TILE_FLOOR || tile == TILE_CORRIDOR {
-                // Floor: flat box
+                // Floor tile: flat box sitting below the player's feet.
+                // PBR params: dark stone-gray albedo, non-metallic, high roughness (matte).
                 let e = world.spawn();
                 world.add_component(
                     e,
                     Transform::from_xyz(px, -0.5, pz)
                         .with_scale(Vec3::new(TILE_SIZE, 0.5, TILE_SIZE)),
                 );
-                world.add_component(
-                    e,
-                    PbrMaterial::new([0.25, 0.25, 0.3, 1.0], 0.0, 0.9),
-                );
+                world.add_component(e, PbrMaterial::new([0.25, 0.25, 0.3, 1.0], 0.0, 0.9));
+                // MeshRenderer bridges the ECS entity to the GPU render pipeline.
+                // cast_shadow=false for floors — they receive shadows but don't cast them.
                 world.add_component(
                     e,
                     MeshRenderer {
-                        mesh_id: 0,
-                        material_id: 0,
+                        mesh_id: 0,     // engine default cube mesh
+                        material_id: 0, // resolved at render time
                         cast_shadow: false,
                     },
                 );
-                // Static collider so player can stand on floor
+                // Static rigid body: participates in collision but doesn't move.
                 world.add_component(e, RigidBody::new_static());
                 world.add_component(e, Collider::cuboid(TILE_SIZE * 0.5, 0.5, TILE_SIZE * 0.5));
                 world.add_component(e, DungeonTile);
                 floor_count += 1;
             } else if tile == TILE_WALL {
-                // Wall: tall box
+                // Wall tile: tall box (3 units high) centered above the floor.
+                // PBR params: warm brown stone, non-metallic, slightly rough.
                 let e = world.spawn();
                 world.add_component(
                     e,
                     Transform::from_xyz(px, 1.5, pz)
                         .with_scale(Vec3::new(TILE_SIZE, 3.0, TILE_SIZE)),
                 );
-                world.add_component(
-                    e,
-                    PbrMaterial::new([0.45, 0.38, 0.32, 1.0], 0.0, 0.85),
-                );
+                world.add_component(e, PbrMaterial::new([0.45, 0.38, 0.32, 1.0], 0.0, 0.85));
+                // cast_shadow=true: walls occlude light, contributing to the shadow map.
                 world.add_component(
                     e,
                     MeshRenderer {
@@ -309,7 +349,6 @@ fn spawn_dungeon(world: &mut World, dungeon: &Dungeon) {
                         cast_shadow: true,
                     },
                 );
-                // Static collider for wall
                 world.add_component(e, RigidBody::new_static());
                 world.add_component(e, Collider::cuboid(TILE_SIZE * 0.5, 1.5, TILE_SIZE * 0.5));
                 world.add_component(e, DungeonTile);
@@ -324,6 +363,11 @@ fn spawn_dungeon(world: &mut World, dungeon: &Dungeon) {
     );
 }
 
+/// Spawn the player entity in the first room.
+///
+/// The player entity is a **camera rig**: Transform + Camera + physics body.
+/// The Camera component drives the view/projection matrices in the render pipeline.
+/// The perspective camera uses a 45° FOV with near=0.1 and far=200 for the depth buffer.
 fn spawn_player(world: &mut World, dungeon: &Dungeon) {
     let (cx, cy) = dungeon.room_center(&dungeon.rooms[0]);
     let px = cx as f32 * TILE_SIZE;
@@ -331,26 +375,41 @@ fn spawn_player(world: &mut World, dungeon: &Dungeon) {
 
     let player = world.spawn();
     world.add_component(player, Transform::from_xyz(px, 1.0, pz));
+    // Perspective camera: fov=π/4 (45°), near clip=0.1, far clip=200.
+    // The render pipeline uses these to build the projection matrix for the depth/lighting passes.
     world.add_component(
         player,
         Camera::perspective(std::f32::consts::FRAC_PI_4, 0.1, 200.0),
     );
-    // Dynamic body for physics (gravity + collision)
+    // Dynamic rigid body: affected by gravity, responds to collision forces.
+    // linear_damping=0 so the player doesn't slow down in mid-air.
     let mut body = RigidBody::new_dynamic();
     body.gravity_scale = 1.0;
     body.linear_damping = 0.0;
     body.angular_damping = 0.0;
-    // Lock rotation to prevent the capsule from tipping over
     world.add_component(player, body);
-    // Capsule collider: radius 0.3, height 1.4
+    // Capsule collider for first-person character: radius 0.3, height 1.4.
+    // Capsules are standard for FPS controllers — they slide smoothly around corners.
     world.add_component(player, Collider::capsule(0.3, 1.4));
     world.add_component(player, PlayerState::new());
 
     println!("Player spawned at ({}, {})", px, pz);
 }
 
+/// Set up the dungeon lighting.
+///
+/// The render pipeline processes lights in two passes:
+/// 1. **Directional light** — uniform parallel rays, used as ambient fill. No shadow map
+///    (too expensive for a dim fill light). Simulates faint skylight leaking underground.
+/// 2. **Point lights** — one per room, positioned at ceiling height (y=2.8).
+///    Each point light contributes to the deferred lighting pass with its color, intensity,
+///    and range. The warm orange color (1.0, 0.75, 0.4) simulates torchlight.
+///
+/// Both light types are ECS entities with Transform + LightComponent — the render graph
+/// queries all light entities each frame to build light lists for the PBR shading pass.
 fn spawn_lights(world: &mut World, dungeon: &Dungeon) {
-    // Dim directional light (ambient fill)
+    // Dim directional light — acts as ambient fill so rooms aren't pitch black.
+    // Direction [0,-1,0] = pointing straight down. Intensity 0.3 = very dim.
     let sun = world.spawn();
     world.add_component(sun, Transform::from_xyz(0.0, 50.0, 0.0));
     world.add_component(
@@ -363,7 +422,8 @@ fn spawn_lights(world: &mut World, dungeon: &Dungeon) {
         },
     );
 
-    // Point light (torch) in each room center
+    // Point lights (torches) — one per room center, near the ceiling.
+    // The deferred renderer accumulates these in the lighting pass over the G-buffer.
     for room in &dungeon.rooms {
         let (cx, cy) = dungeon.room_center(room);
         let lx = cx as f32 * TILE_SIZE;
@@ -374,19 +434,29 @@ fn spawn_lights(world: &mut World, dungeon: &Dungeon) {
         world.add_component(
             light,
             PointLight {
-                color: [1.0, 0.75, 0.4],
+                color: [1.0, 0.75, 0.4], // warm torch orange
                 intensity: 4.0,
-                range: 18.0,
+                range: 18.0, // falloff distance in world units
                 enabled: true,
             },
         );
     }
 
-    println!("Spawned 1 directional light + {} point lights", dungeon.rooms.len());
+    println!(
+        "Spawned 1 directional light + {} point lights",
+        dungeon.rooms.len()
+    );
 }
 
+/// Spawn collectible items: treasures (gold cubes) in each room, a key in the last room,
+/// and an exit door that requires the key.
+///
+/// Each collectible is a renderable entity (Transform + PbrMaterial + MeshRenderer) with
+/// a Collider for physics-based pickup detection. The `collectible_system` handles the
+/// actual pickup logic by reading collision events from PhysicsWorld.
 fn spawn_collectibles(world: &mut World, dungeon: &Dungeon) {
-    // Treasure in each room except the first (player spawn)
+    // Treasure in each room except the first (player spawn room).
+    // Gold metallic cubes: high metallic=0.8, low roughness=0.2 = shiny gold.
     for room in dungeon.rooms.iter().skip(1) {
         let (cx, cy) = dungeon.room_center(room);
         let px = cx as f32 * TILE_SIZE;
@@ -407,7 +477,13 @@ fn spawn_collectibles(world: &mut World, dungeon: &Dungeon) {
             },
         );
         world.add_component(e, Collider::cuboid(0.5, 0.5, 0.5));
-        world.add_component(e, Collectible { kind: CollectibleKind::Treasure, collected: false });
+        world.add_component(
+            e,
+            Collectible {
+                kind: CollectibleKind::Treasure,
+                collected: false,
+            },
+        );
     }
 
     // Key in the last room
@@ -431,7 +507,13 @@ fn spawn_collectibles(world: &mut World, dungeon: &Dungeon) {
             },
         );
         world.add_component(e, Collider::cuboid(0.3, 0.6, 0.1));
-        world.add_component(e, Collectible { kind: CollectibleKind::Key, collected: false });
+        world.add_component(
+            e,
+            Collectible {
+                kind: CollectibleKind::Key,
+                collected: false,
+            },
+        );
     }
 
     // Exit door in the last room (near the key)
@@ -464,6 +546,9 @@ fn spawn_collectibles(world: &mut World, dungeon: &Dungeon) {
     );
 }
 
+/// Spawn enemies in each room (except the player's starting room).
+/// Enemies use kinematic rigid bodies — moved by code, not by physics forces.
+/// Red PBR material with low metallic/high roughness = matte red (blood/slime look).
 fn spawn_enemies(world: &mut World, dungeon: &Dungeon) {
     for room in dungeon.rooms.iter().skip(1) {
         let (cx, cy) = dungeon.room_center(room);
@@ -504,18 +589,23 @@ fn spawn_enemies(world: &mut World, dungeon: &Dungeon) {
         );
     }
 
-    println!(
-        "Spawned {} enemies",
-        dungeon.rooms.len().saturating_sub(1)
-    );
+    println!("Spawned {} enemies", dungeon.rooms.len().saturating_sub(1));
 }
 
 // ---------------------------------------------------------------------------
-// Systems
+// Systems — functions called each frame by the ECS scheduler
 // ---------------------------------------------------------------------------
 
+/// First-person camera controller.
+///
+/// Reads WASD + mouse input from InputManager, converts to movement velocity
+/// applied to the player's RigidBody, and updates the camera rotation.
+///
+/// **Borrow-safety pattern**: InputManager is read in a short-lived block to
+/// release the borrow before mutating PlayerState/RigidBody/Transform below.
 fn player_control_system(world: &mut World) {
-    // Read input state in a block to avoid borrow conflicts
+    // Read input state in a block to release the InputManager borrow before
+    // we mutate player components below (ECS borrow rules).
     let (fwd, back, left, right, mdx, mdy) = {
         let input = match world.get_resource::<InputManager>() {
             Some(i) => i,
@@ -583,8 +673,14 @@ fn player_control_system(world: &mut World) {
     }
 }
 
+/// Enemy AI — finite state machine with Patrol and Chase states.
+///
+/// Each frame: get player position, compute distance, transition states,
+/// then move the enemy's kinematic body toward the current target.
+/// Uses hysteresis on state transitions (detect at range, lose at 1.5× range)
+/// to prevent rapid toggling at the boundary.
 fn enemy_ai_system(world: &mut World) {
-    // Get player position
+    // Get player position for distance checks
     let player_pos = {
         let players = world.component_entities::<PlayerState>();
         players.first().and_then(|&eid| {
@@ -660,8 +756,13 @@ fn enemy_ai_system(world: &mut World) {
     }
 }
 
+/// Pickup system — reads collision events from PhysicsWorld each frame.
+///
+/// When the player entity collides with a Collectible entity, the item is
+/// marked as collected and the player's score/inventory is updated.
+/// This is a standard ECS pattern: event-driven responses to physics overlaps.
 fn collectible_system(world: &mut World) {
-    // Read collision events
+    // Drain collision events from the physics step
     let collision_pairs: Vec<(u32, u32)> = {
         let pw = match world.get_resource::<PhysicsWorld>() {
             Some(pw) => pw,
@@ -675,18 +776,17 @@ fn collectible_system(world: &mut World) {
     };
 
     for (a, b) in collision_pairs {
-        let (player_eid, collectible_eid) =
-            if world.get_by_index::<PlayerState>(a).is_some()
-                && world.get_by_index::<Collectible>(b).is_some()
-            {
-                (a, b)
-            } else if world.get_by_index::<PlayerState>(b).is_some()
-                && world.get_by_index::<Collectible>(a).is_some()
-            {
-                (b, a)
-            } else {
-                continue;
-            };
+        let (player_eid, collectible_eid) = if world.get_by_index::<PlayerState>(a).is_some()
+            && world.get_by_index::<Collectible>(b).is_some()
+        {
+            (a, b)
+        } else if world.get_by_index::<PlayerState>(b).is_some()
+            && world.get_by_index::<Collectible>(a).is_some()
+        {
+            (b, a)
+        } else {
+            continue;
+        };
 
         if let Some(col) = world.get_by_index_mut::<Collectible>(collectible_eid) {
             if !col.collected {
@@ -727,18 +827,17 @@ fn enemy_collision_system(world: &mut World) {
     };
 
     for (a, b) in collision_pairs {
-        let (player_eid, _enemy_eid) =
-            if world.get_by_index::<PlayerState>(a).is_some()
-                && world.get_by_index::<EnemyAI>(b).is_some()
-            {
-                (a, b)
-            } else if world.get_by_index::<PlayerState>(b).is_some()
-                && world.get_by_index::<EnemyAI>(a).is_some()
-            {
-                (b, a)
-            } else {
-                continue;
-            };
+        let (player_eid, _enemy_eid) = if world.get_by_index::<PlayerState>(a).is_some()
+            && world.get_by_index::<EnemyAI>(b).is_some()
+        {
+            (a, b)
+        } else if world.get_by_index::<PlayerState>(b).is_some()
+            && world.get_by_index::<EnemyAI>(a).is_some()
+        {
+            (b, a)
+        } else {
+            continue;
+        };
 
         if let Some(player) = world.get_by_index_mut::<PlayerState>(player_eid) {
             player.lives -= 1;
@@ -777,10 +876,7 @@ fn exit_door_system(world: &mut World) {
             };
             if let Some(player) = world.get_by_index::<PlayerState>(player_eid) {
                 if player.has_key {
-                    println!(
-                        "\n*** LEVEL COMPLETE! Final Score: {} ***\n",
-                        player.score
-                    );
+                    println!("\n*** LEVEL COMPLETE! Final Score: {} ***\n", player.score);
                 } else {
                     println!("[Exit] You need the key to open this door!");
                 }
@@ -858,17 +954,23 @@ fn status_report_system(world: &mut World) {
 // ---------------------------------------------------------------------------
 
 fn main() {
+    // Initialize logging — set RUST_LOG=debug for verbose output.
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     println!("=== RustEngine 3D Dungeon Explorer Demo ===\n");
 
-    // Build app
+    // ── App setup ──────────────────────────────────────────────────────
+    // AppBuilder is the engine entry point. It creates the ECS World,
+    // registers plugins, and manages the system execution order.
     let mut builder = AppBuilder::new();
+    // CorePlugins: registers core ECS resources (Time, InputManager, etc.)
     builder.add_plugin(CorePlugins);
+    // FrameworkPlugin: game-state stack (play → pause → game over transitions)
     builder.add_plugin(FrameworkPlugin);
+    // PhysicsPlugin: registers PhysicsWorld resource + physics step system
     builder.add_plugin(PhysicsPlugin);
 
-    // Configure physics for dungeon scale
+    // Configure physics for dungeon scale — heavier gravity for snappier movement.
     {
         let pw = builder
             .world_mut()
@@ -878,38 +980,43 @@ fn main() {
         pw.set_broadphase_cell_size(4.0);
     }
 
-    // Generate dungeon
+    // ── Procedural dungeon generation ──────────────────────────────────
     let mut dungeon = Dungeon::new();
     dungeon.generate();
 
-    // Spawn entities
+    // ── Entity spawning ────────────────────────────────────────────────
+    // Order matters: dungeon geometry first (floors + walls), then entities
+    // that live on top of it (player, lights, collectibles, enemies).
     spawn_dungeon(builder.world_mut(), &dungeon);
     spawn_player(builder.world_mut(), &dungeon);
     spawn_lights(builder.world_mut(), &dungeon);
     spawn_collectibles(builder.world_mut(), &dungeon);
     spawn_enemies(builder.world_mut(), &dungeon);
 
-    // Register systems
-    builder.add_system(player_control_system);
-    builder.add_system(enemy_ai_system);
-    builder.add_system(collectible_system);
-    builder.add_system(enemy_collision_system);
-    builder.add_system(exit_door_system);
-    builder.add_system(death_check_system);
-    builder.add_system(pause_system);
-    builder.add_system(status_report_system);
+    // ── System registration ────────────────────────────────────────────
+    // Systems run in registration order each frame. Input/physics systems
+    // should run before gameplay systems that depend on their results.
+    builder.add_system(player_control_system); // input → velocity + camera
+    builder.add_system(enemy_ai_system); // AI movement
+    builder.add_system(collectible_system); // pickup detection
+    builder.add_system(enemy_collision_system); // enemy damage
+    builder.add_system(exit_door_system); // win condition
+    builder.add_system(death_check_system); // lose condition
+    builder.add_system(pause_system); // pause toggle
+    builder.add_system(status_report_system); // debug output
 
     let mut app = builder.build();
 
     let entity_count = app.world.entity_count();
-    println!(
-        "\nStarting simulation with {} entities...\n",
-        entity_count
-    );
+    println!("\nStarting simulation with {} entities...\n", entity_count);
 
-    // Simulation loop (terminal-based, no window)
+    // ── Simulation loop (terminal-based, no window) ────────────────────
+    // This demo runs headless — no GPU window. Each iteration simulates one
+    // frame: physics step → system execution → state updates.
+    // In a real game, this would be driven by the window event loop.
     for frame in 0..600u32 {
-        // Simulate forward movement for first 200 frames
+        // Simulate player input programmatically (no real window/input device).
+        // Forward for 200 frames, turn right, forward again — explores the dungeon.
         {
             let input = app.world.get_resource_mut::<InputManager>().unwrap();
             if frame == 0 {
@@ -928,17 +1035,23 @@ fn main() {
             }
         }
 
-        // Run all systems
+        // Run all registered systems for this frame.
+        // Internally: physics step → system scheduler → resource updates.
         app.run();
 
-        // Print physics stats every 120 frames
+        // Print physics stats periodically for debugging
         if frame == 0 || frame == 119 || frame == 299 || frame == 599 {
             let pw = app.world.get_resource::<PhysicsWorld>();
             if let Some(pw) = pw {
-                let elapsed = app.world.get_resource::<Time>().map(|t| t.elapsed_seconds()).unwrap_or(0.0);
+                let elapsed = app
+                    .world
+                    .get_resource::<Time>()
+                    .map(|t| t.elapsed_seconds())
+                    .unwrap_or(0.0);
                 println!(
                     "[Physics] frame={} t={:.1}s | Bodies: {} | Colliders: {} | Collisions: {}",
-                    frame, elapsed,
+                    frame,
+                    elapsed,
                     pw.body_count,
                     pw.collider_count,
                     pw.collision_events.len()
