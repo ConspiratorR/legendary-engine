@@ -1,3 +1,4 @@
+use crate::error::WindowError;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
 
@@ -29,11 +30,13 @@ impl Default for WindowConfig {
 pub fn create_window(
     config: &WindowConfig,
     event_loop: &winit::event_loop::EventLoop<()>,
-) -> Window {
+) -> Result<Window, WindowError> {
     let attrs = Window::default_attributes()
         .with_title(&config.title)
         .with_inner_size(PhysicalSize::new(config.width, config.height));
     event_loop
         .create_window(attrs)
-        .expect("Failed to create window")
+        .map_err(|e| WindowError::CreationFailed {
+            reason: e.to_string(),
+        })
 }

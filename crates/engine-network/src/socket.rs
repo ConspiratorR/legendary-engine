@@ -76,19 +76,28 @@ impl PacketQueue {
     }
 
     pub fn push(&self, packet: NetworkPacket) {
-        self.queue.lock().unwrap().push_back(packet);
+        self.queue
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push_back(packet);
     }
 
     pub fn pop(&self) -> Option<NetworkPacket> {
-        self.queue.lock().unwrap().pop_front()
+        self.queue
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .pop_front()
     }
 
     pub fn len(&self) -> usize {
-        self.queue.lock().unwrap().len()
+        self.queue.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.queue.lock().unwrap().is_empty()
+        self.queue
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_empty()
     }
 }
 

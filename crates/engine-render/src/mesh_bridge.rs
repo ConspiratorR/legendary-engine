@@ -78,7 +78,9 @@ pub fn mesh_upload_system(world: &mut World) {
     // Upload meshes and add MeshRenderer components
     for (idx, vertices, indices) in to_upload {
         let mesh_id = {
-            let mesh_store = world.get_resource_mut::<MeshStore>().unwrap();
+            let mesh_store = world
+                .get_resource_mut::<MeshStore>()
+                .expect("MeshStore must be inserted before uploading meshes");
             let indices_opt = if indices.is_empty() {
                 None
             } else {

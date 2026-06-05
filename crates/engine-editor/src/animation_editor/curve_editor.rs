@@ -54,9 +54,21 @@ pub fn draw_curve_editor(state: &mut AnimationEditorState, ui: &egui::Ui, rect: 
         let mut points = Vec::with_capacity(num_samples + 1);
         for i in 0..=num_samples {
             let t = i as f32 / num_samples as f32;
-            let time = curve.keyframes.first().unwrap().time
-                + t * (curve.keyframes.last().unwrap().time
-                    - curve.keyframes.first().unwrap().time);
+            let time = curve
+                .keyframes
+                .first()
+                .expect("checked: keyframes.len() >= 2")
+                .time
+                + t * (curve
+                    .keyframes
+                    .last()
+                    .expect("checked: keyframes.len() >= 2")
+                    .time
+                    - curve
+                        .keyframes
+                        .first()
+                        .expect("checked: keyframes.len() >= 2")
+                        .time);
             let value = curve.sample(time);
             let screen_x = center_x + (time * zoom_x);
             let screen_y = center_y - (value * zoom_y);

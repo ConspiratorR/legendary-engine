@@ -412,7 +412,7 @@ impl Renderer {
             RenderTarget::Texture(key) => bridge
                 .texture_store()
                 .get_render_target_view(key)
-                .expect("Render target texture not found"),
+                .expect("Render target texture must be loaded before rendering"),
         };
 
         let camera_bg = &self.camera_bind_group;
@@ -555,12 +555,27 @@ impl Renderer {
         let device = &*self.device;
         let queue = &*self.queue;
 
-        let _deferred_pass = self.deferred_pass.as_ref().unwrap();
-        let gbuffer = self.gbuffer.as_ref().unwrap();
-        let _shadow_pass = self.shadow_pass.as_ref().unwrap();
-        let cam_buf = self.deferred_camera_uniform.as_ref().unwrap();
-        let cam_bg = self.deferred_camera_bind_group.as_ref().unwrap();
-        let light_buf = self.light_uniform_buffer.as_ref().unwrap();
+        let _deferred_pass = self
+            .deferred_pass
+            .as_ref()
+            .expect("deferred pass must be initialized");
+        let gbuffer = self.gbuffer.as_ref().expect("gbuffer must be initialized");
+        let _shadow_pass = self
+            .shadow_pass
+            .as_ref()
+            .expect("shadow pass must be initialized");
+        let cam_buf = self
+            .deferred_camera_uniform
+            .as_ref()
+            .expect("camera uniform must be initialized");
+        let cam_bg = self
+            .deferred_camera_bind_group
+            .as_ref()
+            .expect("camera bind group must be initialized");
+        let light_buf = self
+            .light_uniform_buffer
+            .as_ref()
+            .expect("light uniform must be initialized");
 
         // Update camera uniform
         let camera_uniform = CameraUniform {
@@ -638,7 +653,10 @@ impl Renderer {
         light_vp: &Mat4,
         mesh_store: &MeshStore,
     ) {
-        let shadow = self.shadow_pass.as_ref().unwrap();
+        let shadow = self
+            .shadow_pass
+            .as_ref()
+            .expect("shadow pass must be initialized");
 
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("shadow_pass"),
@@ -693,10 +711,19 @@ impl Renderer {
         material_store: &MaterialStore,
         mesh_store: &MeshStore,
     ) {
-        let deferred = self.deferred_pass.as_ref().unwrap();
-        let gb = self.gbuffer.as_ref().unwrap();
-        let cam_bg = self.deferred_camera_bind_group.as_ref().unwrap();
-        let light_bg = self.light_bind_group.as_ref().unwrap();
+        let deferred = self
+            .deferred_pass
+            .as_ref()
+            .expect("deferred pass must be initialized");
+        let gb = self.gbuffer.as_ref().expect("gbuffer must be initialized");
+        let cam_bg = self
+            .deferred_camera_bind_group
+            .as_ref()
+            .expect("camera bind group must be initialized");
+        let light_bg = self
+            .light_bind_group
+            .as_ref()
+            .expect("light bind group must be initialized");
 
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("deferred_geometry_pass"),
@@ -789,10 +816,19 @@ impl Renderer {
         encoder: &mut wgpu::CommandEncoder,
         _shadow_uniform: &ShadowUniform,
     ) {
-        let deferred = self.deferred_pass.as_ref().unwrap();
-        let gb = self.gbuffer.as_ref().unwrap();
-        let cam_bg = self.deferred_camera_bind_group.as_ref().unwrap();
-        let light_bg = self.light_bind_group.as_ref().unwrap();
+        let deferred = self
+            .deferred_pass
+            .as_ref()
+            .expect("deferred pass must be initialized");
+        let gb = self.gbuffer.as_ref().expect("gbuffer must be initialized");
+        let cam_bg = self
+            .deferred_camera_bind_group
+            .as_ref()
+            .expect("camera bind group must be initialized");
+        let light_bg = self
+            .light_bind_group
+            .as_ref()
+            .expect("light bind group must be initialized");
         let device = &*self.device;
 
         // Create G-Buffer bind group for the lighting pass

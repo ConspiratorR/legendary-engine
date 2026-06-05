@@ -115,8 +115,11 @@ impl ComponentCurve {
     }
 
     pub fn sort_keyframes(&mut self) {
-        self.keyframes
-            .sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
+        self.keyframes.sort_by(|a, b| {
+            a.time
+                .partial_cmp(&b.time)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     pub fn sample(&self, time: f32) -> f32 {
@@ -127,14 +130,24 @@ impl ComponentCurve {
             return self.keyframes[0].value;
         }
 
-        let t = time.clamp(self.keyframes[0].time, self.keyframes.last().unwrap().time);
+        let t = time.clamp(
+            self.keyframes[0].time,
+            self.keyframes
+                .last()
+                .expect("checked: keyframes is non-empty")
+                .time,
+        );
 
         let mut i = 0;
         while i < self.keyframes.len() - 1 && self.keyframes[i + 1].time <= t {
             i += 1;
         }
         if i >= self.keyframes.len() - 1 {
-            return self.keyframes.last().unwrap().value;
+            return self
+                .keyframes
+                .last()
+                .expect("checked: keyframes is non-empty")
+                .value;
         }
 
         let k0 = &self.keyframes[i];

@@ -137,7 +137,10 @@ impl AsyncLoader {
             submitted_at: Instant::now(),
         };
 
-        self.states.lock().unwrap().insert(id, LoadState::Queued);
+        self.states
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, LoadState::Queued);
 
         // Send to workers — if channel is closed, we silently drop
         let _ = self.request_tx.send(request);
@@ -152,7 +155,7 @@ impl AsyncLoader {
         let mut results = Vec::new();
         while let Ok(response) = self.result_rx.try_recv() {
             // Update state
-            let mut states = self.states.lock().unwrap();
+            let mut states = self.states.lock().unwrap_or_else(|e| e.into_inner());
             let state = if response.result.is_ok() {
                 LoadState::Completed
             } else {
@@ -174,7 +177,11 @@ impl AsyncLoader {
 
     /// Check the state of a specific load request.
     pub fn state(&self, id: LoadId) -> Option<LoadState> {
-        self.states.lock().unwrap().get(&id).cloned()
+        self.states
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&id)
+            .cloned()
     }
 
     /// Number of worker threads.
@@ -186,7 +193,7 @@ impl AsyncLoader {
     pub fn pending_count(&self) -> usize {
         self.states
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .values()
             .filter(|s| matches!(s, LoadState::Queued | LoadState::Loading))
             .count()
@@ -194,7 +201,7 @@ impl AsyncLoader {
 
     /// Clear completed/failed states to free memory.
     pub fn clear_finished(&self) {
-        let mut states = self.states.lock().unwrap();
+        let mut states = self.states.lock().unwrap_or_else(|e| e.into_inner());
         states.retain(|_, s| matches!(s, LoadState::Queued | LoadState::Loading));
     }
 }
@@ -209,7 +216,7 @@ fn worker_loop(
     for request in rx {
         // Update state to Loading
         {
-            let mut states = states.lock().unwrap();
+            let mut states = states.lock().unwrap_or_else(|e| e.into_inner());
             states.insert(request.id, LoadState::Loading);
         }
 

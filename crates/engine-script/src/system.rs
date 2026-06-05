@@ -99,7 +99,7 @@ impl ScriptSystem {
     }
 
     fn execute(&self, world: &mut World, dt: f32) -> LuaResult<()> {
-        let bridge = self.bridge.read().unwrap();
+        let bridge = self.bridge.read().unwrap_or_else(|e| e.into_inner());
         let lua = &self.lua.0;
 
         // Store Send-wrapped pointers as app data

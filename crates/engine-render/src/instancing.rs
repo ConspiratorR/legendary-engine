@@ -79,7 +79,7 @@ pub fn collect_instance_batches(keys: &[InstanceKey], transforms: &[Mat4]) -> Ve
     order
         .into_iter()
         .map(|key| {
-            let transforms = batch_map.remove(&key).unwrap();
+            let transforms = batch_map.remove(&key).expect("key must exist in batch_map");
             InstanceBatch { key, transforms }
         })
         .collect()

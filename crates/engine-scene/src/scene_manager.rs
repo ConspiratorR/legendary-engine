@@ -103,12 +103,16 @@ impl SceneManager {
 
     /// Get a shared reference to a node's local transform.
     pub fn transform(&self, node: SceneNode) -> &Transform {
-        self.world.get::<Transform>(node.entity()).unwrap()
+        self.world
+            .get::<Transform>(node.entity())
+            .expect("SceneNode entity must have Transform component")
     }
 
     /// Get an exclusive reference to a node's local transform.
     pub fn transform_mut(&mut self, node: SceneNode) -> &mut Transform {
-        self.world.get_mut::<Transform>(node.entity()).unwrap()
+        self.world
+            .get_mut::<Transform>(node.entity())
+            .expect("SceneNode entity must have Transform component")
     }
 
     /// Get mutable access to the underlying ECS world.

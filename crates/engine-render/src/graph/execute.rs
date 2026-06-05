@@ -24,7 +24,7 @@ impl RenderGraph {
                     let view = self.textures[ca.view_index]
                         .as_ref()
                         .and_then(|n| n.view.as_ref())
-                        .expect("Color attachment view not allocated");
+                        .expect("Color attachment view must be allocated");
                     Some(wgpu::RenderPassColorAttachment {
                         view,
                         resolve_target: None,
@@ -41,7 +41,7 @@ impl RenderGraph {
                     let view = self.textures[ds.view_index]
                         .as_ref()
                         .and_then(|n| n.view.as_ref())
-                        .expect("Depth stencil view not allocated");
+                        .expect("Depth stencil view must be allocated");
                     wgpu::RenderPassDepthStencilAttachment {
                         view,
                         depth_ops: Some(wgpu::Operations {

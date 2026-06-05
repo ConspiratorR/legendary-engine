@@ -18,15 +18,18 @@ fn main() {
     info!("Sprite Demo — TextureBridge");
 
     let event_loop = EventLoop::new().unwrap();
-    let window = std::sync::Arc::new(create_window(
-        &WindowConfig {
-            title: "Sprite Demo — TextureBridge".to_string(),
-            width: 800,
-            height: 600,
-            vsync: true,
-        },
-        &event_loop,
-    ));
+    let window = std::sync::Arc::new(
+        create_window(
+            &WindowConfig {
+                title: "Sprite Demo — TextureBridge".to_string(),
+                width: 800,
+                height: 600,
+                vsync: true,
+            },
+            &event_loop,
+        )
+        .unwrap(),
+    );
 
     let renderer = Renderer::new(window).expect("Failed to create renderer");
 

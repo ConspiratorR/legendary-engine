@@ -362,7 +362,10 @@ impl StreamingManager {
                 };
 
                 if needs_load {
-                    let state = self.lod_states.get_mut(base_path).unwrap();
+                    let state = self
+                        .lod_states
+                        .get_mut(base_path)
+                        .expect("lod_states entry must exist after state lookup");
                     state.target_lod = target_lod;
                     state.last_evaluated = Instant::now();
 

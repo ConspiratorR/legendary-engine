@@ -140,7 +140,9 @@ pub fn collect_batches(sprites: &[SpriteDraw]) -> Vec<SpriteBatch> {
     let batches: Vec<SpriteBatch> = order
         .into_iter()
         .map(|tex_idx| {
-            let draws = batch_map.remove(&tex_idx).unwrap();
+            let draws = batch_map
+                .remove(&tex_idx)
+                .expect("tex_idx must exist in batch_map");
             let mut batch = SpriteBatch::new(tex_idx);
             for draw in draws {
                 batch.push(draw);

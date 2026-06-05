@@ -314,7 +314,7 @@ impl CallbackRegistry {
                 }
             }
 
-            let reg = registry.read().unwrap();
+            let reg = registry.read().unwrap_or_else(|e| e.into_inner());
             match reg.invoke(&name, &cb_args) {
                 Ok(result) => result.to_lua_value(lua),
                 Err(e) => Err(LuaError::runtime(format!("callback error: {}", e))),

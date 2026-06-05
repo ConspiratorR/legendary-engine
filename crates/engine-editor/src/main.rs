@@ -24,7 +24,7 @@ fn main() -> anyhow::Result<()> {
             vsync: true,
         },
         &event_loop,
-    ));
+    )?);
 
     // Pollster (for async)
     let mut render = None;

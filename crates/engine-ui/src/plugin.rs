@@ -14,17 +14,28 @@ impl Plugin for EguiPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.insert_resource(EguiInitFlag(false));
         app.add_pre_update_hook(Box::new(|app: &mut App| {
-            let is_init = { app.resources.get::<EguiInitFlag>().unwrap().0 };
+            let is_init = {
+                app.resources
+                    .get::<EguiInitFlag>()
+                    .expect("EguiInitFlag must be inserted")
+                    .0
+            };
             if !is_init {
                 let (renderer, resources) = app.split_renderer_ref();
                 if let Some(r) = renderer {
                     resources.insert(EguiState::new(&r.device, &r.config, 1.0));
                 }
-                resources.get_mut::<EguiInitFlag>().unwrap().0 = true;
+                resources
+                    .get_mut::<EguiInitFlag>()
+                    .expect("EguiInitFlag must be inserted")
+                    .0 = true;
             }
 
             let (mouse_x, mouse_y, left_down, right_down, middle_down) = {
-                let input = app.resources.get::<InputManager>().unwrap();
+                let input = app
+                    .resources
+                    .get::<InputManager>()
+                    .expect("InputManager must be inserted");
                 (
                     input.mouse().position.0,
                     input.mouse().position.1,
@@ -34,7 +45,10 @@ impl Plugin for EguiPlugin {
                 )
             };
             {
-                let egui_state = app.resources.get_mut::<EguiState>().unwrap();
+                let egui_state = app
+                    .resources
+                    .get_mut::<EguiState>()
+                    .expect("EguiState must be inserted");
                 egui_state.handle_mouse_move(mouse_x, mouse_y);
                 if left_down {
                     egui_state.press_button(0);
@@ -58,7 +72,10 @@ impl Plugin for EguiPlugin {
                 .unwrap_or_default()
                 .as_secs_f64();
             {
-                let egui_state = app.resources.get_mut::<EguiState>().unwrap();
+                let egui_state = app
+                    .resources
+                    .get_mut::<EguiState>()
+                    .expect("EguiState must be inserted");
                 egui_state.begin_frame(time);
             }
 
@@ -78,12 +95,20 @@ impl Plugin for EguiPlugin {
             }
 
             let (paint_jobs, textures_delta) = {
-                let egui_state = resources.get_mut::<EguiState>().unwrap();
+                let egui_state = resources
+                    .get_mut::<EguiState>()
+                    .expect("EguiState must be inserted");
                 egui_state.end_frame()
             };
 
-            let device = resources.get::<GpuDevice>().unwrap().clone();
-            let queue = resources.get::<GpuQueue>().unwrap().clone();
+            let device = resources
+                .get::<GpuDevice>()
+                .expect("GpuDevice must be inserted")
+                .clone();
+            let queue = resources
+                .get::<GpuQueue>()
+                .expect("GpuQueue must be inserted")
+                .clone();
 
             let renderer_ref = match renderer {
                 Some(r) => r,
@@ -108,13 +133,10 @@ impl Plugin for EguiPlugin {
                 Err(wgpu::SurfaceError::OutOfMemory) => return,
             };
 
-            resources.get_mut::<EguiState>().unwrap().paint(
-                &device,
-                &queue,
-                &output,
-                &paint_jobs,
-                &textures_delta,
-            );
+            resources
+                .get_mut::<EguiState>()
+                .expect("EguiState must be inserted")
+                .paint(&device, &queue, &output, &paint_jobs, &textures_delta);
 
             output.present();
         }));

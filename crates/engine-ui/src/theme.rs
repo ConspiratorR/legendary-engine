@@ -192,7 +192,10 @@ impl ThemeManager {
 
         if transition_secs > 0.0 {
             self.transition = Some(ThemeTransition {
-                from: self.previous_theme.clone().unwrap(),
+                from: self
+                    .previous_theme
+                    .clone()
+                    .expect("previous_theme must be set before transition"),
                 to: theme,
                 progress: 0.0,
                 duration_secs: transition_secs,

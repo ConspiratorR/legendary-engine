@@ -100,8 +100,8 @@ fn eval_curve<T: Copy>(points: &[(f32, T)], t: f32, lerp: impl Fn(T, T, f32) -> 
     if points.len() == 1 || t <= points[0].0 {
         return points[0].1;
     }
-    if t >= points.last().unwrap().0 {
-        return points.last().unwrap().1;
+    if t >= points.last().expect("checked: points is non-empty").0 {
+        return points.last().expect("checked: points is non-empty").1;
     }
     for window in points.windows(2) {
         let (t0, v0) = window[0];
@@ -111,7 +111,7 @@ fn eval_curve<T: Copy>(points: &[(f32, T)], t: f32, lerp: impl Fn(T, T, f32) -> 
             return lerp(v0, v1, frac);
         }
     }
-    points.last().unwrap().1
+    points.last().expect("checked: points is non-empty").1
 }
 
 // ---------------------------------------------------------------------------

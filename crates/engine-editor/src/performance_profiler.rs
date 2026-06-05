@@ -579,7 +579,7 @@ fn find_peak_stats(state: &PerformanceProfilerState) -> Option<RenderStats> {
         frames
             .iter()
             .max_by_key(|f| f.render_stats.draw_calls)
-            .unwrap()
+            .expect("checked: frames is non-empty")
             .render_stats
             .clone(),
     )

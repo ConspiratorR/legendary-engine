@@ -145,7 +145,10 @@ impl EguiState {
             label: Some("egui_encoder"),
         });
 
-        let renderer = self.renderer.as_mut().unwrap();
+        let renderer = self
+            .renderer
+            .as_mut()
+            .expect("egui renderer must be initialized");
 
         for (id, delta) in &textures_delta.set {
             renderer.update_texture(device, queue, *id, delta);

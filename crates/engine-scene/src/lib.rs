@@ -18,8 +18,8 @@
 //! The [`scene_layer`] module provides bitmask-based scene categorization.
 
 pub mod animation_state;
-pub mod error;
 pub mod diff;
+pub mod error;
 pub mod hierarchy;
 pub mod ik;
 pub mod keyframe;

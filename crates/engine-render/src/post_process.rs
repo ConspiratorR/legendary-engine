@@ -793,7 +793,11 @@ impl PostProcessChain {
             taa_resolved = true;
         }
         if taa_resolved {
-            self.taa.as_mut().unwrap().target.swap();
+            self.taa
+                .as_mut()
+                .expect("TAA must be initialized when taa_resolved is true")
+                .target
+                .swap();
         }
 
         // ── SSR ───────────────────────────────────────────────

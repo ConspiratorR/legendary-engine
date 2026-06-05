@@ -1,3 +1,4 @@
+use crate::error::AudioError;
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
 use std::fs::File;
@@ -46,22 +47,22 @@ unsafe impl Sync for AudioManager {}
 
 impl Default for AudioManager {
     fn default() -> Self {
-        Self::new()
+        Self::new().unwrap_or_else(|e| panic!("Failed to initialize audio: {e}"))
     }
 }
 
 impl AudioManager {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, AudioError> {
         let (_stream, stream_handle) =
-            OutputStream::try_default().expect("Failed to initialize audio output");
-        Self {
+            OutputStream::try_default().map_err(|e| AudioError::StreamError(e.to_string()))?;
+        Ok(Self {
             _stream,
             stream_handle,
             sounds: HashMap::new(),
             next_handle: 0,
             master_volume: 1.0,
             channel_volumes: HashMap::from([(AudioChannel::Sfx, 1.0), (AudioChannel::Music, 1.0)]),
-        }
+        })
     }
 
     // ── Volume ────────────────────────────────────────────────────────
@@ -212,7 +213,7 @@ mod tests {
 
     #[test]
     fn test_audio_manager_create() {
-        let audio = AudioManager::new();
+        let audio = AudioManager::new().unwrap();
         assert!((audio.master_volume() - 1.0).abs() < 1e-6);
         assert!((audio.channel_volume(AudioChannel::Sfx) - 1.0).abs() < 1e-6);
         assert!((audio.channel_volume(AudioChannel::Music) - 1.0).abs() < 1e-6);
@@ -220,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_volume_clamping() {
-        let mut audio = AudioManager::new();
+        let mut audio = AudioManager::new().unwrap();
         audio.set_master_volume(1.5);
         assert!((audio.master_volume() - 1.0).abs() < 1e-6);
         audio.set_master_volume(-0.5);
@@ -231,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_channel_volume() {
-        let mut audio = AudioManager::new();
+        let mut audio = AudioManager::new().unwrap();
         audio.set_channel_volume(AudioChannel::Music, 0.3);
         assert!((audio.channel_volume(AudioChannel::Music) - 0.3).abs() < 1e-6);
         assert!((audio.channel_volume(AudioChannel::Sfx) - 1.0).abs() < 1e-6);
@@ -239,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_effective_volume() {
-        let mut audio = AudioManager::new();
+        let mut audio = AudioManager::new().unwrap();
         audio.set_master_volume(0.5);
         audio.set_channel_volume(AudioChannel::Sfx, 0.8);
         assert!((audio.effective_volume(AudioChannel::Sfx) - 0.4).abs() < 1e-6);
@@ -247,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_stop_all_and_active_count() {
-        let mut audio = AudioManager::new();
+        let mut audio = AudioManager::new().unwrap();
         assert_eq!(audio.active_count(), 0);
         audio.stop_all();
         assert_eq!(audio.active_count(), 0);
@@ -255,7 +256,7 @@ mod tests {
 
     #[test]
     fn test_handle_for_nonexistent_sound() {
-        let audio = AudioManager::new();
+        let audio = AudioManager::new().unwrap();
         let fake = SoundHandle(999);
         assert!(!audio.is_playing(fake));
         assert!(!audio.is_paused(fake));
@@ -264,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_cleanup_empty() {
-        let mut audio = AudioManager::new();
+        let mut audio = AudioManager::new().unwrap();
         audio.cleanup();
         assert_eq!(audio.active_count(), 0);
     }

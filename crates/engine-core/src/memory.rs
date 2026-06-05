@@ -137,7 +137,7 @@ impl MemoryTracker {
         #[cfg(debug_assertions)]
         {
             let tid = TypeId::of::<T>();
-            let mut map = ALLOC_COUNTERS.lock().unwrap();
+            let mut map = ALLOC_COUNTERS.lock().unwrap_or_else(|e| e.into_inner());
             let state = map.get_or_insert_with(|| TrackerState {
                 counters: HashMap::new(),
                 peak_live_objects: 0,
@@ -177,7 +177,7 @@ impl MemoryTracker {
         #[cfg(debug_assertions)]
         {
             let tid = TypeId::of::<T>();
-            let mut map = ALLOC_COUNTERS.lock().unwrap();
+            let mut map = ALLOC_COUNTERS.lock().unwrap_or_else(|e| e.into_inner());
             let state = map.get_or_insert_with(|| TrackerState {
                 counters: HashMap::new(),
                 peak_live_objects: 0,
@@ -198,7 +198,7 @@ impl MemoryTracker {
     pub fn check_leaks() -> Option<Vec<LeakReport>> {
         #[cfg(debug_assertions)]
         {
-            let map = ALLOC_COUNTERS.lock().unwrap();
+            let map = ALLOC_COUNTERS.lock().unwrap_or_else(|e| e.into_inner());
             let state = map.as_ref()?;
             let mut leaks = Vec::new();
             for (&tid, counters) in &state.counters {
@@ -227,7 +227,7 @@ impl MemoryTracker {
     pub fn reset() {
         #[cfg(debug_assertions)]
         {
-            let mut map = ALLOC_COUNTERS.lock().unwrap();
+            let mut map = ALLOC_COUNTERS.lock().unwrap_or_else(|e| e.into_inner());
             *map = None;
         }
     }
@@ -236,7 +236,7 @@ impl MemoryTracker {
     pub fn snapshot() -> MemorySnapshot {
         #[cfg(debug_assertions)]
         {
-            let map = ALLOC_COUNTERS.lock().unwrap();
+            let map = ALLOC_COUNTERS.lock().unwrap_or_else(|e| e.into_inner());
             let mut entries = Vec::new();
             let mut global_peak_live: usize = 0;
             let mut global_peak_bytes: usize = 0;
@@ -283,7 +283,7 @@ impl MemoryTracker {
         #[cfg(debug_assertions)]
         {
             let snapshot = Self::snapshot();
-            let mut map = ALLOC_COUNTERS.lock().unwrap();
+            let mut map = ALLOC_COUNTERS.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(state) = map.as_mut() {
                 state.frame_snapshots.push(snapshot);
                 if state.frame_snapshots.len() > state.max_snapshots {
@@ -297,7 +297,7 @@ impl MemoryTracker {
     pub fn frame_snapshots() -> Vec<MemorySnapshot> {
         #[cfg(debug_assertions)]
         {
-            let map = ALLOC_COUNTERS.lock().unwrap();
+            let map = ALLOC_COUNTERS.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(state) = map.as_ref() {
                 state.frame_snapshots.clone()
             } else {
@@ -314,7 +314,7 @@ impl MemoryTracker {
     pub fn peak_live_objects() -> usize {
         #[cfg(debug_assertions)]
         {
-            let map = ALLOC_COUNTERS.lock().unwrap();
+            let map = ALLOC_COUNTERS.lock().unwrap_or_else(|e| e.into_inner());
             map.as_ref().map(|s| s.peak_live_objects).unwrap_or(0)
         }
         #[cfg(not(debug_assertions))]
@@ -327,7 +327,7 @@ impl MemoryTracker {
     pub fn peak_bytes_in_use() -> usize {
         #[cfg(debug_assertions)]
         {
-            let map = ALLOC_COUNTERS.lock().unwrap();
+            let map = ALLOC_COUNTERS.lock().unwrap_or_else(|e| e.into_inner());
             map.as_ref().map(|s| s.peak_bytes_in_use).unwrap_or(0)
         }
         #[cfg(not(debug_assertions))]

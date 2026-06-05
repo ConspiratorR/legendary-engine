@@ -304,12 +304,20 @@ fn parse_bundle_index(data: &[u8]) -> Result<Vec<BundleEntry>, BundleError> {
         return Err(BundleError::InvalidMagic);
     }
 
-    let version = u32::from_le_bytes(data[8..12].try_into().unwrap());
+    let version = u32::from_le_bytes(
+        data[8..12]
+            .try_into()
+            .map_err(|_| BundleError::CorruptEntry("Invalid version bytes".into()))?,
+    );
     if version != BUNDLE_VERSION {
         return Err(BundleError::UnsupportedVersion(version));
     }
 
-    let entry_count = u32::from_le_bytes(data[12..16].try_into().unwrap()) as usize;
+    let entry_count = u32::from_le_bytes(
+        data[12..16]
+            .try_into()
+            .map_err(|_| BundleError::CorruptEntry("Invalid entry count bytes".into()))?,
+    ) as usize;
     let mut offset = 16usize;
     let mut entries = Vec::with_capacity(entry_count);
 
@@ -318,7 +326,11 @@ fn parse_bundle_index(data: &[u8]) -> Result<Vec<BundleEntry>, BundleError> {
             return Err(BundleError::CorruptEntry("Truncated index".into()));
         }
 
-        let path_len = u16::from_le_bytes(data[offset..offset + 2].try_into().unwrap()) as usize;
+        let path_len = u16::from_le_bytes(
+            data[offset..offset + 2]
+                .try_into()
+                .map_err(|_| BundleError::CorruptEntry("Invalid path length bytes".into()))?,
+        ) as usize;
         offset += 2;
 
         if offset + path_len > data.len() {
@@ -332,13 +344,25 @@ fn parse_bundle_index(data: &[u8]) -> Result<Vec<BundleEntry>, BundleError> {
             return Err(BundleError::CorruptEntry("Truncated entry header".into()));
         }
 
-        let entry_offset = u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
+        let entry_offset = u64::from_le_bytes(
+            data[offset..offset + 8]
+                .try_into()
+                .map_err(|_| BundleError::CorruptEntry("Invalid offset bytes".into()))?,
+        );
         offset += 8;
 
-        let original_size = u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
+        let original_size = u64::from_le_bytes(
+            data[offset..offset + 8]
+                .try_into()
+                .map_err(|_| BundleError::CorruptEntry("Invalid original size bytes".into()))?,
+        );
         offset += 8;
 
-        let stored_size = u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
+        let stored_size = u64::from_le_bytes(
+            data[offset..offset + 8]
+                .try_into()
+                .map_err(|_| BundleError::CorruptEntry("Invalid stored size bytes".into()))?,
+        );
         offset += 8;
 
         let flags = data[offset];

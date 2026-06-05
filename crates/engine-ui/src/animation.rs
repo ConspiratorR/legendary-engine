@@ -445,7 +445,9 @@ impl GestureRecognizer {
         if self.elapsed.as_millis() as u64 >= self.config.long_press_min_duration_ms
             && self.pending_gesture.is_none()
         {
-            let (x, y) = self.start_pos.unwrap();
+            let (x, y) = self
+                .start_pos
+                .expect("start_pos must be Some when elapsed exceeds threshold");
             self.pending_gesture = Some(Gesture::LongPress { x, y });
             // Clear to prevent re-triggering.
             self.start_pos = None;

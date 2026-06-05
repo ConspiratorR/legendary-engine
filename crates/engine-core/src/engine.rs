@@ -1,4 +1,5 @@
 use crate::app::AppBuilder;
+use crate::error::EngineError;
 use engine_window::window::{WindowConfig, create_window};
 use std::sync::Arc;
 
@@ -22,12 +23,13 @@ impl Engine {
 /// winit event loop. Input events are forwarded to the app's input system.
 /// The app's `run()` method is called each frame.
 #[allow(deprecated)]
-pub fn run_default(app_builder: AppBuilder) {
+pub fn run_default(app_builder: AppBuilder) -> Result<(), EngineError> {
     let mut app = app_builder.build();
-    let event_loop = winit::event_loop::EventLoop::new().unwrap();
-    let window = Arc::new(create_window(&WindowConfig::default(), &event_loop));
-    let renderer =
-        engine_render::renderer::Renderer::new(window.clone()).expect("Failed to create renderer");
+    let event_loop =
+        winit::event_loop::EventLoop::new().map_err(|e| EngineError::InitFailed(e.to_string()))?;
+    let window = Arc::new(create_window(&WindowConfig::default(), &event_loop)?);
+    let renderer = engine_render::renderer::Renderer::new(window.clone())
+        .map_err(|e| EngineError::InitFailed(format!("Failed to create renderer: {e}")))?;
     app.set_renderer(renderer);
 
     use winit::event::{ElementState, Event, MouseButton, WindowEvent};
@@ -96,5 +98,6 @@ pub fn run_default(app_builder: AppBuilder) {
                 }
             }
         })
-        .unwrap();
+        .map_err(|e| EngineError::InitFailed(e.to_string()))?;
+    Ok(())
 }

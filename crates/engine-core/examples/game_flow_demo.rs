@@ -480,7 +480,7 @@ impl Plugin for AudioSetupPlugin {
         use engine_audio::mixer::AudioMixer;
 
         // Create the audio manager and configure channel volumes
-        let mut audio = AudioManager::new();
+        let mut audio = AudioManager::new().unwrap();
         audio.set_master_volume(0.8);
         audio.set_channel_volume(AudioChannel::Music, 0.6);
         audio.set_channel_volume(AudioChannel::Sfx, 1.0);

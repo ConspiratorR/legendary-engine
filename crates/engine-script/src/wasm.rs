@@ -308,7 +308,9 @@ impl WasmRuntime {
             },
         );
         store.limiter(|state| &mut state.limiter);
-        store.set_fuel(self.sandbox.max_fuel).unwrap();
+        store
+            .set_fuel(self.sandbox.max_fuel)
+            .expect("Failed to set WASM fuel");
         store
     }
 }
@@ -679,7 +681,7 @@ impl WasmSystem {
     }
 
     fn execute(&self, world: &mut World, dt: f32) -> anyhow::Result<()> {
-        let bridge = self.bridge.read().unwrap();
+        let bridge = self.bridge.read().unwrap_or_else(|e| e.into_inner());
 
         let mut store = self.runtime.create_store(dt);
         store.data_mut().world = WorldPtr(world as *mut World);

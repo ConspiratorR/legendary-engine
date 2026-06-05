@@ -212,7 +212,9 @@ impl App {
 
     /// Get mutable access to the [`InputManager`] resource.
     pub fn input_mut(&mut self) -> &mut InputManager {
-        self.world.get_resource_mut::<InputManager>().unwrap()
+        self.world
+            .get_resource_mut::<InputManager>()
+            .expect("InputManager resource must be inserted before use")
     }
 
     /// Get a shared reference to the renderer, if set.

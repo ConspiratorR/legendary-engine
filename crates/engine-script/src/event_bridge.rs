@@ -150,7 +150,7 @@ impl ScriptEventBus {
     /// This is the Rust-side entry point: scripts will receive the event
     /// the next time [`drain_pending`](Self::drain_pending) is called.
     pub fn queue_event(&self, channel: impl Into<String>, data: EventData) {
-        let mut channels = self.channels.lock().unwrap();
+        let mut channels = self.channels.lock().unwrap_or_else(|e| e.into_inner());
         let channel_name = channel.into();
         let ch = channels
             .entry(channel_name.clone())
@@ -164,7 +164,7 @@ impl ScriptEventBus {
 
     /// Drain all pending events from all channels.
     pub fn drain_pending(&self) -> Vec<PendingEvent> {
-        let mut channels = self.channels.lock().unwrap();
+        let mut channels = self.channels.lock().unwrap_or_else(|e| e.into_inner());
         let mut result = Vec::new();
         for (name, ch) in channels.iter_mut() {
             for data in ch.pending.drain(..) {
@@ -187,7 +187,7 @@ impl ScriptEventBus {
         callback: LuaFunction,
     ) -> LuaResult<ScriptListenerId> {
         let ref_key = lua.create_registry_value(&callback)?;
-        let mut channels = self.channels.lock().unwrap();
+        let mut channels = self.channels.lock().unwrap_or_else(|e| e.into_inner());
         let ch = channels
             .entry(channel.into())
             .or_insert_with(|| EventChannelState {
@@ -206,7 +206,7 @@ impl ScriptEventBus {
 
     /// Unsubscribe a listener from a channel.
     pub fn unsubscribe(&self, channel: &str, id: ScriptListenerId) {
-        let mut channels = self.channels.lock().unwrap();
+        let mut channels = self.channels.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(ch) = channels.get_mut(channel) {
             ch.listeners.retain(|l| l._id != id);
         }
@@ -219,7 +219,7 @@ impl ScriptEventBus {
     /// callback functions.
     pub fn dispatch_to_lua(&self, lua: &Lua) -> LuaResult<()> {
         let pending = self.drain_pending();
-        let channels = self.channels.lock().unwrap();
+        let channels = self.channels.lock().unwrap_or_else(|e| e.into_inner());
 
         for event in pending {
             if let Some(ch) = channels.get(&event.channel) {
@@ -346,7 +346,7 @@ impl ScriptEventBus {
 
     /// Check if a channel has any listeners.
     pub fn has_listeners(&self, channel: &str) -> bool {
-        let channels = self.channels.lock().unwrap();
+        let channels = self.channels.lock().unwrap_or_else(|e| e.into_inner());
         channels
             .get(channel)
             .map(|ch| !ch.listeners.is_empty())
@@ -355,7 +355,7 @@ impl ScriptEventBus {
 
     /// Get the number of listeners on a channel.
     pub fn listener_count(&self, channel: &str) -> usize {
-        let channels = self.channels.lock().unwrap();
+        let channels = self.channels.lock().unwrap_or_else(|e| e.into_inner());
         channels
             .get(channel)
             .map(|ch| ch.listeners.len())
