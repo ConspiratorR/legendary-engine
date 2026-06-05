@@ -772,3 +772,107 @@ fn joint_solver_remove_for_entity() {
     assert_eq!(solver.joints.len(), 1);
     assert_eq!(solver.joints[0].entity_a, 1);
 }
+
+// ===========================================================================
+// Physics 2D
+// ===========================================================================
+
+#[cfg(test)]
+mod physics_2d_tests {
+    use engine_physics::physics_2d::{AABB2D, BodyType2D, Collider2D, PhysicsWorld2D, RigidBody2D};
+    use engine_math::Vec2;
+
+    #[test]
+    fn test_aabb_overlap() {
+        let a = AABB2D::new(Vec2::new(0.0, 0.0), Vec2::new(2.0, 2.0));
+        let b = AABB2D::new(Vec2::new(1.0, 1.0), Vec2::new(3.0, 3.0));
+        assert!(a.overlaps(&b));
+    }
+
+    #[test]
+    fn test_aabb_no_overlap() {
+        let a = AABB2D::new(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0));
+        let b = AABB2D::new(Vec2::new(2.0, 2.0), Vec2::new(3.0, 3.0));
+        assert!(!a.overlaps(&b));
+    }
+
+    #[test]
+    fn test_aabb_intersection_x_axis() {
+        let a = AABB2D::new(Vec2::new(0.0, 0.0), Vec2::new(2.0, 2.0));
+        let b = AABB2D::new(Vec2::new(1.0, 0.0), Vec2::new(3.0, 2.0));
+        let (normal, pen) = a.intersection(&b).unwrap();
+        assert!(pen > 0.0);
+        assert!(normal.x.abs() > 0.0);
+    }
+
+    #[test]
+    fn test_aabb_intersection_y_axis() {
+        let a = AABB2D::new(Vec2::new(0.0, 0.0), Vec2::new(2.0, 2.0));
+        let b = AABB2D::new(Vec2::new(0.0, 1.0), Vec2::new(2.0, 3.0));
+        let (normal, pen) = a.intersection(&b).unwrap();
+        assert!(pen > 0.0);
+        assert!(normal.y.abs() > 0.0);
+    }
+
+    #[test]
+    fn test_collider2d_world_aabb() {
+        let col = Collider2D::aabb(0.5, 0.5);
+        let aabb = col.world_aabb(Vec2::new(1.0, 2.0));
+        assert!((aabb.min.x - 0.5).abs() < 0.001);
+        assert!((aabb.min.y - 1.5).abs() < 0.001);
+        assert!((aabb.max.x - 1.5).abs() < 0.001);
+        assert!((aabb.max.y - 2.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_rigidbody2d_types() {
+        let dynamic = RigidBody2D::new_dynamic();
+        assert_eq!(dynamic.body_type, BodyType2D::Dynamic);
+        assert_eq!(dynamic.gravity_scale, 1.0);
+
+        let static_body = RigidBody2D::new_static();
+        assert_eq!(static_body.body_type, BodyType2D::Static);
+        assert_eq!(static_body.gravity_scale, 0.0);
+
+        let kinematic = RigidBody2D::new_kinematic();
+        assert_eq!(kinematic.body_type, BodyType2D::Kinematic);
+    }
+
+    #[test]
+    fn test_physics_world_2d_gravity() {
+        let mut world = engine_ecs::world::World::new();
+        let entity = world.spawn();
+        world.add_component(entity, engine_core::transform::Transform::from_xyz(0.0, 10.0, 0.0));
+        world.add_component(entity, RigidBody2D::new_dynamic());
+        world.add_component(entity, Collider2D::aabb(0.5, 0.5));
+
+        let mut physics = PhysicsWorld2D::new();
+        physics.step(&mut world, 1.0 / 60.0);
+
+        let transform = world.get_by_index::<engine_core::transform::Transform>(entity.index()).unwrap();
+        assert!(transform.position.y < 10.0);
+    }
+
+    #[test]
+    fn test_physics_world_2d_ground_detection() {
+        let mut world = engine_ecs::world::World::new();
+
+        let player = world.spawn();
+        world.add_component(player, engine_core::transform::Transform::from_xyz(0.0, 0.6, 0.0));
+        world.add_component(player, RigidBody2D::new_dynamic());
+        world.add_component(player, Collider2D::aabb(0.5, 0.5));
+
+        let floor = world.spawn();
+        world.add_component(floor, engine_core::transform::Transform::from_xyz(0.0, 0.0, 0.0));
+        world.add_component(floor, RigidBody2D::new_static());
+        world.add_component(floor, Collider2D::aabb(50.0, 0.5));
+
+        let mut physics = PhysicsWorld2D::new();
+        for _ in 0..60 {
+            physics.step(&mut world, 1.0 / 60.0);
+        }
+
+        let body = world.get_by_index::<RigidBody2D>(player.index()).unwrap();
+        assert!(body.grounded, "Player should be grounded after falling onto floor");
+    }
+}
