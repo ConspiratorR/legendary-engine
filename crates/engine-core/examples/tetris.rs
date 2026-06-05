@@ -47,7 +47,7 @@ const SCORE_X: f32 = 480.0;
 const SCORE_Y: f32 = 200.0;
 const WIN_W: u32 = 640;
 const WIN_H: u32 = 620;
-const TOTAL_ENTITIES: usize = COLS * VISIBLE_ROWS + 16 + 16 + 128 + 64;
+const TOTAL_ENTITIES: usize = COLS * VISIBLE_ROWS + 16 + 16 + 128 + 64 + 28;
 
 const DAS_DELAY: f32 = 0.167;
 const DAS_REPEAT: f32 = 0.033;
@@ -241,6 +241,42 @@ struct Game {
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    println!();
+    println!("========================================");
+    println!("           T E T R I S");
+    println!("========================================");
+    println!();
+    println!("  Controls:");
+    println!("    Left / A    - Move left");
+    println!("    Right / D   - Move right");
+    println!("    Up / X      - Rotate clockwise");
+    println!("    Z           - Rotate counter-clockwise");
+    println!("    Down / S    - Soft drop");
+    println!("    Space       - Hard drop");
+    println!("    C           - Hold piece");
+    println!("    P           - Pause / Resume");
+    println!("    Esc         - Restart (when game over)");
+    println!();
+    println!("  Rules:");
+    println!("    - Clear lines by filling a complete row");
+    println!("    - 7-bag randomizer (standard Tetris)");
+    println!("    - Lock delay: 0.5s after landing");
+    println!("    - SRS rotation with wall kicks");
+    println!("    - Ghost piece shows landing position");
+    println!();
+    println!("  Scoring:");
+    println!("    1 line  = 100 x level");
+    println!("    2 lines = 300 x level");
+    println!("    3 lines = 500 x level");
+    println!("    4 lines = 800 x level (Tetris!)");
+    println!("    Combo bonus = 50 x combo x level");
+    println!("    Hard drop = 2 per cell");
+    println!("    Soft drop = 1 per cell");
+    println!();
+    println!("========================================");
+    println!();
+
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
     let window = Arc::new(
         create_window(
@@ -714,6 +750,39 @@ fn redraw(world: &mut World, g: &Game, entities: &[Entity]) {
                         0.0,
                     ));
                 }
+            }
+        }
+    }
+
+    // Controls indicator (bottom-left)
+    let base = COLS * VISIBLE_ROWS + 64 + 84 + 24 + 24;
+    let key_color = [0.3, 0.3, 0.4, 1.0];
+    let label_color = [0.7, 0.7, 0.8, 1.0];
+    let controls: [([f32; 4], &str); 7] = [
+        (label_color, "LEFT/RIGHT : MOVE"),
+        (label_color, "UP/X : ROTATE CW"),
+        (label_color, "Z : ROTATE CCW"),
+        (label_color, "DOWN/S : SOFT DROP"),
+        (label_color, "SPACE : HARD DROP"),
+        (label_color, "C : HOLD"),
+        (label_color, "P : PAUSE"),
+    ];
+    for (i, (color, _label)) in controls.iter().enumerate() {
+        let ei = base + i * 2;
+        if ei + 1 < entities.len() {
+            let e = entities[ei];
+            if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
+                sprite.color = key_color;
+                sprite.size = Vec2::new(6.0, 6.0);
+                sprite.transform =
+                    Mat4::from_translation(Vec3::new(20.0, 20.0 + i as f32 * 12.0, 0.0));
+            }
+            let e2 = entities[ei + 1];
+            if let Some(sprite) = world.get_by_index_mut::<Sprite>(e2.index()) {
+                sprite.color = *color;
+                sprite.size = Vec2::new(80.0, 6.0);
+                sprite.transform =
+                    Mat4::from_translation(Vec3::new(30.0, 20.0 + i as f32 * 12.0, 0.0));
             }
         }
     }

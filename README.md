@@ -88,6 +88,37 @@ cargo run --example complete_demo -p engine-core
 cargo run --example particle_demo -p engine-core
 ```
 
+### 俄罗斯方块
+
+完整的可玩俄罗斯方块游戏，基于 ECS 自动渲染集成构建。
+
+```bash
+cargo run --example tetris -p engine-core
+```
+
+**操作说明：**
+
+| 按键 | 功能 |
+|------|------|
+| ← → / A D | 左右移动 |
+| ↑ / X | 顺时针旋转 |
+| Z | 逆时针旋转 |
+| ↓ / S | 软降（加速下落） |
+| 空格 | 硬降（直接落底） |
+| C | 暂存方块（Hold） |
+| P | 暂停 / 恢复 |
+| Esc | 游戏结束后重新开始 |
+
+**游戏特性：**
+- SRS 旋转系统 + 完整踢墙表
+- 0.5 秒锁定延迟（落地后仍可操作）
+- DAS/ARR 操作手感（长按自动重复）
+- 7-Bag 随机器（标准 Tetris）
+- Ghost piece（落点预览）
+- Hold 暂存 + Next 预览队列
+- Combo 连击加分
+- 消行动画 + 暂停遮罩
+
 ### 运行测试
 
 ```bash
