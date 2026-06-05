@@ -1,23 +1,33 @@
+//! High-performance sprite renderer with batched rendering and indirect draw calls.
+//!
+//! The sprite renderer uses persistent GPU buffers and indirect drawing to
+//! efficiently render large numbers of sprites with minimal CPU overhead.
+
 use std::sync::Arc;
 
 use crate::indirect::DrawIndexedIndirectArgs;
 use crate::pipeline::sprite::SpritePipeline;
 use crate::sprite::SpriteBatch;
 
-/// 每个批次的绘制偏移信息
+/// Draw offset information for a single batch.
+///
+/// Contains the byte offset into the indirect draw buffer where this batch's
+/// draw command is located.
 pub struct BatchDrawInfo {
-    /// 间接绘制命令在间接缓冲区中的字节偏移
+    /// Byte offset of the indirect draw command in the indirect buffer.
     pub indirect_offset: u64,
 }
 
-/// GPU 缓冲包装
+/// A persistent GPU buffer wrapper.
+///
+/// Wraps a wgpu buffer with its size for convenient access.
 pub struct PersistentBuffer {
     buffer: wgpu::Buffer,
     size: usize,
 }
 
 impl PersistentBuffer {
-    /// 创建缓冲区
+    /// Create a new persistent buffer with the given size and optional label.
     pub fn new(device: &wgpu::Device, size: usize, label: Option<&str>) -> Self {
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label,
@@ -32,45 +42,54 @@ impl PersistentBuffer {
         Self { buffer, size }
     }
 
-    /// 获取缓冲区引用
+    /// Get a reference to the underlying wgpu buffer.
     pub fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
 
-    /// 获取缓冲区大小
+    /// Get the buffer size in bytes.
     pub fn size(&self) -> usize {
         self.size
     }
 }
 
-/// 高性能精灵渲染器
-/// 使用持久映射缓冲 + 间接绘制
+/// High-performance sprite renderer using persistent buffers and indirect drawing.
+///
+/// Uses double-buffered instance data and indirect draw commands to minimize
+/// CPU overhead when rendering large numbers of sprites. Sprites are batched
+/// by texture to reduce bind group switches.
 #[allow(dead_code)]
 pub struct SpriteRenderer {
-    /// 双缓冲实例缓冲
+    /// Double-buffered instance buffers for frame pipelining.
     instance_buffers: [PersistentBuffer; 2],
-    /// 间接绘制命令缓冲
+    /// Indirect draw command buffer.
     indirect_buffer: PersistentBuffer,
-    /// 当前帧索引 (0 or 1)
+    /// Current frame index (0 or 1) for double buffering.
     current_frame: usize,
-    /// 精灵容量上限
+    /// Maximum sprite capacity.
     sprite_capacity: usize,
-    /// 复用现有管线
+    /// Shared sprite pipeline.
     pipeline: Arc<SpritePipeline>,
-    /// 顶点缓冲（复用）
+    /// Vertex buffer (reused across frames).
     vertex_buffer: PersistentBuffer,
-    /// 索引缓冲（复用）
+    /// Index buffer (reused across frames).
     index_buffer: PersistentBuffer,
 }
 
 impl SpriteRenderer {
+    /// Create a new sprite renderer with the given capacity.
+    ///
+    /// # Arguments
+    /// * `device` - wgpu device for buffer creation
+    /// * `pipeline` - Shared sprite pipeline
+    /// * `sprite_capacity` - Maximum number of sprites that can be rendered per frame
     pub fn new(
         device: &wgpu::Device,
         pipeline: Arc<SpritePipeline>,
         sprite_capacity: usize,
     ) -> Self {
-        // 计算缓冲区大小
-        // 每个精灵: 4 顶点 * 36 字节 + 6 索引 * 2 字节 + 1 实例 * 64 字节
+        // Calculate buffer sizes
+        // Per sprite: 4 vertices * 36 bytes + 6 indices * 2 bytes + 1 instance * 64 bytes
         let vertex_size = sprite_capacity * 4 * 36;
         let index_size = sprite_capacity * 6 * 2;
         let instance_size = sprite_capacity * 64;
@@ -100,22 +119,22 @@ impl SpriteRenderer {
         }
     }
 
-    /// 开始新帧，切换双缓冲
+    /// Begin a new frame, switching the double-buffered instance buffer.
     pub fn begin_frame(&mut self) {
         self.current_frame = 1 - self.current_frame;
     }
 
-    /// 获取当前帧的实例缓冲
+    /// Get the current frame's instance buffer.
     pub fn current_instance_buffer(&self) -> &PersistentBuffer {
         &self.instance_buffers[self.current_frame]
     }
 
-    /// 获取当前帧的实例缓冲区索引 (0 or 1)
+    /// Get the current frame index (0 or 1).
     pub fn current_frame_index(&self) -> usize {
         self.current_frame
     }
 
-    /// 上传批次数据到缓冲
+    /// Upload a single batch's data to the GPU buffers.
     pub fn upload_batch(
         &self,
         queue: &wgpu::Queue,
@@ -153,8 +172,12 @@ impl SpriteRenderer {
         );
     }
 
-    /// 批量上传所有批次数据，合并为 4 次 write_buffer 调用
-    /// 返回每个批次的绘制偏移信息，用于间接绘制
+    /// Upload all batches in a single consolidated operation.
+    ///
+    /// Merges all vertex, index, instance, and indirect data into contiguous
+    /// buffers using only 4 `write_buffer` calls instead of 4N calls.
+    ///
+    /// Returns draw offset information for each batch.
     pub fn upload_batches(
         &self,
         queue: &wgpu::Queue,
@@ -164,7 +187,7 @@ impl SpriteRenderer {
             return Vec::new();
         }
 
-        // 累积所有顶点数据
+        // Accumulate all data
         let total_vertices: usize = batches.iter().map(|b| b.vertices.len()).sum();
         let total_indices: usize = batches.iter().map(|b| b.indices.len()).sum();
         let total_instances: usize = batches.iter().map(|b| b.instance_data.len()).sum();
@@ -185,13 +208,13 @@ impl SpriteRenderer {
             indirect_data.extend_from_slice(bytemuck::bytes_of(&batch.indirect_cmd));
         }
 
-        // 4 次 write_buffer 调用替代 4N 次
+        // 4 write_buffer calls instead of 4N
         queue.write_buffer(self.vertex_buffer.buffer(), 0, &vertex_data);
         queue.write_buffer(self.index_buffer.buffer(), 0, &index_data);
         queue.write_buffer(self.current_instance_buffer().buffer(), 0, &instance_data);
         queue.write_buffer(self.indirect_buffer.buffer(), 0, &indirect_data);
 
-        // 计算每个批次的间接偏移
+        // Calculate indirect offsets for each batch
         let indirect_stride = std::mem::size_of::<DrawIndexedIndirectArgs>() as u64;
         (0..batches.len())
             .map(|i| BatchDrawInfo {
@@ -200,7 +223,7 @@ impl SpriteRenderer {
             .collect()
     }
 
-    /// 获取绘制所需的缓冲区引用
+    /// Get buffer references needed for drawing.
     pub fn get_buffers(&self) -> SpriteRendererBuffers<'_> {
         SpriteRendererBuffers {
             vertex_buffer: self.vertex_buffer.buffer(),
@@ -210,7 +233,7 @@ impl SpriteRenderer {
         }
     }
 
-    /// 释放所有缓冲区所有权，用于导入 Render Graph
+    /// Consume the renderer and return owned buffers for import into a render graph.
     pub fn into_buffers(self) -> SpriteRendererOwnedBuffers {
         SpriteRendererOwnedBuffers {
             vertex_buffer: self.vertex_buffer,
@@ -220,7 +243,7 @@ impl SpriteRenderer {
         }
     }
 
-    /// 获取各缓冲区大小（字节）
+    /// Get buffer sizes in bytes: (vertex, index, instance, indirect).
     pub fn buffer_sizes(&self) -> (usize, usize, usize, usize) {
         (
             self.vertex_buffer.size(),
@@ -231,7 +254,7 @@ impl SpriteRenderer {
     }
 }
 
-/// 绘制所需的缓冲区引用集合
+/// Buffer references needed for sprite drawing.
 pub struct SpriteRendererBuffers<'a> {
     pub vertex_buffer: &'a wgpu::Buffer,
     pub index_buffer: &'a wgpu::Buffer,
@@ -239,7 +262,7 @@ pub struct SpriteRendererBuffers<'a> {
     pub indirect_buffer: &'a wgpu::Buffer,
 }
 
-/// 拥有所有权的缓冲区集合，用于导入 Render Graph
+/// Owned buffer collection for import into a render graph.
 pub struct SpriteRendererOwnedBuffers {
     pub vertex_buffer: PersistentBuffer,
     pub index_buffer: PersistentBuffer,

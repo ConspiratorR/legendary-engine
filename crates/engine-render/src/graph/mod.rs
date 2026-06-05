@@ -1,3 +1,9 @@
+//! Render graph for organizing render passes and resource dependencies.
+//!
+//! The render graph allows declarative specification of render passes and their
+//! resource dependencies. Passes are automatically ordered based on their
+//! read/write dependencies on textures and buffers.
+
 pub mod buffer;
 pub mod compile;
 pub mod execute;
@@ -9,6 +15,27 @@ pub use texture::{BufferHandle, TextureDesc, TextureHandle};
 
 use std::collections::HashMap;
 
+/// A declarative render graph that manages render passes and GPU resources.
+///
+/// Passes are added to the graph with their resource dependencies (textures and
+/// buffers). The graph can then be compiled to determine execution order and
+/// executed to run all passes in the correct sequence.
+///
+/// # Example
+///
+/// ```rust
+/// use engine_render::graph::{RenderGraph, TextureDesc, BufferDesc};
+///
+/// let mut graph = RenderGraph::new();
+/// let texture = graph.create_texture(
+///     TextureDesc::new_2d(
+///         1920,
+///         1080,
+///         wgpu::TextureFormat::Rgba8Unorm,
+///         wgpu::TextureUsages::RENDER_ATTACHMENT,
+///     ).named("hdr_buffer")
+/// );
+/// ```
 pub struct RenderGraph {
     textures: Vec<Option<texture::TextureNode>>,
     buffers: Vec<Option<buffer::BufferNode>>,
@@ -19,6 +46,7 @@ pub struct RenderGraph {
 }
 
 impl RenderGraph {
+    /// Create a new empty render graph.
     pub fn new() -> Self {
         Self {
             textures: Vec::new(),
@@ -30,6 +58,9 @@ impl RenderGraph {
         }
     }
 
+    /// Create a new texture resource in the graph.
+    ///
+    /// Returns a handle that can be used to reference this texture in render passes.
     pub fn create_texture(&mut self, desc: TextureDesc) -> TextureHandle {
         let id = TextureHandle(self.textures.len() as u32);
         if let Some(ref name) = desc.label {
@@ -39,6 +70,9 @@ impl RenderGraph {
         id
     }
 
+    /// Create a new buffer resource in the graph.
+    ///
+    /// Returns a handle that can be used to reference this buffer in render passes.
     pub fn create_buffer(&mut self, desc: BufferDesc) -> texture::BufferHandle {
         let id = texture::BufferHandle(self.buffers.len() as u32);
         if let Some(ref name) = desc.label {
@@ -48,6 +82,10 @@ impl RenderGraph {
         id
     }
 
+    /// Import an external texture into the graph.
+    ///
+    /// The graph takes ownership of the texture. Use this when the texture was
+    /// created outside the graph but needs to be used in graph passes.
     pub fn import_texture(
         &mut self,
         name: &str,
@@ -61,6 +99,9 @@ impl RenderGraph {
         id
     }
 
+    /// Import an external texture view into the graph.
+    ///
+    /// The graph does not take ownership of the underlying texture, only the view.
     pub fn import_texture_view(&mut self, name: &str, view: wgpu::TextureView) -> TextureHandle {
         let id = TextureHandle(self.textures.len() as u32);
         self.texture_map.insert(name.to_string(), id);
@@ -69,6 +110,9 @@ impl RenderGraph {
         id
     }
 
+    /// Import an external buffer into the graph.
+    ///
+    /// The graph takes ownership of the buffer.
     pub fn import_buffer(&mut self, name: &str, buffer: wgpu::Buffer) -> texture::BufferHandle {
         let id = texture::BufferHandle(self.buffers.len() as u32);
         self.buffer_map.insert(name.to_string(), id);
@@ -77,8 +121,9 @@ impl RenderGraph {
         id
     }
 
-    /// 导入外部缓冲区引用（不转移所有权）
-    /// 调用者需确保缓冲区在图执行期间有效
+    /// Import an external buffer reference into the graph (without transferring ownership).
+    ///
+    /// The caller must ensure the buffer remains valid for the duration of graph execution.
     pub fn import_buffer_ref(
         &mut self,
         name: &str,
@@ -91,6 +136,9 @@ impl RenderGraph {
         id
     }
 
+    /// Add a render pass to the graph.
+    ///
+    /// Returns the execute function that will be called when the pass is executed.
     pub fn add_render_pass<'a>(&mut self, desc: pass::RenderPassDesc<'a>) -> pass::ExecuteFn<'a> {
         let meta = pass::PassMetadata {
             label: desc.label,
@@ -101,11 +149,12 @@ impl RenderGraph {
         desc.execute
     }
 
+    /// Check if the graph has been compiled.
     pub fn is_compiled(&self) -> bool {
         self.compiled
     }
 
-    /// 获取图管理的缓冲区引用（按注册顺序）
+    /// Get references to all buffers managed by the graph (in registration order).
     pub fn get_buffers(&self) -> Vec<Option<&wgpu::Buffer>> {
         self.buffers
             .iter()
@@ -113,6 +162,10 @@ impl RenderGraph {
             .collect()
     }
 
+    /// Reset the graph, removing all passes and non-imported resources.
+    ///
+    /// Imported textures and buffers are preserved. Passes are cleared and the
+    /// graph is marked as not compiled.
     pub fn reset(&mut self) {
         self.textures
             .retain(|t| t.as_ref().is_some_and(|n| n.import));

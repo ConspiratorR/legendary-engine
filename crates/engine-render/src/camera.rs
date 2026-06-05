@@ -1,6 +1,15 @@
+//! Camera system with projection, viewport, and render target management.
+//!
+//! Cameras define how the 3D scene is projected onto the 2D screen. They support
+//! both perspective and orthographic projections, configurable viewports, and
+//! can render to either the screen or off-screen textures.
+
 use engine_math::Mat4;
 
-/// RGBA color.
+/// RGBA color with floating-point components.
+///
+/// Colors are typically in linear space and converted to wgpu color format
+/// for clear values and other GPU operations.
 #[derive(Debug, Clone, Copy)]
 pub struct Color {
     pub r: f32,
@@ -10,18 +19,21 @@ pub struct Color {
 }
 
 impl Color {
+    /// Black color (0, 0, 0, 1).
     pub const BLACK: Self = Self {
         r: 0.0,
         g: 0.0,
         b: 0.0,
         a: 1.0,
     };
+    /// White color (1, 1, 1, 1).
     pub const WHITE: Self = Self {
         r: 1.0,
         g: 1.0,
         b: 1.0,
         a: 1.0,
     };
+    /// Transparent color (0, 0, 0, 0).
     pub const TRANSPARENT: Self = Self {
         r: 0.0,
         g: 0.0,
@@ -29,10 +41,12 @@ impl Color {
         a: 0.0,
     };
 
+    /// Create a new color with the given RGBA components.
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
     }
 
+    /// Convert to wgpu color format.
     pub fn to_wgpu(self) -> wgpu::Color {
         wgpu::Color {
             r: self.r as f64,
@@ -44,28 +58,48 @@ impl Color {
 }
 
 /// Projection type for cameras.
+///
+/// Determines how 3D coordinates are mapped to 2D screen space.
 #[derive(Debug, Clone)]
 pub enum Projection {
+    /// Perspective projection with field of view, near and far planes.
     Perspective {
+        /// Vertical field of view in radians.
         fov_y: f32,
+        /// Near clipping plane distance.
         near: f32,
+        /// Far clipping plane distance.
         far: f32,
     },
+    /// Orthographic projection with explicit bounds.
     Orthographic {
+        /// Left boundary.
         left: f32,
+        /// Right boundary.
         right: f32,
+        /// Bottom boundary.
         bottom: f32,
+        /// Top boundary.
         top: f32,
+        /// Near clipping plane.
         near: f32,
+        /// Far clipping plane.
         far: f32,
     },
 }
 
 impl Projection {
+    /// Create a perspective projection.
+    ///
+    /// # Arguments
+    /// * `fov_y` - Vertical field of view in radians
+    /// * `near` - Near clipping plane distance
+    /// * `far` - Far clipping plane distance
     pub fn perspective(fov_y: f32, near: f32, far: f32) -> Self {
         Self::Perspective { fov_y, near, far }
     }
 
+    /// Create an orthographic projection.
     pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32, near: f32, far: f32) -> Self {
         Self::Orthographic {
             left,
@@ -77,6 +111,7 @@ impl Projection {
         }
     }
 
+    /// Compute the projection matrix for the given aspect ratio.
     pub fn matrix(&self, aspect: f32) -> Mat4 {
         match *self {
             Self::Perspective { fov_y, near, far } => {
@@ -95,6 +130,9 @@ impl Projection {
 }
 
 /// Viewport region for a camera.
+///
+/// Defines the portion of the render target that the camera renders to.
+/// This enables split-screen rendering and picture-in-picture effects.
 #[derive(Debug, Clone)]
 pub enum Viewport {
     /// Absolute pixel coordinates.
@@ -143,6 +181,9 @@ impl Viewport {
 }
 
 /// Render target for a camera.
+///
+/// Cameras can render to either the screen (swapchain) or to an off-screen
+/// texture for effects like picture-in-picture or post-processing chains.
 #[derive(Debug, Clone)]
 pub enum RenderTarget {
     /// Render to the screen (swapchain).
@@ -152,19 +193,44 @@ pub enum RenderTarget {
     Texture(u64),
 }
 
-/// Camera component — attach to any ECS entity.
+/// Camera component for rendering the scene.
+///
+/// Attach to any ECS entity to define a viewpoint from which the scene is rendered.
+/// Cameras support priority-based ordering for multi-camera setups (e.g., split-screen,
+/// UI overlay cameras).
+///
+/// # Example
+///
+/// ```rust
+/// use engine_render::camera::{Camera, Projection, Viewport};
+///
+/// // Create a perspective camera
+/// let mut camera = Camera::perspective(std::f32::consts::FRAC_PI_4, 0.1, 1000.0);
+/// camera.priority = 10;
+///
+/// // Compute view-projection matrix
+/// let vp = camera.view_projection(16.0 / 9.0);
+/// ```
 #[derive(Debug, Clone)]
 pub struct Camera {
+    /// The projection type (perspective or orthographic).
     pub projection: Projection,
+    /// The view matrix (world-to-camera transform).
     pub view: Mat4,
+    /// Rendering priority (lower values render first).
     pub priority: i32,
+    /// The viewport region within the render target.
     pub viewport: Viewport,
+    /// The render target (screen or off-screen texture).
     pub render_target: RenderTarget,
+    /// Whether this camera is actively rendering.
     pub is_active: bool,
+    /// Optional clear color for this camera's render pass.
     pub clear_color: Option<Color>,
 }
 
 impl Camera {
+    /// Create a new camera with the given projection.
     pub fn new(projection: Projection) -> Self {
         Self {
             projection,
@@ -182,10 +248,17 @@ impl Camera {
         }
     }
 
+    /// Create a perspective camera.
+    ///
+    /// # Arguments
+    /// * `fov_y` - Vertical field of view in radians
+    /// * `near` - Near clipping plane distance
+    /// * `far` - Far clipping plane distance
     pub fn perspective(fov_y: f32, near: f32, far: f32) -> Self {
         Self::new(Projection::perspective(fov_y, near, far))
     }
 
+    /// Create an orthographic camera with default near/far planes (-1.0 to 1.0).
     pub fn orthographic(left: f32, right: f32, bottom: f32, top: f32) -> Self {
         Self::new(Projection::orthographic(
             left, right, bottom, top, -1.0, 1.0,
@@ -193,6 +266,8 @@ impl Camera {
     }
 
     /// Compute the combined view-projection matrix.
+    ///
+    /// This matrix transforms world coordinates to clip space.
     pub fn view_projection(&self, aspect: f32) -> Mat4 {
         self.projection.matrix(aspect) * self.view
     }

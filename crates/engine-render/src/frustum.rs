@@ -1,3 +1,8 @@
+//! View frustum for visibility culling.
+//!
+//! The frustum is defined by 6 planes extracted from the view-projection matrix.
+//! It is used to test whether objects are visible before rendering them.
+
 use engine_math::{Mat4, Vec3, Vec4};
 
 /// A view frustum defined by 6 planes.
@@ -5,6 +10,19 @@ use engine_math::{Mat4, Vec3, Vec4};
 /// Planes: 0=left, 1=right, 2=bottom, 3=top, 4=near, 5=far.
 /// Each plane is (a, b, c, d) where ax + by + cz + d = 0.
 /// The normal points inward (positive half-space is inside).
+///
+/// # Usage
+///
+/// ```rust
+/// use engine_render::frustum::Frustum;
+/// use engine_math::{Mat4, Vec3};
+///
+/// let vp = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, 16.0/9.0, 0.1, 1000.0);
+/// let frustum = Frustum::from_view_projection(&vp);
+///
+/// // Test if a point is visible
+/// assert!(frustum.test_sphere(Vec3::new(0.0, 0.0, -5.0), 1.0));
+/// ```
 #[derive(Debug, Clone)]
 pub struct Frustum {
     pub planes: [Vec4; 6],
@@ -13,7 +31,7 @@ pub struct Frustum {
 impl Frustum {
     /// Extract frustum planes from a combined view-projection matrix.
     ///
-    /// Uses the Gribb-Hartmann method.
+    /// Uses the Gribb-Hartmann method for plane extraction.
     pub fn from_view_projection(vp: &Mat4) -> Self {
         let row0 = vp.row(0);
         let row1 = vp.row(1);
@@ -32,7 +50,8 @@ impl Frustum {
     }
 
     /// Test if an AABB (axis-aligned bounding box) intersects the frustum.
-    /// Returns true if the AABB is at least partially inside the frustum.
+    ///
+    /// Returns `true` if the AABB is at least partially inside the frustum.
     pub fn test_aabb(&self, min: Vec3, max: Vec3) -> bool {
         for plane in &self.planes {
             let p = Vec3::new(
@@ -48,7 +67,8 @@ impl Frustum {
     }
 
     /// Test if a sphere intersects the frustum.
-    /// Returns true if the sphere is at least partially inside the frustum.
+    ///
+    /// Returns `true` if the sphere is at least partially inside the frustum.
     pub fn test_sphere(&self, center: Vec3, radius: f32) -> bool {
         for plane in &self.planes {
             let dist = plane.x * center.x + plane.y * center.y + plane.z * center.z + plane.w;

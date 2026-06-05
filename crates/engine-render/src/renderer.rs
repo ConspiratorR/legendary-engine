@@ -1,3 +1,9 @@
+//! Main renderer implementation.
+//!
+//! The [`Renderer`] is the central component that owns the wgpu device, queue,
+//! surface, and all render pipelines. It coordinates the rendering of both 2D
+//! sprites and 3D deferred shading passes.
+
 use crate::command_batch::{CommandBatcher, QueueSubmitBatchExt};
 use crate::deferred::{DeferredPass, GBuffer, GeometryPassUniform};
 use crate::instancing::InstanceBatch;
@@ -38,6 +44,23 @@ impl Deref for GpuQueue {
     fn deref(&self) -> &Queue {
         &self.0
     }
+}
+
+/// Input data for the 3D deferred rendering path.
+///
+/// Contains all resources needed to render a 3D scene through the deferred
+/// pipeline: meshes, materials, lighting, camera, and visible geometry batches.
+pub struct Scene3d<'a> {
+    pub mesh_store: &'a MeshStore,
+    pub material_store: &'a MaterialStore,
+    pub lighting_uniform: &'a LightingUniform,
+    pub camera_vp: &'a Mat4,
+    pub camera_pos: &'a [f32; 3],
+    pub light_direction: &'a [f32; 3],
+    pub batches: &'a [InstanceBatch],
+    pub scene_aabb_min: Vec3,
+    pub scene_aabb_max: Vec3,
+    pub shadow_config: ShadowMapConfig,
 }
 
 /// Main renderer owning the wgpu device, queue, surface, and render pipelines.
@@ -455,23 +478,6 @@ impl Renderer {
             }
         }
     }
-}
-
-/// Input data for the 3D deferred rendering path.
-///
-/// Contains all resources needed to render a 3D scene through the deferred
-/// pipeline: meshes, materials, lighting, camera, and visible geometry batches.
-pub struct Scene3d<'a> {
-    pub mesh_store: &'a MeshStore,
-    pub material_store: &'a MaterialStore,
-    pub lighting_uniform: &'a LightingUniform,
-    pub camera_vp: &'a Mat4,
-    pub camera_pos: &'a [f32; 3],
-    pub light_direction: &'a [f32; 3],
-    pub batches: &'a [InstanceBatch],
-    pub scene_aabb_min: Vec3,
-    pub scene_aabb_max: Vec3,
-    pub shadow_config: ShadowMapConfig,
 }
 
 impl Renderer {

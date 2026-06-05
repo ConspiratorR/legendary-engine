@@ -1,16 +1,40 @@
-//! Rendering pipeline with wgpu.
+//! # engine-render
 //!
-//! This crate provides:
-//! - **Renderer**: wgpu device/queue/surface management
-//! - **Render Graph**: declarative pass dependency system
-//! - **Sprite Pipeline**: 2D sprite batching and rendering
-//! - **PBR Pipeline**: physically-based 3D rendering with lighting
-//! - **Camera System**: projection, view matrices, frustum culling
-//! - **Shadow Mapping**: cascaded shadow maps (CSM)
-//! - **Post-Processing**: tonemapping, bloom, SSAO
-//! - **Particles**: 2D and 3D particle systems
-//! - **Animation**: sprite sheet and skeletal animation
-//! - **Tilemap**: tile-based level rendering
+//! Rendering system for the RustEngine.
+//!
+//! A wgpu-based rendering pipeline featuring:
+//! - Render graph for organizing render passes
+//! - Sprite pipeline with batching
+//! - 3D PBR rendering with deferred shading
+//! - Shadow mapping (CSM)
+//! - Environment mapping / IBL
+//! - Camera system with ECS integration
+//! - 2D/3D particle systems
+//! - Tilemap support
+//!
+//! ## Architecture
+//!
+//! The rendering pipeline is organized as a render graph:
+//!
+//! ```text
+//! [Camera] -> [Shadow Pass] -> [G-Buffer Pass] -> [Lighting Pass] -> [Post-Processing] -> [Output]
+//! ```
+//!
+//! Each pass reads from and writes to GPU resources (textures, buffers)
+//! managed by the resource manager.
+//!
+//! ## Quick Start
+//!
+//! ```rust,no_run
+//! use engine_render::camera::{Camera, Projection};
+//! use engine_render::graph::RenderGraph;
+//!
+//! // Create a camera
+//! let camera = Camera::perspective(std::f32::consts::FRAC_PI_4, 0.1, 1000.0);
+//!
+//! // Create a render graph
+//! let mut graph = RenderGraph::new();
+//! ```
 
 pub mod error;
 pub use error::RenderError;
