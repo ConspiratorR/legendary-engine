@@ -2,6 +2,13 @@ use engine_math::{Mat4, Quat, Vec3};
 use serde::{Deserialize, Serialize};
 
 /// Local transform of a scene node (translation, rotation, scale).
+///
+/// Expressed **relative to the parent** node. The world-space equivalent is
+/// [`GlobalTransform`], which is computed by
+/// [`SceneManager::sync_transforms`](super::scene_manager::SceneManager::sync_transforms).
+///
+/// The transform matrix is built as:
+/// `Scale → Rotation → Translation` (SRT order).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transform {
     /// Position relative to the parent.
@@ -39,6 +46,11 @@ impl Transform {
 
 /// The world-space transform of a scene node, computed by
 /// [`SceneManager::sync_transforms`](super::scene_manager::SceneManager::sync_transforms).
+///
+/// This is the accumulated product of all ancestor [`Transform`]s:
+/// `global(child) = global(parent) * local(child)`.
+///
+/// Do not set this directly — it is overwritten on every sync pass.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalTransform(pub Mat4);
 

@@ -96,11 +96,14 @@ impl IKChain {
     }
 
     /// Index of the end-effector (last joint in the chain).
+    ///
+    /// # Panics
+    /// Panics if the chain is empty (invariant: chains must have ≥ 1 joint).
     pub fn effector_index(&self) -> usize {
         *self
             .joint_indices
             .last()
-            .expect("IKChain must not be empty")
+            .expect("IKChain must not be empty: invariant violation")
     }
 }
 
@@ -270,7 +273,9 @@ pub fn ik_solve_system(world: &mut World) {
         }
 
         // Clone skeleton to avoid borrow conflicts.
-        let skeleton = world.get_by_index::<Skeleton>(entity_idx).unwrap().clone();
+        let Some(skeleton) = world.get_by_index::<Skeleton>(entity_idx).cloned() else {
+            continue;
+        };
         if let Some(player) = world.get_by_index_mut::<SkeletalAnimationPlayer>(entity_idx) {
             IKSolver::solve_with_player(&skeleton, &chain, &target, player);
         }

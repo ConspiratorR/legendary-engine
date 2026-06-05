@@ -102,6 +102,10 @@ impl SceneManager {
     }
 
     /// Get a shared reference to a node's local transform.
+    ///
+    /// # Panics
+    /// Panics if the entity does not have a `Transform` component (should never
+    /// happen for nodes created via [`add_node`](Self::add_node)).
     pub fn transform(&self, node: SceneNode) -> &Transform {
         self.world
             .get::<Transform>(node.entity())
@@ -109,6 +113,10 @@ impl SceneManager {
     }
 
     /// Get an exclusive reference to a node's local transform.
+    ///
+    /// # Panics
+    /// Panics if the entity does not have a `Transform` component (should never
+    /// happen for nodes created via [`add_node`](Self::add_node)).
     pub fn transform_mut(&mut self, node: SceneNode) -> &mut Transform {
         self.world
             .get_mut::<Transform>(node.entity())
@@ -145,11 +153,10 @@ impl SceneManager {
         let root_entity = self.root.entity();
         let mut stack = vec![(root_entity, Mat4::IDENTITY)];
         while let Some((entity, parent_global)) = stack.pop() {
-            let local_matrix = self
-                .world
-                .get::<Transform>(entity)
-                .map(|t| t.to_matrix())
-                .unwrap_or(Mat4::IDENTITY);
+            let local_matrix = match self.world.get::<Transform>(entity) {
+                Some(t) => t.to_matrix(),
+                None => Mat4::IDENTITY,
+            };
             let global = parent_global * local_matrix;
             if let Some(gt) = self.world.get_mut::<GlobalTransform>(entity) {
                 gt.0 = global;

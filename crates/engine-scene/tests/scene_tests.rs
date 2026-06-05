@@ -1,4 +1,5 @@
 use engine_ecs::entity::Entity;
+use engine_math::Vec3;
 use engine_scene::hierarchy::{Children, Parent};
 use engine_scene::node::SceneNode;
 use engine_scene::scene_manager::SceneManager;
@@ -442,4 +443,221 @@ fn test_scene_entity_lookup() {
     assert_eq!(removed.unwrap().name, "Modified");
     assert!(scene.get_entity(2).is_none());
     assert_eq!(scene.entities.len(), 2);
+}
+
+// ── Rotation & Scale Propagation ────────────────────────────────────
+
+#[test]
+fn test_sync_transforms_rotation_propagation() {
+    use engine_math::Quat;
+
+    let mut sm = SceneManager::new();
+    let parent: SceneNode = sm
+        .add_node("Parent")
+        .with_transform(Transform {
+            translation: Vec3::ZERO,
+            rotation: Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+            scale: Vec3::ONE,
+        })
+        .into();
+    let child: SceneNode = sm
+        .add_node("Child")
+        .with_transform(Transform::from_xyz(10.0, 0.0, 0.0))
+        .into();
+
+    sm.set_parent(child, parent);
+    sm.sync_transforms();
+
+    let gt = sm
+        .world_mut()
+        .get::<GlobalTransform>(child.entity())
+        .unwrap();
+    let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
+    // After 90° Y rotation, (10,0,0) → (0,0,-10)
+    assert!(
+        (translation.x).abs() < 1e-4,
+        "x should be ~0, got {}",
+        translation.x
+    );
+    assert!(
+        (translation.z - (-10.0)).abs() < 1e-4,
+        "z should be ~-10, got {}",
+        translation.z
+    );
+}
+
+#[test]
+fn test_sync_transforms_nested_scale() {
+    let mut sm = SceneManager::new();
+    let grandparent: SceneNode = sm
+        .add_node("Grandparent")
+        .with_transform(Transform {
+            translation: Vec3::ZERO,
+            rotation: engine_math::Quat::IDENTITY,
+            scale: Vec3::new(2.0, 2.0, 2.0),
+        })
+        .into();
+    let parent: SceneNode = sm
+        .add_node("Parent")
+        .with_transform(Transform {
+            translation: Vec3::ZERO,
+            rotation: engine_math::Quat::IDENTITY,
+            scale: Vec3::new(3.0, 3.0, 3.0),
+        })
+        .into();
+    let child: SceneNode = sm
+        .add_node("Child")
+        .with_transform(Transform::from_xyz(1.0, 0.0, 0.0))
+        .into();
+
+    sm.set_parent(parent, grandparent);
+    sm.set_parent(child, parent);
+    sm.sync_transforms();
+
+    let gt = sm
+        .world_mut()
+        .get::<GlobalTransform>(child.entity())
+        .unwrap();
+    let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
+    // grandparent scale 2 * parent scale 3 = 6x, child at (1,0,0) → (6,0,0)
+    assert!(
+        (translation.x - 6.0).abs() < 1e-4,
+        "x should be 6.0, got {}",
+        translation.x
+    );
+}
+
+// ── Edge Cases ──────────────────────────────────────────────────────
+
+#[test]
+fn test_orphaned_node_has_identity_global_transform() {
+    let mut sm = SceneManager::new();
+    // Create a node but don't set a parent (it gets parented to root by default)
+    let node: SceneNode = sm
+        .add_node("Orphan")
+        .with_transform(Transform::from_xyz(7.0, 8.0, 9.0))
+        .into();
+
+    sm.sync_transforms();
+
+    // Node is under root (default), so global = local
+    let gt = sm
+        .world_mut()
+        .get::<GlobalTransform>(node.entity())
+        .unwrap();
+    let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
+    assert!((translation.x - 7.0).abs() < 1e-5);
+    assert!((translation.y - 8.0).abs() < 1e-5);
+    assert!((translation.z - 9.0).abs() < 1e-5);
+}
+
+#[test]
+fn test_reparent_removes_from_old_parent_children() {
+    let mut sm = SceneManager::new();
+    let parent_a: SceneNode = sm.add_node("A").into();
+    let parent_b: SceneNode = sm.add_node("B").into();
+    let child: SceneNode = sm.add_node("Child").into();
+
+    sm.set_parent(child, parent_a);
+    {
+        let children = sm.world_mut().get::<Children>(parent_a.entity()).unwrap();
+        assert!(children.0.contains(&child.entity()));
+    }
+
+    // Reparent to B
+    sm.set_parent(child, parent_b);
+
+    // Child should be removed from A's children
+    {
+        let children = sm.world_mut().get::<Children>(parent_a.entity()).unwrap();
+        assert!(
+            !children.0.contains(&child.entity()),
+            "child should be removed from old parent's children"
+        );
+    }
+    // Child should be in B's children
+    {
+        let children = sm.world_mut().get::<Children>(parent_b.entity()).unwrap();
+        assert!(
+            children.0.contains(&child.entity()),
+            "child should be in new parent's children"
+        );
+    }
+}
+
+#[test]
+fn test_multiple_children_order_preserved() {
+    let mut sm = SceneManager::new();
+    let parent: SceneNode = sm.add_node("Parent").into();
+    let c1: SceneNode = sm.add_node("C1").into();
+    let c2: SceneNode = sm.add_node("C2").into();
+    let c3: SceneNode = sm.add_node("C3").into();
+
+    sm.set_parent(c1, parent);
+    sm.set_parent(c2, parent);
+    sm.set_parent(c3, parent);
+
+    let children = sm.world_mut().get::<Children>(parent.entity()).unwrap();
+    assert_eq!(children.0.len(), 3);
+    assert_eq!(children.0[0], c1.entity());
+    assert_eq!(children.0[1], c2.entity());
+    assert_eq!(children.0[2], c3.entity());
+}
+
+#[test]
+fn test_scene_node_serialization_roundtrip_all_formats() {
+    let mut scene = SceneData::new("MultiFormat");
+    let mut entity = SceneEntityData::new(1, "Object");
+    entity.transform.translation = [1.0, 2.0, 3.0];
+    entity.transform.rotation = [0.0, 0.0, 0.0, 1.0];
+    entity.transform.scale = [1.0, 1.0, 1.0];
+    scene.add_entity(entity);
+
+    for format in [SceneFormat::Json, SceneFormat::Ron, SceneFormat::Bin] {
+        let data = serialize_scene(&scene, format).unwrap();
+        let loaded = deserialize_scene(&data, format).unwrap();
+        assert_eq!(loaded.name, "MultiFormat");
+        assert_eq!(loaded.entities.len(), 1);
+        assert_eq!(loaded.entities[0].name, "Object");
+        assert_eq!(loaded.entities[0].transform.translation, [1.0, 2.0, 3.0]);
+        assert_eq!(loaded.entities[0].transform.rotation, [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(loaded.entities[0].transform.scale, [1.0, 1.0, 1.0]);
+    }
+}
+
+#[test]
+fn test_sync_transforms_after_reparent() {
+    let mut sm = SceneManager::new();
+    let a: SceneNode = sm
+        .add_node("A")
+        .with_transform(Transform::from_xyz(10.0, 0.0, 0.0))
+        .into();
+    let b: SceneNode = sm
+        .add_node("B")
+        .with_transform(Transform::from_xyz(20.0, 0.0, 0.0))
+        .into();
+    let child: SceneNode = sm
+        .add_node("Child")
+        .with_transform(Transform::from_xyz(5.0, 0.0, 0.0))
+        .into();
+
+    // Under A: global = 10 + 5 = 15
+    sm.set_parent(child, a);
+    sm.sync_transforms();
+    let gt = sm
+        .world_mut()
+        .get::<GlobalTransform>(child.entity())
+        .unwrap();
+    let pos = gt.0.transform_point3(engine_math::Vec3::ZERO);
+    assert!((pos.x - 15.0).abs() < 1e-5);
+
+    // Under B: global = 20 + 5 = 25
+    sm.set_parent(child, b);
+    sm.sync_transforms();
+    let gt = sm
+        .world_mut()
+        .get::<GlobalTransform>(child.entity())
+        .unwrap();
+    let pos = gt.0.transform_point3(engine_math::Vec3::ZERO);
+    assert!((pos.x - 25.0).abs() < 1e-5);
 }

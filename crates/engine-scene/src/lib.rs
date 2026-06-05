@@ -1,10 +1,42 @@
 //! # engine-scene
 //!
-//! Scene management for the RustEngine.
+//! Scene management for the RustEngine — scene graph, transforms, animation,
+//! serialization, and streaming.
 //!
-//! Provides a scene graph with parent-child hierarchy,
-//! [`Transform`](transform::Transform)/[`GlobalTransform`](transform::GlobalTransform) synchronization,
-//! and serialization support.
+//! ## Scene Graph Model
+//!
+//! The scene is a **tree of [`SceneNode`](node::SceneNode)s**, each backed by
+//! an ECS [`Entity`](engine_ecs::entity::Entity). Parent-child relationships
+//! are stored as ECS components:
+//!
+//! - [`Parent`](hierarchy::Parent) — links a child to its parent.
+//! - [`Children`](hierarchy::Children) — lists a node's direct children.
+//!
+//! The [`SceneManager`](scene_manager::SceneManager) owns the ECS
+//! [`World`](engine_ecs::world::World) and provides convenience methods for
+//! building and querying the hierarchy.
+//!
+//! ## Transform Propagation
+//!
+//! Every node has two transform components:
+//!
+//! | Component | Coordinate space | Set by user |
+//! |---|---|---|
+//! | [`Transform`](transform::Transform) | Local (relative to parent) | Yes |
+//! | [`GlobalTransform`](transform::GlobalTransform) | World-space (absolute) | No — computed |
+//!
+//! After modifying any [`Transform`], call
+//! [`SceneManager::sync_transforms`] to recompute all
+//! [`GlobalTransform`]s. The sync walks the tree top-down, multiplying
+//! each local transform by its parent's global transform:
+//!
+//! ```text
+//! global(child) = global(parent) * local(child)
+//! ```
+//!
+//! This means **rotation and scale propagate**: a parent scaled 2×
+//! with a child at local (1, 0, 0) produces a child global position
+//! of (2, 0, 0).
 //!
 //! ## Quick Start
 //!
@@ -25,16 +57,22 @@
 //!
 //! ## Modules
 //!
-//! - [`serialization`] — Scene file I/O in JSON, RON, and binary formats.
-//! - [`prefab`] — Reusable entity templates with instantiation and property overrides.
-//! - [`multi_scene`] — Multiple scenes loaded simultaneously with namespaced IDs.
-//! - [`sub_scene`] — Distance-based streaming of sub-scenes.
-//! - [`scene_layer`] — Bitmask-based scene categorization.
-//! - [`skeleton`] — Skeletal animation with joint hierarchies and skinning.
-//! - [`ik`] — Inverse kinematics (CCD) and forward kinematics solvers.
-//! - [`keyframe`] — Keyframe animation clips and interpolation.
-//! - [`animation_state`] — Animation state machine with blend transitions.
-//! - [`diff`] — Scene diffing for incremental serialization.
+//! | Module | Description |
+//! |---|---|
+//! | [`serialization`] | Scene file I/O in JSON, RON, and binary formats. |
+//! | [`prefab`] | Reusable entity templates with instantiation and property overrides. |
+//! | [`multi_scene`] | Multiple scenes loaded simultaneously with namespaced IDs. |
+//! | [`sub_scene`] | Distance-based streaming of sub-scenes. |
+//! | [`scene_layer`] | Bitmask-based scene categorization. |
+//! | [`skeleton`] | Skeletal animation with joint hierarchies and skinning. |
+//! | [`ik`] | Inverse kinematics (CCD) and forward kinematics solvers. |
+//! | [`keyframe`] | Keyframe animation clips and interpolation. |
+//! | [`animation_state`] | Animation state machine with blend transitions. |
+//! | [`diff`] | Scene diffing for incremental serialization. |
+//! | [`hierarchy`] | `Parent` and `Children` ECS components. |
+//! | [`node`] | Lightweight `SceneNode` handle wrapping an `Entity`. |
+//! | [`transform`] | `Transform` (local) and `GlobalTransform` (world-space). |
+//! | [`error`] | Shared error types. |
 
 pub mod animation_state;
 pub mod diff;

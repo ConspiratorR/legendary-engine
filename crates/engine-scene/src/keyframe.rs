@@ -296,13 +296,12 @@ fn sample_vec3_track(track: &[Vec3Keyframe], time: f32, looping: bool, duration:
         return track[0].value;
     }
 
+    // SAFETY: track has ≥ 2 elements after early returns above.
+    let last_time = track[track.len() - 1].time;
     let t = if looping {
         time.rem_euclid(duration)
     } else {
-        time.clamp(
-            track[0].time,
-            track.last().expect("checked: track is non-empty").time,
-        )
+        time.clamp(track[0].time, last_time)
     };
 
     // Find the two keyframes surrounding time t
@@ -311,7 +310,7 @@ fn sample_vec3_track(track: &[Vec3Keyframe], time: f32, looping: bool, duration:
         i += 1;
     }
     if i >= track.len() - 1 {
-        return track.last().expect("checked: track is non-empty").value;
+        return track[track.len() - 1].value;
     }
 
     let k0 = &track[i];
@@ -351,13 +350,12 @@ fn sample_rotation_track(
         return track[0].value;
     }
 
+    // SAFETY: track has ≥ 2 elements after early returns above.
+    let last_time = track[track.len() - 1].time;
     let t = if looping {
         time.rem_euclid(duration)
     } else {
-        time.clamp(
-            track[0].time,
-            track.last().expect("checked: track is non-empty").time,
-        )
+        time.clamp(track[0].time, last_time)
     };
 
     let mut i = 0;
@@ -365,7 +363,7 @@ fn sample_rotation_track(
         i += 1;
     }
     if i >= track.len() - 1 {
-        return track.last().expect("checked: track is non-empty").value;
+        return track[track.len() - 1].value;
     }
 
     let k0 = &track[i];

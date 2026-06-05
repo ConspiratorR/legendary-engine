@@ -266,3 +266,36 @@ fn assert_matrices_eq(a: Mat4, b: Mat4) {
         }
     }
 }
+
+#[test]
+fn sync_transforms_rotation_propagation() {
+    let mut sm = SceneManager::new();
+
+    let parent: SceneNode = sm
+        .add_node("Parent")
+        .with_transform(Transform {
+            translation: Vec3::ZERO,
+            rotation: engine_math::Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+            scale: Vec3::ONE,
+        })
+        .into();
+
+    let child: SceneNode = sm.add_node("Child").into();
+    sm.set_parent(child, parent);
+    *sm.transform_mut(child) = Transform::from_xyz(10.0, 0.0, 0.0);
+
+    sm.sync_transforms();
+
+    let child_gt = sm
+        .world_mut()
+        .get::<GlobalTransform>(child.entity())
+        .unwrap();
+    let pos = child_gt.0.transform_point3(Vec3::ZERO);
+    // After 90° Y rotation, (10,0,0) → (0,0,-10)
+    assert!(pos.x.abs() < 1e-4, "x should be ~0, got {}", pos.x);
+    assert!(
+        (pos.z - (-10.0)).abs() < 1e-4,
+        "z should be ~-10, got {}",
+        pos.z
+    );
+}
