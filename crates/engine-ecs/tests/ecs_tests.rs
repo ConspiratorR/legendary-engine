@@ -259,3 +259,204 @@ fn despawn_entity_with_large_index_is_noop() {
     world.despawn(fake);
     assert_eq!(world.entity_count(), 0);
 }
+
+// -- get_mut tests --
+
+#[test]
+fn get_mut_modifies_component_in_place() {
+    let mut world = World::new();
+    let e = world.spawn();
+    world.add_component(e, Position { x: 0.0, y: 0.0 });
+
+    if let Some(pos) = world.get_mut::<Position>(e) {
+        pos.x = 42.0;
+        pos.y = 99.0;
+    }
+
+    let pos = world.get::<Position>(e).unwrap();
+    assert_eq!(pos.x, 42.0);
+    assert_eq!(pos.y, 99.0);
+}
+
+#[test]
+fn get_mut_returns_none_for_missing_component() {
+    let mut world = World::new();
+    let e = world.spawn();
+    assert!(world.get_mut::<Position>(e).is_none());
+}
+
+#[test]
+fn get_mut_returns_none_for_despawned_entity() {
+    let mut world = World::new();
+    let e = world.spawn();
+    world.add_component(e, Position { x: 1.0, y: 2.0 });
+    world.despawn(e);
+    assert!(world.get_mut::<Position>(e).is_none());
+}
+
+// -- Resource tests --
+
+#[test]
+fn insert_and_get_resource() {
+    let mut world = World::new();
+    #[derive(Debug, PartialEq)]
+    struct Gravity(f32);
+    world.insert_resource(Gravity(9.81));
+    let g = world.get_resource::<Gravity>().unwrap();
+    assert_eq!(g.0, 9.81);
+}
+
+#[test]
+fn get_resource_mut_modifies_resource() {
+    let mut world = World::new();
+    #[derive(Debug, PartialEq)]
+    struct Score(u32);
+    world.insert_resource(Score(0));
+
+    if let Some(score) = world.get_resource_mut::<Score>() {
+        score.0 = 100;
+    }
+
+    assert_eq!(world.get_resource::<Score>().unwrap().0, 100);
+}
+
+#[test]
+fn remove_resource_returns_value() {
+    let mut world = World::new();
+    #[derive(Debug, PartialEq)]
+    struct Config(String);
+    world.insert_resource(Config("test".to_string()));
+
+    let removed = world.remove_resource::<Config>();
+    assert_eq!(removed, Some(Config("test".to_string())));
+    assert!(world.get_resource::<Config>().is_none());
+}
+
+#[test]
+fn get_resource_returns_none_for_missing() {
+    let world = World::new();
+    #[derive(Debug)]
+    struct Missing;
+    assert!(world.get_resource::<Missing>().is_none());
+}
+
+// -- component_entities tests --
+
+#[test]
+fn component_entities_returns_matching_indices() {
+    let mut world = World::new();
+    let e1 = world.spawn();
+    let e2 = world.spawn();
+    let _e3 = world.spawn(); // no Position
+    world.add_component(e1, Position { x: 0.0, y: 0.0 });
+    world.add_component(e2, Position { x: 1.0, y: 1.0 });
+
+    let entities = world.component_entities::<Position>();
+    assert_eq!(entities.len(), 2);
+    assert!(entities.contains(&e1.index()));
+    assert!(entities.contains(&e2.index()));
+}
+
+#[test]
+fn component_entities_empty_for_no_components() {
+    let world = World::new();
+    let entities = world.component_entities::<Position>();
+    assert!(entities.is_empty());
+}
+
+// -- Query on empty world --
+
+#[test]
+fn query_single_on_empty_world() {
+    let world = World::new();
+    let query = Query::<Position>::new();
+    let results: Vec<&Position> = query.iter(&world).collect();
+    assert!(results.is_empty());
+}
+
+#[test]
+fn query_pair_on_empty_world() {
+    let world = World::new();
+    let query = QueryPair::<Position, Velocity>::new();
+    let results: Vec<(&Position, &Velocity)> = query.iter(&world).collect();
+    assert!(results.is_empty());
+}
+
+// -- Generation tracking --
+
+#[test]
+fn generation_increments_on_each_despawn() {
+    let mut world = World::new();
+    let e0 = world.spawn();
+    assert_eq!(e0.generation(), 0);
+
+    world.despawn(e0);
+    let e1 = world.spawn();
+    assert_eq!(e1.index(), e0.index());
+    assert_eq!(e1.generation(), 1);
+
+    world.despawn(e1);
+    let e2 = world.spawn();
+    assert_eq!(e2.index(), e0.index());
+    assert_eq!(e2.generation(), 2);
+}
+
+#[test]
+fn stale_handle_never_accesses_reused_slot() {
+    let mut world = World::new();
+    let e1 = world.spawn();
+    world.add_component(e1, Health(100));
+    world.despawn(e1);
+
+    let e2 = world.spawn();
+    world.add_component(e2, Health(200));
+
+    // e1 is stale — must not see e2's data
+    assert!(world.get::<Health>(e1).is_none());
+    assert_eq!(world.get::<Health>(e2).unwrap().0, 200);
+}
+
+// -- Archetype-like migration (component add/remove changes queryability) --
+
+#[test]
+fn adding_component_makes_entity_queryable() {
+    let mut world = World::new();
+    let e = world.spawn();
+    // No Velocity initially
+    let query = Query::<Velocity>::new();
+    assert_eq!(query.iter(&world).count(), 0);
+
+    // Add Velocity — now queryable
+    world.add_component(e, Velocity { dx: 1.0, dy: 0.0 });
+    assert_eq!(query.iter(&world).count(), 1);
+}
+
+#[test]
+fn removing_component_makes_entity_unqueryable() {
+    let mut world = World::new();
+    let e = world.spawn();
+    world.add_component(e, Velocity { dx: 1.0, dy: 0.0 });
+    let query = Query::<Velocity>::new();
+    assert_eq!(query.iter(&world).count(), 1);
+
+    world.remove_component::<Velocity>(e);
+    assert_eq!(query.iter(&world).count(), 0);
+}
+
+#[test]
+fn query_pair_respects_component_add_remove() {
+    let mut world = World::new();
+    let e = world.spawn();
+    world.add_component(e, Position { x: 0.0, y: 0.0 });
+
+    let query = QueryPair::<Position, Velocity>::new();
+    assert_eq!(query.iter(&world).count(), 0);
+
+    // Add second component — pair now matches
+    world.add_component(e, Velocity { dx: 1.0, dy: 0.0 });
+    assert_eq!(query.iter(&world).count(), 1);
+
+    // Remove one — pair no longer matches
+    world.remove_component::<Velocity>(e);
+    assert_eq!(query.iter(&world).count(), 0);
+}

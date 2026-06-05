@@ -8,6 +8,43 @@
 //! - Efficient query iteration
 //! - Parallel system execution (optional, via engine-jobs)
 //!
+//! ## Storage Model
+//!
+//! This ECS uses **sparse-set** storage rather than archetype tables. Each
+//! component type gets its own [`SparseSet<T>`](component::SparseSet) — a
+//! pair of arrays:
+//!
+//! - **sparse**: indexed by entity index, maps to dense position (or `None`)
+//! - **dense**: packed list of `(entity_index, component_value)` pairs
+//!
+//! This gives O(1) insert, remove, and lookup. Iteration walks the dense
+//! array which is cache-friendly for single-component queries. The trade-off
+//! vs archetypes is that multi-component queries must intersect entity-index
+//! lists rather than co-iterating struct-of-arrays columns.
+//!
+//! ## Entity Lifecycle
+//!
+//! Entities are lightweight handles containing an **index** (slot in the
+//! sparse array) and a **generation** counter. When an entity is despawned
+//! its generation increments so stale handles never alias a recycled slot.
+//!
+//! ```text
+//! spawn()  → Entity { index: 0, gen: 0 }
+//! despawn  → generation[0] becomes 1, index 0 enters free list
+//! spawn()  → Entity { index: 0, gen: 1 }  // index reused, gen bumped
+//! ```
+//!
+//! ## Query System
+//!
+//! Queries iterate over all entities possessing specific component types:
+//!
+//! - [`Query<T>`](query::Query) — single-component iteration
+//! - [`QueryPair<A, B>`](query::QueryPair) — two-component join
+//!
+//! Both support shared (`iter`) and exclusive (`iter_mut`) access. The join
+//! intersects entity-index lists from both sparse sets, yielding only entities
+//! that have **both** components.
+//!
 //! ## Quick Start
 //!
 //! ```rust
