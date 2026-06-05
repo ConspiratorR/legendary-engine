@@ -19,17 +19,25 @@ impl Engine {
 
 /// Run the application with a default window and renderer.
 ///
-/// This creates a window, initializes the wgpu renderer, and enters the
-/// winit event loop. Input events are forwarded to the app's input system.
-/// The app's `run()` method is called each frame.
+/// This creates a window, initializes the wgpu renderer via [`RenderPlugin2D`],
+/// and enters the winit event loop. Input events are forwarded to the app's
+/// input system. The app's `run()` method is called each frame, followed by
+/// an automatic render phase that collects Camera and Sprite components from
+/// the ECS world and renders them to the window.
 #[allow(deprecated)]
-pub fn run_default(app_builder: AppBuilder) -> Result<(), EngineError> {
-    let mut app = app_builder.build();
+pub fn run_default(mut app_builder: AppBuilder) -> Result<(), EngineError> {
     let event_loop =
         winit::event_loop::EventLoop::new().map_err(|e| EngineError::InitFailed(e.to_string()))?;
     let window = Arc::new(create_window(&WindowConfig::default(), &event_loop)?);
-    let renderer = engine_render::renderer::Renderer::new(window.clone())
-        .map_err(|e| EngineError::InitFailed(format!("Failed to create renderer: {e}")))?;
+
+    // Use RenderPlugin2D to set up renderer and texture bridge
+    let mut plugin = engine_render::plugin::RenderPlugin2D::new(window.clone());
+    plugin.build(app_builder.world_mut());
+    let renderer = plugin
+        .take_renderer()
+        .ok_or_else(|| EngineError::InitFailed("Renderer already taken".into()))?;
+
+    let mut app = app_builder.build();
     app.set_renderer(renderer);
 
     use winit::event::{ElementState, Event, MouseButton, WindowEvent};
@@ -89,6 +97,7 @@ pub fn run_default(app_builder: AppBuilder) -> Result<(), EngineError> {
             }
             if let Event::AboutToWait = event {
                 app.run();
+                // Run post-render hooks (for user extensions)
                 if !app.post_render_hooks.is_empty() {
                     let mut hooks = std::mem::take(&mut app.post_render_hooks);
                     for hook in &mut hooks {
@@ -96,6 +105,8 @@ pub fn run_default(app_builder: AppBuilder) -> Result<(), EngineError> {
                     }
                     app.post_render_hooks = hooks;
                 }
+                // Automatic render phase: collect cameras/sprites from ECS and render
+                app.render_phase();
             }
         })
         .map_err(|e| EngineError::InitFailed(e.to_string()))?;

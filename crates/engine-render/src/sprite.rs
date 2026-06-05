@@ -8,6 +8,7 @@ use engine_math::{Mat4, Vec2};
 ///
 /// Sprites are collected into [`SpriteBatch`]es for efficient GPU rendering.
 /// Use `uv_region` for sprite sheet sub-regions.
+#[derive(Clone)]
 pub struct Sprite {
     pub texture: Handle<Texture>,
     pub color: [f32; 4],

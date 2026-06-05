@@ -143,6 +143,9 @@ pub struct App {
     /// The resource registry.
     pub resources: ResourceRegistry,
     renderer: Option<engine_render::renderer::Renderer>,
+    /// Asset registry for texture loading (lazily initialized in render_phase).
+    /// Registry is not Send+Sync but is only accessed from the main thread.
+    asset_registry: Option<engine_asset::registry::Registry>,
     /// Hooks executed before the update phase.
     pub pre_update_hooks: Vec<Hook>,
     /// Hooks executed after the update phase.
@@ -168,6 +171,7 @@ impl App {
             parallel_schedule: None,
             resources: ResourceRegistry::new(),
             renderer: None,
+            asset_registry: None,
             pre_update_hooks: Vec::new(),
             post_update_hooks: Vec::new(),
             post_render_hooks: Vec::new(),
@@ -268,6 +272,59 @@ impl App {
     ) {
         (self.renderer.as_ref(), &mut self.resources)
     }
+
+    /// Execute the render phase: collect cameras and sprites from ECS, then render.
+    ///
+    /// This is called automatically by `run_default` in the event loop.
+    /// If no renderer is set or no cameras exist, this is a no-op.
+    pub fn render_phase(&mut self) {
+        use engine_render::camera::Camera;
+        use engine_render::sprite::Sprite;
+        use engine_render::texture_bridge::TextureBridge;
+
+        let has_renderer = self.renderer.is_some();
+        if !has_renderer {
+            return;
+        }
+
+        // Collect cameras (clone to avoid borrow conflict)
+        let cameras: Vec<Camera> = {
+            let entities = self.world.component_entities::<Camera>();
+            entities
+                .iter()
+                .filter_map(|&idx| self.world.get_by_index::<Camera>(idx).cloned())
+                .collect()
+        };
+
+        if cameras.is_empty() {
+            return;
+        }
+
+        // Collect sprites (clone to avoid borrow conflict)
+        let sprites: Vec<Sprite> = {
+            let entities = self.world.component_entities::<Sprite>();
+            entities
+                .iter()
+                .filter_map(|&idx| self.world.get_by_index::<Sprite>(idx).cloned())
+                .collect()
+        };
+
+        // Get TextureBridge from world
+        let Some(bridge) = self.world.get_resource_mut::<TextureBridge>() else {
+            return;
+        };
+
+        // Lazily initialize asset registry (persists across frames for texture loading)
+        if self.asset_registry.is_none() {
+            self.asset_registry = Some(engine_asset::registry::Registry::new());
+        }
+        let registry = self.asset_registry.as_ref().unwrap();
+
+        // Render (renderer is a separate field, no borrow conflict with world)
+        let camera_refs: Vec<&Camera> = cameras.iter().collect();
+        let renderer = self.renderer.as_mut().unwrap();
+        let _ = renderer.render_frame(&camera_refs, &sprites, bridge, registry);
+    }
 }
 
 impl From<AppBuilder> for App {
@@ -278,6 +335,7 @@ impl From<AppBuilder> for App {
             parallel_schedule: b.parallel_schedule,
             resources: b.resources,
             renderer: None,
+            asset_registry: None,
             pre_update_hooks: b.pre_update_hooks,
             post_update_hooks: b.post_update_hooks,
             post_render_hooks: b.post_render_hooks,

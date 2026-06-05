@@ -106,6 +106,7 @@ pub mod occlusion;
 pub mod particle;
 pub mod particle3d;
 pub mod pipeline;
+pub mod plugin;
 pub mod post_process;
 pub mod renderer;
 pub mod resource;
