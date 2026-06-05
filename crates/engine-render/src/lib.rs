@@ -23,6 +23,50 @@
 //! Each pass reads from and writes to GPU resources (textures, buffers)
 //! managed by the resource manager.
 //!
+//! ### Render Graph Lifecycle
+//!
+//! 1. **Create** — Allocate texture/buffer handles via [`graph::RenderGraph::create_texture`]
+//!    and [`graph::RenderGraph::create_buffer`].
+//! 2. **Import** — Inject external GPU resources with [`graph::RenderGraph::import_texture`]
+//!    or [`graph::RenderGraph::import_buffer`].
+//! 3. **Register passes** — Add render passes with [`graph::RenderGraph::add_render_pass`],
+//!    specifying color/depth attachments by handle.
+//! 4. **Compile** — Call [`graph::RenderGraph::compile`] to allocate transient GPU resources
+//!    and resolve attachment indices.
+//! 5. **Execute** — Run compiled passes via [`graph::RenderGraph::execute`] in topological
+//!    order.
+//! 6. **Reset** — Clear passes and non-imported resources with [`graph::RenderGraph::reset`]
+//!    for reuse next frame.
+//!
+//! ### GPU Resource Lifecycle
+//!
+//! GPU resources follow a create-upload-use pattern:
+//!
+//! - **Textures**: Loaded via [`texture_bridge::TextureBridge`] which bridges the asset
+//!   system's `Handle<Texture>` to the GPU. Textures load asynchronously and are uploaded
+//!   on `flush()`. The [`texture_store::TextureStore`] manages GPU texture lifetime and
+//!   bind group allocation.
+//! - **Buffers**: Created directly via wgpu with descriptors from [`graph::BufferDesc`].
+//!   Transient buffers are allocated per-frame in `compile()` and dropped after execution.
+//! - **Materials**: Defined as CPU-side structs in [`resource::material`] and uploaded as
+//!   uniform buffers each frame.
+//!
+//! ### System Organization
+//!
+//! | Module | Purpose |
+//! |--------|---------|
+//! | [`camera`] / [`camera_system`] | Camera types, ECS integration, priority sorting |
+//! | [`frustum`] / [`culling`] / [`culling_system`] | View frustum culling, LOD selection |
+//! | [`sprite`] / [`sprite_renderer`] | 2D sprite batching and rendering |
+//! | [`instancing`] | GPU instancing for meshes sharing materials |
+//! | [`deferred`] | G-Buffer creation and deferred shading pass |
+//! | [`shadow`] | Cascaded shadow maps |
+//! | [`ibl`] | Image-based lighting (diffuse/specular) |
+//! | [`post_process`] | Bloom, tonemapping, SSAO, TAA, SSR |
+//! | [`particle`] / [`particle3d`] | 2D and 3D particle systems |
+//! | [`tilemap`] | Tile-based 2D map rendering |
+//! | [`light`] | Point, spot, and directional light management |
+//!
 //! ## Quick Start
 //!
 //! ```rust,no_run

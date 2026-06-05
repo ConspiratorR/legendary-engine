@@ -392,4 +392,85 @@ mod tests {
             other => panic!("Expected Some(Pending), got {:?}", other),
         }
     }
+
+    #[test]
+    fn test_request_idempotent() {
+        let (device, queue) = test_device();
+        let layout = test_layout(&device);
+        let mut bridge = TextureBridge::new(&device, &queue, layout);
+        let tex = Texture {
+            id: "test".into(),
+            width: 1,
+            height: 1,
+            data: vec![255, 0, 0, 255],
+            channels: 4,
+            asset_path: PathBuf::new(),
+        };
+        let handle = Handle::new(tex);
+        bridge.request(&handle, "path1.png");
+        bridge.request(&handle, "path2.png");
+        match bridge.state(&handle) {
+            Some(LoadState::Pending) => {}
+            other => panic!("Expected Some(Pending), got {:?}", other),
+        }
+    }
+}
+
+#[cfg(test)]
+mod event_channel_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn test_event_channel_subscribe_and_emit() {
+        let mut channel = EventChannel::<u32>::new();
+        let counter = Arc::new(AtomicUsize::new(0));
+        let counter_clone = counter.clone();
+        channel.subscribe(move |_ev| {
+            counter_clone.fetch_add(1, Ordering::Relaxed);
+        });
+        channel.emit(&42);
+        channel.emit(&99);
+        assert_eq!(counter.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn test_event_channel_multiple_listeners() {
+        let mut channel = EventChannel::<i32>::new();
+        let sum1 = Arc::new(AtomicUsize::new(0));
+        let sum2 = Arc::new(AtomicUsize::new(0));
+        let s1 = sum1.clone();
+        let s2 = sum2.clone();
+        channel.subscribe(move |_| {
+            s1.fetch_add(1, Ordering::Relaxed);
+        });
+        channel.subscribe(move |_| {
+            s2.fetch_add(1, Ordering::Relaxed);
+        });
+        channel.emit(&1);
+        assert_eq!(sum1.load(Ordering::Relaxed), 1);
+        assert_eq!(sum2.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_event_channel_default() {
+        let channel = EventChannel::<String>::default();
+        channel.emit(&"no listeners".to_string());
+    }
+
+    #[test]
+    fn test_event_channel_empty_emit() {
+        let channel = EventChannel::<u8>::new();
+        channel.emit(&0);
+    }
+
+    #[test]
+    fn test_load_state_clone() {
+        let pending = LoadState::Pending;
+        let ready = LoadState::Ready(42);
+        let failed = LoadState::Failed("err".to_string());
+        assert!(matches!(pending.clone(), LoadState::Pending));
+        assert!(matches!(ready.clone(), LoadState::Ready(42)));
+        assert!(matches!(failed.clone(), LoadState::Failed(ref s) if s == "err"));
+    }
 }

@@ -37,12 +37,14 @@ pub struct RenderPassDesc<'a> {
     pub execute: ExecuteFn<'a>,
 }
 
+/// Internal node representing a render pass in the graph.
 pub(crate) struct PassMetadata {
     pub label: Option<String>,
     pub color_attachments: Vec<ColorAttachment>,
     pub depth_stencil_attachment: Option<DepthStencilAttachment>,
 }
 
+/// Internal node representing a render pass in the render graph.
 pub(crate) struct RenderPassNode {
     pub meta: PassMetadata,
 }

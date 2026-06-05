@@ -10,13 +10,14 @@
 //! ```no_run
 //! # use engine_render::command_batch::CommandBatcher;
 //! # let device: wgpu::Device = unimplemented!();
-//! let mut batcher = CommandBatcher::new(&device, 4);
+//! let batcher = CommandBatcher::new(&device, 4);
 //!
 //! // Record passes in parallel
 //! rayon::scope(|s| {
 //!     for i in 0..4 {
+//!         let b = &batcher;
 //!         s.spawn(move |_| {
-//!             let encoder = batcher.encoder(i);
+//!             let mut encoder = b.get(i);
 //!             // ... record commands on encoder ...
 //!         });
 //!     }

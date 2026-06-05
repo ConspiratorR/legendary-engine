@@ -422,3 +422,91 @@ fn test_render_target_texture() {
         panic!("Expected Texture variant");
     }
 }
+
+// ============================================================================
+// BufferDesc / TextureDesc Builder Tests
+// ============================================================================
+
+#[test]
+fn test_buffer_desc_named() {
+    let desc = BufferDesc::new(256, wgpu::BufferUsages::VERTEX).named("vb");
+    assert_eq!(desc.label.as_deref(), Some("vb"));
+    assert_eq!(desc.size, 256);
+    assert!(!desc.transient);
+}
+
+#[test]
+fn test_buffer_desc_transient() {
+    let desc = BufferDesc::new(512, wgpu::BufferUsages::UNIFORM).transient();
+    assert!(desc.transient);
+    assert!(desc.label.is_none());
+}
+
+#[test]
+fn test_texture_desc_named() {
+    let desc = TextureDesc::new_2d(
+        64,
+        64,
+        wgpu::TextureFormat::Rgba8Unorm,
+        wgpu::TextureUsages::TEXTURE_BINDING,
+    )
+    .named("icon");
+    assert_eq!(desc.label.as_deref(), Some("icon"));
+    assert_eq!(desc.size.width, 64);
+    assert!(!desc.transient);
+}
+
+#[test]
+fn test_texture_desc_transient() {
+    let desc = TextureDesc::new_2d(
+        256,
+        256,
+        wgpu::TextureFormat::Depth32Float,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+    )
+    .transient();
+    assert!(desc.transient);
+}
+
+#[test]
+fn test_texture_handle_equality() {
+    let a = engine_render::graph::TextureHandle(5);
+    let b = engine_render::graph::TextureHandle(5);
+    let c = engine_render::graph::TextureHandle(6);
+    assert_eq!(a, b);
+    assert_ne!(a, c);
+}
+
+#[test]
+fn test_buffer_handle_equality() {
+    let a = engine_render::graph::BufferHandle(0);
+    let b = engine_render::graph::BufferHandle(0);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn test_render_graph_multiple_named_resources() {
+    let mut graph = RenderGraph::new();
+    let _t1 = graph.create_texture(
+        TextureDesc::new_2d(
+            100,
+            100,
+            wgpu::TextureFormat::Rgba8Unorm,
+            wgpu::TextureUsages::RENDER_ATTACHMENT,
+        )
+        .named("albedo"),
+    );
+    let _t2 = graph.create_texture(
+        TextureDesc::new_2d(
+            100,
+            100,
+            wgpu::TextureFormat::Depth32Float,
+            wgpu::TextureUsages::RENDER_ATTACHMENT,
+        )
+        .named("depth"),
+    );
+    let _b1 =
+        graph.create_buffer(BufferDesc::new(1024, wgpu::BufferUsages::UNIFORM).named("camera_ubo"));
+    // All created without error
+    assert!(!graph.is_compiled());
+}
