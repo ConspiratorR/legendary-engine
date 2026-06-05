@@ -1,12 +1,18 @@
 use std::collections::VecDeque;
 
+/// Trait for undoable editor commands.
 pub trait Command: std::fmt::Debug {
+    /// Executes the command (first time or redo).
     fn execute(&mut self);
+    /// Reverses the command.
     fn undo(&mut self);
+    /// Re-applies the command after an undo.
     fn redo(&mut self);
+    /// Human-readable description for the undo/redo menu.
     fn description(&self) -> String;
 }
 
+/// Manages an undo/redo stack of [`Command`] instances.
 pub struct CommandManager {
     undo_stack: VecDeque<Box<dyn Command>>,
     redo_stack: VecDeque<Box<dyn Command>>,
@@ -14,6 +20,7 @@ pub struct CommandManager {
 }
 
 impl CommandManager {
+    /// Creates a new command manager with the given maximum undo history depth.
     pub fn new(max_history: usize) -> Self {
         Self {
             undo_stack: VecDeque::with_capacity(max_history),
@@ -22,6 +29,7 @@ impl CommandManager {
         }
     }
 
+    /// Executes a command, pushing it onto the undo stack and clearing the redo stack.
     pub fn execute(&mut self, command: Box<dyn Command>) {
         let mut cmd = command;
         cmd.execute();
@@ -34,6 +42,7 @@ impl CommandManager {
         }
     }
 
+    /// Undoes the last command. Returns `Some(())` if a command was undone.
     pub fn undo(&mut self) -> Option<()> {
         let mut cmd = self.undo_stack.pop_back()?;
         cmd.undo();
@@ -41,6 +50,7 @@ impl CommandManager {
         Some(())
     }
 
+    /// Redoes the last undone command. Returns `Some(())` if a command was redone.
     pub fn redo(&mut self) -> Option<()> {
         let mut cmd = self.redo_stack.pop_back()?;
         cmd.redo();
@@ -48,23 +58,28 @@ impl CommandManager {
         Some(())
     }
 
+    /// Returns `true` if there are commands to undo.
     pub fn can_undo(&self) -> bool {
         !self.undo_stack.is_empty()
     }
 
+    /// Returns `true` if there are commands to redo.
     pub fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
 
+    /// Clears both undo and redo stacks.
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
     }
 
+    /// Returns the description of the next command to undo, if any.
     pub fn undo_description(&self) -> Option<String> {
         self.undo_stack.back().map(|cmd| cmd.description())
     }
 
+    /// Returns the description of the next command to redo, if any.
     pub fn redo_description(&self) -> Option<String> {
         self.redo_stack.back().map(|cmd| cmd.description())
     }

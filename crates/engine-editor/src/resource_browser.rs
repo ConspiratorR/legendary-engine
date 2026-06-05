@@ -3,6 +3,7 @@ use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_asset::types::ResourceType;
 use engine_ui::Gui;
 
+/// Resource browser panel state — displays project assets in a file-list view.
 #[derive(Debug, Clone)]
 pub struct ResourceBrowser {
     pub current_path: String,
@@ -10,6 +11,7 @@ pub struct ResourceBrowser {
     pub selected_entry: Option<usize>,
 }
 
+/// A single entry in the resource browser (file or directory).
 #[derive(Debug, Clone)]
 pub struct ResourceEntry {
     pub name: String,
@@ -25,6 +27,7 @@ impl Default for ResourceBrowser {
 }
 
 impl ResourceBrowser {
+    /// Creates a new resource browser with default demo entries.
     pub fn new() -> Self {
         let entries = vec![
             ResourceEntry {
@@ -108,6 +111,7 @@ impl ResourceBrowser {
         }
     }
 
+    /// Returns the icon emoji for a given resource type.
     pub fn get_icon(&self, file_type: &ResourceType) -> &'static str {
         file_type.icon()
     }

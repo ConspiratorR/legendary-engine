@@ -1,6 +1,7 @@
 use engine_input::keyboard::KeyCode;
 use std::collections::HashMap;
 
+/// A keyboard shortcut with modifier keys.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct KeyBinding {
     pub key: KeyCode,
@@ -10,6 +11,7 @@ pub struct KeyBinding {
 }
 
 impl KeyBinding {
+    /// Creates a key binding with no modifier keys.
     pub fn new(key: KeyCode) -> Self {
         Self {
             key,
@@ -19,26 +21,31 @@ impl KeyBinding {
         }
     }
 
+    /// Adds the Ctrl modifier.
     pub fn with_ctrl(mut self) -> Self {
         self.ctrl = true;
         self
     }
 
+    /// Adds the Shift modifier.
     pub fn with_shift(mut self) -> Self {
         self.shift = true;
         self
     }
 
+    /// Adds the Alt modifier.
     pub fn with_alt(mut self) -> Self {
         self.alt = true;
         self
     }
 
+    /// Returns `true` if this binding matches the given key + modifiers.
     pub fn matches(&self, key: KeyCode, ctrl: bool, shift: bool, alt: bool) -> bool {
         self.key == key && self.ctrl == ctrl && self.shift == shift && self.alt == alt
     }
 }
 
+/// All bindable editor actions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EditorAction {
     SaveScene,
@@ -70,12 +77,14 @@ pub enum EditorAction {
     ShowProject,
 }
 
+/// Maps [`EditorAction`]s to key bindings and handler callbacks.
 pub struct ShortcutManager {
     bindings: HashMap<EditorAction, KeyBinding>,
     action_handlers: HashMap<EditorAction, Box<dyn Fn()>>,
 }
 
 impl ShortcutManager {
+    /// Creates a new shortcut manager with default key bindings.
     pub fn new() -> Self {
         let mut manager = Self {
             bindings: HashMap::new(),
@@ -147,18 +156,22 @@ impl ShortcutManager {
         );
     }
 
+    /// Binds an action to a key binding.
     pub fn bind(&mut self, action: EditorAction, binding: KeyBinding) {
         self.bindings.insert(action, binding);
     }
 
+    /// Removes the binding for an action.
     pub fn unbind(&mut self, action: EditorAction) {
         self.bindings.remove(&action);
     }
 
+    /// Returns the key binding for an action, if any.
     pub fn get_binding(&self, action: &EditorAction) -> Option<&KeyBinding> {
         self.bindings.get(action)
     }
 
+    /// Looks up the action bound to the given key + modifiers.
     pub fn get_action(
         &self,
         key: KeyCode,
@@ -174,6 +187,7 @@ impl ShortcutManager {
         None
     }
 
+    /// Registers a callback handler for an action.
     pub fn register_handler<F>(&mut self, action: EditorAction, handler: F)
     where
         F: Fn() + 'static,
@@ -181,12 +195,14 @@ impl ShortcutManager {
         self.action_handlers.insert(action, Box::new(handler));
     }
 
+    /// Executes the handler for the given action, if registered.
     pub fn execute(&self, action: &EditorAction) {
         if let Some(handler) = self.action_handlers.get(action) {
             handler();
         }
     }
 
+    /// Returns a human-readable string for the action's key binding (e.g. "Ctrl+S").
     pub fn format_shortcut(&self, action: &EditorAction) -> String {
         if let Some(binding) = self.bindings.get(action) {
             let mut parts = Vec::new();

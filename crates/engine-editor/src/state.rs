@@ -2,41 +2,63 @@ use egui::{Context, Pos2};
 use engine_math::{Mat4, Vec3};
 use engine_ui::GuiSkin;
 
+/// Active transform tool in the viewport toolbar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolType {
+    /// Selection-only mode (click to select).
     Select,
+    /// Translate (move) objects along axes.
     Translate,
+    /// Rotate objects around axes.
     Rotate,
+    /// Scale objects along axes.
     Scale,
+    /// Terrain sculpting mode.
     Terrain,
 }
 
+/// Current gizmo drag interaction state.
 #[derive(Debug, Clone)]
 pub struct GizmoInteraction {
+    /// Active axis mask (bit 0=X, 1=Y, 2=Z).
     pub axis: u8,
+    /// Active plane mask, if dragging on a plane.
     pub plane: Option<u8>,
+    /// Mouse position at drag start.
     pub start_mouse: Pos2,
+    /// Initial value at drag start.
     pub start_value: f32,
 }
 
+/// A single node in the scene hierarchy tree.
 #[derive(Debug, Clone)]
 pub struct TreeNode {
+    /// Unique identifier for this node.
     pub id: u64,
+    /// Display name.
     pub name: String,
+    /// Icon emoji shown in the hierarchy panel.
     pub icon: String,
+    /// Whether this node's children are visible in the hierarchy.
     pub expanded: bool,
+    /// Parent node ID, or `None` for root nodes.
     pub parent: Option<u64>,
+    /// Child node IDs.
     pub children: Vec<u64>,
 }
 
+/// The scene hierarchy tree, managing parent-child relationships between nodes.
 #[derive(Debug, Clone)]
 pub struct SceneTree {
+    /// All nodes in the tree.
     pub nodes: Vec<TreeNode>,
+    /// IDs of root-level nodes.
     pub root_ids: Vec<u64>,
     next_id: u64,
 }
 
 impl SceneTree {
+    /// Creates a new scene tree with a default hierarchy (Root + 5 child nodes).
     pub fn new() -> Self {
         let root_id = 1;
         Self {
@@ -95,6 +117,8 @@ impl SceneTree {
         }
     }
 
+    /// Adds a new node with the given name under `parent` (or the root if `None`).
+    /// Returns the new node's ID.
     pub fn add_node(&mut self, name: &str, parent: Option<u64>) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
@@ -113,6 +137,7 @@ impl SceneTree {
         id
     }
 
+    /// Removes a node and all its descendants from the tree.
     pub fn remove_node(&mut self, id: u64) {
         let parent_id = self
             .nodes
@@ -139,6 +164,7 @@ impl SceneTree {
         self.nodes.retain(|n| !to_remove.contains(&n.id));
     }
 
+    /// Moves a node to a new parent. If `new_parent` is `None`, moves to root.
     pub fn reparent(&mut self, id: u64, new_parent: Option<u64>) {
         let old_parent = self
             .nodes
@@ -160,12 +186,14 @@ impl SceneTree {
         }
     }
 
+    /// Renames a node.
     pub fn rename(&mut self, id: u64, name: &str) {
         if let Some(node) = self.nodes.iter_mut().find(|n| n.id == id) {
             node.name = name.to_string();
         }
     }
 
+    /// Searches nodes by name (case-insensitive substring match). Returns matching node IDs.
     pub fn search(&self, query: &str) -> Vec<u64> {
         if query.is_empty() {
             return Vec::new();
@@ -185,18 +213,27 @@ impl Default for SceneTree {
     }
 }
 
+/// Orbiting camera for the editor viewport.
 #[derive(Debug, Clone)]
 pub struct EditorCamera {
+    /// World-space point the camera orbits around.
     pub target: Vec3,
+    /// Distance from target.
     pub distance: f32,
+    /// Horizontal angle in radians.
     pub yaw: f32,
+    /// Vertical angle in radians (clamped to avoid gimbal lock).
     pub pitch: f32,
+    /// Field of view in radians.
     pub fov: f64,
+    /// Near clipping plane.
     pub near: f64,
+    /// Far clipping plane.
     pub far: f64,
 }
 
 impl EditorCamera {
+    /// Creates a camera with default orbiting parameters.
     pub fn new() -> Self {
         Self {
             target: Vec3::new(0.0, 2.0, 0.0),
@@ -209,11 +246,13 @@ impl EditorCamera {
         }
     }
 
+    /// Orbits the camera by the given mouse delta (pitch is clamped).
     pub fn orbit(&mut self, delta_x: f32, delta_y: f32) {
         self.yaw += delta_x * 0.005;
         self.pitch = (self.pitch + delta_y * 0.005).clamp(-1.55, 1.55);
     }
 
+    /// Pans the camera (moves target in the camera's local right/up plane).
     pub fn pan(&mut self, delta_x: f32, delta_y: f32) {
         let right = self.right();
         let up = self.up();
@@ -222,10 +261,12 @@ impl EditorCamera {
         self.target += up * delta_y * speed;
     }
 
+    /// Zooms the camera (adjusts distance, clamped to [0.5, 500]).
     pub fn zoom(&mut self, delta: f32) {
         self.distance = (self.distance * 1.1_f32.powf(-delta)).clamp(0.5, 500.0);
     }
 
+    /// Returns the camera's world-space position.
     pub fn eye(&self) -> Vec3 {
         let dir = self.forward();
         self.target + dir * self.distance
@@ -249,10 +290,12 @@ impl EditorCamera {
         Vec3::new(0.0, 1.0, 0.0)
     }
 
+    /// Computes the view matrix (right-handed, looking at target).
     pub fn view_matrix(&self) -> Mat4 {
         Mat4::look_at_rh(self.eye(), self.target, self.up())
     }
 
+    /// Computes the perspective projection matrix for the given aspect ratio.
     pub fn projection_matrix(&self, aspect: f32) -> Mat4 {
         Mat4::perspective_rh(self.fov as f32, aspect, self.near as f32, self.far as f32)
     }
@@ -331,6 +374,7 @@ impl Default for MaterialData {
     }
 }
 
+/// Central editor state holding all panel data, selections, and tool state.
 #[derive(Debug, Clone)]
 pub struct EditorState {
     pub selected_nodes: Vec<u64>,
@@ -373,6 +417,7 @@ impl Default for EditorState {
 }
 
 impl EditorState {
+    /// Creates a new editor state with default scene tree, camera, and panel data.
     pub fn new() -> Self {
         let mut node_transforms = HashMap::new();
         let mut node_render = HashMap::new();
@@ -432,6 +477,7 @@ impl EditorState {
         }
     }
 
+    /// Runs one frame of the editor UI, drawing all panels via egui.
     pub fn frame(&mut self, ctx: &Context, skin: &GuiSkin) {
         crate::layout::frame(self, ctx, skin);
     }

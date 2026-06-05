@@ -5,6 +5,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// A complete scene containing entities and global settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Scene {
     pub name: String,
@@ -12,6 +13,7 @@ pub struct Scene {
     pub settings: SceneSettings,
 }
 
+/// A single entity in a scene with transform, components, and hierarchy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneEntity {
     pub id: u64,
@@ -23,6 +25,7 @@ pub struct SceneEntity {
     pub active: bool,
 }
 
+/// Transform data (translation, rotation as quaternion, scale).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformData {
     pub translation: [f32; 3],
@@ -40,12 +43,14 @@ impl Default for TransformData {
     }
 }
 
+/// Serialized component data with typed properties.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComponentData {
     pub type_name: String,
     pub properties: HashMap<String, PropertyValue>,
 }
 
+/// A typed property value for serialized components.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum PropertyValue {
@@ -59,6 +64,7 @@ pub enum PropertyValue {
     Color([f32; 4]),
 }
 
+/// Global scene rendering settings (ambient color, fog).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SceneSettings {
     pub ambient_color: [f32; 4],
@@ -81,6 +87,7 @@ impl Default for SceneSettings {
 }
 
 impl Scene {
+    /// Creates an empty scene with default settings.
     pub fn new(name: String) -> Self {
         Self {
             name,
@@ -89,10 +96,12 @@ impl Scene {
         }
     }
 
+    /// Adds an entity to the scene.
     pub fn add_entity(&mut self, entity: SceneEntity) {
         self.entities.push(entity);
     }
 
+    /// Removes an entity by ID, returning it if found.
     pub fn remove_entity(&mut self, id: u64) -> Option<SceneEntity> {
         if let Some(pos) = self.entities.iter().position(|e| e.id == id) {
             Some(self.entities.remove(pos))
@@ -101,14 +110,17 @@ impl Scene {
         }
     }
 
+    /// Returns a reference to the entity with the given ID.
     pub fn get_entity(&self, id: u64) -> Option<&SceneEntity> {
         self.entities.iter().find(|e| e.id == id)
     }
 
+    /// Returns a mutable reference to the entity with the given ID.
     pub fn get_entity_mut(&mut self, id: u64) -> Option<&mut SceneEntity> {
         self.entities.iter_mut().find(|e| e.id == id)
     }
 
+    /// Returns a human-readable summary of the scene.
     pub fn to_string_pretty(&self) -> String {
         let mut output = format!("Scene: {}\n", self.name);
         output += "Settings:\n";
@@ -141,6 +153,7 @@ impl Scene {
 }
 
 impl SceneEntity {
+    /// Creates a new entity with default transform and no components.
     pub fn new(id: u64, name: String) -> Self {
         Self {
             id,
@@ -153,10 +166,12 @@ impl SceneEntity {
         }
     }
 
+    /// Adds a component to this entity.
     pub fn add_component(&mut self, component: ComponentData) {
         self.components.push(component);
     }
 
+    /// Removes and returns the first component with the given type name.
     pub fn remove_component(&mut self, type_name: &str) -> Option<ComponentData> {
         self.components
             .iter()
@@ -166,6 +181,7 @@ impl SceneEntity {
 }
 
 impl ComponentData {
+    /// Creates a new component with the given type name and no properties.
     pub fn new(type_name: String) -> Self {
         Self {
             type_name,
@@ -173,12 +189,14 @@ impl ComponentData {
         }
     }
 
+    /// Adds a property to this component (builder pattern).
     pub fn with_property(mut self, key: &str, value: PropertyValue) -> Self {
         self.properties.insert(key.to_string(), value);
         self
     }
 }
 
+/// Manages scene creation, loading, saving, and modification tracking.
 pub struct SceneManager {
     current_scene: Option<Scene>,
     scene_path: Option<PathBuf>,
@@ -206,6 +224,7 @@ impl Clone for SceneManager {
 }
 
 impl SceneManager {
+    /// Creates a new scene manager with no loaded scene.
     pub fn new() -> Self {
         Self {
             current_scene: None,
@@ -214,37 +233,45 @@ impl SceneManager {
         }
     }
 
+    /// Creates a new empty scene with the given name.
     pub fn create_scene(&mut self, name: String) {
         self.current_scene = Some(Scene::new(name));
         self.scene_path = None;
         self.is_modified = false;
     }
 
+    /// Returns a reference to the current scene, if loaded.
     pub fn current_scene(&self) -> Option<&Scene> {
         self.current_scene.as_ref()
     }
 
+    /// Returns a mutable reference to the current scene (marks as modified).
     pub fn current_scene_mut(&mut self) -> Option<&mut Scene> {
         self.is_modified = true;
         self.current_scene.as_mut()
     }
 
+    /// Returns the file path of the current scene, if saved.
     pub fn scene_path(&self) -> Option<&Path> {
         self.scene_path.as_deref()
     }
 
+    /// Returns `true` if the scene has unsaved changes.
     pub fn is_modified(&self) -> bool {
         self.is_modified
     }
 
+    /// Marks the scene as having unsaved changes.
     pub fn mark_modified(&mut self) {
         self.is_modified = true;
     }
 
+    /// Marks the scene as saved (clears modified flag).
     pub fn mark_saved(&mut self) {
         self.is_modified = false;
     }
 
+    /// Creates a new entity in the current scene. Returns its ID, or `None` if no scene is loaded.
     pub fn new_entity(&mut self, name: String) -> Option<u64> {
         if let Some(ref mut scene) = self.current_scene {
             let id = scene.entities.iter().map(|e| e.id).max().unwrap_or(0) + 1;
@@ -256,12 +283,14 @@ impl SceneManager {
         }
     }
 
+    /// Prints the current scene to stdout.
     pub fn print_scene(&self) {
         if let Some(ref scene) = self.current_scene {
             println!("{}", scene.to_string_pretty());
         }
     }
 
+    /// Saves the current scene to the given file path (JSON format).
     pub fn save_scene(&mut self, path: &Path) -> Result<()> {
         let scene = self.current_scene.as_ref().context("No scene loaded")?;
 
@@ -280,6 +309,7 @@ impl SceneManager {
         Ok(())
     }
 
+    /// Saves the current scene to its previously-set path.
     pub fn save_current_scene(&mut self) -> Result<()> {
         let path = self
             .scene_path
@@ -288,6 +318,7 @@ impl SceneManager {
         self.save_scene(&path)
     }
 
+    /// Loads a scene from a JSON file.
     pub fn load_scene(&mut self, path: &Path) -> Result<()> {
         let json = fs::read_to_string(path)
             .with_context(|| format!("Failed to read scene file: {}", path.display()))?;
