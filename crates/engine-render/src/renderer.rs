@@ -118,12 +118,17 @@ impl Renderer {
         ))
         .map_err(|e| format!("Failed to create device: {}", e))?;
         let size = window.inner_size();
-        let config = surface
+        let mut config = surface
             .get_default_config(&adapter, size.width, size.height)
             .ok_or("Failed to get surface config")?;
+        config.present_mode = wgpu::PresentMode::Fifo;
         surface.configure(&device, &config);
 
-        let sprite_pipeline = Arc::new(SpritePipeline::new(&device, config.format));
+        // Sprite pipeline renders to HDR framebuffer (Rgba16Float), not swapchain
+        let sprite_pipeline = Arc::new(SpritePipeline::new(
+            &device,
+            wgpu::TextureFormat::Rgba16Float,
+        ));
 
         let camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("camera_uniform"),
@@ -144,8 +149,13 @@ impl Renderer {
         let sprite_renderer =
             SpriteRenderer::new(&device, sprite_pipeline.clone(), DEFAULT_SPRITE_CAPACITY);
 
-        let post_process =
-            PostProcessChain::new(&device, &queue, config.width, config.height, config.format);
+        let post_process = PostProcessChain::new_minimal(
+            &device,
+            &queue,
+            config.width,
+            config.height,
+            config.format,
+        );
 
         Ok(Self {
             device: GpuDevice(Arc::new(device)),
