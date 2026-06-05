@@ -5,12 +5,14 @@
 //!   Up          — rotate
 //!   Down        — soft drop
 //!   Space       — hard drop
+//!   P           — pause
 //!   Escape      — restart (when game over)
 
 use engine_asset::asset::Handle;
 use engine_asset::types::Texture;
 use engine_core::app::AppBuilder;
 use engine_core::plugins::CorePlugins;
+use engine_core::time::Time;
 use engine_ecs::entity::Entity;
 use engine_ecs::world::World;
 use engine_input::input_manager::InputManager;
@@ -26,59 +28,57 @@ use std::sync::Arc;
 
 const COLS: usize = 10;
 const ROWS: usize = 20;
-const BLOCK_SIZE: f32 = 28.0;
-const GRID_X: f32 = 220.0;
+const CELL: f32 = 28.0;
+const BLOCK: f32 = 26.0;
+const GRID_X: f32 = 180.0;
 const GRID_Y: f32 = 560.0;
-const PREVIEW_X: f32 = 530.0;
-const PREVIEW_Y: f32 = 440.0;
-const WINDOW_W: u32 = 680;
-const WINDOW_H: u32 = 640;
-const NUM_ENTITIES: usize = COLS * ROWS + 16 + 200 + 64;
+const PREVIEW_X: f32 = 510.0;
+const PREVIEW_Y: f32 = 400.0;
+const SCORE_X: f32 = 510.0;
+const SCORE_Y: f32 = 240.0;
+const LEVEL_X: f32 = 510.0;
+const LEVEL_Y: f32 = 330.0;
+const WINDOW_W: u32 = 660;
+const WINDOW_H: u32 = 620;
+const NUM_ENTITIES: usize = COLS * ROWS + 16 + 128;
 
 const TETROMINOES: [[[(i32, i32); 4]; 4]; 7] = [
-    // I
     [
         [(0, 1), (1, 1), (2, 1), (3, 1)],
         [(2, 0), (2, 1), (2, 2), (2, 3)],
         [(0, 2), (1, 2), (2, 2), (3, 2)],
         [(1, 0), (1, 1), (1, 2), (1, 3)],
     ],
-    // O
     [
         [(1, 0), (2, 0), (1, 1), (2, 1)],
         [(1, 0), (2, 0), (1, 1), (2, 1)],
         [(1, 0), (2, 0), (1, 1), (2, 1)],
         [(1, 0), (2, 0), (1, 1), (2, 1)],
     ],
-    // T
     [
         [(1, 0), (0, 1), (1, 1), (2, 1)],
         [(1, 0), (1, 1), (2, 1), (1, 2)],
         [(0, 1), (1, 1), (2, 1), (1, 2)],
         [(1, 0), (0, 1), (1, 1), (1, 2)],
     ],
-    // S
     [
         [(1, 0), (2, 0), (0, 1), (1, 1)],
         [(1, 0), (1, 1), (2, 1), (2, 2)],
         [(1, 1), (2, 1), (0, 2), (1, 2)],
         [(0, 0), (0, 1), (1, 1), (1, 2)],
     ],
-    // Z
     [
         [(0, 0), (1, 0), (1, 1), (2, 1)],
         [(2, 0), (1, 1), (2, 1), (1, 2)],
         [(0, 1), (1, 1), (1, 2), (2, 2)],
         [(1, 0), (0, 1), (1, 1), (0, 2)],
     ],
-    // J
     [
         [(0, 0), (0, 1), (1, 1), (2, 1)],
         [(1, 0), (2, 0), (1, 1), (1, 2)],
         [(0, 1), (1, 1), (2, 1), (2, 2)],
         [(1, 0), (1, 1), (0, 2), (1, 2)],
     ],
-    // L
     [
         [(2, 0), (0, 1), (1, 1), (2, 1)],
         [(1, 0), (1, 1), (1, 2), (2, 2)],
@@ -87,41 +87,48 @@ const TETROMINOES: [[[(i32, i32); 4]; 4]; 7] = [
     ],
 ];
 
-const PIECE_COLORS: [[f32; 4]; 8] = [
-    [0.0, 0.0, 0.0, 0.0],
-    [0.0, 1.0, 1.0, 1.0],
-    [1.0, 1.0, 0.0, 1.0],
+const COLORS: [[f32; 4]; 8] = [
+    [0.12, 0.12, 0.16, 1.0],
+    [0.0, 0.9, 0.9, 1.0],
+    [0.9, 0.9, 0.0, 1.0],
     [0.6, 0.0, 0.8, 1.0],
-    [0.0, 1.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0, 1.0],
-    [1.0, 0.5, 0.0, 1.0],
+    [0.0, 0.9, 0.0, 1.0],
+    [0.9, 0.0, 0.0, 1.0],
+    [0.0, 0.0, 0.9, 1.0],
+    [0.9, 0.5, 0.0, 1.0],
 ];
 
-struct GameState {
+const DIGIT_MAP: [[[u8; 3]; 4]; 10] = [
+    [[1, 1, 1], [1, 0, 1], [1, 0, 1], [1, 1, 1]],
+    [[0, 1, 0], [1, 1, 0], [0, 1, 0], [1, 1, 1]],
+    [[1, 1, 1], [0, 1, 1], [1, 1, 0], [1, 1, 1]],
+    [[1, 1, 1], [0, 1, 1], [0, 0, 1], [1, 1, 1]],
+    [[1, 0, 1], [1, 1, 1], [0, 0, 1], [0, 0, 1]],
+    [[1, 1, 1], [1, 1, 0], [0, 0, 1], [1, 1, 1]],
+    [[1, 1, 1], [1, 1, 0], [1, 0, 1], [1, 1, 1]],
+    [[1, 1, 1], [0, 0, 1], [0, 1, 0], [0, 1, 0]],
+    [[1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 1, 1]],
+    [[1, 1, 1], [1, 1, 1], [0, 0, 1], [1, 1, 1]],
+];
+
+struct Game {
     grid: [[u8; COLS]; ROWS],
-    piece_type: usize,
-    piece_x: i32,
-    piece_y: i32,
-    piece_rot: usize,
-    next_piece: usize,
+    piece: usize,
+    px: i32,
+    py: i32,
+    rot: usize,
+    next: usize,
     score: u32,
     level: u32,
     lines: u32,
-    game_over: bool,
-    gravity_counter: u32,
-    gravity_interval: u32,
-    input_repeat: u32,
-    input_dir: i32,
-}
-
-fn random_piece() -> usize {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .subsec_nanos();
-    (nanos % 7) as usize
+    over: bool,
+    paused: bool,
+    fall_acc: f32,
+    fall_speed: f32,
+    repeat_key: KeyCode,
+    repeat_acc: f32,
+    repeat_delay: f32,
+    repeat_rate: f32,
 }
 
 fn main() {
@@ -144,7 +151,7 @@ fn main() {
     let mut builder = AppBuilder::new();
     builder.add_plugin(CorePlugins);
 
-    let white_tex = Texture {
+    let tex = Texture {
         id: "white".into(),
         width: 1,
         height: 1,
@@ -152,13 +159,13 @@ fn main() {
         channels: 4,
         asset_path: PathBuf::new(),
     };
-    let tex_handle = Handle::new(white_tex);
+    let tex_handle = Handle::new(tex);
 
     let world = builder.world_mut();
 
     let cam = world.spawn();
     let mut camera = Camera::orthographic(0.0, WINDOW_W as f32, WINDOW_H as f32, 0.0);
-    camera.clear_color = Some(Color::new(0.08, 0.08, 0.12, 1.0));
+    camera.clear_color = Some(Color::new(0.06, 0.06, 0.08, 1.0));
     world.add_component(cam, camera);
 
     let mut entities = Vec::with_capacity(NUM_ENTITIES);
@@ -169,8 +176,8 @@ fn main() {
             Sprite {
                 texture: tex_handle.clone(),
                 color: [0.0, 0.0, 0.0, 0.0],
-                size: Vec2::new(BLOCK_SIZE, BLOCK_SIZE),
-                transform: Mat4::from_translation(Vec3::new(-100.0, -100.0, 0.0)),
+                size: Vec2::new(BLOCK, BLOCK),
+                transform: Mat4::from_translation(Vec3::new(-200.0, -200.0, 0.0)),
                 flip_x: false,
                 flip_y: false,
                 uv_region: [0.0, 0.0, 1.0, 1.0],
@@ -179,27 +186,28 @@ fn main() {
         entities.push(e);
     }
 
-    let mut game = GameState {
+    let mut game = Game {
         grid: [[0; COLS]; ROWS],
-        piece_type: random_piece(),
-        piece_x: 3,
-        piece_y: 0,
-        piece_rot: 0,
-        next_piece: random_piece(),
+        piece: rand_piece(),
+        px: 3,
+        py: 0,
+        rot: 0,
+        next: rand_piece(),
         score: 0,
         level: 1,
         lines: 0,
-        game_over: false,
-        gravity_counter: 0,
-        gravity_interval: 45,
-        input_repeat: 0,
-        input_dir: 0,
+        over: false,
+        paused: false,
+        fall_acc: 0.0,
+        fall_speed: 0.8,
+        repeat_key: KeyCode::Escape,
+        repeat_acc: 0.0,
+        repeat_delay: 0.17,
+        repeat_rate: 0.05,
     };
 
     let mut plugin = RenderPlugin2D::new(window.clone());
     plugin.build(builder.world_mut());
-
-    // Register texture handle with bridge
     {
         let bridge = builder
             .world_mut()
@@ -207,7 +215,6 @@ fn main() {
             .unwrap();
         bridge.request(&tex_handle, "");
     }
-
     let renderer = plugin.take_renderer().unwrap();
     let mut app = builder.build();
     app.set_renderer(renderer);
@@ -235,8 +242,7 @@ fn main() {
                     ..
                 } => {
                     let input = app.input_mut();
-                    use winit::keyboard::PhysicalKey;
-                    if let PhysicalKey::Code(key) = ke.physical_key {
+                    if let winit::keyboard::PhysicalKey::Code(key) = ke.physical_key {
                         if ke.state == winit::event::ElementState::Pressed {
                             input.press(key);
                         } else {
@@ -248,8 +254,20 @@ fn main() {
             }
 
             if let winit::event::Event::AboutToWait = event {
-                handle_input(app.world.get_resource::<InputManager>().unwrap(), &mut game);
-                update(&mut game);
+                let dt = app
+                    .world
+                    .get_resource::<Time>()
+                    .map(|t| t.delta_seconds())
+                    .unwrap_or(0.016)
+                    .min(0.05);
+
+                let input_ref: *const InputManager =
+                    app.world.get_resource::<InputManager>().unwrap() as *const _;
+                let input = unsafe { &*input_ref };
+
+                process_input(input, &mut game, dt);
+                update(&mut game, dt);
+
                 redraw(&mut app.world, &game, &entities);
                 app.run();
                 app.render_phase();
@@ -258,318 +276,361 @@ fn main() {
         .unwrap();
 }
 
-fn handle_input(input: &InputManager, game: &mut GameState) {
-    if game.game_over {
-        if input.key_just_pressed(KeyCode::Escape) {
-            game.grid = [[0; COLS]; ROWS];
-            game.piece_type = random_piece();
-            game.piece_x = 3;
-            game.piece_y = 0;
-            game.piece_rot = 0;
-            game.next_piece = random_piece();
-            game.score = 0;
-            game.level = 1;
-            game.lines = 0;
-            game.game_over = false;
-            game.gravity_counter = 0;
-            game.gravity_interval = 45;
+fn process_input(input: &InputManager, g: &mut Game, dt: f32) {
+    if input.key_just_pressed(KeyCode::Escape) {
+        if g.over {
+            reset_game(g);
         }
         return;
     }
-
-    if input.key_just_pressed(KeyCode::ArrowLeft) || input.key_just_pressed(KeyCode::KeyA) {
-        try_move(game, -1, 0);
-        game.input_repeat = 0;
-        game.input_dir = -1;
-    } else if input.key_down(KeyCode::ArrowLeft) || input.key_down(KeyCode::KeyA) {
-        game.input_repeat += 1;
-        if game.input_dir == -1 && game.input_repeat > 12 && game.input_repeat.is_multiple_of(3) {
-            try_move(game, -1, 0);
-        }
+    if input.key_just_pressed(KeyCode::KeyP) {
+        g.paused = !g.paused;
+        return;
     }
-
-    if input.key_just_pressed(KeyCode::ArrowRight) || input.key_just_pressed(KeyCode::KeyD) {
-        try_move(game, 1, 0);
-        game.input_repeat = 0;
-        game.input_dir = 1;
-    } else if input.key_down(KeyCode::ArrowRight) || input.key_down(KeyCode::KeyD) {
-        game.input_repeat += 1;
-        if game.input_dir == 1 && game.input_repeat > 12 && game.input_repeat.is_multiple_of(3) {
-            try_move(game, 1, 0);
-        }
-    }
-
-    if !input.key_down(KeyCode::ArrowLeft)
-        && !input.key_down(KeyCode::KeyA)
-        && !input.key_down(KeyCode::ArrowRight)
-        && !input.key_down(KeyCode::KeyD)
-    {
-        game.input_repeat = 0;
-        game.input_dir = 0;
+    if g.over || g.paused {
+        return;
     }
 
     if input.key_just_pressed(KeyCode::ArrowUp) || input.key_just_pressed(KeyCode::KeyW) {
-        try_rotate(game);
+        try_rotate(g);
     }
-
-    if (input.key_down(KeyCode::ArrowDown) || input.key_down(KeyCode::KeyS)) && try_move(game, 0, 1)
-    {
-        game.score += 1;
-    }
-
     if input.key_just_pressed(KeyCode::Space) {
-        while try_move(game, 0, 1) {
-            game.score += 2;
+        while fits(g, g.piece, g.rot, g.px, g.py + 1) {
+            g.py += 1;
+            g.score += 2;
         }
-        lock_piece(game);
-    }
-}
-
-fn update(game: &mut GameState) {
-    if game.game_over {
+        lock(g);
         return;
     }
 
-    game.gravity_counter += 1;
-    let interval = game.gravity_interval.max(3);
-    if game.gravity_counter >= interval {
-        game.gravity_counter = 0;
-        if !try_move(game, 0, 1) {
-            lock_piece(game);
+    handle_repeat(input, g, dt, KeyCode::ArrowLeft, KeyCode::KeyA, -1);
+    handle_repeat(input, g, dt, KeyCode::ArrowRight, KeyCode::KeyD, 1);
+
+    if input.key_just_pressed(KeyCode::ArrowDown) || input.key_just_pressed(KeyCode::KeyS) {
+        if try_move(g, 0, 1) {
+            g.score += 1;
+        }
+        g.repeat_key = KeyCode::ArrowDown;
+        g.repeat_acc = 0.0;
+    } else if input.key_down(KeyCode::ArrowDown) || input.key_down(KeyCode::KeyS) {
+        g.repeat_acc += dt;
+        if g.repeat_acc >= g.repeat_rate {
+            g.repeat_acc -= g.repeat_rate;
+            if try_move(g, 0, 1) {
+                g.score += 1;
+            }
+        }
+    } else if g.repeat_key == KeyCode::ArrowDown {
+        g.repeat_key = KeyCode::Escape;
+    }
+}
+
+fn handle_repeat(
+    input: &InputManager,
+    g: &mut Game,
+    dt: f32,
+    key1: KeyCode,
+    key2: KeyCode,
+    dx: i32,
+) {
+    let just = input.key_just_pressed(key1) || input.key_just_pressed(key2);
+    let held = input.key_down(key1) || input.key_down(key2);
+
+    if just {
+        try_move(g, dx, 0);
+        g.repeat_key = key1;
+        g.repeat_acc = 0.0;
+    } else if held && g.repeat_key == key1 {
+        g.repeat_acc += dt;
+        if g.repeat_acc >= g.repeat_delay {
+            g.repeat_acc -= g.repeat_rate;
+            try_move(g, dx, 0);
+        }
+    } else if !held && g.repeat_key == key1 {
+        g.repeat_key = KeyCode::Escape;
+    }
+}
+
+fn update(g: &mut Game, dt: f32) {
+    if g.over || g.paused {
+        return;
+    }
+    g.fall_acc += dt;
+    if g.fall_acc >= g.fall_speed {
+        g.fall_acc -= g.fall_speed;
+        if !try_move(g, 0, 1) {
+            lock(g);
         }
     }
 }
 
-fn redraw(world: &mut World, game: &GameState, entities: &[Entity]) {
-    // Grid background + placed blocks
+fn redraw(world: &mut World, g: &Game, entities: &[Entity]) {
+    let ghost_y = ghost_y(g);
+
     for row in 0..ROWS {
         for col in 0..COLS {
             let idx = row * COLS + col;
             let e = entities[idx];
-            let cell = game.grid[row][col];
-            let color = PIECE_COLORS[cell as usize];
-            let px = GRID_X + col as f32 * BLOCK_SIZE;
-            let py = GRID_Y + row as f32 * BLOCK_SIZE;
+            let cell = g.grid[row][col];
 
+            let is_ghost = !g.over
+                && cell == 0
+                && is_piece_cell(g, col as i32, row as i32, g.piece, g.rot, g.px, g.py);
+            let is_ghost_below = !g.over
+                && cell == 0
+                && !is_ghost
+                && is_piece_cell(g, col as i32, row as i32, g.piece, g.rot, g.px, ghost_y);
+
+            let (color, size) = if cell != 0 {
+                (COLORS[cell as usize], Vec2::new(BLOCK, BLOCK))
+            } else if is_ghost {
+                let c = COLORS[g.piece + 1];
+                ([c[0], c[1], c[2], 0.35], Vec2::new(BLOCK, BLOCK))
+            } else if is_ghost_below {
+                let c = COLORS[g.piece + 1];
+                (
+                    [c[0] * 0.5, c[1] * 0.5, c[2] * 0.5, 0.2],
+                    Vec2::new(BLOCK, BLOCK),
+                )
+            } else {
+                (COLORS[0], Vec2::new(CELL, CELL))
+            };
+
+            let px = GRID_X + col as f32 * CELL;
+            let py = GRID_Y + row as f32 * CELL;
             if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
                 sprite.color = color;
-                sprite.transform = Mat4::from_translation(Vec3::new(px, py, 0.0));
+                sprite.size = size;
+                sprite.transform = Mat4::from_translation(Vec3::new(px + 1.0, py + 1.0, 0.0));
             }
         }
     }
 
-    // Current piece
-    if !game.game_over {
-        let blocks = TETROMINOES[game.piece_type][game.piece_rot];
-        let color = PIECE_COLORS[game.piece_type + 1];
-        for &(bx, by) in &blocks {
-            let gx = game.piece_x + bx;
-            let gy = game.piece_y + by;
-            if gx >= 0 && gx < COLS as i32 && gy >= 0 && gy < ROWS as i32 {
-                let idx = (gy as usize) * COLS + (gx as usize);
-                let e = entities[idx];
-                let px = GRID_X + gx as f32 * BLOCK_SIZE;
-                let py = GRID_Y + gy as f32 * BLOCK_SIZE;
-                if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
-                    sprite.color = color;
-                    sprite.transform = Mat4::from_translation(Vec3::new(px, py, 0.0));
-                }
-            }
-        }
-    }
-
-    // Next piece preview (entities[240..256])
-    let next_blocks = TETROMINOES[game.next_piece][0];
-    let next_color = PIECE_COLORS[game.next_piece + 1];
+    // Next piece preview
+    let blocks = TETROMINOES[g.next][0];
+    let color = COLORS[g.next + 1];
     for i in 0..16 {
         let e = entities[COLS * ROWS + i];
         let col = i % 4;
         let row = i / 4;
-        let is_block = next_blocks
+        let is_block = blocks
             .iter()
             .any(|&(bx, by)| bx as usize == col && by as usize == row);
-        if is_block {
-            let px = PREVIEW_X + col as f32 * BLOCK_SIZE;
-            let py = PREVIEW_Y + row as f32 * BLOCK_SIZE;
-            if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
-                sprite.color = next_color;
-                sprite.transform = Mat4::from_translation(Vec3::new(px, py, 0.0));
+        if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
+            if is_block {
+                sprite.color = color;
+                sprite.size = Vec2::new(BLOCK, BLOCK);
+                sprite.transform = Mat4::from_translation(Vec3::new(
+                    PREVIEW_X + col as f32 * CELL,
+                    PREVIEW_Y + row as f32 * CELL,
+                    0.0,
+                ));
+            } else {
+                sprite.color = [0.0, 0.0, 0.0, 0.0];
+                sprite.transform = Mat4::from_translation(Vec3::new(-200.0, -200.0, 0.0));
             }
-        } else if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
-            sprite.color = [0.0, 0.0, 0.0, 0.0];
-            sprite.transform = Mat4::from_translation(Vec3::new(-100.0, -100.0, 0.0));
         }
     }
 
-    // Score digits — simplified bar-style display
-    let score_str = format!("{:06}", game.score);
-    for (di, ch) in score_str.chars().enumerate() {
-        let digit = ch.to_digit(10).unwrap() as usize;
-        let digit_map = DIGIT_MAP[digit];
-        for (py, row) in digit_map.iter().enumerate() {
-            let idx = COLS * ROWS + 16 + di * 4 + py;
-            if idx < entities.len() {
-                let e = entities[idx];
-                let on_count = row.iter().filter(|&&v| v != 0).count();
-                let any_on = on_count > 0;
-                let color = if any_on {
-                    [0.9, 0.9, 0.9, 1.0]
-                } else {
-                    [0.0, 0.0, 0.0, 0.0]
-                };
-                let screen_x = 530.0 + di as f32 * 18.0;
-                let screen_y = 310.0 + py as f32 * 6.0;
-                if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
-                    sprite.color = color;
-                    sprite.size = Vec2::new(on_count as f32 * 5.0, 5.0);
-                    sprite.transform = Mat4::from_translation(Vec3::new(screen_x, screen_y, 0.0));
+    // Score
+    draw_number(
+        world,
+        entities,
+        COLS * ROWS + 16,
+        SCORE_X,
+        SCORE_Y,
+        g.score,
+        6,
+        [0.95, 0.95, 0.95, 1.0],
+    );
+
+    // Level
+    draw_number(
+        world,
+        entities,
+        COLS * ROWS + 16 + 48,
+        LEVEL_X,
+        LEVEL_Y,
+        g.level,
+        2,
+        [0.9, 0.9, 0.5, 1.0],
+    );
+
+    // Lines
+    draw_number(
+        world,
+        entities,
+        COLS * ROWS + 16 + 64,
+        LEVEL_X,
+        LEVEL_Y - 60.0,
+        g.lines,
+        4,
+        [0.7, 0.7, 0.9, 1.0],
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_number(
+    world: &mut World,
+    entities: &[Entity],
+    start_idx: usize,
+    x: f32,
+    y: f32,
+    value: u32,
+    digits: usize,
+    color: [f32; 4],
+) {
+    let s = format!(
+        "{:0width$}",
+        value.min(10u32.pow(digits as u32) - 1),
+        width = digits
+    );
+    for (di, ch) in s.chars().enumerate() {
+        let d = ch.to_digit(10).unwrap() as usize;
+        let map = DIGIT_MAP[d];
+        for (py, row) in map.iter().enumerate() {
+            for (px, &on) in row.iter().enumerate() {
+                let ei = start_idx + di * 12 + py * 3 + px;
+                if ei >= entities.len() {
+                    continue;
                 }
-            }
-        }
-    }
-
-    // Level indicator
-    let level_str = format!("{:02}", game.level);
-    for (di, ch) in level_str.chars().enumerate() {
-        let digit = ch.to_digit(10).unwrap() as usize;
-        let digit_map = DIGIT_MAP[digit];
-        for (py, row) in digit_map.iter().enumerate() {
-            let idx = COLS * ROWS + 16 + 24 + di * 4 + py;
-            if idx < entities.len() {
-                let e = entities[idx];
-                let on_count = row.iter().filter(|&&v| v != 0).count();
-                let any_on = on_count > 0;
-                let color = if any_on {
-                    [0.9, 0.9, 0.5, 1.0]
-                } else {
-                    [0.0, 0.0, 0.0, 0.0]
-                };
-                let screen_x = 530.0 + di as f32 * 18.0;
-                let screen_y = 370.0 + py as f32 * 6.0;
+                let e = entities[ei];
+                let on = on != 0;
                 if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
-                    sprite.color = color;
-                    sprite.size = Vec2::new(on_count as f32 * 5.0, 5.0);
-                    sprite.transform = Mat4::from_translation(Vec3::new(screen_x, screen_y, 0.0));
+                    sprite.color = if on { color } else { [0.0, 0.0, 0.0, 0.0] };
+                    sprite.size = Vec2::new(4.0, 4.0);
+                    sprite.transform = Mat4::from_translation(Vec3::new(
+                        x + di as f32 * 20.0 + px as f32 * 5.0,
+                        y + py as f32 * 5.0,
+                        0.0,
+                    ));
                 }
             }
         }
     }
 }
 
-fn try_move(game: &mut GameState, dx: i32, dy: i32) -> bool {
-    let nx = game.piece_x + dx;
-    let ny = game.piece_y + dy;
-    if fits(game, game.piece_type, game.piece_rot, nx, ny) {
-        game.piece_x = nx;
-        game.piece_y = ny;
+fn is_piece_cell(_g: &Game, gx: i32, gy: i32, piece: usize, rot: usize, px: i32, py: i32) -> bool {
+    TETROMINOES[piece][rot]
+        .iter()
+        .any(|&(bx, by)| px + bx == gx && py + by == gy)
+}
+
+fn ghost_y(g: &Game) -> i32 {
+    let mut gy = g.py;
+    while fits(g, g.piece, g.rot, g.px, gy + 1) {
+        gy += 1;
+    }
+    gy
+}
+
+fn try_move(g: &mut Game, dx: i32, dy: i32) -> bool {
+    if fits(g, g.piece, g.rot, g.px + dx, g.py + dy) {
+        g.px += dx;
+        g.py += dy;
         true
     } else {
         false
     }
 }
 
-fn try_rotate(game: &mut GameState) {
-    let new_rot = (game.piece_rot + 1) % 4;
-    if fits(game, game.piece_type, new_rot, game.piece_x, game.piece_y) {
-        game.piece_rot = new_rot;
-        return;
-    }
-    for &(dx, dy) in &[(1i32, 0i32), (-1, 0), (0, -1), (2, 0), (-2, 0)] {
-        if fits(
-            game,
-            game.piece_type,
-            new_rot,
-            game.piece_x + dx,
-            game.piece_y + dy,
-        ) {
-            game.piece_x += dx;
-            game.piece_y += dy;
-            game.piece_rot = new_rot;
+fn try_rotate(g: &mut Game) {
+    let nr = (g.rot + 1) % 4;
+    for &(dx, dy) in &[(0, 0), (1, 0), (-1, 0), (0, -1), (2, 0), (-2, 0)] {
+        if fits(g, g.piece, nr, g.px + dx, g.py + dy) {
+            g.rot = nr;
+            g.px += dx;
+            g.py += dy;
             return;
         }
     }
 }
 
-fn lock_piece(game: &mut GameState) {
-    let blocks = TETROMINOES[game.piece_type][game.piece_rot];
-    let color_id = (game.piece_type + 1) as u8;
+fn lock(g: &mut Game) {
+    let blocks = TETROMINOES[g.piece][g.rot];
+    let cid = (g.piece + 1) as u8;
     for &(bx, by) in &blocks {
-        let gx = game.piece_x + bx;
-        let gy = game.piece_y + by;
+        let gx = g.px + bx;
+        let gy = g.py + by;
         if gx >= 0 && gx < COLS as i32 && gy >= 0 && gy < ROWS as i32 {
-            game.grid[gy as usize][gx as usize] = color_id;
+            g.grid[gy as usize][gx as usize] = cid;
         }
     }
-    clear_lines(game);
-    game.piece_type = game.next_piece;
-    game.next_piece = random_piece();
-    game.piece_x = 3;
-    game.piece_y = 0;
-    game.piece_rot = 0;
-    game.gravity_counter = 0;
-    if !fits(
-        game,
-        game.piece_type,
-        game.piece_rot,
-        game.piece_x,
-        game.piece_y,
-    ) {
-        game.game_over = true;
+    clear_lines(g);
+    g.piece = g.next;
+    g.next = rand_piece();
+    g.px = 3;
+    g.py = 0;
+    g.rot = 0;
+    g.fall_acc = 0.0;
+    if !fits(g, g.piece, g.rot, g.px, g.py) {
+        g.over = true;
     }
 }
 
-fn clear_lines(game: &mut GameState) {
+fn clear_lines(g: &mut Game) {
     let mut cleared = 0;
     let mut write = ROWS;
     for read in (0..ROWS).rev() {
-        let full = game.grid[read].iter().all(|&c| c != 0);
-        if full {
+        if g.grid[read].iter().all(|&c| c != 0) {
             cleared += 1;
         } else {
             write -= 1;
             if write != read {
-                game.grid[write] = game.grid[read];
+                g.grid[write] = g.grid[read];
             }
         }
     }
-    for row in game.grid.iter_mut().take(cleared) {
+    for row in g.grid.iter_mut().take(cleared) {
         *row = [0; COLS];
     }
-    game.score += match cleared {
+    g.score += match cleared {
         0 => 0,
         1 => 100,
         2 => 300,
         3 => 500,
         _ => 800,
-    } * game.level;
-    game.lines += cleared as u32;
-    game.level = game.lines / 10 + 1;
-    game.gravity_interval = 45_u32.saturating_sub(game.level * 3);
+    } * g.level;
+    g.lines += cleared as u32;
+    g.level = g.lines / 10 + 1;
+    g.fall_speed = (0.8 - g.level as f32 * 0.06).max(0.05);
 }
 
-fn fits(game: &GameState, piece: usize, rot: usize, px: i32, py: i32) -> bool {
+fn fits(g: &Game, piece: usize, rot: usize, px: i32, py: i32) -> bool {
     for &(bx, by) in &TETROMINOES[piece][rot] {
         let gx = px + bx;
         let gy = py + by;
-        if gx < 0 || gx >= COLS as i32 || gy < 0 || gy >= ROWS as i32 {
+        if gx < 0 || gx >= COLS as i32 || gy >= ROWS as i32 {
             return false;
         }
-        if game.grid[gy as usize][gx as usize] != 0 {
+        if gy >= 0 && g.grid[gy as usize][gx as usize] != 0 {
             return false;
         }
     }
     true
 }
 
-const DIGIT_MAP: [[[u8; 3]; 4]; 10] = [
-    [[1, 1, 1], [1, 0, 1], [1, 0, 1], [1, 1, 1]],
-    [[0, 1, 0], [1, 1, 0], [0, 1, 0], [1, 1, 1]],
-    [[1, 1, 1], [0, 1, 1], [1, 1, 0], [1, 1, 1]],
-    [[1, 1, 1], [0, 1, 1], [0, 0, 1], [1, 1, 1]],
-    [[1, 0, 1], [1, 1, 1], [0, 0, 1], [0, 0, 1]],
-    [[1, 1, 1], [1, 1, 0], [0, 0, 1], [1, 1, 1]],
-    [[1, 1, 1], [1, 1, 0], [1, 0, 1], [1, 1, 1]],
-    [[1, 1, 1], [0, 0, 1], [0, 1, 0], [0, 1, 0]],
-    [[1, 1, 1], [1, 1, 1], [1, 0, 1], [1, 1, 1]],
-    [[1, 1, 1], [1, 1, 1], [0, 0, 1], [1, 1, 1]],
-];
+fn reset_game(g: &mut Game) {
+    g.grid = [[0; COLS]; ROWS];
+    g.piece = rand_piece();
+    g.px = 3;
+    g.py = 0;
+    g.rot = 0;
+    g.next = rand_piece();
+    g.score = 0;
+    g.level = 1;
+    g.lines = 0;
+    g.over = false;
+    g.paused = false;
+    g.fall_acc = 0.0;
+    g.fall_speed = 0.8;
+}
+
+fn rand_piece() -> usize {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let ns = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .subsec_nanos();
+    (ns % 7) as usize
+}
