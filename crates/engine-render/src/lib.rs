@@ -14,6 +14,7 @@
 
 pub mod animation;
 pub mod atmosphere;
+pub mod collect_system;
 pub mod bloom;
 pub mod camera;
 pub mod camera_system;

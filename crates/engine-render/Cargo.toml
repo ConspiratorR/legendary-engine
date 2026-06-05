@@ -9,6 +9,7 @@ engine-window = { path = "../engine-window" }
 engine-math = { path = "../engine-math" }
 engine-asset = { path = "../engine-asset" }
 engine-ecs = { path = "../engine-ecs" }
+engine-scene = { path = "../engine-scene" }
 wgpu = { version = "23", features = ["wgsl"] }
 winit = "0.30"
 thiserror = "2"
