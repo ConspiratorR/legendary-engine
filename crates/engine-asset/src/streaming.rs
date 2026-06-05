@@ -310,7 +310,6 @@ pub struct StreamingManager {
     /// LOD selector.
     selector: LodSelector,
     /// Pending stream requests sorted by priority.
-    #[allow(dead_code)]
     request_queue: BTreeMap<StreamPriority, Vec<StreamRequest>>,
 }
 
@@ -362,12 +361,10 @@ impl StreamingManager {
                 };
 
                 if needs_load {
-                    let state = self
-                        .lod_states
-                        .get_mut(base_path)
-                        .expect("lod_states entry must exist after state lookup");
-                    state.target_lod = target_lod;
-                    state.last_evaluated = Instant::now();
+                    if let Some(state) = self.lod_states.get_mut(base_path) {
+                        state.target_lod = target_lod;
+                        state.last_evaluated = Instant::now();
+                    }
 
                     let priority = if distance < 10.0 {
                         StreamPriority::Critical
@@ -432,6 +429,33 @@ impl StreamingManager {
     /// Get the number of registered streaming assets.
     pub fn registered_count(&self) -> usize {
         self.lod_configs.len()
+    }
+
+    /// Submit stream requests into the priority queue.
+    pub fn enqueue(&mut self, requests: Vec<StreamRequest>) {
+        for req in requests {
+            self.request_queue
+                .entry(req.priority)
+                .or_default()
+                .push(req);
+        }
+    }
+
+    /// Drain all queued requests in priority order (highest first).
+    pub fn drain_queue(&mut self) -> Vec<StreamRequest> {
+        let mut all = Vec::new();
+        for (_, mut requests) in std::mem::take(&mut self.request_queue) {
+            all.append(&mut requests);
+        }
+        // Already ordered by key (BTreeMap iterates sorted), but sort explicitly
+        // in case same-priority requests need stable ordering.
+        all.sort_by_key(|b| std::cmp::Reverse(b.priority));
+        all
+    }
+
+    /// Number of pending requests in the queue.
+    pub fn queue_len(&self) -> usize {
+        self.request_queue.values().map(|v| v.len()).sum()
     }
 }
 
@@ -623,5 +647,58 @@ mod tests {
         assert!(StreamPriority::Critical > StreamPriority::Visible);
         assert!(StreamPriority::Visible > StreamPriority::Normal);
         assert!(StreamPriority::Normal > StreamPriority::Background);
+    }
+
+    #[test]
+    fn test_enqueue_and_drain() {
+        let mut mgr = StreamingManager::new(1024 * 1024);
+        assert_eq!(mgr.queue_len(), 0);
+
+        let config = LodConfig::uniform(PathBuf::from("terrain.obj"), 3, 500.0);
+        mgr.register(config);
+
+        let mut positions = HashMap::new();
+        positions.insert(PathBuf::from("terrain.obj"), [10.0, 0.0, 0.0]);
+
+        let requests = mgr.evaluate([0.0, 0.0, 0.0], &positions);
+        assert!(!requests.is_empty());
+
+        mgr.enqueue(requests);
+        assert!(mgr.queue_len() > 0);
+
+        let drained = mgr.drain_queue();
+        assert!(!drained.is_empty());
+        assert_eq!(mgr.queue_len(), 0);
+    }
+
+    #[test]
+    fn test_drain_priority_order() {
+        let mut mgr = StreamingManager::new(1024 * 1024);
+
+        // Manually insert requests at different priorities
+        mgr.request_queue
+            .entry(StreamPriority::Normal)
+            .or_default()
+            .push(StreamRequest {
+                path: PathBuf::from("far.obj"),
+                target_lod: 2,
+                priority: StreamPriority::Normal,
+                submitted_at: Instant::now(),
+            });
+        mgr.request_queue
+            .entry(StreamPriority::Critical)
+            .or_default()
+            .push(StreamRequest {
+                path: PathBuf::from("close.obj"),
+                target_lod: 0,
+                priority: StreamPriority::Critical,
+                submitted_at: Instant::now(),
+            });
+
+        let drained = mgr.drain_queue();
+        assert_eq!(drained.len(), 2);
+        // Critical should come first
+        assert_eq!(drained[0].priority, StreamPriority::Critical);
+        assert_eq!(drained[1].priority, StreamPriority::Normal);
     }
 }

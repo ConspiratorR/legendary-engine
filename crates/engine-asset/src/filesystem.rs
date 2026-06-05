@@ -128,4 +128,44 @@ mod tests {
         manager.refresh().unwrap();
         assert_eq!(manager.get_resources().len(), 0);
     }
+
+    #[test]
+    fn test_scan_missing_directory() {
+        let mut manager = ResourceManager::new("/nonexistent/path/that/does/not/exist");
+        let result = manager.refresh();
+        // Missing directory returns Ok (graceful skip) with empty resources
+        assert!(result.is_ok());
+        assert_eq!(manager.get_resources().len(), 0);
+    }
+
+    #[test]
+    fn test_scan_nested_directories() {
+        let dir = tempdir().unwrap();
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("file.txt"), "nested").unwrap();
+
+        let mut manager = ResourceManager::new(dir.path());
+        manager.refresh().unwrap();
+
+        let resources = manager.get_resources();
+        assert!(resources.len() >= 2); // sub dir + file.txt
+        assert!(resources.iter().any(|r| r.name == "sub"));
+        assert!(resources.iter().any(|r| r.name == "file.txt"));
+    }
+
+    #[test]
+    fn test_get_resources_in_directory() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "a").unwrap();
+        std::fs::write(dir.path().join("b.txt"), "b").unwrap();
+        let sub = dir.path().join("sub");
+        std::fs::create_dir(&sub).unwrap();
+
+        let mut manager = ResourceManager::new(dir.path());
+        manager.refresh().unwrap();
+
+        let root_resources = manager.get_resources_in_directory(dir.path());
+        assert_eq!(root_resources.len(), 3); // a.txt, b.txt, sub
+    }
 }

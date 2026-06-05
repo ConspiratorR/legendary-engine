@@ -453,4 +453,46 @@ mod tests {
         let result = imp.import(b"not an image", &mut ctx);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_gltf_importer_corrupt_data() {
+        let imp = GltfImporter;
+        let mut ctx = ImportContext::new("test.glb");
+        let result = imp.import(b"not a gltf file", &mut ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_script_importer_invalid_utf8() {
+        let imp = ScriptImporter;
+        let mut ctx = ImportContext::new("test.lua");
+        let result = imp.import(&[0xFF, 0xFE, 0x00], &mut ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_material_importer_invalid_utf8() {
+        let imp = MaterialImporter;
+        let mut ctx = ImportContext::new("test.mat");
+        let result = imp.import(&[0xFF, 0xFE, 0x00], &mut ctx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_audio_importer_empty_data() {
+        let imp = AudioImporter;
+        let mut ctx = ImportContext::new("test.wav");
+        // Empty data should still produce a valid clip with 0 duration
+        let clip = imp.import(b"", &mut ctx).unwrap();
+        assert_eq!(clip.format, AudioFormat::Wav);
+        assert_eq!(clip.duration, 0.0);
+    }
+
+    #[test]
+    fn test_script_importer_python() {
+        let imp = ScriptImporter;
+        let mut ctx = ImportContext::new("test.py");
+        let script = imp.import(b"print('hi')", &mut ctx).unwrap();
+        assert_eq!(script.language, ScriptLanguage::Python);
+    }
 }

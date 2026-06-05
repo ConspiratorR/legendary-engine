@@ -166,4 +166,56 @@ mod tests {
         let h2 = Handle::new(MyAsset::new(2));
         assert_ne!(HandleId::from_handle(&h1), HandleId::from_handle(&h2));
     }
+
+    #[test]
+    fn test_handle_ref_count_lifecycle() {
+        let h1 = Handle::new(MyAsset::new(10));
+        assert_eq!(h1.ref_count(), 1);
+
+        let h2 = h1.clone();
+        assert_eq!(h1.ref_count(), 2);
+        assert_eq!(h2.ref_count(), 2);
+
+        let h3 = h2.clone();
+        assert_eq!(h1.ref_count(), 3);
+
+        drop(h3);
+        assert_eq!(h1.ref_count(), 2);
+
+        drop(h2);
+        assert_eq!(h1.ref_count(), 1);
+    }
+
+    #[test]
+    fn test_handle_drop_releases_ref() {
+        let h1 = Handle::new(MyAsset::new(5));
+        assert_eq!(h1.ref_count(), 1);
+        {
+            let _h2 = h1.clone();
+            assert_eq!(h1.ref_count(), 2);
+        }
+        // _h2 dropped, ref count back to 1
+        assert_eq!(h1.ref_count(), 1);
+    }
+
+    #[test]
+    fn test_registry_type_mismatch_returns_none() {
+        #[derive(Clone)]
+        struct OtherAsset {
+            id: String,
+        }
+        impl Asset for OtherAsset {
+            type Id = str;
+            fn id(&self) -> &Self::Id {
+                &self.id
+            }
+        }
+
+        let mut reg = Registry::new();
+        reg.store("key", MyAsset::new(42));
+
+        // Try to get as wrong type — should return None, not panic
+        let result = reg.get::<OtherAsset>("key");
+        assert!(result.is_none());
+    }
 }
