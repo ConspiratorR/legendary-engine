@@ -1,3 +1,18 @@
+//! Window creation and configuration.
+//!
+//! Provides [`WindowConfig`] for describing window properties and
+//! [`create_window`] for instantiating a [`winit::window::Window`].
+//!
+//! # Platform behavior
+//!
+//! - **Size** is in *physical* pixels. On HiDPI displays the actual
+//!   framebuffer may be larger than the logical size; winit handles
+//!   this transparently.
+//! - **Title** must be valid UTF-8. Non-ASCII characters are supported
+//!   on all platforms.
+//! - **VSync** is a hint to the rendering layer; the window itself
+//!   does not enforce it.
+
 use crate::error::WindowError;
 use winit::dpi::PhysicalSize;
 use winit::window::Window;
@@ -14,6 +29,7 @@ use winit::window::Window;
 ///     .with_size(1920, 1080)
 ///     .with_vsync(false);
 /// ```
+#[derive(Debug)]
 pub struct WindowConfig {
     /// The window title.
     pub title: String,
