@@ -2,22 +2,72 @@
 //!
 //! Core engine systems for the RustEngine.
 //!
-//! This is the central crate that ties together all engine subsystems:
+//! This is the central crate ("Layer 4") that ties together all engine subsystems:
 //! - Application builder and plugin system
 //! - Time management
 //! - Configuration system
 //! - Logging and performance profiling
+//! - Memory tracking and object pools
+//! - Event channels
 //!
 //! ## Architecture
 //!
-//! engine-core follows a plugin-based architecture:
+//! engine-core follows a plugin-based architecture where each subsystem is
+//! integrated as a [`Plugin`](crate::plugin::Plugin) that registers systems,
+//! resources, and lifecycle hooks with the [`AppBuilder`](crate::app::AppBuilder).
 //!
 //! ```text
-//! AppBuilder -> Plugin::build() -> System Registration -> App::run()
+//! AppBuilder::new()
+//!   .add_plugin(CorePlugins)      // registers Time, ActionMap, etc.
+//!   .add_plugin(MyGamePlugin)     // registers game-specific systems
+//!   .build()                      // produces an App
+//!   .run()                        // executes one frame
 //! ```
 //!
-//! Each subsystem (render, physics, audio, etc.) is integrated
-//! as a plugin that registers its systems with the app builder.
+//! ## AppBuilder Pattern
+//!
+//! [`AppBuilder`](crate::app::AppBuilder) is the primary entry point for
+//! constructing an application. It accumulates:
+//!
+//! - **Plugins** via [`add_plugin`](crate::app::AppBuilder::add_plugin) —
+//!   each plugin's `build()` method is called immediately in registration order.
+//! - **Systems** via [`add_system`](crate::app::AppBuilder::add_system) —
+//!   added to either the sequential or parallel schedule.
+//! - **Resources** via [`insert_resource`](crate::app::AppBuilder::insert_resource) —
+//!   global singletons accessible from any system.
+//! - **Lifecycle hooks** via `add_pre_update_hook` / `add_post_update_hook` —
+//!   closures that run before/after the system schedule each frame.
+//!
+//! Call [`build`](crate::app::AppBuilder::build) to finalize and produce an
+//! [`App`](crate::app::App). The `App` holds the ECS world, schedule, and
+//! renderer. Call [`run`](crate::app::App::run) each frame to execute:
+//!
+//! ```text
+//! pre-update hooks → input frame advance → systems → post-update hooks
+//! ```
+//!
+//! ## Plugin Lifecycle
+//!
+//! 1. **Registration**: `app.add_plugin(MyPlugin)` calls `MyPlugin::build(&self, &mut AppBuilder)`.
+//! 2. **Build phase**: The plugin inserts resources, registers systems, and adds hooks.
+//! 3. **Build order**: Plugins execute `build()` in the order they are registered.
+//!    Dependencies between plugins must be handled by registration order.
+//! 4. **App finalization**: `app_builder.build()` consumes the builder and
+//!    produces an `App` with all registered systems and hooks.
+//! 5. **Runtime**: `app.run()` executes the frame cycle. Hooks and systems
+//!    see all resources and components registered during the build phase.
+//!
+//! ## Crate Dependencies
+//!
+//! engine-core depends on all major engine crates. Mandatory dependencies:
+//! - `engine-ecs` — Entity-Component-World and scheduling
+//! - `engine-input` — Input manager and action maps
+//! - `engine-render` — Renderer (set via `App::set_renderer`)
+//! - `engine-math` — Vector math types
+//! - `engine-scene`, `engine-asset`, `engine-window` — Error type integration
+//!
+//! Optional (feature-gated):
+//! - `engine-audio` — Audio playback (feature `"audio"`, enabled by default)
 //!
 //! ## Quick Start
 //!

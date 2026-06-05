@@ -438,3 +438,148 @@ fn test_parallel_schedule_system_execution() {
 
     assert_eq!(counter.load(Ordering::Relaxed), 2);
 }
+
+// ---------------------------------------------------------------------------
+// Additional hardening tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_builder_insert_resource() {
+    let mut builder = AppBuilder::new();
+    builder.insert_resource(42u64);
+    builder.insert_resource("hello".to_string());
+
+    let app = builder.build();
+    assert_eq!(*app.world.get_resource::<u64>().unwrap(), 42);
+    assert_eq!(
+        app.world.get_resource::<String>().unwrap().as_str(),
+        "hello"
+    );
+}
+
+#[test]
+fn test_plugin_registers_resource_via_builder() {
+    struct ConfigPlugin;
+
+    impl Plugin for ConfigPlugin {
+        fn build(&self, app: &mut AppBuilder) {
+            app.insert_resource(Config::from_toml("name = \"test\"\nport = \"8080\"").unwrap());
+        }
+    }
+
+    let mut builder = AppBuilder::new();
+    builder.add_plugin(ConfigPlugin);
+    let app = builder.build();
+
+    let config = app.world.get_resource::<Config>().unwrap();
+    assert_eq!(config.get("name"), Some(&"test".to_string()));
+    assert_eq!(config.get_i32("port"), Some(8080));
+}
+
+#[test]
+fn test_hook_execution_order() {
+    let log = Arc::new(std::sync::Mutex::new(Vec::<&'static str>::new()));
+    let l1 = log.clone();
+    let l2 = log.clone();
+    let l3 = log.clone();
+
+    let mut builder = AppBuilder::new();
+    builder.add_pre_update_hook(Box::new(move |_app| {
+        l1.lock().unwrap().push("pre");
+    }));
+    builder.add_system(move |_world: &mut World| {
+        l2.lock().unwrap().push("system");
+    });
+    builder.add_post_update_hook(Box::new(move |_app| {
+        l3.lock().unwrap().push("post");
+    }));
+
+    let mut app = builder.build();
+    app.run();
+
+    let entries = log.lock().unwrap();
+    assert_eq!(*entries, vec!["pre", "system", "post"]);
+}
+
+#[test]
+fn test_config_overwrite() {
+    let mut config = Config::new();
+    config.set("key".to_string(), "old".to_string());
+    config.set("key".to_string(), "new".to_string());
+    assert_eq!(config.get("key"), Some(&"new".to_string()));
+    assert_eq!(config.len(), 1);
+}
+
+#[test]
+fn test_config_empty_toml() {
+    let config = Config::from_toml("").unwrap();
+    assert!(config.is_empty());
+}
+
+#[test]
+fn test_config_comments_only() {
+    let toml = "# just a comment\n# another comment\n";
+    let config = Config::from_toml(toml).unwrap();
+    assert!(config.is_empty());
+}
+
+#[test]
+fn test_time_delta_seconds_positive_after_update() {
+    let mut time = Time::new();
+    // Small sleep to ensure measurable delta
+    std::thread::sleep(std::time::Duration::from_millis(1));
+    time.update();
+    assert!(time.delta_seconds() > 0.0);
+    assert!(time.delta().as_secs_f32() > 0.0);
+}
+
+#[test]
+fn test_time_fps_positive_after_update() {
+    let mut time = Time::new();
+    std::thread::sleep(std::time::Duration::from_millis(1));
+    time.update();
+    let fps = time.fps();
+    assert!(fps > 0.0);
+    assert!(fps < 1_000_000.0); // sanity upper bound
+}
+
+#[test]
+fn test_time_elapsed_grows_monotonically() {
+    let mut time = Time::new();
+    let mut prev_elapsed = time.elapsed_seconds();
+    for _ in 0..5 {
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        time.update();
+        let current = time.elapsed_seconds();
+        assert!(current >= prev_elapsed);
+        prev_elapsed = current;
+    }
+}
+
+#[test]
+fn test_multiple_post_render_hooks() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let c1 = counter.clone();
+    let c2 = counter.clone();
+
+    let mut builder = AppBuilder::new();
+    builder.add_post_render_hook(Box::new(move |_app| {
+        c1.fetch_add(1, Ordering::Relaxed);
+    }));
+    builder.add_post_render_hook(Box::new(move |_app| {
+        c2.fetch_add(1, Ordering::Relaxed);
+    }));
+
+    let app = builder.build();
+    // post_render_hooks are only invoked in the event loop, not in app.run()
+    // but we can verify they were registered
+    assert_eq!(app.post_render_hooks.len(), 2);
+}
+
+#[test]
+fn test_resource_registry_basic() {
+    let mut builder = AppBuilder::new();
+    builder.resources_mut().insert(100u32);
+    let app = builder.build();
+    assert_eq!(*app.resources.get::<u32>().unwrap(), 100);
+}
