@@ -29,6 +29,7 @@ pub mod indirect;
 pub mod instancing;
 pub mod light;
 pub mod lod;
+pub mod mesh_bridge;
 pub mod occlusion;
 pub mod particle;
 pub mod particle3d;
