@@ -363,31 +363,32 @@ mod tests {
         data.set("v", "vec2", SaveValue::Vec2([1.0, 2.0]));
         data.set("v", "vec3", SaveValue::Vec3([1.0, 2.0, 3.0]));
         data.set("v", "vec4", SaveValue::Vec4([1.0, 2.0, 3.0, 4.0]));
-        data.set(
-            "v",
-            "int_arr",
-            SaveValue::IntArray(vec![10, 20, 30]),
-        );
-        data.set(
-            "v",
-            "float_arr",
-            SaveValue::FloatArray(vec![1.1, 2.2]),
-        );
+        data.set("v", "int_arr", SaveValue::IntArray(vec![10, 20, 30]));
+        data.set("v", "float_arr", SaveValue::FloatArray(vec![1.1, 2.2]));
         data.set(
             "v",
             "str_arr",
             SaveValue::StringArray(vec!["a".into(), "b".into()]),
         );
 
-        assert!(matches!(data.get("v", "bool"), Some(SaveValue::Bool(false))));
+        assert!(matches!(
+            data.get("v", "bool"),
+            Some(SaveValue::Bool(false))
+        ));
         assert!(matches!(data.get("v", "int"), Some(SaveValue::Int(-42))));
-        assert!(matches!(data.get("v", "float"), Some(SaveValue::Float(f)) if (*f - 2.718).abs() < 1e-10));
+        assert!(
+            matches!(data.get("v", "float"), Some(SaveValue::Float(f)) if (*f - 2.718).abs() < 1e-10)
+        );
         assert!(matches!(data.get("v", "string"), Some(SaveValue::String(s)) if s == "hello"));
         assert!(matches!(data.get("v", "vec2"), Some(SaveValue::Vec2(_))));
         assert!(matches!(data.get("v", "vec3"), Some(SaveValue::Vec3(_))));
         assert!(matches!(data.get("v", "vec4"), Some(SaveValue::Vec4(_))));
         assert!(matches!(data.get("v", "int_arr"), Some(SaveValue::IntArray(a)) if a.len() == 3));
-        assert!(matches!(data.get("v", "float_arr"), Some(SaveValue::FloatArray(a)) if a.len() == 2));
-        assert!(matches!(data.get("v", "str_arr"), Some(SaveValue::StringArray(a)) if a.len() == 2));
+        assert!(
+            matches!(data.get("v", "float_arr"), Some(SaveValue::FloatArray(a)) if a.len() == 2)
+        );
+        assert!(
+            matches!(data.get("v", "str_arr"), Some(SaveValue::StringArray(a)) if a.len() == 2)
+        );
     }
 }

@@ -457,7 +457,10 @@ fn pop_empty_stack_no_exit_callback() {
     log.borrow_mut().clear();
     s.pop();
     s.flush(&mut w, &mut r);
-    assert!(log.borrow().is_empty(), "no callbacks on pop of empty stack");
+    assert!(
+        log.borrow().is_empty(),
+        "no callbacks on pop of empty stack"
+    );
 }
 
 #[test]
