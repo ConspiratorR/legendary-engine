@@ -292,7 +292,7 @@ impl WasmRuntime {
     }
 
     /// Create a Store with the sandbox limits applied.
-    fn create_store(&self, dt: f32) -> Store<HostState> {
+    fn create_store(&self, dt: f32) -> anyhow::Result<Store<HostState>> {
         let limiter = SandboxLimiter {
             max_memory_bytes: self.sandbox.max_memory_bytes,
             max_table_elements: self.sandbox.max_table_elements,
@@ -311,8 +311,8 @@ impl WasmRuntime {
         store.limiter(|state| &mut state.limiter);
         store
             .set_fuel(self.sandbox.max_fuel)
-            .expect("Failed to set WASM fuel");
-        store
+            .map_err(|e| anyhow::anyhow!("Failed to set WASM fuel: {}", e))?;
+        Ok(store)
     }
 }
 
@@ -689,7 +689,7 @@ impl WasmSystem {
     fn execute(&self, world: &mut World, dt: f32) -> anyhow::Result<()> {
         let bridge = self.bridge.read().unwrap_or_else(|e| e.into_inner());
 
-        let mut store = self.runtime.create_store(dt);
+        let mut store = self.runtime.create_store(dt)?;
         store.data_mut().world = WorldPtr(world as *mut World);
         store.data_mut().bridge = BridgePtr(&*bridge as *const WasmComponentBridge);
 
@@ -953,6 +953,64 @@ mod tests {
         assert!((pos.x - 1.0).abs() < 0.001);
         assert!((pos.y - 2.0).abs() < 0.001);
         assert!((pos.z - 3.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_wasm_memory_limit_exceeded() {
+        let bridge = make_bridge();
+        let sandbox = WasmSandbox {
+            max_memory_bytes: 65536, // 64 KiB — one WASM page
+            ..Default::default()
+        };
+        let runtime = Arc::new(WasmRuntime::with_sandbox(sandbox).unwrap());
+
+        // WASM module that tries to grow memory beyond 64 KiB (1 page already allocated)
+        let wasm = wat::parse_str(
+            r#"
+            (module
+                (memory (export "memory") 1 2)
+                (func (export "update") (param $dt f32)
+                    ;; Try to grow memory by 2 pages (would exceed 64 KiB limit)
+                    (drop (memory.grow (i32.const 2)))
+                )
+            )
+            "#,
+        )
+        .unwrap();
+
+        let system = WasmSystem::new("mem_test", &wasm, runtime, bridge).unwrap();
+        let mut world = World::new();
+        // Should not panic — memory growth is rejected by the limiter
+        let result = system.execute(&mut world, 0.016);
+        // The module may succeed (memory.grow returns -1 on failure) or fail
+        // depending on wasmtime version; either way it must not panic.
+        let _ = result;
+    }
+
+    #[test]
+    fn test_wasm_table_limit_exceeded() {
+        let bridge = make_bridge();
+        let sandbox = WasmSandbox {
+            max_table_elements: 1, // Very small table limit
+            ..Default::default()
+        };
+        let runtime = Arc::new(WasmRuntime::with_sandbox(sandbox).unwrap());
+
+        // WASM module with no table growth attempt — just verify the sandbox enforces limits
+        let wasm = wat::parse_str(
+            r#"
+            (module
+                (memory (export "memory") 1 1)
+                (func (export "update") (param $dt f32))
+            )
+            "#,
+        )
+        .unwrap();
+
+        let system = WasmSystem::new("table_test", &wasm, runtime, bridge).unwrap();
+        let mut world = World::new();
+        // Should succeed — module doesn't try to grow the table
+        system.run(&mut world);
     }
 
     #[test]

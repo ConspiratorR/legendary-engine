@@ -928,6 +928,67 @@ mod tests {
     }
 
     #[test]
+    fn test_registry_wasm_roundtrip_f32() {
+        let registry = TypeRegistry::default();
+        let mut world = engine_ecs::world::World::new();
+        let e = world.spawn();
+        world.add_component(e, 3.14f32);
+
+        let mut buf = [0u8; 4];
+        let written = registry.wasm_get(&world, "f32", e.index(), &mut buf);
+        assert_eq!(written, Some(4));
+
+        let v = f32::from_le_bytes(buf);
+        assert!((v - 3.14).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_registry_wasm_roundtrip_bool() {
+        let registry = TypeRegistry::default();
+        let mut world = engine_ecs::world::World::new();
+        let e = world.spawn();
+        world.add_component(e, true);
+
+        let mut buf = [0u8; 1];
+        let written = registry.wasm_get(&world, "bool", e.index(), &mut buf);
+        assert_eq!(written, Some(1));
+        assert_eq!(buf[0], 1);
+    }
+
+    #[test]
+    fn test_registry_lua_type_mismatch_error() {
+        let registry = TypeRegistry::default();
+        let lua = Lua::new();
+        let mut world = engine_ecs::world::World::new();
+        let e = world.spawn();
+        world.add_component(e, Vec3::new(1.0, 2.0, 3.0));
+
+        // Try to set a Vec3 with a number (type mismatch)
+        let result = registry.lua_set(&lua, &mut world, "Vec3", e.index(), &LuaValue::Number(42.0));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_registry_wasm_get_nonexistent_entity() {
+        let registry = TypeRegistry::default();
+        let world = engine_ecs::world::World::new();
+
+        let mut buf = [0u8; 12];
+        let result = registry.wasm_get(&world, "Vec3", 999, &mut buf);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_registry_wasm_get_unregistered_type() {
+        let registry = TypeRegistry::default();
+        let world = engine_ecs::world::World::new();
+
+        let mut buf = [0u8; 12];
+        let result = registry.wasm_get(&world, "NotRegistered", 0, &mut buf);
+        assert!(result.is_none());
+    }
+
+    #[test]
     fn test_registry_registered_names() {
         let registry = TypeRegistry::default();
         let names = registry.registered_names();

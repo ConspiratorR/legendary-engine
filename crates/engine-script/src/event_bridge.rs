@@ -533,6 +533,100 @@ mod tests {
     }
 
     #[test]
+    fn test_subscribe_emit_unsubscribe_lifecycle() {
+        let bus = ScriptEventBus::new();
+        let lua = Lua::new();
+
+        let cb1 = lua.create_function(|_, _: LuaValue| Ok(())).unwrap();
+        let cb2 = lua.create_function(|_, _: LuaValue| Ok(())).unwrap();
+
+        let id1 = bus.subscribe("ch", &lua, cb1).unwrap();
+        let id2 = bus.subscribe("ch", &lua, cb2).unwrap();
+        assert_eq!(bus.listener_count("ch"), 2);
+
+        // Unsubscribe first
+        bus.unsubscribe("ch", id1);
+        assert_eq!(bus.listener_count("ch"), 1);
+        assert!(bus.has_listeners("ch"));
+
+        // Unsubscribe second
+        bus.unsubscribe("ch", id2);
+        assert_eq!(bus.listener_count("ch"), 0);
+        assert!(!bus.has_listeners("ch"));
+    }
+
+    #[test]
+    fn test_unsubscribe_nonexistent_channel() {
+        let bus = ScriptEventBus::new();
+        // Should not panic
+        bus.unsubscribe("no_such", ScriptListenerId(999));
+    }
+
+    #[test]
+    fn test_dispatch_no_listeners() {
+        let bus = ScriptEventBus::new();
+        let lua = Lua::new();
+
+        bus.queue_event("orphan", EventData::I64(1));
+        // Should succeed with no listeners
+        bus.dispatch_to_lua(&lua).unwrap();
+
+        let pending = bus.drain_pending();
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_channels_independent() {
+        let bus = Arc::new(ScriptEventBus::new());
+        let lua = Lua::new();
+
+        lua.load(
+            r#"
+            ch_a_results = {}
+            ch_b_results = {}
+            "#,
+        )
+        .exec()
+        .unwrap();
+
+        let lua_ref_a = lua.clone();
+        let cb_a = lua
+            .create_function(move |_, data: LuaValue| {
+                let globals = lua_ref_a.globals();
+                let t: LuaTable = globals.get("ch_a_results").unwrap();
+                let len: i64 = t.len().unwrap();
+                t.set(len + 1, data).unwrap();
+                Ok(())
+            })
+            .unwrap();
+
+        let lua_ref_b = lua.clone();
+        let cb_b = lua
+            .create_function(move |_, data: LuaValue| {
+                let globals = lua_ref_b.globals();
+                let t: LuaTable = globals.get("ch_b_results").unwrap();
+                let len: i64 = t.len().unwrap();
+                t.set(len + 1, data).unwrap();
+                Ok(())
+            })
+            .unwrap();
+
+        bus.subscribe("a", &lua, cb_a).unwrap();
+        bus.subscribe("b", &lua, cb_b).unwrap();
+
+        bus.queue_event("a", EventData::I64(10));
+        bus.queue_event("b", EventData::I64(20));
+        bus.queue_event("a", EventData::I64(30));
+
+        bus.dispatch_to_lua(&lua).unwrap();
+
+        let a_results: LuaTable = lua.globals().get("ch_a_results").unwrap();
+        let b_results: LuaTable = lua.globals().get("ch_b_results").unwrap();
+        assert_eq!(a_results.len().unwrap(), 2);
+        assert_eq!(b_results.len().unwrap(), 1);
+    }
+
+    #[test]
     fn test_full_lua_integration() {
         let bus = Arc::new(ScriptEventBus::new());
         let lua = Lua::new();

@@ -4,6 +4,50 @@
 //! runtimes, enabling gameplay logic to be written in Lua or compiled
 //! WASM modules while retaining full ECS access.
 //!
+//! # Dual-Runtime Architecture
+//!
+//! The scripting layer supports two independent runtimes that share the
+//! same ECS world and component bridge infrastructure:
+//!
+//! - **Lua** (via [`mlua`](https://docs.rs/mlua)): Interpreted scripts with
+//!   hot-reload support. Best for rapid iteration and gameplay scripting.
+//!   Scripts are compiled and executed inside a sandboxed Lua 5.4 state.
+//!
+//! - **WASM** (via [`wasmtime`](https://docs.rs/wasmtime)): Ahead-of-time
+//!   compiled modules with deterministic execution. Best for performance-
+//!   critical or untrusted code. Modules run inside a resource-bounded
+//!   [`WasmSandbox`](wasm::WasmSandbox).
+//!
+//! Both runtimes interact with the ECS through the same
+//! [`ComponentBridge`](bridge::ComponentBridge) / [`WasmComponentBridge`](wasm::WasmComponentBridge)
+//! pattern: Rust component types are registered with closures that handle
+//! conversion to/from script values (Lua tables or WASM linear memory bytes).
+//!
+//! # Sandbox Safety Model
+//!
+//! ## WASM Sandbox
+//!
+//! WASM modules are executed inside a [`WasmSandbox`](wasm::WasmSandbox) that
+//! enforces hard resource limits:
+//!
+//! - **Memory**: Linear memory is capped (default 16 MiB). Growth beyond the
+//!   limit is rejected by [`SandboxLimiter`](wasm::SandboxLimiter).
+//! - **Fuel**: Each execution receives a finite fuel budget (default 1M units).
+//!   Infinite loops are terminated when fuel is exhausted.
+//! - **Table**: Indirect call table size is bounded (default 10K entries).
+//! - **Stack**: WASM call stack is limited to 1 MiB.
+//!
+//! Use [`WasmSandbox::strict()`](wasm::WasmSandbox::strict) for untrusted code
+//! (4 MiB memory, 100K fuel) and [`WasmSandbox::relaxed()`](wasm::WasmSandbox::relaxed)
+//! for trusted modules (64 MiB memory, 100M fuel).
+//!
+//! ## Lua Sandboxing
+//!
+//! Lua scripts run in a fresh Lua 5.4 state with the standard `print` function
+//! redirected to the host console. The `io` and `os` modules are available by
+//! default in Lua 5.4 — for production use, consider removing them via
+//! `lua.globals().set("io", LuaValue::Nil)`.
+//!
 //! # Features
 //!
 //! - **[`ComponentBridge`](bridge::ComponentBridge)**: Register Rust component types for Lua access
@@ -177,6 +221,55 @@ mod tests {
         let bridge = make_bridge_with_f32();
         let reloader = HotReloader::new(bridge);
         assert!(reloader.script_names().is_empty());
+    }
+
+    #[test]
+    fn test_component_bridge_round_trip() {
+        let bridge = make_bridge_with_f32();
+        let lua = Lua::new();
+        let mut world = World::new();
+        let e = world.spawn();
+        world.add_component(e, 42.0f32);
+
+        let bridge = bridge.read().unwrap();
+        // Get the value
+        let result = bridge.get(&lua, &world, "Health", e.index()).unwrap();
+        assert!(result.is_some());
+        if let Some(LuaValue::Number(v)) = result {
+            assert!((v - 42.0).abs() < 0.01);
+        } else {
+            panic!("Expected Number");
+        }
+
+        // Set a new value
+        bridge
+            .set(
+                &lua,
+                &mut world,
+                "Health",
+                e.index(),
+                &LuaValue::Number(99.0),
+            )
+            .unwrap();
+
+        // Verify the set
+        let result = bridge.get(&lua, &world, "Health", e.index()).unwrap();
+        if let Some(LuaValue::Number(v)) = result {
+            assert!((v - 99.0).abs() < 0.01);
+        } else {
+            panic!("Expected Number after set");
+        }
+    }
+
+    #[test]
+    fn test_component_bridge_get_unregistered() {
+        let bridge = make_bridge_with_f32();
+        let lua = Lua::new();
+        let world = World::new();
+
+        let bridge = bridge.read().unwrap();
+        let result = bridge.get(&lua, &world, "NonExistent", 0).unwrap();
+        assert!(result.is_none());
     }
 
     #[test]
