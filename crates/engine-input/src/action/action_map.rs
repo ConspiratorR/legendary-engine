@@ -136,6 +136,9 @@ impl ActionMap {
     }
 }
 
+/// ECS system that updates all action maps each frame.
+///
+/// Placeholder for future integration with the ECS scheduler.
 pub fn action_update_system(_world: &mut engine_ecs::world::World) {}
 
 #[cfg(test)]

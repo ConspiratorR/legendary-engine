@@ -1,20 +1,31 @@
-//! Input handling for keyboard and mouse.
+//! # engine-input
 //!
-//! Provides [`input_manager::InputManager`] for raw key/mouse state tracking and
-//! [`ActionMap`](action::ActionMap) for abstracting physical inputs
-//! into named game actions.
+//! Input management for the RustEngine.
 //!
-//! # Example
+//! Provides keyboard/mouse state tracking, action mapping,
+//! and input action detection for game controls.
 //!
-//! ```
+//! ## Quick Start
+//!
+//! ```rust
 //! use engine_input::input_manager::InputManager;
+//! use engine_input::action::ActionMap;
 //! use engine_input::keyboard::KeyCode;
 //!
 //! let mut input = InputManager::new();
+//! let mut actions = ActionMap::new();
+//!
+//! // Bind a key to an action
+//! actions.bind_key("jump", KeyCode::Space);
+//!
+//! // Simulate a key press
 //! input.press(KeyCode::Space);
-//! assert!(input.key_down(KeyCode::Space));
-//! input.update_frame();
-//! assert!(input.key_down(KeyCode::Space)); // still held
+//! actions.update(&input);
+//!
+//! // Check if action was just pressed
+//! if actions.action("jump").just_pressed() {
+//!     // Player jumps!
+//! }
 //! ```
 
 pub mod action;
