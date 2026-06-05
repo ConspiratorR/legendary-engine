@@ -292,7 +292,7 @@ fn deserialize_despawned(bytes: &[u8], offset: &mut usize) -> Option<Vec<u32>> {
 }
 
 impl NetworkMessage {
-    /// Serialize the message to bytes.
+    /// Serialize the message to a byte vector using a compact binary format.
     pub fn serialize(&self) -> Vec<u8> {
         match self {
             NetworkMessage::Handshake { client_id, version } => {
@@ -531,7 +531,8 @@ impl NetworkMessage {
         }
     }
 
-    /// Deserialize bytes into a message.
+    /// Deserialize a message from bytes. Returns `None` if the data is invalid or
+    /// the message type tag is unknown.
     pub fn deserialize(bytes: &[u8]) -> Option<Self> {
         if bytes.is_empty() {
             return None;

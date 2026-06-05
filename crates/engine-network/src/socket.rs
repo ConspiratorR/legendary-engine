@@ -69,12 +69,14 @@ pub struct PacketQueue {
 }
 
 impl PacketQueue {
+    /// Create a new empty packet queue.
     pub fn new() -> Self {
         Self {
             queue: Mutex::new(VecDeque::new()),
         }
     }
 
+    /// Push a packet to the back of the queue.
     pub fn push(&self, packet: NetworkPacket) {
         self.queue
             .lock()
@@ -82,6 +84,7 @@ impl PacketQueue {
             .push_back(packet);
     }
 
+    /// Pop a packet from the front of the queue.
     pub fn pop(&self) -> Option<NetworkPacket> {
         self.queue
             .lock()
@@ -89,10 +92,12 @@ impl PacketQueue {
             .pop_front()
     }
 
+    /// Get the number of packets in the queue.
     pub fn len(&self) -> usize {
         self.queue.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
+    /// Check if the queue is empty.
     pub fn is_empty(&self) -> bool {
         self.queue
             .lock()
@@ -140,10 +145,12 @@ impl UdpSocket {
         Ok((len, addr.to_string()))
     }
 
+    /// Set the socket to blocking or non-blocking mode.
     pub fn set_nonblocking(&self, nonblocking: bool) {
         let _ = self.socket.set_nonblocking(nonblocking);
     }
 
+    /// Set read and write timeouts on the socket.
     pub fn set_timeout(&self, duration: Duration) {
         let _ = self.socket.set_read_timeout(Some(duration));
         let _ = self.socket.set_write_timeout(Some(duration));
@@ -173,6 +180,7 @@ impl TcpListener {
         Ok((TcpConnection { stream }, addr.to_string()))
     }
 
+    /// Set the listener to blocking or non-blocking mode.
     pub fn set_nonblocking(&self, nonblocking: bool) {
         let _ = self.listener.set_nonblocking(nonblocking);
     }
@@ -213,6 +221,7 @@ impl TcpConnection {
         Ok(n)
     }
 
+    /// Get the peer address of this connection.
     pub fn peer_addr(&self) -> String {
         self.stream
             .peer_addr()
@@ -220,10 +229,12 @@ impl TcpConnection {
             .unwrap_or_default()
     }
 
+    /// Check if the connection appears to be active (has a valid peer address).
     pub fn is_connected(&self) -> bool {
         self.peer_addr() != ""
     }
 
+    /// Set read and write timeouts on the connection.
     pub fn set_timeout(&self, duration: Duration) {
         let _ = self.stream.set_read_timeout(Some(duration));
         let _ = self.stream.set_write_timeout(Some(duration));

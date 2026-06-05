@@ -60,14 +60,17 @@ pub struct Room {
 }
 
 impl Room {
+    /// Check if the room has reached maximum capacity.
     pub fn is_full(&self) -> bool {
         self.players.len() >= self.max_players as usize
     }
 
+    /// Check if the room is in the waiting state.
     pub fn is_waiting(&self) -> bool {
         self.state == RoomState::Waiting
     }
 
+    /// Check if a player is in this room.
     pub fn contains_player(&self, player_id: u64) -> bool {
         self.players.contains(&player_id)
     }
@@ -82,6 +85,7 @@ pub struct RoomManager {
 }
 
 impl RoomManager {
+    /// Create a new room manager.
     pub fn new() -> Self {
         Self {
             rooms: HashMap::new(),
@@ -90,6 +94,7 @@ impl RoomManager {
         }
     }
 
+    /// Create a new room and assign the host. Returns the room ID.
     pub fn create_room(
         &mut self,
         name: String,
@@ -126,6 +131,7 @@ impl RoomManager {
         Ok(room_id)
     }
 
+    /// Add a player to a room.
     pub fn join_room(&mut self, room_id: u64, player_id: u64) -> Result<(), MatchmakingError> {
         if self.player_rooms.contains_key(&player_id) {
             return Err(MatchmakingError::AlreadyInRoom);
@@ -148,6 +154,7 @@ impl RoomManager {
         Ok(())
     }
 
+    /// Remove a player from their current room.
     pub fn leave_room(&mut self, player_id: u64) -> Result<(), MatchmakingError> {
         let room_id = self
             .player_rooms
@@ -169,6 +176,7 @@ impl RoomManager {
         Ok(())
     }
 
+    /// Destroy a room. Only the host can destroy a room.
     pub fn destroy_room(
         &mut self,
         room_id: u64,
@@ -190,23 +198,28 @@ impl RoomManager {
         Ok(())
     }
 
+    /// Get a reference to a room by ID.
     pub fn get_room(&self, room_id: u64) -> Option<&Room> {
         self.rooms.get(&room_id)
     }
 
+    /// Get a mutable reference to a room by ID.
     pub fn get_room_mut(&mut self, room_id: u64) -> Option<&mut Room> {
         self.rooms.get_mut(&room_id)
     }
 
+    /// Get the room a player is currently in.
     pub fn get_player_room(&self, player_id: u64) -> Option<&Room> {
         let room_id = self.player_rooms.get(&player_id)?;
         self.rooms.get(room_id)
     }
 
+    /// Get the room ID for a player, if they are in a room.
     pub fn get_player_room_id(&self, player_id: u64) -> Option<u64> {
         self.player_rooms.get(&player_id).copied()
     }
 
+    /// List all rooms in the waiting state.
     pub fn list_waiting_rooms(&self) -> Vec<&Room> {
         self.rooms
             .values()
@@ -214,10 +227,12 @@ impl RoomManager {
             .collect()
     }
 
+    /// List all rooms regardless of state.
     pub fn list_all_rooms(&self) -> Vec<&Room> {
         self.rooms.values().collect()
     }
 
+    /// Set the state of a room.
     pub fn set_room_state(
         &mut self,
         room_id: u64,
@@ -231,10 +246,12 @@ impl RoomManager {
         Ok(())
     }
 
+    /// Get the total number of rooms.
     pub fn room_count(&self) -> usize {
         self.rooms.len()
     }
 
+    /// Remove all rooms in the [`Closed`](RoomState::Closed) state.
     pub fn cleanup_closed(&mut self) {
         let closed: Vec<u64> = self
             .rooms
@@ -279,6 +296,7 @@ pub struct Matchmaker {
 }
 
 impl Matchmaker {
+    /// Create a new matchmaker with the given player count bounds.
     pub fn new(min_players: u32, max_players: u32) -> Self {
         Self {
             queue: Vec::new(),
@@ -289,10 +307,12 @@ impl Matchmaker {
         }
     }
 
+    /// Add a player to the matchmaking queue.
     pub fn queue_player(&mut self, player: QueuedPlayer) {
         self.queue.push(player);
     }
 
+    /// Remove a player from the queue. Returns `true` if the player was found.
     pub fn dequeue_player(&mut self, player_id: u64) -> bool {
         let len_before = self.queue.len();
         self.queue.retain(|p| p.player_id != player_id);
@@ -337,14 +357,17 @@ impl Matchmaker {
         }
     }
 
+    /// Get the current queue size.
     pub fn queue_size(&self) -> usize {
         self.queue.len()
     }
 
+    /// Clear the matchmaking queue.
     pub fn clear(&mut self) {
         self.queue.clear();
     }
 
+    /// Get a slice of all queued players.
     pub fn queue(&self) -> &[QueuedPlayer] {
         &self.queue
     }
@@ -374,6 +397,7 @@ pub struct Lobby {
 }
 
 impl Lobby {
+    /// Create a new lobby for the given room.
     pub fn new(room_id: u64) -> Self {
         Self {
             room_id,
@@ -383,15 +407,18 @@ impl Lobby {
         }
     }
 
+    /// Add a player to the lobby.
     pub fn add_player(&mut self, player_id: u64) {
         self.players.insert(player_id, false);
     }
 
+    /// Remove a player from the lobby.
     pub fn remove_player(&mut self, player_id: u64) {
         self.players.remove(&player_id);
         self.teams.remove(&player_id);
     }
 
+    /// Set the ready state for a player.
     pub fn set_ready(&mut self, player_id: u64, ready: bool) -> Result<(), MatchmakingError> {
         if !self.players.contains_key(&player_id) {
             return Err(MatchmakingError::PlayerNotFound(player_id));
@@ -400,34 +427,42 @@ impl Lobby {
         Ok(())
     }
 
+    /// Check if a player is ready.
     pub fn is_ready(&self, player_id: u64) -> bool {
         self.players.get(&player_id).copied().unwrap_or(false)
     }
 
+    /// Check if all players in the lobby are ready.
     pub fn all_ready(&self) -> bool {
         !self.players.is_empty() && self.players.values().all(|&r| r)
     }
 
+    /// Get all player IDs in the lobby.
     pub fn player_ids(&self) -> Vec<u64> {
         self.players.keys().copied().collect()
     }
 
+    /// Get ready states for all players.
     pub fn ready_states(&self) -> Vec<bool> {
         self.players.values().copied().collect()
     }
 
+    /// Assign a player to a team.
     pub fn assign_team(&mut self, player_id: u64, team_id: u32) {
         self.teams.insert(player_id, team_id);
     }
 
+    /// Get the team assignment for a player.
     pub fn get_team(&self, player_id: u64) -> Option<u32> {
         self.teams.get(&player_id).copied()
     }
 
+    /// Get the number of players in the lobby.
     pub fn player_count(&self) -> usize {
         self.players.len()
     }
 
+    /// Get a list of `(player_id, is_ready)` tuples.
     pub fn player_ready_list(&self) -> Vec<(u64, bool)> {
         self.players
             .iter()
@@ -443,34 +478,41 @@ pub struct LobbyManager {
 }
 
 impl LobbyManager {
+    /// Create a new lobby manager.
     pub fn new() -> Self {
         Self {
             lobbies: HashMap::new(),
         }
     }
 
+    /// Create a lobby for a room, or return the existing one.
     pub fn create_lobby(&mut self, room_id: u64) -> &mut Lobby {
         self.lobbies
             .entry(room_id)
             .or_insert_with(|| Lobby::new(room_id))
     }
 
+    /// Get a reference to a lobby by room ID.
     pub fn get_lobby(&self, room_id: u64) -> Option<&Lobby> {
         self.lobbies.get(&room_id)
     }
 
+    /// Get a mutable reference to a lobby by room ID.
     pub fn get_lobby_mut(&mut self, room_id: u64) -> Option<&mut Lobby> {
         self.lobbies.get_mut(&room_id)
     }
 
+    /// Remove a lobby by room ID.
     pub fn remove_lobby(&mut self, room_id: u64) {
         self.lobbies.remove(&room_id);
     }
 
+    /// Get the total number of lobbies.
     pub fn lobby_count(&self) -> usize {
         self.lobbies.len()
     }
 
+    /// Check if all players in a room's lobby are ready.
     pub fn all_ready(&self, room_id: u64) -> bool {
         self.lobbies
             .get(&room_id)
@@ -478,6 +520,8 @@ impl LobbyManager {
             .unwrap_or(false)
     }
 
+    /// Transition the lobby to [`Starting`](LobbyState::Starting) if all players are ready.
+    /// Returns `true` if the transition occurred.
     pub fn try_start(&mut self, room_id: u64) -> bool {
         if let Some(lobby) = self.lobbies.get_mut(&room_id)
             && lobby.all_ready()

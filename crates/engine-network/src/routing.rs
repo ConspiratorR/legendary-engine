@@ -45,7 +45,7 @@ impl MessageRouter {
         }
     }
 
-    /// Queue a message for routing.
+    /// Queue a message with explicit routing information.
     pub fn send(&mut self, from: u64, target: RoutingTarget, message: NetworkMessage) {
         self.pending.push_back(RoutedMessage {
             from,

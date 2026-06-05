@@ -33,6 +33,7 @@ pub struct Connection {
 }
 
 impl Connection {
+    /// Create a new connection with the given ID in the [`Disconnected`](ConnectionState::Disconnected) state.
     pub fn new(id: u64) -> Self {
         Self {
             id,
@@ -44,26 +45,32 @@ impl Connection {
         }
     }
 
+    /// Queue a message for sending to the remote peer.
     pub fn send(&mut self, message: NetworkMessage) {
         self.outgoing.push_back(message);
     }
 
+    /// Enqueue a received message into the incoming buffer.
     pub fn receive(&mut self, message: NetworkMessage) {
         self.incoming.push_back(message);
     }
 
+    /// Drain all incoming messages, leaving the buffer empty.
     pub fn take_incoming(&mut self) -> VecDeque<NetworkMessage> {
         std::mem::take(&mut self.incoming)
     }
 
+    /// Drain all outgoing messages, leaving the buffer empty.
     pub fn take_outgoing(&mut self) -> VecDeque<NetworkMessage> {
         std::mem::take(&mut self.outgoing)
     }
 
+    /// Transition the connection to the [`Connecting`](ConnectionState::Connecting) state.
     pub fn connect(&mut self) {
         self.state = ConnectionState::Connecting;
     }
 
+    /// Disconnect with a reason message. Sends a [`Disconnect`](NetworkMessage::Disconnect) and transitions to [`Disconnected`](ConnectionState::Disconnected).
     pub fn disconnect(&mut self, reason: &str) {
         self.state = ConnectionState::Disconnected;
         self.send(NetworkMessage::Disconnect {
