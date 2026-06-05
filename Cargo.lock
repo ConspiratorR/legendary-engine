@@ -1195,6 +1195,7 @@ dependencies = [
  "engine-window",
  "env_logger",
  "log",
+ "thiserror 2.0.18",
  "winit",
 ]
 
@@ -1207,6 +1208,7 @@ dependencies = [
  "log",
  "rayon",
  "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1245,6 +1247,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1253,6 +1256,7 @@ version = "0.1.0"
 dependencies = [
  "engine-ecs",
  "engine-window",
+ "thiserror 2.0.18",
  "winit",
 ]
 
@@ -1264,6 +1268,7 @@ dependencies = [
  "crossbeam-deque",
  "log",
  "parking_lot",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1271,6 +1276,7 @@ name = "engine-math"
 version = "0.1.0"
 dependencies = [
  "glam",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1291,6 +1297,7 @@ dependencies = [
  "engine-ecs",
  "engine-math",
  "rayon",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1355,6 +1362,7 @@ dependencies = [
  "engine-render",
  "log",
  "rand",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1376,6 +1384,7 @@ dependencies = [
 name = "engine-window"
 version = "0.1.0"
 dependencies = [
+ "thiserror 2.0.18",
  "winit",
 ]
 
