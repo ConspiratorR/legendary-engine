@@ -1,3 +1,6 @@
+//! Bridge between the serializable [`Scene`] representation and the ECS
+//! [`World`]. Handles import/export of entities and component data.
+
 use crate::scene_serializer::{ComponentData, PropertyValue, Scene, SceneEntity, TransformData};
 use anyhow::{Context, Result};
 use engine_ecs::entity::Entity;

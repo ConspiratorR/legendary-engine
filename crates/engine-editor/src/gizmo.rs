@@ -1,3 +1,6 @@
+//! Viewport gizmo — translate, rotate, and scale handles drawn over the
+//! 3-D viewport for interactive object manipulation.
+
 use crate::state::{EditorState, ToolType};
 use egui::{Color32, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 

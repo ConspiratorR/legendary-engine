@@ -1,3 +1,10 @@
+//! Undo/redo command system for the editor.
+//!
+//! Provides a [`Command`] trait and [`CommandManager`] that maintains an
+//! undo/redo stack with configurable history depth. Each editor action that
+//! should be reversible implements [`Command`] with paired `execute`/`undo`
+//! methods.
+
 use std::collections::VecDeque;
 
 /// Trait for undoable editor commands.
@@ -96,8 +103,7 @@ impl Default for CommandManager {
 pub struct CreateEntityCommand {
     entity_id: u64,
     entity_name: String,
-    #[allow(dead_code)]
-    parent_id: Option<u64>,
+    _parent_id: Option<u64>,
 }
 
 impl CreateEntityCommand {
@@ -105,7 +111,7 @@ impl CreateEntityCommand {
         Self {
             entity_id,
             entity_name,
-            parent_id,
+            _parent_id: parent_id,
         }
     }
 }

@@ -1,3 +1,6 @@
+//! Top-level editor layout — composes all panels into the main window with
+//! menu bar, toolbar, and dockable panel regions.
+
 use crate::state::{EditorState, ToolType};
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::{Gui, GuiSkin};

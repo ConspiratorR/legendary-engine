@@ -1,3 +1,6 @@
+//! Resource browser panel — lists project assets and allows browsing,
+//! filtering, and selecting resources for use in the scene.
+
 use crate::state::EditorState;
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_asset::types::ResourceType;

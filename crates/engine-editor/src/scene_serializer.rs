@@ -1,3 +1,6 @@
+//! Scene serialization — JSON-based save/load for editor scenes including
+//! entities, components, and global settings.
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

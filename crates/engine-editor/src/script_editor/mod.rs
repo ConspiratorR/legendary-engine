@@ -1,3 +1,6 @@
+//! Script editor — code editing with syntax highlighting, breakpoints,
+//! output console, and file-watcher integration.
+
 pub mod breakpoints;
 pub mod output;
 pub mod syntax_highlight;

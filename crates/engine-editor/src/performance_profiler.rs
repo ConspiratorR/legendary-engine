@@ -1,3 +1,6 @@
+//! Performance profiler panel — detailed frame timing, GPU stats, and
+//! historical graphs for profiling editor and runtime performance.
+
 use egui::{Color32, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_render::gpu_profiler::{FrameHistory, FrameSnapshot, RenderStats};
 use std::collections::HashMap;

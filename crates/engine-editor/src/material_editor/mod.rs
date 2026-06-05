@@ -1,3 +1,6 @@
+//! Material editor — visual material authoring with a node-graph backend,
+//! preset library, and live preview.
+
 pub mod material_library;
 
 use egui::{Color32, Pos2, Rect, Rounding, Shape, Stroke, Vec2};

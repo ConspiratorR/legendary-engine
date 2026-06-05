@@ -1,3 +1,6 @@
+//! Real-time performance overlay — FPS counter, frame time graph, and draw
+//! call stats rendered as a HUD on top of the viewport.
+
 use egui::{Color32, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};

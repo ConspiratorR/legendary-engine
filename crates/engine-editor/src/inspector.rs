@@ -1,3 +1,6 @@
+//! Inspector panel — shows and edits properties of the selected entity,
+//! including transform, light parameters, material assignments, and tags.
+
 use crate::material_editor::MaterialEditorState;
 use crate::state::{EditorState, LightType};
 use egui::{Color32, Pos2, Rect, Rounding, Shape, Stroke, Vec2};

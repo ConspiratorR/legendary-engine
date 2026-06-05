@@ -1,3 +1,6 @@
+//! Editor plugin — registers the editor with the engine's plugin system
+//! and hooks the editor UI into the post-update phase.
+
 use crate::state::EditorState;
 use engine_core::app::{App, AppBuilder};
 use engine_core::plugin::Plugin;

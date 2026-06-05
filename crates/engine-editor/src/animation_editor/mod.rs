@@ -1,3 +1,6 @@
+//! Animation editor — clip management, curve editing, keyframe manipulation,
+//! timeline scrubbing, and animation preview/IO.
+
 pub mod curve_editor;
 pub mod io;
 pub mod keyframe_list;

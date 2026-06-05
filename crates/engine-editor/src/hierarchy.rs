@@ -1,3 +1,6 @@
+//! Scene hierarchy panel — displays the entity tree with drag-and-drop
+//! selection and right-click context actions.
+
 use crate::state::EditorState;
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::Gui;
@@ -317,7 +320,6 @@ fn draw_node(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::EditorState;
     use engine_ui::{Gui, GuiSkin};
 
     #[test]

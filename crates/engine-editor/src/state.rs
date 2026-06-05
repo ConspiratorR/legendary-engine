@@ -1,3 +1,10 @@
+//! Central editor state that all panels share.
+//!
+//! [`EditorState`] owns the scene hierarchy, selection, active tool, camera,
+//! and references to sub-editor states (animation, material, node-graph, etc.).
+//! Each panel module receives `&mut EditorState` during the frame to read and
+//! mutate shared data.
+
 use egui::{Context, Pos2};
 use engine_math::{Mat4, Vec3};
 use engine_ui::GuiSkin;

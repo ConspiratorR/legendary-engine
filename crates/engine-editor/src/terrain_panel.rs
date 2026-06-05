@@ -1,3 +1,6 @@
+//! Terrain editor panel — brush settings, sculpt/paint modes, texture
+//! layer management, and vegetation tools for terrain entities.
+
 use engine_terrain::components::{
     BrushFalloff, PaintBrushSettings, PaintMode, SculptMode, Terrain, TerrainTextureLayers,
     VegetationData, VegetationType,

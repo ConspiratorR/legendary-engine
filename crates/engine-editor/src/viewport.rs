@@ -1,3 +1,6 @@
+//! 3-D viewport panel — renders the scene preview, toolbar, camera controls,
+//! and delegates gizmo interaction to [`crate::gizmo`].
+
 use crate::state::EditorState;
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_math::Vec3Ext;

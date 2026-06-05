@@ -1,3 +1,6 @@
+//! Node graph editor — visual scripting with blueprint components, data-flow
+//! evaluation, export, and a drag-and-drop renderer.
+
 pub mod blueprint;
 pub mod blueprint_component;
 pub mod evaluator;

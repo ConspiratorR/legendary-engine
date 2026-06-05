@@ -1,3 +1,6 @@
+//! Keyboard shortcut manager — maps key bindings to editor actions with
+//! support for configurable shortcut profiles.
+
 use engine_input::keyboard::KeyCode;
 use std::collections::HashMap;
 
