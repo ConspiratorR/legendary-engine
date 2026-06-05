@@ -57,6 +57,7 @@ pub mod ccd;
 pub mod collider;
 pub mod contact;
 pub mod joint;
+pub mod physics_2d;
 pub mod plugin;
 pub mod world;
 
