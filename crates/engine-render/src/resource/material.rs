@@ -140,7 +140,7 @@ impl MaterialStore {
         self.next_id += 1;
 
         let uniform = MaterialUniform::from(&material);
-        let offset = ((id - 1) * 48) as u64;
+        let offset = (id - 1) * 48;
         queue.write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(&uniform));
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -171,6 +171,10 @@ impl MaterialStore {
 
     pub fn len(&self) -> usize {
         self.materials.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.materials.is_empty()
     }
 }
 

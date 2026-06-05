@@ -1302,6 +1302,7 @@ dependencies = [
  "engine-asset",
  "engine-ecs",
  "engine-math",
+ "engine-scene",
  "engine-window",
  "image",
  "parking_lot",

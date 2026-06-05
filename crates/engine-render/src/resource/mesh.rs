@@ -75,6 +75,12 @@ pub struct MeshStore {
     next_id: u64,
 }
 
+impl Default for MeshStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MeshStore {
     pub fn new() -> Self {
         Self {
