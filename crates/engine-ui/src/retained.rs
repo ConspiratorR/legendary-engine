@@ -243,8 +243,6 @@ pub struct UiTree {
     root: Option<WidgetId>,
     next_id: u64,
     focused: Option<WidgetId>,
-    #[allow(dead_code)]
-    hovered: Option<WidgetId>,
 }
 
 impl UiTree {
@@ -255,7 +253,6 @@ impl UiTree {
             root: None,
             next_id: 1,
             focused: None,
-            hovered: None,
         }
     }
 
@@ -1072,5 +1069,165 @@ mod tests {
         assert_eq!(tree.len(), 1);
         tree.remove_widget(root);
         assert!(tree.is_empty());
+    }
+
+    #[test]
+    fn test_widget_lifecycle_create_layout_destroy() {
+        let mut tree = UiTree::new();
+        let root = tree.create_widget(WidgetKind::Container);
+        let btn = tree.create_widget(WidgetKind::Button("Play".into()));
+        let label = tree.create_widget(WidgetKind::Label("Score".into()));
+        tree.set_root(root);
+        tree.add_child(root, btn);
+        tree.add_child(root, label);
+        assert_eq!(tree.len(), 3);
+
+        tree.layout(Vec2::new(800.0, 600.0));
+        let btn_bounds = tree.get(btn).unwrap().bounds;
+        assert!(btn_bounds.width() > 0.0);
+        assert!(btn_bounds.height() > 0.0);
+
+        tree.remove_widget(btn);
+        assert_eq!(tree.len(), 2);
+        assert!(tree.get(btn).is_none());
+    }
+
+    #[test]
+    fn test_event_click_on_label_not_consumed() {
+        let mut tree = UiTree::new();
+        let root = tree.create_widget(WidgetKind::Container);
+        let label = tree.create_widget(WidgetKind::Label("text".into()));
+        tree.set_root(root);
+        tree.add_child(root, label);
+        tree.layout(Vec2::new(400.0, 300.0));
+
+        let label_bounds = tree.get(label).unwrap().bounds;
+        let response = tree.dispatch_event(
+            label,
+            &UiEvent::Click {
+                pos: label_bounds.center(),
+            },
+        );
+        assert!(!response.consumed, "label click should not consume");
+    }
+
+    #[test]
+    fn test_event_hover_propagates() {
+        let mut tree = UiTree::new();
+        let root = tree.create_widget(WidgetKind::Container);
+        let child = tree.create_widget(WidgetKind::Button("OK".into()));
+        tree.set_root(root);
+        tree.add_child(root, child);
+        tree.layout(Vec2::new(400.0, 300.0));
+
+        let child_bounds = tree.get(child).unwrap().bounds;
+        let response = tree.dispatch_event(
+            child,
+            &UiEvent::Hover {
+                pos: child_bounds.center(),
+            },
+        );
+        assert!(!response.consumed, "hover should not consume");
+    }
+
+    #[test]
+    fn test_event_focus_marks_dirty() {
+        let mut tree = UiTree::new();
+        let root = tree.create_widget(WidgetKind::Container);
+        let field = tree.create_widget(WidgetKind::TextField {
+            text: String::new(),
+            placeholder: "type".into(),
+        });
+        tree.set_root(root);
+        tree.add_child(root, field);
+        tree.clear_dirty();
+
+        let response = tree.dispatch_event(field, &UiEvent::FocusGained);
+        assert!(response.dirty, "focus should mark dirty");
+    }
+
+    #[test]
+    fn test_event_focus_lost_marks_dirty() {
+        let mut tree = UiTree::new();
+        let root = tree.create_widget(WidgetKind::Container);
+        let field = tree.create_widget(WidgetKind::TextField {
+            text: String::new(),
+            placeholder: "type".into(),
+        });
+        tree.set_root(root);
+        tree.add_child(root, field);
+        tree.clear_dirty();
+
+        let response = tree.dispatch_event(field, &UiEvent::FocusLost);
+        assert!(response.dirty, "focus lost should mark dirty");
+    }
+
+    #[test]
+    fn test_layout_flex_stretch_ratio() {
+        let mut tree = UiTree::new();
+        let root = tree.create_widget(WidgetKind::Container);
+        let c1 = tree.create_widget(WidgetKind::Label("A".into()));
+        let c2 = tree.create_widget(WidgetKind::Label("B".into()));
+        let c3 = tree.create_widget(WidgetKind::Label("C".into()));
+        tree.get_mut(c1).unwrap().constraints.stretch_y = 1.0;
+        tree.get_mut(c2).unwrap().constraints.stretch_y = 1.0;
+        tree.get_mut(c3).unwrap().constraints.stretch_y = 1.0;
+        tree.get_mut(c1).unwrap().constraints.min_height = Some(0.0);
+        tree.get_mut(c2).unwrap().constraints.min_height = Some(0.0);
+        tree.get_mut(c3).unwrap().constraints.min_height = Some(0.0);
+        tree.set_root(root);
+        tree.add_child(root, c1);
+        tree.add_child(root, c2);
+        tree.add_child(root, c3);
+        tree.layout(Vec2::new(400.0, 300.0));
+
+        let h1 = tree.get(c1).unwrap().bounds.height();
+        let h2 = tree.get(c2).unwrap().bounds.height();
+        let h3 = tree.get(c3).unwrap().bounds.height();
+        assert!(
+            (h1 - h2).abs() < 1.0,
+            "equal stretch should give equal height"
+        );
+        assert!(
+            (h2 - h3).abs() < 1.0,
+            "equal stretch should give equal height"
+        );
+    }
+
+    #[test]
+    fn test_layout_constraints_stored() {
+        let mut tree = UiTree::new();
+        let root = tree.create_widget(WidgetKind::Container);
+        let child = tree.create_widget(WidgetKind::Label("X".into()));
+        tree.get_mut(child).unwrap().constraints.max_width = Some(50.0);
+        tree.get_mut(child).unwrap().constraints.max_height = Some(30.0);
+        tree.get_mut(child).unwrap().constraints.min_width = Some(10.0);
+        tree.get_mut(child).unwrap().constraints.min_height = Some(5.0);
+        tree.set_root(root);
+        tree.add_child(root, child);
+        tree.layout(Vec2::new(400.0, 300.0));
+
+        let c = tree.get(child).unwrap();
+        assert_eq!(c.constraints.max_width, Some(50.0));
+        assert_eq!(c.constraints.max_height, Some(30.0));
+        assert_eq!(c.constraints.min_width, Some(10.0));
+        assert_eq!(c.constraints.min_height, Some(5.0));
+    }
+
+    #[test]
+    fn test_descendants_removed_with_parent() {
+        let mut tree = UiTree::new();
+        let root = tree.create_widget(WidgetKind::Container);
+        let parent = tree.create_widget(WidgetKind::Container);
+        let child = tree.create_widget(WidgetKind::Label("deep".into()));
+        tree.set_root(root);
+        tree.add_child(root, parent);
+        tree.add_child(parent, child);
+        assert_eq!(tree.len(), 3);
+
+        tree.remove_widget(parent);
+        assert_eq!(tree.len(), 1);
+        assert!(tree.get(parent).is_none());
+        assert!(tree.get(child).is_none());
     }
 }

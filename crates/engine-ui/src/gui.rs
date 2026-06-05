@@ -1,3 +1,10 @@
+//! Immediate-mode skinned widgets drawn via `egui`.
+//!
+//! [`Gui`] wraps an `egui::Ui` reference and a [`GuiSkin`] to draw
+//! labels, buttons, sliders, toggles, text fields, toolbars, and more.
+//! Each widget method takes a `Rect` for positioning and returns
+//! interaction results (e.g. `bool` for click).
+
 use crate::skin::{ColorBlock, GuiSkin};
 use egui::{Color32, Painter, Pos2, Rect, Rounding, Shape, Stroke};
 

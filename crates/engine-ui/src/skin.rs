@@ -1,3 +1,10 @@
+//! Skin and style data structures for the immediate-mode GUI.
+//!
+//! A [`GuiSkin`] defines the visual appearance of every widget type by
+//! mapping each to a [`GuiStyle`]. Each style contains [`ColorBlock`]s for
+//! the normal, hover, active, and focused states, plus border rounding,
+//! margins, and font size.
+
 use egui::{Color32, Margin, Rounding};
 
 /// Visual theme for the GUI, defining styles for each widget type.

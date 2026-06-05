@@ -368,9 +368,6 @@ pub struct GestureRecognizer {
     config: GestureConfig,
     /// Start position of the current touch/click.
     start_pos: Option<(f32, f32)>,
-    /// Start time of the current touch/click.
-    #[allow(dead_code)]
-    start_time: Option<Duration>,
     /// Current position.
     current_pos: Option<(f32, f32)>,
     /// Accumulated time for long press detection.
@@ -384,7 +381,6 @@ impl GestureRecognizer {
         Self {
             config,
             start_pos: None,
-            start_time: None,
             current_pos: None,
             elapsed: Duration::ZERO,
             pending_gesture: None,

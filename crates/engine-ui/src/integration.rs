@@ -1,3 +1,12 @@
+//! egui ↔ wgpu bridge.
+//!
+//! [`EguiState`] manages the `egui` context, the `egui_wgpu::Renderer`,
+//! and input forwarding (mouse position, button presses). Call
+//! [`begin_frame`](EguiState::begin_frame) at the start of each frame,
+//! use [`ctx`](EguiState::ctx) to build UI, then
+//! [`end_frame`](EguiState::end_frame) and [`paint`](EguiState::paint)
+//! to render via wgpu.
+
 use egui::Context;
 use egui_wgpu::{Renderer, ScreenDescriptor};
 

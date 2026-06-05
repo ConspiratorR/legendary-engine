@@ -1,3 +1,9 @@
+//! Scoped layout helpers for building GUIs with horizontal and vertical containers.
+//!
+//! [`GuiLayout`] opens [`HorizontalScope`] and [`VerticalScope`] closures
+//! that auto-advance a cursor after each widget draw. This provides an
+//! immediate-mode alternative to the retained-mode [`crate::UiTree`].
+
 use crate::skin::GuiSkin;
 use egui::{Align2, Color32, Id, LayerId, Order, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 
@@ -417,7 +423,6 @@ impl<'a> GuiLayout<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::skin::GuiSkin;
 
     fn run_layout(mut f: impl FnMut(&mut GuiLayout)) {
         let ctx = egui::Context::default();
