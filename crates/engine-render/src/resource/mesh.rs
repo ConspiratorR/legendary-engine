@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use std::collections::HashMap;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
@@ -65,5 +66,50 @@ impl Mesh {
             num_vertices: vertices.len() as u32,
             num_indices,
         }
+    }
+}
+
+/// GPU Mesh 缓存，作为 World 资源存储
+pub struct MeshStore {
+    meshes: HashMap<u64, Mesh>,
+    next_id: u64,
+}
+
+impl MeshStore {
+    pub fn new() -> Self {
+        Self {
+            meshes: HashMap::new(),
+            next_id: 1,
+        }
+    }
+
+    /// 上传顶点/索引数据到 GPU，返回 mesh_id
+    pub fn upload(
+        &mut self,
+        device: &wgpu::Device,
+        vertices: &[MeshVertex],
+        indices: Option<&[u32]>,
+    ) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        let mesh = Mesh::new(device, vertices, indices);
+        self.meshes.insert(id, mesh);
+        id
+    }
+
+    pub fn get(&self, id: u64) -> Option<&Mesh> {
+        self.meshes.get(&id)
+    }
+
+    pub fn remove(&mut self, id: u64) -> Option<Mesh> {
+        self.meshes.remove(&id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.meshes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.meshes.is_empty()
     }
 }
