@@ -304,4 +304,90 @@ mod tests {
         let loaded: SaveData = serde_json::from_str(&json).unwrap();
         assert_eq!(loaded.name, "SerTest");
     }
+
+    #[test]
+    fn test_delete_nonexistent_slot() {
+        let (mgr, _dir) = temp_save_manager();
+        // Deleting a slot that doesn't exist should succeed (noop)
+        assert!(mgr.delete_slot(0).is_ok());
+        assert!(!mgr.slot_exists(0));
+    }
+
+    #[test]
+    fn test_max_slots_boundary() {
+        let (mgr, _dir) = temp_save_manager(); // max_slots = 3
+        assert!(mgr.save(0, &SaveData::new("a")).is_ok());
+        assert!(mgr.save(1, &SaveData::new("b")).is_ok());
+        assert!(mgr.save(2, &SaveData::new("c")).is_ok());
+        // Slot 3 is out of range
+        assert!(mgr.save(3, &SaveData::new("d")).is_err());
+        assert!(mgr.load(3).is_err());
+    }
+
+    #[test]
+    fn test_overwrite_existing_slot() {
+        let (mgr, _dir) = temp_save_manager();
+        mgr.save(0, &SaveData::new("first")).unwrap();
+        mgr.save(0, &SaveData::new("second")).unwrap();
+        let loaded = mgr.load(0).unwrap();
+        assert_eq!(loaded.name, "second");
+    }
+
+    #[test]
+    fn test_save_data_category_keys() {
+        let mut data = SaveData::new("Keys");
+        data.set("a", "x", SaveValue::Int(1));
+        data.set("a", "y", SaveValue::Int(2));
+        data.set("b", "z", SaveValue::Int(3));
+        let mut keys = data.category_keys("a");
+        keys.sort();
+        assert_eq!(keys, vec!["x", "y"]);
+        assert!(data.category_keys("nonexistent").is_empty());
+    }
+
+    #[test]
+    fn test_save_data_has_category() {
+        let mut data = SaveData::new("Cat");
+        assert!(!data.has_category("player"));
+        data.set("player", "hp", SaveValue::Int(100));
+        assert!(data.has_category("player"));
+    }
+
+    #[test]
+    fn test_save_value_all_variants() {
+        let mut data = SaveData::new("All");
+        data.set("v", "bool", SaveValue::Bool(false));
+        data.set("v", "int", SaveValue::Int(-42));
+        data.set("v", "float", SaveValue::Float(2.718));
+        data.set("v", "string", SaveValue::String("hello".into()));
+        data.set("v", "vec2", SaveValue::Vec2([1.0, 2.0]));
+        data.set("v", "vec3", SaveValue::Vec3([1.0, 2.0, 3.0]));
+        data.set("v", "vec4", SaveValue::Vec4([1.0, 2.0, 3.0, 4.0]));
+        data.set(
+            "v",
+            "int_arr",
+            SaveValue::IntArray(vec![10, 20, 30]),
+        );
+        data.set(
+            "v",
+            "float_arr",
+            SaveValue::FloatArray(vec![1.1, 2.2]),
+        );
+        data.set(
+            "v",
+            "str_arr",
+            SaveValue::StringArray(vec!["a".into(), "b".into()]),
+        );
+
+        assert!(matches!(data.get("v", "bool"), Some(SaveValue::Bool(false))));
+        assert!(matches!(data.get("v", "int"), Some(SaveValue::Int(-42))));
+        assert!(matches!(data.get("v", "float"), Some(SaveValue::Float(f)) if (*f - 2.718).abs() < 1e-10));
+        assert!(matches!(data.get("v", "string"), Some(SaveValue::String(s)) if s == "hello"));
+        assert!(matches!(data.get("v", "vec2"), Some(SaveValue::Vec2(_))));
+        assert!(matches!(data.get("v", "vec3"), Some(SaveValue::Vec3(_))));
+        assert!(matches!(data.get("v", "vec4"), Some(SaveValue::Vec4(_))));
+        assert!(matches!(data.get("v", "int_arr"), Some(SaveValue::IntArray(a)) if a.len() == 3));
+        assert!(matches!(data.get("v", "float_arr"), Some(SaveValue::FloatArray(a)) if a.len() == 2));
+        assert!(matches!(data.get("v", "str_arr"), Some(SaveValue::StringArray(a)) if a.len() == 2));
+    }
 }

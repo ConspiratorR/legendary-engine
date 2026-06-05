@@ -52,7 +52,11 @@ impl StateStack {
     }
 
     /// Apply all pending push/pop/replace operations, calling the
-    /// appropriate `on_enter` / `on_exit` lifecycle hooks.
+    /// appropriate lifecycle hooks:
+    ///
+    /// - **Push**: `on_pause` on the current top, then `on_enter` on the new state.
+    /// - **Pop**: `on_exit` on the popped state, then `on_resume` on the new top.
+    /// - **Replace**: `on_exit` on the old top, then `on_enter` on the new state.
     pub fn flush(
         &mut self,
         world: &mut engine_ecs::world::World,
@@ -62,6 +66,13 @@ impl StateStack {
         for op in ops {
             match op {
                 PendingOp::Push(mut s) => {
+                    if let Some(top) = self.states.last_mut() {
+                        top.on_pause(&mut StateCtx {
+                            world,
+                            resources,
+                            delta: 0.0,
+                        });
+                    }
                     s.on_enter(&mut StateCtx {
                         world,
                         resources,
@@ -72,6 +83,13 @@ impl StateStack {
                 PendingOp::Pop => {
                     if let Some(mut s) = self.states.pop() {
                         s.on_exit(&mut StateCtx {
+                            world,
+                            resources,
+                            delta: 0.0,
+                        });
+                    }
+                    if let Some(top) = self.states.last_mut() {
+                        top.on_resume(&mut StateCtx {
                             world,
                             resources,
                             delta: 0.0,
@@ -127,6 +145,8 @@ mod tests {
     impl GameState for TestState {
         fn on_enter(&mut self, _: &mut StateCtx) {}
         fn on_exit(&mut self, _: &mut StateCtx) {}
+        fn on_pause(&mut self, _: &mut StateCtx) {}
+        fn on_resume(&mut self, _: &mut StateCtx) {}
         fn update(&mut self, _: &mut StateCtx, _: f32) {}
     }
 
@@ -181,5 +201,34 @@ mod tests {
         s.push(Box::new(TestState));
         s.flush(&mut w, &mut r);
         assert_eq!(s.len(), 2);
+    }
+
+    #[test]
+    fn test_flush_empty_pending_is_noop() {
+        let mut w = World::new();
+        let mut r = ResourceRegistry::new();
+        let mut s = StateStack::new();
+        s.flush(&mut w, &mut r);
+        assert_eq!(s.len(), 0);
+    }
+
+    #[test]
+    fn test_pop_empty_is_noop() {
+        let mut w = World::new();
+        let mut r = ResourceRegistry::new();
+        let mut s = StateStack::new();
+        s.pop();
+        s.flush(&mut w, &mut r);
+        assert_eq!(s.len(), 0);
+    }
+
+    #[test]
+    fn test_replace_empty_acts_as_push() {
+        let mut w = World::new();
+        let mut r = ResourceRegistry::new();
+        let mut s = StateStack::new();
+        s.replace(Box::new(TestState));
+        s.flush(&mut w, &mut r);
+        assert_eq!(s.len(), 1);
     }
 }

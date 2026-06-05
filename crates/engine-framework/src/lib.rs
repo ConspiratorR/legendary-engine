@@ -34,6 +34,18 @@
 //! | [`GameFlowPlugin`] | Wires the standard state machine into the engine |
 //! | [`FrameworkPlugin`] | Registers [`StateStack`] and hooks updates into the engine loop |
 //! | [`SaveManager`](save::SaveManager) | JSON-based save / load with slot management |
+//!
+//! # State Lifecycle
+//!
+//! States on the [`StateStack`] receive lifecycle callbacks during [`StateStack::flush`]:
+//!
+//! | Transition | Outgoing hook | Incoming hook |
+//! |---|---|---|
+//! | **Push** new state on top | old top → [`on_pause`](GameState::on_pause) | new state → [`on_enter`](GameState::on_enter) |
+//! | **Pop** top state | popped → [`on_exit`](GameState::on_exit) | new top → [`on_resume`](GameState::on_resume) |
+//! | **Replace** top state | old top → [`on_exit`](GameState::on_exit) | new state → [`on_enter`](GameState::on_enter) |
+//!
+//! Only the topmost state receives [`update`](GameState::update) calls each frame.
 
 pub mod error;
 pub use error::FrameworkError;
