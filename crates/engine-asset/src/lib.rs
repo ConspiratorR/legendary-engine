@@ -18,6 +18,7 @@ pub mod asset;
 pub mod async_loader;
 pub mod bundle;
 pub mod cache;
+pub mod error;
 pub mod filesystem;
 pub mod format;
 pub mod loader;
@@ -28,3 +29,5 @@ pub mod registry;
 pub mod streaming;
 pub mod types;
 pub mod watcher;
+
+pub use error::AssetError;
