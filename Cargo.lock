@@ -1275,6 +1275,7 @@ dependencies = [
 name = "engine-math"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "glam",
  "thiserror 2.0.18",
 ]

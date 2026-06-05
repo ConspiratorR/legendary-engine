@@ -1,7 +1,20 @@
-//! Math primitives for the engine.
+//! # engine-math
 //!
-//! Re-exports `glam` types and provides extension traits for common
-//! game engine operations.
+//! Core math types and operations for the RustEngine.
+//!
+//! Provides vector, matrix, and quaternion types backed by glam.
+//! Includes extension traits for additional functionality like
+//! interpolation, angle conversions, and geometric operations.
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! use engine_math::{Vec3, Mat4, Quat};
+//!
+//! let position = Vec3::new(1.0, 2.0, 3.0);
+//! let rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+//! let transform = Mat4::from_rotation_translation(rotation, position);
+//! ```
 
 pub mod error;
 pub use error::MathError;
@@ -11,6 +24,24 @@ pub use glam::{EulerRot, Mat4, Quat, Vec2, Vec3, Vec4};
 /// Extension trait for [`Vec3`] providing game-utility methods.
 pub trait Vec3Ext {
     /// Extend a 3D vector to a 4D vector with the given `w` component.
+    ///
+    /// # Arguments
+    ///
+    /// * `w` - The w component for the resulting 4D vector.
+    ///
+    /// # Returns
+    ///
+    /// A [`Vec4`] with the original x, y, z values and the specified `w`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use engine_math::{Vec3, Vec3Ext, Vec4};
+    ///
+    /// let v = Vec3::new(1.0, 2.0, 3.0);
+    /// let v4 = v.extend_with_w(1.0);
+    /// assert_eq!(v4, Vec4::new(1.0, 2.0, 3.0, 1.0));
+    /// ```
     fn extend_with_w(self, w: f32) -> Vec4;
 }
 
@@ -20,9 +51,31 @@ impl Vec3Ext for Vec3 {
     }
 }
 
-/// Extension trait for [`Mat4`] providing left-handed look-at.
+/// Extension trait for [`Mat4`] providing left-handed look-at utilities.
 pub trait Mat4Ext {
     /// Build a left-handed look-at matrix from eye, target, and up vectors.
+    ///
+    /// # Arguments
+    ///
+    /// * `eye` - Position of the camera.
+    /// * `target` - Point the camera looks at.
+    /// * `up` - Up direction (typically `Vec3::Y`).
+    ///
+    /// # Returns
+    ///
+    /// A [`Mat4`] view matrix for a left-handed coordinate system.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use engine_math::{Vec3, Mat4, Mat4Ext};
+    ///
+    /// let view = Mat4::look_at_lh(
+    ///     Vec3::new(0.0, 0.0, -5.0),
+    ///     Vec3::ZERO,
+    ///     Vec3::Y,
+    /// );
+    /// ```
     fn look_at_lh(eye: Vec3, target: Vec3, up: Vec3) -> Self;
 }
 

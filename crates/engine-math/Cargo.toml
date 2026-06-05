@@ -7,3 +7,10 @@ license.workspace = true
 [dependencies]
 glam = { version = "0.29", features = ["bytemuck", "serde"] }
 thiserror = "2"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "math_benchmarks"
+harness = false
