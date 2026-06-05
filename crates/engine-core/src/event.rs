@@ -16,6 +16,7 @@ pub struct EventChannel<T: Send + 'static> {
 }
 
 impl<T: Send + 'static> EventChannel<T> {
+    /// Create a new, empty event channel with no listeners.
     pub fn new() -> Self {
         Self {
             listeners: Vec::new(),

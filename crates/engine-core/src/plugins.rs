@@ -6,7 +6,10 @@ use crate::profiler::Profiler;
 use crate::time::Time;
 use engine_input::action::ActionMap;
 
-/// Action plugin, adds an ActionMap resource.
+/// Plugin that registers an [`ActionMap`](engine_input::action::ActionMap) resource.
+///
+/// Add this plugin to enable action-based input mapping (e.g. "jump", "fire")
+/// decoupled from raw key codes.
 pub struct ActionPlugin;
 
 impl Plugin for ActionPlugin {
@@ -15,7 +18,10 @@ impl Plugin for ActionPlugin {
     }
 }
 
-/// Time plugin, adds a Time resource and updates it each frame.
+/// Plugin that registers a [`Time`] resource and updates it each frame.
+///
+/// Inserts a pre-update hook that calls [`Time::update`] every frame,
+/// keeping `delta_seconds`, `elapsed`, and `frame_count` current.
 pub struct TimePlugin;
 
 impl Plugin for TimePlugin {
@@ -31,12 +37,22 @@ impl Plugin for TimePlugin {
     }
 }
 
-/// Logger plugin, adds a Logger resource for logging.
+/// Plugin that registers a [`Logger`] resource with a configurable verbosity level.
+///
+/// # Example
+///
+/// ```rust
+/// use engine_core::plugins::LoggerPlugin;
+/// use engine_core::logger::LogLevel;
+///
+/// let plugin = LoggerPlugin::new(LogLevel::Debug);
+/// ```
 pub struct LoggerPlugin {
     level: crate::logger::LogLevel,
 }
 
 impl LoggerPlugin {
+    /// Create a new logger plugin that filters messages below `level`.
     pub fn new(level: crate::logger::LogLevel) -> Self {
         Self { level }
     }
@@ -48,10 +64,15 @@ impl Plugin for LoggerPlugin {
     }
 }
 
-/// A collection of core plugins that are typically needed.
+/// Convenience plugin bundle that registers the most common core plugins:
+/// [`TimePlugin`] and [`ActionPlugin`].
+///
+/// For logging as well, use [`CorePlugins::with_logging`].
 pub struct CorePlugins;
 
 impl CorePlugins {
+    /// Create a plugin bundle that includes [`TimePlugin`], [`ActionPlugin`],
+    /// and [`LoggerPlugin`] with the given log level.
     pub fn with_logging(level: crate::logger::LogLevel) -> impl Plugin {
         struct ConfigurablePlugins {
             log_level: crate::logger::LogLevel,
@@ -77,14 +98,25 @@ impl Plugin for CorePlugins {
     }
 }
 
-/// Profiler plugin, adds a [`Profiler`] resource and updates it each frame.
+/// Plugin that registers a [`Profiler`] resource and hooks into the frame
+/// lifecycle to collect per-frame timing data.
 ///
-/// Automatically calls `begin_frame`/`end_frame` around the update phase.
+/// Automatically calls `begin_frame` in the pre-update hook and `end_frame`
+/// in the post-update hook.
+///
+/// # Example
+///
+/// ```rust
+/// use engine_core::plugins::ProfilerPlugin;
+///
+/// let plugin = ProfilerPlugin::new(120); // track last 120 frames
+/// ```
 pub struct ProfilerPlugin {
     max_frames: usize,
 }
 
 impl ProfilerPlugin {
+    /// Create a profiler plugin that keeps the last `max_frames` frame records.
     pub fn new(max_frames: usize) -> Self {
         Self { max_frames }
     }
@@ -116,8 +148,10 @@ impl Plugin for ProfilerPlugin {
     }
 }
 
-/// Memory tracker plugin, hooks into the frame lifecycle to collect
-/// per-frame memory snapshots.
+/// Plugin that hooks into the post-update phase to take per-frame memory
+/// snapshots via [`MemoryTracker::take_frame_snapshot`].
+///
+/// Useful for detecting memory leaks during development.
 pub struct MemoryTrackerPlugin;
 
 impl Plugin for MemoryTrackerPlugin {

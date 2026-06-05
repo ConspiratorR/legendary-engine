@@ -1,3 +1,5 @@
+//! Type-erased resource registry for global singletons.
+
 use std::any::TypeId;
 use std::collections::HashMap;
 
