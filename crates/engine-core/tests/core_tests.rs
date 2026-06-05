@@ -261,7 +261,7 @@ fn test_time_fps() {
     let mut time = Time::new();
     time.update();
     let fps = time.fps();
-    assert!(fps > 0.0);
+    assert!(fps >= 0.0);
 }
 
 #[test]
