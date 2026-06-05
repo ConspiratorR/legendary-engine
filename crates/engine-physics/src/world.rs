@@ -4,6 +4,7 @@ use crate::broadphase::{BroadphaseEntry, SpatialHashBroadphase};
 use crate::ccd::{CcdBody, sweep_sphere_aabb, sweep_sphere_sphere};
 use crate::collider::{Collider, ColliderShape, CollisionInfo, check_collision};
 use crate::contact::{ContactManifold, ContactPoint, ContactSolver};
+use crate::joint::JointSolver;
 use engine_core::transform::Transform;
 use engine_ecs::world::World;
 use engine_math::{EulerRot, Quat, Vec3};
@@ -115,6 +116,8 @@ pub struct PhysicsWorld {
     previous_collision_pairs: HashSet<PairKey>,
     /// Set of sensor pairs that were overlapping last frame.
     previous_sensor_pairs: HashSet<PairKey>,
+    /// Joint solver for hinge, ball-socket, and spring constraints.
+    pub joint_solver: JointSolver,
 }
 
 impl Default for PhysicsWorld {
@@ -133,6 +136,7 @@ impl Default for PhysicsWorld {
             contact_solver: ContactSolver::new(),
             previous_collision_pairs: HashSet::new(),
             previous_sensor_pairs: HashSet::new(),
+            joint_solver: JointSolver::new(),
         }
     }
 }
@@ -170,6 +174,7 @@ impl PhysicsWorld {
             self.detect_collisions(world);
             self.wake_colliding_bodies(world);
             self.resolve_collisions_with_warm_start(world);
+            self.joint_solver.solve_constraints(world, dt);
         }
 
         // Update sleep states once per frame
