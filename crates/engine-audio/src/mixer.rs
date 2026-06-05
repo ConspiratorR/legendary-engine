@@ -220,4 +220,49 @@ mod tests {
         assert!(!mixer.is_bus_muted("nonexistent"));
         assert!((mixer.effective_volume("nonexistent") - 1.0).abs() < 1e-6);
     }
+
+    #[test]
+    fn test_bus_volume_clamping() {
+        let mut mixer = AudioMixer::new();
+        mixer.set_bus_volume("sfx", 2.0);
+        assert!((mixer.bus_volume("sfx") - 1.0).abs() < 1e-6);
+        mixer.set_bus_volume("sfx", -1.0);
+        assert!(mixer.bus_volume("sfx").abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_master_volume_clamping() {
+        let mut mixer = AudioMixer::new();
+        mixer.set_master_volume(5.0);
+        assert!((mixer.master_volume() - 1.0).abs() < 1e-6);
+        mixer.set_master_volume(-0.5);
+        assert!(mixer.master_volume().abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_effective_volume_muted_overrides_master() {
+        let mut mixer = AudioMixer::new();
+        mixer.set_master_volume(1.0);
+        mixer.set_bus_volume("music", 1.0);
+        mixer.set_bus_muted("music", true);
+        assert!(mixer.effective_volume("music").abs() < 1e-6);
+        mixer.set_bus_muted("music", false);
+        assert!((mixer.effective_volume("music") - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_add_bus_does_not_clobber_existing() {
+        let mut mixer = AudioMixer::new();
+        mixer.set_bus_volume("sfx", 0.3);
+        mixer.add_bus(AudioBus::new("sfx"));
+        // add_bus replaces the bus, resetting volume to default
+        assert!((mixer.bus_volume("sfx") - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_remove_nonexistent_bus() {
+        let mut mixer = AudioMixer::new();
+        let removed = mixer.remove_bus("nonexistent");
+        assert!(removed.is_none());
+    }
 }

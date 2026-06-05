@@ -395,4 +395,128 @@ mod tests {
         assert_eq!(cfg.distance_model, DistanceModel::Inverse);
         assert!((cfg.speed_of_sound - 343.3).abs() < 1e-6);
     }
+
+    #[test]
+    fn test_exponential_volume_at_reference_distance() {
+        let listener = listener_at(Vec3::ZERO);
+        let source = SpatialAudioSource {
+            position: Vec3::new(1.0, 0.0, 0.0),
+            reference_distance: 1.0,
+            rolloff_factor: 1.0,
+            min_distance: 0.5,
+            max_distance: 100.0,
+            ..Default::default()
+        };
+        let cfg = config(DistanceModel::Exponential);
+        let vol = compute_volume(&listener, &source, &cfg);
+        // At reference distance, exponential model should return 1.0
+        assert!((vol - 1.0).abs() < 1e-6, "at ref_distance vol={vol}");
+    }
+
+    #[test]
+    fn test_linear_volume_at_reference_distance() {
+        let listener = listener_at(Vec3::ZERO);
+        let source = SpatialAudioSource {
+            position: Vec3::new(1.0, 0.0, 0.0),
+            reference_distance: 1.0,
+            rolloff_factor: 1.0,
+            min_distance: 0.5,
+            max_distance: 100.0,
+            ..Default::default()
+        };
+        let cfg = config(DistanceModel::Linear);
+        let vol = compute_volume(&listener, &source, &cfg);
+        // At reference distance, linear model should return 1.0
+        assert!((vol - 1.0).abs() < 1e-6, "at ref_distance vol={vol}");
+    }
+
+    #[test]
+    fn test_inverse_volume_halves_at_double_distance() {
+        let listener = listener_at(Vec3::ZERO);
+        let source = SpatialAudioSource {
+            position: Vec3::new(2.0, 0.0, 0.0),
+            reference_distance: 1.0,
+            rolloff_factor: 1.0,
+            min_distance: 0.5,
+            max_distance: 100.0,
+            ..Default::default()
+        };
+        let cfg = config(DistanceModel::Inverse);
+        let vol = compute_volume(&listener, &source, &cfg);
+        // Inverse: ref / (ref + rolloff * (dist - ref)) = 1 / (1 + 1) = 0.5
+        assert!((vol - 0.5).abs() < 1e-6, "expected 0.5, got {vol}");
+    }
+
+    #[test]
+    fn test_doppler_zero_speed_of_sound_zero_velocity() {
+        let listener = listener_at(Vec3::ZERO);
+        let source = source_at(Vec3::new(0.0, 0.0, -10.0));
+        let cfg = SpatialAudioConfig {
+            speed_of_sound: 0.0,
+            doppler_factor: 1.0,
+            ..Default::default()
+        };
+        let ratio = compute_doppler(&listener, &source, &cfg);
+        // Zero speed + zero velocities → denom=0 → returns 1.0
+        assert!((ratio - 1.0).abs() < 1e-6, "expected 1.0, got {ratio}");
+    }
+
+    #[test]
+    fn test_doppler_zero_speed_with_velocity() {
+        let listener = listener_at(Vec3::ZERO);
+        let source = SpatialAudioSource {
+            position: Vec3::new(0.0, 0.0, -10.0),
+            velocity: Vec3::new(0.0, 0.0, -20.0),
+            ..Default::default()
+        };
+        let cfg = SpatialAudioConfig {
+            speed_of_sound: 0.0,
+            doppler_factor: 1.0,
+            ..Default::default()
+        };
+        let ratio = compute_doppler(&listener, &source, &cfg);
+        // denom = 0 - (-20) = 20, num = 0 - 0 = 0 → ratio = 0
+        assert!(ratio.abs() < 1e-6, "expected 0.0, got {ratio}");
+    }
+
+    #[test]
+    fn test_pan_full_right() {
+        let listener = listener_at(Vec3::ZERO);
+        let source = source_at(Vec3::new(100.0, 0.0, 0.0));
+        let (left, right) = compute_stereo_pan(&listener, &source);
+        assert!(right > 0.9, "expected right>0.9, got R={right}");
+        assert!(left < 0.1, "expected left<0.1, got L={left}");
+    }
+
+    #[test]
+    fn test_pan_full_left() {
+        let listener = listener_at(Vec3::ZERO);
+        let source = source_at(Vec3::new(-100.0, 0.0, 0.0));
+        let (left, right) = compute_stereo_pan(&listener, &source);
+        assert!(left > 0.9, "expected left>0.9, got L={left}");
+        assert!(right < 0.1, "expected right<0.1, got R={right}");
+    }
+
+    #[test]
+    fn test_volume_clamped_at_boundary() {
+        let listener = listener_at(Vec3::ZERO);
+        let source = SpatialAudioSource {
+            position: Vec3::new(50.0, 0.0, 0.0),
+            min_distance: 1.0,
+            max_distance: 100.0,
+            rolloff_factor: 10.0,
+            ..Default::default()
+        };
+        let cfg = config(DistanceModel::Linear);
+        let vol = compute_volume(&listener, &source, &cfg);
+        assert!((0.0..=1.0).contains(&vol), "volume {vol} out of [0,1]");
+    }
+
+    #[test]
+    fn test_distance_function() {
+        let listener = listener_at(Vec3::ZERO);
+        let source = source_at(Vec3::new(3.0, 4.0, 0.0));
+        let dist = distance(&listener, &source);
+        assert!((dist - 5.0).abs() < 1e-6, "expected 5.0, got {dist}");
+    }
 }

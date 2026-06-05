@@ -105,10 +105,11 @@ impl AudioManager {
     // ── Playback ──────────────────────────────────────────────────────
 
     /// Play an audio file on the given channel.  Returns a handle for later control.
-    pub fn play(&mut self, path: &str, channel: AudioChannel) -> Result<SoundHandle, String> {
-        let file = File::open(path).map_err(|e| format!("Cannot open '{}': {}", path, e))?;
+    pub fn play(&mut self, path: &str, channel: AudioChannel) -> Result<SoundHandle, AudioError> {
+        let file = File::open(path)
+            .map_err(|e| AudioError::PlaybackError(format!("Cannot open '{}': {}", path, e)))?;
         let source = Decoder::new(BufReader::new(file))
-            .map_err(|e| format!("Cannot decode '{}': {}", path, e))?;
+            .map_err(|e| AudioError::DecodeError(format!("Cannot decode '{}': {}", path, e)))?;
         let converted = source.convert_samples::<f32>();
         self.play_f32_source(converted, channel)
     }
@@ -118,8 +119,9 @@ impl AudioManager {
         &mut self,
         source: impl Source<Item = f32> + Send + 'static,
         channel: AudioChannel,
-    ) -> Result<SoundHandle, String> {
-        let sink = Sink::try_new(&self.stream_handle).map_err(|e| format!("Sink error: {}", e))?;
+    ) -> Result<SoundHandle, AudioError> {
+        let sink = Sink::try_new(&self.stream_handle)
+            .map_err(|e| AudioError::PlaybackError(format!("Sink error: {}", e)))?;
         let vol = self.effective_volume(channel);
         sink.set_volume(vol);
         sink.append(source);
@@ -131,11 +133,13 @@ impl AudioManager {
     }
 
     /// Play a sound with no tracking handle (fire-and-forget).
-    pub fn play_detached(&self, path: &str, channel: AudioChannel) -> Result<(), String> {
-        let file = File::open(path).map_err(|e| format!("Cannot open '{}': {}", path, e))?;
+    pub fn play_detached(&self, path: &str, channel: AudioChannel) -> Result<(), AudioError> {
+        let file = File::open(path)
+            .map_err(|e| AudioError::PlaybackError(format!("Cannot open '{}': {}", path, e)))?;
         let source = Decoder::new(BufReader::new(file))
-            .map_err(|e| format!("Cannot decode '{}': {}", path, e))?;
-        let sink = Sink::try_new(&self.stream_handle).map_err(|e| format!("Sink error: {}", e))?;
+            .map_err(|e| AudioError::DecodeError(format!("Cannot decode '{}': {}", path, e)))?;
+        let sink = Sink::try_new(&self.stream_handle)
+            .map_err(|e| AudioError::PlaybackError(format!("Sink error: {}", e)))?;
         let vol = self.effective_volume(channel);
         sink.set_volume(vol);
         sink.append(source.convert_samples::<f32>());
@@ -267,6 +271,68 @@ mod tests {
     fn test_cleanup_empty() {
         let mut audio = AudioManager::new().unwrap();
         audio.cleanup();
+        assert_eq!(audio.active_count(), 0);
+    }
+
+    #[test]
+    fn test_play_invalid_path() {
+        let mut audio = AudioManager::new().unwrap();
+        let result = audio.play("nonexistent_file_abc123.ogg", AudioChannel::Sfx);
+        assert!(result.is_err(), "expected error for invalid path");
+        // Verify it returns AudioError, not a panic
+        let err = result.unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("nonexistent_file_abc123.ogg"));
+    }
+
+    #[test]
+    fn test_play_detached_invalid_path() {
+        let audio = AudioManager::new().unwrap();
+        let result = audio.play_detached("nonexistent_file_abc123.ogg", AudioChannel::Sfx);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_stop_nonexistent_handle() {
+        let mut audio = AudioManager::new().unwrap();
+        let fake = SoundHandle(999);
+        // Should not panic
+        audio.stop(fake);
+        assert_eq!(audio.active_count(), 0);
+    }
+
+    #[test]
+    fn test_pause_resume_nonexistent() {
+        let audio = AudioManager::new().unwrap();
+        let fake = SoundHandle(999);
+        // Should not panic
+        audio.pause(fake);
+        audio.resume(fake);
+    }
+
+    #[test]
+    fn test_channel_volume_clamping() {
+        let mut audio = AudioManager::new().unwrap();
+        audio.set_channel_volume(AudioChannel::Sfx, 2.0);
+        assert!((audio.channel_volume(AudioChannel::Sfx) - 1.0).abs() < 1e-6);
+        audio.set_channel_volume(AudioChannel::Sfx, -1.0);
+        assert!(audio.channel_volume(AudioChannel::Sfx).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_master_volume_zero_silences_all() {
+        let mut audio = AudioManager::new().unwrap();
+        audio.set_channel_volume(AudioChannel::Sfx, 0.8);
+        audio.set_channel_volume(AudioChannel::Music, 0.6);
+        audio.set_master_volume(0.0);
+        assert!(audio.effective_volume(AudioChannel::Sfx).abs() < 1e-6);
+        assert!(audio.effective_volume(AudioChannel::Music).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_default_is_consistent_with_new() {
+        let audio = AudioManager::default();
+        assert!((audio.master_volume() - 1.0).abs() < 1e-6);
         assert_eq!(audio.active_count(), 0);
     }
 }
