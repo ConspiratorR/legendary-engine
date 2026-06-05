@@ -46,6 +46,7 @@ impl<'a> Gui<'a> {
         );
     }
 
+    /// Draw a text label within the given rectangle using the skin's label style.
     pub fn label(&mut self, rect: Rect, text: &str) {
         let painter = self.ui.painter_at(rect);
         let block = &self.skin.label.normal;
@@ -53,6 +54,7 @@ impl<'a> Gui<'a> {
         Self::draw_text(&painter, block, rect, text, &self.skin.font);
     }
 
+    /// Draw a clickable button. Returns `true` when clicked.
     pub fn button(&mut self, rect: Rect, text: &str) -> bool {
         let id = egui::Id::new("gui_btn")
             .with(rect.min.x as u64)
@@ -73,6 +75,7 @@ impl<'a> Gui<'a> {
         response.clicked()
     }
 
+    /// Draw a repeat button that returns `true` while the pointer is held down.
     pub fn repeat_button(&mut self, rect: Rect, text: &str) -> bool {
         let id = egui::Id::new("gui_rpt")
             .with(rect.min.x as u64)
@@ -94,6 +97,7 @@ impl<'a> Gui<'a> {
         is_down
     }
 
+    /// Draw a box container with centered text.
     pub fn box_(&mut self, rect: Rect, text: &str) {
         let painter = self.ui.painter_at(rect);
         let block = &self.skin.box_.normal;
@@ -101,6 +105,7 @@ impl<'a> Gui<'a> {
         Self::draw_text(&painter, block, rect, text, &self.skin.font);
     }
 
+    /// Draw a horizontal separator line.
     pub fn separator(&mut self, rect: Rect) {
         let painter = self.ui.painter_at(rect);
         let center_y = rect.center().y;
@@ -113,6 +118,7 @@ impl<'a> Gui<'a> {
         ));
     }
 
+    /// Draw an editable text field. Gains focus on click and accepts keyboard input.
     pub fn text_field(&mut self, rect: Rect, text: &mut String, id_salt: &str) {
         let widget_id = egui::Id::new(id_salt).with("field");
         let response = self.ui.interact(rect, widget_id, egui::Sense::click());
@@ -155,6 +161,7 @@ impl<'a> Gui<'a> {
         }
     }
 
+    /// Draw a toggle (checkbox-style) widget. Clicking toggles the boolean value.
     pub fn toggle(&mut self, rect: Rect, value: &mut bool, label: &str) {
         let id = egui::Id::new("gui_tog")
             .with(rect.min.x as u64)
@@ -202,6 +209,7 @@ impl<'a> Gui<'a> {
         }
     }
 
+    /// Draw a draggable slider. Updates `value` when dragged.
     pub fn slider(&mut self, rect: Rect, value: &mut f32, min: f32, max: f32) {
         let id = egui::Id::new("gui_sld")
             .with(rect.min.x as u64)
@@ -270,6 +278,7 @@ impl<'a> Gui<'a> {
         );
     }
 
+    /// Draw a toolbar with selectable items. Updates `selected` on click.
     pub fn toolbar(&mut self, rect: Rect, selected: &mut usize, texts: &[&str]) {
         let painter = self.ui.painter_at(rect);
         let n = texts.len();
@@ -312,6 +321,7 @@ impl<'a> Gui<'a> {
         }
     }
 
+    /// Draw a thin horizontal separator line.
     pub fn separator_h(&mut self, rect: Rect) {
         let painter = self.ui.painter_at(rect);
         let y = rect.center().y;
@@ -321,6 +331,7 @@ impl<'a> Gui<'a> {
         ));
     }
 
+    /// Draw a thin vertical separator line.
     pub fn separator_v(&mut self, rect: Rect) {
         let painter = self.ui.painter_at(rect);
         let x = rect.center().x;
@@ -330,6 +341,7 @@ impl<'a> Gui<'a> {
         ));
     }
 
+    /// Draw a label with an explicit text color override.
     pub fn colored_label(&mut self, rect: Rect, text: &str, color: Color32) {
         let painter = self.ui.painter_at(rect);
         painter.text(
@@ -341,6 +353,7 @@ impl<'a> Gui<'a> {
         );
     }
 
+    /// Draw a status indicator with a colored dot and text label.
     pub fn status_item(&mut self, rect: Rect, text: &str, dot_color: Color32) {
         let painter = self.ui.painter_at(rect);
         let dot_r = 4.0;
@@ -355,6 +368,7 @@ impl<'a> Gui<'a> {
         );
     }
 
+    /// Draw a panel header bar and return the content rect below it.
     pub fn panel_header(&mut self, rect: Rect, title: &str) -> Rect {
         let painter = self.ui.painter_at(rect);
         painter.add(Shape::rect_filled(
@@ -383,6 +397,7 @@ impl<'a> Gui<'a> {
         )
     }
 
+    /// Draw a checkbox with a label. Clicking toggles the checked state.
     pub fn checkbox(&mut self, rect: Rect, label: &str, checked: &mut bool) {
         let id = egui::Id::new("gui_chk")
             .with(rect.min.x as u64)
@@ -431,6 +446,7 @@ impl<'a> Gui<'a> {
         }
     }
 
+    /// Draw a grid of selectable items. Updates `selected` on click.
     pub fn selection_grid(
         &mut self,
         rect: Rect,
@@ -485,6 +501,7 @@ impl<'a> Gui<'a> {
         }
     }
 
+    /// Draw a menu bar. Returns the index of the clicked item, if any.
     pub fn menu_bar(&mut self, rect: Rect, items: &[&str]) -> Option<usize> {
         if items.is_empty() {
             return None;
@@ -536,6 +553,7 @@ impl<'a> Gui<'a> {
         None
     }
 
+    /// Draw a tool button that can be active or inactive. Returns `true` when clicked.
     pub fn tool_button(&mut self, rect: Rect, label: &str, active: bool) -> bool {
         let id = egui::Id::new("gui_tbtn")
             .with(rect.min.x as u64)
@@ -583,6 +601,7 @@ impl<'a> Gui<'a> {
         response.clicked()
     }
 
+    /// Draw a tab item. Returns `true` when clicked.
     pub fn tab(&mut self, rect: Rect, label: &str, active: bool) -> bool {
         let id = egui::Id::new("gui_tab")
             .with(rect.min.x as u64)
@@ -626,6 +645,7 @@ impl<'a> Gui<'a> {
         response.clicked()
     }
 
+    /// Draw a tree view node with icon, label, and indentation. Returns `true` when clicked.
     pub fn tree_node(
         &mut self,
         rect: Rect,
@@ -678,6 +698,7 @@ impl<'a> Gui<'a> {
         response.clicked()
     }
 
+    /// Draw a vec3 input with colored axis labels (X=red, Y=green, Z=blue).
     pub fn vec3_input(&mut self, rect: Rect, label: &str, x: &mut f32, y: &mut f32, z: &mut f32) {
         let painter = self.ui.painter_at(rect);
 
@@ -735,6 +756,7 @@ impl<'a> Gui<'a> {
         }
     }
 
+    /// Draw a read-only labeled input field.
     pub fn input_labeled(&mut self, rect: Rect, label: &str, value: &str) {
         let painter = self.ui.painter_at(rect);
 

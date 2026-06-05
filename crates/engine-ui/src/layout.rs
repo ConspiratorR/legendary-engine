@@ -35,6 +35,7 @@ fn painter_at(ctx: &egui::Context, rect: Rect) -> egui::Painter {
 }
 
 impl HorizontalScope<'_> {
+    /// Draw a clickable button. Returns `true` when clicked.
     pub fn button(&mut self, text: &str) -> bool {
         let rect = Rect::from_min_size(self.start, Vec2::new(text.len() as f32 * 8.0 + 12.0, 22.0));
         let over = hovered(self.ctx, rect);
@@ -59,6 +60,7 @@ impl HorizontalScope<'_> {
         hit
     }
 
+    /// Draw a text label and advance the cursor.
     pub fn label(&mut self, text: &str) {
         let rect = Rect::from_min_size(self.start, Vec2::new(text.len() as f32 * 8.0 + 4.0, 22.0));
         let painter = painter_at(self.ctx, rect);
@@ -74,14 +76,17 @@ impl HorizontalScope<'_> {
         self.start.x = rect.right() + 4.0;
     }
 
+    /// Advance the cursor by a fixed width.
     pub fn space(&mut self, width: f32) {
         self.start.x += width;
     }
 
+    /// Advance the cursor by a small flexible spacing amount.
     pub fn flexible_space(&mut self) {
         self.start.x += 8.0;
     }
 
+    /// Draw a read-only text field and advance the cursor horizontally.
     pub fn text_field(&mut self, text: &str, width: f32) {
         let rect = Rect::from_min_size(self.start, Vec2::new(width, 22.0));
         let block = &self.skin.text_field.normal;
@@ -97,6 +102,7 @@ impl HorizontalScope<'_> {
         self.start.x = rect.right() + 4.0;
     }
 
+    /// Draw a toggle checkbox and advance the cursor horizontally.
     pub fn toggle(&mut self, value: &mut bool, text: &str) {
         let rect = Rect::from_min_size(self.start, Vec2::new(18.0 + text.len() as f32 * 8.0, 22.0));
         let over = hovered(self.ctx, rect);
@@ -141,6 +147,7 @@ pub struct VerticalScope<'a> {
 }
 
 impl VerticalScope<'_> {
+    /// Draw a clickable button and advance the cursor vertically. Returns `true` when clicked.
     pub fn button(&mut self, text: &str) -> bool {
         let rect = Rect::from_min_size(self.start, Vec2::new(120.0, 22.0));
         let over = hovered(self.ctx, rect);
@@ -165,6 +172,7 @@ impl VerticalScope<'_> {
         hit
     }
 
+    /// Draw a text label and advance the cursor vertically.
     pub fn label(&mut self, text: &str) {
         let rect = Rect::from_min_size(self.start, Vec2::new(120.0, 22.0));
         let painter = painter_at(self.ctx, rect);
@@ -180,14 +188,17 @@ impl VerticalScope<'_> {
         self.start.y = rect.bottom() + 2.0;
     }
 
+    /// Advance the cursor vertically by a fixed height.
     pub fn space(&mut self, height: f32) {
         self.start.y += height;
     }
 
+    /// Advance the cursor vertically by a small flexible spacing amount.
     pub fn flexible_space(&mut self) {
         self.start.y += 4.0;
     }
 
+    /// Draw a box container and advance the cursor vertically.
     pub fn box_(&mut self, text: &str, width: f32, height: f32) {
         let rect = Rect::from_min_size(self.start, Vec2::new(width, height));
         let painter = painter_at(self.ctx, rect);
@@ -203,6 +214,7 @@ impl VerticalScope<'_> {
         self.start.y = rect.bottom() + 2.0;
     }
 
+    /// Draw a read-only text field and advance the cursor vertically.
     pub fn text_field(&mut self, text: &str, width: f32) {
         let rect = Rect::from_min_size(self.start, Vec2::new(width, 22.0));
         let block = &self.skin.text_field.normal;
@@ -218,6 +230,7 @@ impl VerticalScope<'_> {
         self.start.y = rect.bottom() + 2.0;
     }
 
+    /// Draw a toggle checkbox and advance the cursor vertically.
     pub fn toggle(&mut self, value: &mut bool, text: &str) {
         let rect = Rect::from_min_size(self.start, Vec2::new(18.0 + text.len() as f32 * 8.0, 22.0));
         let over = hovered(self.ctx, rect);
@@ -254,6 +267,7 @@ impl VerticalScope<'_> {
         self.start.y = rect.bottom() + 2.0;
     }
 
+    /// Draw a draggable slider and advance the cursor vertically.
     pub fn slider(&mut self, value: &mut f32, min: f32, max: f32, width: f32) {
         let rect = Rect::from_min_size(self.start, Vec2::new(width, 22.0));
         let over = hovered(self.ctx, rect);
@@ -301,6 +315,7 @@ impl VerticalScope<'_> {
         self.start.y = rect.bottom() + 2.0;
     }
 
+    /// Draw a horizontal separator and advance the cursor vertically.
     pub fn separator(&mut self) {
         let rect = Rect::from_min_size(self.start, Vec2::new(120.0, 4.0));
         let painter = painter_at(self.ctx, rect);
@@ -327,10 +342,12 @@ impl VerticalScope<'_> {
 }
 
 impl<'a> GuiLayout<'a> {
+    /// Create a new layout helper from an egui context and skin.
     pub fn new(ctx: &'a egui::Context, skin: &'a GuiSkin) -> GuiLayout<'a> {
         GuiLayout { ctx, skin }
     }
 
+    /// Open a horizontal layout scope.
     pub fn horizontal(&mut self, f: impl FnOnce(&mut HorizontalScope)) {
         let mut scope = HorizontalScope {
             ctx: self.ctx,
@@ -340,6 +357,7 @@ impl<'a> GuiLayout<'a> {
         f(&mut scope);
     }
 
+    /// Open a vertical layout scope.
     pub fn vertical(&mut self, f: impl FnOnce(&mut VerticalScope)) {
         let mut scope = VerticalScope {
             ctx: self.ctx,
@@ -349,6 +367,7 @@ impl<'a> GuiLayout<'a> {
         f(&mut scope);
     }
 
+    /// Open a scrollable vertical view within the given rectangle.
     pub fn scroll_view(
         &mut self,
         rect: Rect,
@@ -364,6 +383,7 @@ impl<'a> GuiLayout<'a> {
         f(&mut vs);
     }
 
+    /// Draw a window with a title bar and open a vertical scope for its content.
     pub fn window(&mut self, title: &str, rect: &mut Rect, f: impl FnOnce(&mut VerticalScope)) {
         let painter = painter_at(self.ctx, *rect);
         crate::gui::Gui::draw_background(
