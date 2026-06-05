@@ -17,6 +17,7 @@ pub enum ColliderShape {
 }
 
 impl ColliderShape {
+    /// Return the radius of a bounding sphere that fully encloses this shape.
     pub fn get_bounding_sphere(&self) -> f32 {
         match self {
             ColliderShape::Sphere { radius } => *radius,
@@ -62,6 +63,7 @@ impl Default for Collider {
 }
 
 impl Collider {
+    /// Create a sphere collider with the given radius.
     pub fn sphere(radius: f32) -> Self {
         Self {
             shape: ColliderShape::Sphere { radius },
@@ -69,6 +71,7 @@ impl Collider {
         }
     }
 
+    /// Create a box (cuboid) collider with the given half-extents along each axis.
     pub fn cuboid(half_x: f32, half_y: f32, half_z: f32) -> Self {
         Self {
             shape: ColliderShape::Box {
@@ -78,6 +81,7 @@ impl Collider {
         }
     }
 
+    /// Create a capsule collider (cylinder with hemispherical caps along local Y).
     pub fn capsule(radius: f32, height: f32) -> Self {
         Self {
             shape: ColliderShape::Capsule { radius, height },
@@ -85,6 +89,7 @@ impl Collider {
         }
     }
 
+    /// Create a cylinder collider along local Y.
     pub fn cylinder(radius: f32, height: f32) -> Self {
         Self {
             shape: ColliderShape::Cylinder { radius, height },
@@ -112,7 +117,10 @@ pub struct CollisionInfo {
 // AABB helpers (axis-aligned, kept for backward compatibility)
 // ---------------------------------------------------------------------------
 
-/// Check collision between two AABB boxes.
+/// Check collision between two AABB boxes defined by center positions and half-extents.
+///
+/// Returns `Some(CollisionInfo)` with the collision normal, depth, and contact point
+/// if the boxes overlap, or `None` if they are separated.
 pub fn check_box_box(pos1: Vec3, half1: Vec3, pos2: Vec3, half2: Vec3) -> Option<CollisionInfo> {
     let delta = pos2 - pos1;
     let overlap_x = half1.x + half2.x - delta.x.abs();
@@ -159,6 +167,9 @@ pub fn check_box_box(pos1: Vec3, half1: Vec3, pos2: Vec3, half2: Vec3) -> Option
 }
 
 /// Check collision between a sphere and an AABB box.
+///
+/// Handles both exterior and interior (sphere center inside box) cases.
+/// Returns `Some(CollisionInfo)` on overlap, `None` otherwise.
 pub fn check_sphere_box(
     sphere_pos: Vec3,
     radius: f32,
@@ -226,6 +237,10 @@ pub fn check_sphere_box(
 // Generic sphere-sphere (no rotation needed)
 // ---------------------------------------------------------------------------
 
+/// Check collision between two spheres given positions and radii.
+///
+/// Returns `Some(CollisionInfo)` if the spheres overlap, `None` otherwise.
+/// The collision normal points from sphere 1 toward sphere 2.
 pub fn check_sphere_sphere(
     pos1: Vec3,
     radius1: f32,
@@ -255,7 +270,10 @@ pub fn check_sphere_sphere(
 // OBB collision – Separating Axis Theorem
 // ---------------------------------------------------------------------------
 
-/// SAT-based OBB-OBB collision.
+/// SAT-based OBB-OBB collision detection.
+///
+/// Tests 15 separating axes (3 face normals from each box + 9 edge cross products).
+/// Returns `Some(CollisionInfo)` with the minimum penetration axis on overlap.
 pub fn check_obb_obb(
     pos_a: Vec3,
     rot_a: Quat,
@@ -333,7 +351,10 @@ pub fn check_obb_obb(
     })
 }
 
-/// Sphere vs OBB collision.
+/// Sphere vs OBB (oriented bounding box) collision detection.
+///
+/// Transforms the sphere into the OBB's local space for a simple clamped-point test.
+/// Returns `Some(CollisionInfo)` on overlap, `None` otherwise.
 pub fn check_sphere_obb(
     sphere_pos: Vec3,
     radius: f32,
@@ -471,7 +492,11 @@ fn closest_points_segment_segment(p1: Vec3, q1: Vec3, p2: Vec3, q2: Vec3) -> (Ve
     (cp1, cp2, dist)
 }
 
-/// Capsule-capsule collision.
+/// Capsule-capsule collision detection.
+///
+/// Finds the closest points between the two capsule center-line segments,
+/// then checks if the combined radii exceed the distance.
+/// Returns `Some(CollisionInfo)` on overlap, `None` otherwise.
 pub fn check_capsule_capsule(
     pos_a: Vec3,
     rot_a: Quat,
@@ -508,7 +533,11 @@ pub fn check_capsule_capsule(
     })
 }
 
-/// Sphere-capsule collision.
+/// Sphere-capsule collision detection.
+///
+/// Projects the sphere center onto the capsule's center-line segment, then
+/// checks if the combined radii exceed the distance. Returns `Some(CollisionInfo)`
+/// on overlap, `None` otherwise.
 pub fn check_sphere_capsule(
     sphere_pos: Vec3,
     sphere_radius: f32,
@@ -550,7 +579,11 @@ pub fn check_sphere_capsule(
     })
 }
 
-/// OBB-capsule collision via capsule segment sampling against OBB.
+/// OBB-capsule collision detection via capsule segment sampling.
+///
+/// Samples points along the capsule's center-line segment in the OBB's local space
+/// and finds the closest point to the OBB. Returns `Some(CollisionInfo)` on overlap,
+/// `None` otherwise.
 pub fn check_obb_capsule(
     obb_pos: Vec3,
     obb_rot: Quat,
@@ -644,8 +677,13 @@ pub fn check_obb_capsule(
 // Dispatcher
 // ---------------------------------------------------------------------------
 
-/// Check collision between two colliders given their positions and rotations.
-/// Use [`Quat::IDENTITY`] for shapes that don't require orientation (Sphere).
+/// Generic collision dispatcher between two colliders.
+///
+/// Selects the appropriate narrow-phase algorithm based on the collider shapes.
+/// Applies collider offsets to positions before testing. Use [`Quat::IDENTITY`]
+/// for shapes that don't require orientation (e.g., Sphere).
+///
+/// Cylinder and unsupported shape combinations fall back to bounding-sphere tests.
 pub fn check_collision(
     pos_a: Vec3,
     rot_a: Quat,

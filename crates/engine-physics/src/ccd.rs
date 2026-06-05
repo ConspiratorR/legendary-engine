@@ -20,6 +20,7 @@ pub struct SweepResult {
 }
 
 impl SweepResult {
+    /// Create a miss result (no collision detected).
     pub fn miss() -> Self {
         Self {
             toi: 1.0,

@@ -20,7 +20,7 @@ pub struct BroadphaseEntry {
 }
 
 impl BroadphaseEntry {
-    /// Compute the AABB min corner.
+    /// Compute the AABB min corner (center - half_extents).
     pub fn aabb_min(&self) -> Vec3 {
         self.center - self.half_extents
     }
@@ -45,6 +45,8 @@ pub struct BroadphasePair {
 }
 
 /// Check if two AABBs overlap (tight AABB refinement test).
+///
+/// Used internally by the broadphase to filter false positives from shared cells.
 pub fn aabb_overlap(a: &BroadphaseEntry, b: &BroadphaseEntry) -> bool {
     let a_min = a.aabb_min();
     let a_max = a.aabb_max();
@@ -74,6 +76,8 @@ pub struct SpatialHashBroadphase {
 
 impl SpatialHashBroadphase {
     /// Create a new spatial hash broadphase with the given cell size.
+    ///
+    /// Cell size should be >= the largest collider diameter for optimal performance.
     pub fn new(cell_size: f32) -> Self {
         Self {
             cell_size: cell_size.max(0.1),

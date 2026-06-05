@@ -21,6 +21,8 @@ pub struct ContactPoint {
 }
 
 impl ContactPoint {
+    /// Create a new contact point at the given world-space position with the specified
+    /// normal and penetration depth. Accumulated impulses start at zero.
     pub fn new(position: Vec3, normal: Vec3, depth: f32) -> Self {
         Self {
             position,
@@ -51,6 +53,7 @@ pub struct ContactManifold {
 }
 
 impl ContactManifold {
+    /// Create an empty contact manifold for the given body pair.
     pub fn new(body_a: u32, body_b: u32) -> Self {
         Self {
             body_a,
@@ -95,6 +98,7 @@ impl Default for ContactSolver {
 }
 
 impl ContactSolver {
+    /// Create a new contact solver with default settings (10 iterations, Baumgarte 0.2, slop 0.005).
     pub fn new() -> Self {
         Self::default()
     }

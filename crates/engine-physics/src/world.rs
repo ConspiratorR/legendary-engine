@@ -138,10 +138,12 @@ impl Default for PhysicsWorld {
 }
 
 impl PhysicsWorld {
+    /// Create a new physics world with default settings (gravity -9.81 Y, 60 Hz, 4 sub-steps).
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set the gravity vector applied to all dynamic bodies each frame.
     pub fn set_gravity(&mut self, gravity: Vec3) {
         self.gravity = gravity;
     }
