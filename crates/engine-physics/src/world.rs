@@ -639,14 +639,30 @@ impl PhysicsWorld {
             islands.entry(root).or_default().push(i);
         }
 
-        // Resolve each island in parallel using the contact solver
-        // SAFETY: Islands are disjoint sets of entities - no two islands share
-        // an entity, so concurrent mutable access to different entity components
-        // is safe. Within an island, collisions are processed sequentially.
+        // Resolve each island in parallel using the contact solver.
+        //
+        // SAFETY INVARIANTS:
+        //   1. Islands are disjoint sets of entities — the Union-Find guarantees
+        //      that no two islands share an entity index.
+        //   2. Each parallel task therefore writes to a distinct subset of
+        //      RigidBody/Transform components, so there is no data race on
+        //      component storage.
+        //   3. The AtomicPtr is only *loaded* (never stored-to) inside the
+        //      parallel closure; all loads return the same pointer to the
+        //      original `world` borrow, which lives for the duration of
+        //      `par_iter`.
+        //   4. Within a single island, manifolds are processed sequentially,
+        //      so shared-body writes within an island are ordered.
+        //
+        // If the island decomposition ever changes to allow entity overlap
+        // between islands, this block MUST be reworked (e.g. split the World
+        // into per-island sub-slices or use a lock).
         let solver = &self.contact_solver;
         let world_ptr = AtomicPtr::new(world as *mut World);
 
         islands.par_iter().for_each(|(_, manifold_indices)| {
+            // SAFETY: see invariants above — all tasks receive the same pointer
+            // and access disjoint entity sets.
             let world_ref = unsafe { &mut *world_ptr.load(std::sync::atomic::Ordering::Relaxed) };
             for &mi in manifold_indices {
                 let manifold = &manifolds[mi];

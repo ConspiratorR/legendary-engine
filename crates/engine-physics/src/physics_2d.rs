@@ -234,18 +234,21 @@ impl PhysicsWorld2D {
         // Phase 1: Apply gravity & integrate
         let entities: Vec<u32> = world.component_entities::<RigidBody2D>();
         for &eid in &entities {
-            let body = world.get_by_index_mut::<RigidBody2D>(eid).unwrap();
-            if body.body_type != BodyType2D::Dynamic {
-                continue;
+            if let Some(body) = world.get_by_index_mut::<RigidBody2D>(eid) {
+                if body.body_type != BodyType2D::Dynamic {
+                    continue;
+                }
+                body.velocity += self.gravity * body.gravity_scale * dt;
+                body.velocity *= 1.0 - body.linear_damping * dt;
             }
-            body.velocity += self.gravity * body.gravity_scale * dt;
-            body.velocity *= 1.0 - body.linear_damping * dt;
         }
 
         // Phase 2: Move entities
         let entities: Vec<u32> = world.component_entities::<RigidBody2D>();
         for &eid in &entities {
-            let body = world.get_by_index_mut::<RigidBody2D>(eid).unwrap();
+            let Some(body) = world.get_by_index_mut::<RigidBody2D>(eid) else {
+                continue;
+            };
             if body.body_type == BodyType2D::Static {
                 continue;
             }
@@ -278,7 +281,9 @@ impl PhysicsWorld2D {
         let mut colliders: Vec<(u32, Vec2, Collider2D, BodyType2D)> = Vec::new();
         let entities: Vec<u32> = world.component_entities::<Collider2D>();
         for &eid in &entities {
-            let collider = world.get_by_index::<Collider2D>(eid).unwrap();
+            let Some(collider) = world.get_by_index::<Collider2D>(eid) else {
+                continue;
+            };
             let body_type = world
                 .get_by_index::<RigidBody2D>(eid)
                 .map(|b| b.body_type)
