@@ -1,11 +1,11 @@
+use engine_math::{Vec2, Vec3};
 use engine_terrain::brush::apply_sculpt_brush;
 use engine_terrain::components::{
-    BrushFalloff, BrushSettings, PaintBrushSettings, PaintMode, SplatMap, SculptMode, Terrain,
+    BrushFalloff, BrushSettings, PaintBrushSettings, PaintMode, SculptMode, SplatMap, Terrain,
     TerrainTextureLayers, VegetationData, VegetationType,
 };
 use engine_terrain::paint::apply_paint_brush;
 use engine_terrain::vegetation::regenerate_vegetation;
-use engine_math::{Vec2, Vec3};
 
 const EPSILON: f32 = 1e-5;
 
@@ -185,7 +185,10 @@ fn sculpt_raise_increases_height() {
         0.016,
     );
     let center = terrain.get_height(2, 2);
-    assert!(center > 0.0, "height should increase after raise brush, got {center}");
+    assert!(
+        center > 0.0,
+        "height should increase after raise brush, got {center}"
+    );
 }
 
 #[test]
@@ -205,7 +208,10 @@ fn sculpt_lower_decreases_height() {
         0.016,
     );
     let center = terrain.get_height(2, 2);
-    assert!(center < 5.0, "height should decrease after lower brush, got {center}");
+    assert!(
+        center < 5.0,
+        "height should decrease after lower brush, got {center}"
+    );
 }
 
 #[test]
@@ -275,7 +281,10 @@ fn sculpt_marks_dirty_chunks() {
         SculptMode::Raise,
         0.016,
     );
-    assert!(!terrain.dirty_chunks.is_empty(), "sculpt should mark chunks dirty");
+    assert!(
+        !terrain.dirty_chunks.is_empty(),
+        "sculpt should mark chunks dirty"
+    );
 }
 
 #[test]

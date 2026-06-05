@@ -17,7 +17,9 @@ struct TrackingState {
 
 impl GameState for TrackingState {
     fn on_enter(&mut self, _: &mut StateCtx) {
-        self.log.borrow_mut().push(format!("{}:on_enter", self.name));
+        self.log
+            .borrow_mut()
+            .push(format!("{}:on_enter", self.name));
     }
     fn on_exit(&mut self, _: &mut StateCtx) {
         self.log.borrow_mut().push(format!("{}:on_exit", self.name));
@@ -249,7 +251,10 @@ fn push_multiple_flushes_call_enter_in_order() {
     }));
     s.flush(&mut w, &mut r);
 
-    assert_eq!(*log.borrow(), vec!["A:on_enter", "B:on_enter", "C:on_enter"]);
+    assert_eq!(
+        *log.borrow(),
+        vec!["A:on_enter", "B:on_enter", "C:on_enter"]
+    );
 }
 
 #[test]

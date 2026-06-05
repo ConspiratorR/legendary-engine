@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use glam::{Mat4, Quat, Vec3};
 
 fn bench_vec3_add(c: &mut Criterion) {
@@ -27,7 +27,9 @@ fn bench_vec3_normalize(c: &mut Criterion) {
 fn bench_mat4_mul_vec3(c: &mut Criterion) {
     let m = black_box(Mat4::IDENTITY);
     let v = black_box(Vec3::new(1.0, 2.0, 3.0));
-    c.bench_function("mat4_mul_vec3", |bench| bench.iter(|| m.transform_point3(v)));
+    c.bench_function("mat4_mul_vec3", |bench| {
+        bench.iter(|| m.transform_point3(v))
+    });
 }
 
 fn bench_mat4_inverse(c: &mut Criterion) {

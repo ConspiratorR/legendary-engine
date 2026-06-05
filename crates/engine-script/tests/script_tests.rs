@@ -1,6 +1,6 @@
-use engine_script::prelude::*;
 use engine_ecs::system::System;
 use engine_ecs::world::World;
+use engine_script::prelude::*;
 use std::sync::{Arc, RwLock};
 
 fn make_bridge() -> Arc<RwLock<ComponentBridge>> {
@@ -19,7 +19,10 @@ fn make_bridge() -> Arc<RwLock<ComponentBridge>> {
 fn script_engine_creation() {
     let bridge = make_bridge();
     let system = ScriptSystem::new("test", "function update(dt) end", bridge);
-    assert!(system.is_ok(), "ScriptSystem should be created successfully");
+    assert!(
+        system.is_ok(),
+        "ScriptSystem should be created successfully"
+    );
 
     let system = system.unwrap();
     assert_eq!(system.script_name(), "test");

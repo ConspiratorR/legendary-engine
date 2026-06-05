@@ -3,8 +3,8 @@ use engine_core::config::Config;
 use engine_core::plugin::Plugin;
 use engine_core::time::Time;
 use engine_ecs::world::World;
-use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,20 +44,32 @@ impl Plugin for OrderTracker {
 fn test_app_creation() {
     let app = App::new();
     // App should have an InputManager resource
-    assert!(app.world.get_resource::<engine_input::input_manager::InputManager>().is_some());
+    assert!(
+        app.world
+            .get_resource::<engine_input::input_manager::InputManager>()
+            .is_some()
+    );
 }
 
 #[test]
 fn test_app_default() {
     let app = App::default();
-    assert!(app.world.get_resource::<engine_input::input_manager::InputManager>().is_some());
+    assert!(
+        app.world
+            .get_resource::<engine_input::input_manager::InputManager>()
+            .is_some()
+    );
 }
 
 #[test]
 fn test_app_builder_new() {
     let builder = AppBuilder::new();
     let app = builder.build();
-    assert!(app.world.get_resource::<engine_input::input_manager::InputManager>().is_some());
+    assert!(
+        app.world
+            .get_resource::<engine_input::input_manager::InputManager>()
+            .is_some()
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -369,7 +381,10 @@ fn test_config_keys() {
 
     let mut keys: Vec<&String> = config.keys().collect();
     keys.sort();
-    assert_eq!(keys, vec![&"a".to_string(), &"b".to_string(), &"c".to_string()]);
+    assert_eq!(
+        keys,
+        vec![&"a".to_string(), &"b".to_string(), &"c".to_string()]
+    );
 }
 
 // ---------------------------------------------------------------------------
