@@ -3,6 +3,78 @@
 //! Networking layer for the RustEngine game engine, providing multiplayer
 //! support through a client/server architecture with ECS integration.
 //!
+//! ## Architecture
+//!
+//! The networking layer follows an **authoritative server** model where the
+//! server is the single source of truth for the game world. Clients send
+//! inputs and receive state updates; the server runs the full ECS simulation.
+//!
+//! ```text
+//! ┌──────────────────────────────────────────────────────────┐
+//! │  Server                                                  │
+//! │  ECS World ──► AuthoritativeServer ──► GameServer        │
+//! │  (simulation)   (tick + snapshot)      (TCP transport)   │
+//! └──────────────────────────┬───────────────────────────────┘
+//!                            │ StateSnapshot / DeltaSnapshot
+//!                            ▼
+//! ┌──────────────────────────────────────────────────────────┐
+//! │  Client                                                  │
+//! │  GameClient ──► ClientAuthority ──► ECS World            │
+//! │  (TCP transport)  (apply snapshot)   (render only)       │
+//! │  Interpolator ──► smooth visual state                    │
+//! │  PredictionManager ──► client-side prediction + reconcile│
+//! └──────────────────────────────────────────────────────────┘
+//! ```
+//!
+//! ### Transport
+//!
+//! TCP is used for reliable communication via [`TcpConnection`] and
+//! [`TcpListener`]. UDP is available for lower-latency needs via
+//! [`UdpSocket`]. All messages use a compact binary format with a
+//! 1-byte type tag (see [`NetworkMessage`]).
+//!
+//! ### Snapshot Synchronization
+//!
+//! Components implement [`NetworkSync`] to participate in replication.
+//! The [`SnapshotRegistry`] maps component types to serialize/deserialize
+//! functions. The server captures [`WorldSnapshot`]s each tick and either:
+//!
+//! - Sends a **full snapshot** ([`NetworkMessage::StateSnapshot`]) at
+//!   configurable intervals, or
+//! - Sends a **delta snapshot** ([`NetworkMessage::DeltaSnapshot`]) with
+//!   only changed entities between full snapshots.
+//!
+//! Clients apply snapshots via [`ClientAuthority`] and interpolate between
+//! them using [`Interpolator`] with a configurable delay (default 2 ticks).
+//!
+//! ### Client-Side Prediction
+//!
+//! [`PredictionManager`] stores predicted states locally so the client can
+//! apply inputs immediately. When the server sends an [`InputAck`] or
+//! [`Correction`], the manager reconciles predictions — snapping for large
+//! errors or smoothing over several frames for small drift.
+//!
+//! ### Reconnection
+//!
+//! [`ReconnectManager`] issues tokens on first connection. If a client
+//! disconnects, the server stores its last snapshot and accumulates deltas.
+//! On reconnect, the server sends a [`ReconnectSnapshot`] with either
+//! a full state (large tick gap) or accumulated deltas (small gap).
+//!
+//! ### NAT Traversal
+//!
+//! [`StunClient`] discovers the client's public address via STUN (RFC 5389).
+//! [`HolePuncher`] coordinates UDP hole punching between peers.
+//! [`RendezvousServer`] brokers peer introductions for direct P2P via
+//! [`P2pConnection`].
+//!
+//! ### Matchmaking
+//!
+//! [`RoomManager`] handles room creation/joining with host migration.
+//! [`Matchmaker`] groups queued players by skill and ping.
+//! [`LobbyManager`] manages pre-game lobbies with ready-up and team
+//! assignment.
+//!
 //! ## Features
 //!
 //! - **Client/Server** — [`GameServer`] and [`GameClient`] with TCP connections,
