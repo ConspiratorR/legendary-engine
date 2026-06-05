@@ -354,4 +354,59 @@ mod tests {
         let order = order.lock();
         assert_eq!(*order, vec!["A", "B", "C", "D"]);
     }
+
+    #[test]
+    fn test_graph_len_and_is_empty() {
+        let mut graph = JobGraph::new();
+        assert_eq!(graph.len(), 0);
+        assert!(graph.is_empty());
+
+        graph.add(|| {});
+        assert_eq!(graph.len(), 1);
+        assert!(!graph.is_empty());
+
+        graph.add(|| {});
+        assert_eq!(graph.len(), 2);
+    }
+
+    #[test]
+    fn test_many_independent_jobs() {
+        let pool = ThreadPool::new(4);
+        let mut graph = JobGraph::new();
+        let counter = Arc::new(AtomicU64::new(0));
+
+        for _ in 0..100 {
+            let c = Arc::clone(&counter);
+            graph.add(move || {
+                c.fetch_add(1, Ordering::Relaxed);
+            });
+        }
+
+        graph.execute(&pool);
+        assert_eq!(counter.load(Ordering::Relaxed), 100);
+    }
+
+    #[test]
+    fn test_wide_then_narrow_dependency() {
+        // A, B, C independent → D depends on all three
+        let pool = ThreadPool::new(4);
+        let mut graph = JobGraph::new();
+        let order = Arc::new(Mutex::new(Vec::new()));
+
+        let o1 = Arc::clone(&order);
+        let a = graph.add(move || o1.lock().push("A"));
+        let o2 = Arc::clone(&order);
+        let b = graph.add(move || o2.lock().push("B"));
+        let o3 = Arc::clone(&order);
+        let c = graph.add(move || o3.lock().push("C"));
+
+        let o4 = Arc::clone(&order);
+        graph.add_after(&[a, b, c], move || o4.lock().push("D"));
+
+        graph.execute(&pool);
+
+        let order = order.lock();
+        assert_eq!(order.len(), 4);
+        assert_eq!(order[3], "D");
+    }
 }

@@ -10,6 +10,19 @@ use crate::task::Task;
 ///
 /// Spawns `num_threads` worker threads. Tasks submitted via [`submit`](Self::submit)
 /// are distributed across workers using a central injector with work-stealing.
+///
+/// ## Architecture
+///
+/// The pool uses a central [`Injector`] queue as the primary task store.
+/// Each worker thread owns a local FIFO [`Worker`] deque. When a worker's
+/// local queue is empty, it first tries to steal from the central injector,
+/// then from other workers' deques — this is the work-stealing algorithm.
+///
+/// ## Shutdown
+///
+/// Dropping the pool sets a shutdown flag and pushes sentinel tasks to wake
+/// all idle workers, then joins every thread. The pool guarantees all
+/// submitted tasks complete before the destructor returns.
 pub struct ThreadPool {
     injector: Arc<Injector<Task>>,
     threads: Vec<thread::JoinHandle<()>>,
@@ -65,6 +78,15 @@ impl ThreadPool {
         }
     }
 
+    /// Worker thread main loop.
+    ///
+    /// Each iteration tries to find work in this priority order:
+    /// 1. Pop from the thread-local deque (cheapest, no contention).
+    /// 2. Steal from the central injector (shared, moderate contention).
+    /// 3. Steal from another worker's deque (work-stealing, highest contention).
+    ///
+    /// If no work is found, checks the shutdown flag. If not shutting down,
+    /// yields the CPU and retries.
     fn worker_loop(
         worker: Worker<Task>,
         injector: Arc<Injector<Task>>,
