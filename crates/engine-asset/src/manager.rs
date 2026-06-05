@@ -447,12 +447,16 @@ mod tests {
         // Change the file
         std::fs::write(&file, "version 2").unwrap();
 
+        // Drain any stale events from the background watcher thread
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        manager.update();
+
         // Inject a Modified event
         let tx = manager.watcher.sender();
         tx.send(FileEvent::Modified(file.clone())).unwrap();
 
         // Wait for debounce
-        std::thread::sleep(std::time::Duration::from_millis(400));
+        std::thread::sleep(std::time::Duration::from_millis(300));
         manager.update();
 
         // Registry should have the updated content
