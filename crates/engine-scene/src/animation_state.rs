@@ -5,13 +5,18 @@ use serde::{Deserialize, Serialize};
 /// A state in an animation state machine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationState {
+    /// Unique state name.
     pub name: String,
+    /// Name of the animation clip to play in this state.
     pub clip_name: String,
+    /// Playback speed multiplier.
     pub speed: f32,
+    /// Whether the animation should loop.
     pub looping: bool,
 }
 
 impl AnimationState {
+    /// Create a new animation state with the given name and clip, defaulting to speed 1.0 and looping.
     pub fn new(name: impl Into<String>, clip_name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -21,11 +26,13 @@ impl AnimationState {
         }
     }
 
+    /// Set the playback speed multiplier.
     pub fn with_speed(mut self, speed: f32) -> Self {
         self.speed = speed;
         self
     }
 
+    /// Set whether the animation should loop.
     pub fn with_looping(mut self, looping: bool) -> Self {
         self.looping = looping;
         self
@@ -35,7 +42,9 @@ impl AnimationState {
 /// A transition between two animation states.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationTransition {
+    /// Source state name.
     pub from: String,
+    /// Target state name.
     pub to: String,
     /// Blend duration in seconds.
     pub blend_duration: f32,
@@ -66,9 +75,13 @@ pub enum TransitionCondition {
 /// and parameter conditions.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnimationStateMachine {
+    /// Name of the current state.
     pub current_state: String,
+    /// Registered animation states keyed by name.
     pub states: HashMap<String, AnimationState>,
+    /// Registered transitions between states.
     pub transitions: Vec<AnimationTransition>,
+    /// Parameter values used to evaluate transition conditions.
     pub parameters: AnimationParameters,
     /// Current blend progress (0.0 = fully in current state, 1.0 = fully in target).
     pub blend_progress: f32,
@@ -81,36 +94,46 @@ pub struct AnimationStateMachine {
 /// Parameters used to evaluate transition conditions.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AnimationParameters {
+    /// Boolean parameters keyed by name.
     pub bools: HashMap<String, bool>,
+    /// Float parameters keyed by name.
     pub floats: HashMap<String, f32>,
+    /// Pending trigger names.
     pub triggers: Vec<String>,
 }
 
 impl AnimationParameters {
+    /// Create an empty parameter set.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Set a boolean parameter.
     pub fn set_bool(&mut self, name: impl Into<String>, value: bool) {
         self.bools.insert(name.into(), value);
     }
 
+    /// Get a boolean parameter (defaults to `false`).
     pub fn get_bool(&self, name: &str) -> bool {
         self.bools.get(name).copied().unwrap_or(false)
     }
 
+    /// Set a float parameter.
     pub fn set_float(&mut self, name: impl Into<String>, value: f32) {
         self.floats.insert(name.into(), value);
     }
 
+    /// Get a float parameter (defaults to `0.0`).
     pub fn get_float(&self, name: &str) -> f32 {
         self.floats.get(name).copied().unwrap_or(0.0)
     }
 
+    /// Set a trigger parameter.
     pub fn set_trigger(&mut self, name: impl Into<String>) {
         self.triggers.push(name.into());
     }
 
+    /// Consume a trigger, returning `true` if it was present.
     pub fn consume_trigger(&mut self, name: &str) -> bool {
         if let Some(pos) = self.triggers.iter().position(|t| t == name) {
             self.triggers.remove(pos);
@@ -120,12 +143,14 @@ impl AnimationParameters {
         }
     }
 
+    /// Clear all pending triggers.
     pub fn clear_triggers(&mut self) {
         self.triggers.clear();
     }
 }
 
 impl AnimationStateMachine {
+    /// Create a new state machine with the given initial state.
     pub fn new(initial_state: impl Into<String>) -> Self {
         Self {
             current_state: initial_state.into(),

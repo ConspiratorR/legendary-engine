@@ -15,8 +15,11 @@ pub enum Interpolation {
 /// A single keyframe for a float value.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct FloatKeyframe {
+    /// Time of this keyframe in seconds.
     pub time: f32,
+    /// Float value at this keyframe.
     pub value: f32,
+    /// Interpolation method to the next keyframe.
     pub interpolation: Interpolation,
     /// Cubic tangent in (used with Cubic interpolation).
     pub tangent_in: f32,
@@ -25,6 +28,7 @@ pub struct FloatKeyframe {
 }
 
 impl FloatKeyframe {
+    /// Create a linear interpolation keyframe.
     pub fn linear(time: f32, value: f32) -> Self {
         Self {
             time,
@@ -35,6 +39,7 @@ impl FloatKeyframe {
         }
     }
 
+    /// Create a step (no interpolation) keyframe.
     pub fn step(time: f32, value: f32) -> Self {
         Self {
             time,
@@ -45,6 +50,7 @@ impl FloatKeyframe {
         }
     }
 
+    /// Create a cubic spline keyframe with tangent values.
     pub fn cubic(time: f32, value: f32, tangent_in: f32, tangent_out: f32) -> Self {
         Self {
             time,
@@ -59,14 +65,20 @@ impl FloatKeyframe {
 /// A single keyframe for a Vec3 value.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Vec3Keyframe {
+    /// Time of this keyframe in seconds.
     pub time: f32,
+    /// Vec3 value at this keyframe.
     pub value: Vec3,
+    /// Interpolation method to the next keyframe.
     pub interpolation: Interpolation,
+    /// Cubic tangent in.
     pub tangent_in: Vec3,
+    /// Cubic tangent out.
     pub tangent_out: Vec3,
 }
 
 impl Vec3Keyframe {
+    /// Create a linear interpolation keyframe.
     pub fn linear(time: f32, value: Vec3) -> Self {
         Self {
             time,
@@ -77,6 +89,7 @@ impl Vec3Keyframe {
         }
     }
 
+    /// Create a step (no interpolation) keyframe.
     pub fn step(time: f32, value: Vec3) -> Self {
         Self {
             time,
@@ -91,12 +104,16 @@ impl Vec3Keyframe {
 /// A single keyframe for a rotation (quaternion).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct RotationKeyframe {
+    /// Time of this keyframe in seconds.
     pub time: f32,
+    /// Quaternion value at this keyframe.
     pub value: Quat,
+    /// Interpolation method to the next keyframe.
     pub interpolation: Interpolation,
 }
 
 impl RotationKeyframe {
+    /// Create a linear (slerp) interpolation keyframe.
     pub fn linear(time: f32, value: Quat) -> Self {
         Self {
             time,
@@ -105,6 +122,7 @@ impl RotationKeyframe {
         }
     }
 
+    /// Create a step (no interpolation) keyframe.
     pub fn step(time: f32, value: Quat) -> Self {
         Self {
             time,
@@ -119,15 +137,22 @@ impl RotationKeyframe {
 /// Each track is optional — only the tracks that are present will be applied.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationClip {
+    /// Clip name.
     pub name: String,
+    /// Clip duration in seconds.
     pub duration: f32,
+    /// Whether the clip should loop.
     pub looping: bool,
+    /// Optional position keyframe track.
     pub position_track: Option<Vec<Vec3Keyframe>>,
+    /// Optional rotation keyframe track.
     pub rotation_track: Option<Vec<RotationKeyframe>>,
+    /// Optional scale keyframe track.
     pub scale_track: Option<Vec<Vec3Keyframe>>,
 }
 
 impl AnimationClip {
+    /// Create a new clip with the given name and duration.
     pub fn new(name: impl Into<String>, duration: f32) -> Self {
         Self {
             name: name.into(),
@@ -139,21 +164,25 @@ impl AnimationClip {
         }
     }
 
+    /// Set whether this clip loops.
     pub fn looping(mut self, looping: bool) -> Self {
         self.looping = looping;
         self
     }
 
+    /// Set the position keyframe track.
     pub fn with_position_track(mut self, track: Vec<Vec3Keyframe>) -> Self {
         self.position_track = Some(track);
         self
     }
 
+    /// Set the rotation keyframe track.
     pub fn with_rotation_track(mut self, track: Vec<RotationKeyframe>) -> Self {
         self.rotation_track = Some(track);
         self
     }
 
+    /// Set the scale keyframe track.
     pub fn with_scale_track(mut self, track: Vec<Vec3Keyframe>) -> Self {
         self.scale_track = Some(track);
         self
@@ -184,10 +213,15 @@ impl AnimationClip {
 /// Animation player component — tracks playback state for an entity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnimationPlayer {
+    /// Name of the current clip.
     pub clip_name: String,
+    /// Current playback time in seconds.
     pub time: f32,
+    /// Playback speed multiplier.
     pub speed: f32,
+    /// Whether the player is currently playing.
     pub playing: bool,
+    /// Number of times the clip has looped.
     pub loop_count: i32,
 }
 
@@ -204,6 +238,7 @@ impl Default for AnimationPlayer {
 }
 
 impl AnimationPlayer {
+    /// Create a new player for the given clip, starting in the playing state.
     pub fn new(clip_name: impl Into<String>) -> Self {
         Self {
             clip_name: clip_name.into(),
@@ -212,14 +247,17 @@ impl AnimationPlayer {
         }
     }
 
+    /// Resume playback.
     pub fn play(&mut self) {
         self.playing = true;
     }
 
+    /// Pause playback without resetting time.
     pub fn pause(&mut self) {
         self.playing = false;
     }
 
+    /// Stop playback and reset time to zero.
     pub fn stop(&mut self) {
         self.playing = false;
         self.time = 0.0;

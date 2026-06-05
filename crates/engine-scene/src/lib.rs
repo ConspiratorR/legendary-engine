@@ -1,21 +1,40 @@
-//! Scene graph with ECS-backed hierarchy and transforms.
+//! # engine-scene
 //!
-//! Provides [`scene_manager::SceneManager`] for building a tree of [`node::SceneNode`]s with
-//! parent/child relationships, local [`transform::Transform`]s, and computed
-//! [`transform::GlobalTransform`]s. Also includes skeletal animation, inverse
-//! kinematics, and keyframe animation systems.
+//! Scene management for the RustEngine.
 //!
-//! The [`serialization`] module provides scene file I/O in JSON, RON, and binary formats.
+//! Provides a scene graph with parent-child hierarchy,
+//! [`Transform`](transform::Transform)/[`GlobalTransform`](transform::GlobalTransform) synchronization,
+//! and serialization support.
 //!
-//! The [`prefab`] module provides reusable entity templates with instantiation,
-//! property overrides, and nested prefab support.
+//! ## Quick Start
 //!
-//! The [`multi_scene`] module manages multiple scenes loaded simultaneously,
-//! merging their entities with namespaced IDs.
+//! ```rust
+//! use engine_scene::scene_manager::SceneManager;
+//! use engine_scene::transform::Transform;
 //!
-//! The [`sub_scene`] module provides distance-based streaming of sub-scenes.
+//! let mut sm = SceneManager::new();
+//! let root = sm.root();
 //!
-//! The [`scene_layer`] module provides bitmask-based scene categorization.
+//! let child = sm.add_node("Child")
+//!     .with_transform(Transform::from_xyz(0.0, 5.0, 0.0))
+//!     .build();
+//!
+//! sm.set_parent(child, root);
+//! sm.sync_transforms();
+//! ```
+//!
+//! ## Modules
+//!
+//! - [`serialization`] — Scene file I/O in JSON, RON, and binary formats.
+//! - [`prefab`] — Reusable entity templates with instantiation and property overrides.
+//! - [`multi_scene`] — Multiple scenes loaded simultaneously with namespaced IDs.
+//! - [`sub_scene`] — Distance-based streaming of sub-scenes.
+//! - [`scene_layer`] — Bitmask-based scene categorization.
+//! - [`skeleton`] — Skeletal animation with joint hierarchies and skinning.
+//! - [`ik`] — Inverse kinematics (CCD) and forward kinematics solvers.
+//! - [`keyframe`] — Keyframe animation clips and interpolation.
+//! - [`animation_state`] — Animation state machine with blend transitions.
+//! - [`diff`] — Scene diffing for incremental serialization.
 
 pub mod animation_state;
 pub mod diff;

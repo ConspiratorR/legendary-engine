@@ -8,7 +8,9 @@ use crate::keyframe::{RotationKeyframe, Vec3Keyframe};
 /// A single joint (bone) in a skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Joint {
+    /// Unique joint identifier.
     pub id: u32,
+    /// Human-readable joint name.
     pub name: String,
     /// Index into the skeleton's joint list, or `None` for the root.
     pub parent_index: Option<usize>,
@@ -26,6 +28,7 @@ pub struct Skeleton {
 }
 
 impl Skeleton {
+    /// Create a skeleton from a list of joints, building the name lookup table.
     pub fn new(joints: Vec<Joint>) -> Self {
         let mut joint_names = HashMap::with_capacity(joints.len());
         for (i, joint) in joints.iter().enumerate() {
@@ -37,10 +40,12 @@ impl Skeleton {
         }
     }
 
+    /// Return the number of joints in this skeleton.
     pub fn joint_count(&self) -> usize {
         self.joints.len()
     }
 
+    /// Return a slice of all joints.
     pub fn joints(&self) -> &[Joint] {
         &self.joints
     }
@@ -75,6 +80,7 @@ pub struct Skin {
 }
 
 impl Skin {
+    /// Create a new skin with zero-initialized joint data for the given vertex count.
     pub fn new(skeleton_name: impl Into<String>, vertex_count: usize) -> Self {
         Self {
             skeleton_name: skeleton_name.into(),
@@ -83,6 +89,7 @@ impl Skin {
         }
     }
 
+    /// Return the number of vertices this skin covers.
     pub fn vertex_count(&self) -> usize {
         self.joint_indices.len()
     }
@@ -91,8 +98,11 @@ impl Skin {
 /// Local transform for a single joint (position, rotation, scale).
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct JointTransform {
+    /// Joint translation.
     pub translation: Vec3,
+    /// Joint rotation.
     pub rotation: Quat,
+    /// Joint scale.
     pub scale: Vec3,
 }
 
@@ -107,6 +117,7 @@ impl Default for JointTransform {
 }
 
 impl JointTransform {
+    /// Convert to a 4×4 transformation matrix.
     pub fn to_matrix(&self) -> Mat4 {
         Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
     }
@@ -134,8 +145,11 @@ impl JointTransform {
 /// A per-joint animation clip mapping joint names to animation tracks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkeletalAnimationClip {
+    /// Clip name.
     pub name: String,
+    /// Clip duration in seconds.
     pub duration: f32,
+    /// Whether the clip should loop.
     pub looping: bool,
     /// Maps joint name → position track.
     pub position_tracks: HashMap<String, Vec<Vec3Keyframe>>,
@@ -146,6 +160,7 @@ pub struct SkeletalAnimationClip {
 }
 
 impl SkeletalAnimationClip {
+    /// Create a new clip with the given name and duration.
     pub fn new(name: impl Into<String>, duration: f32) -> Self {
         Self {
             name: name.into(),
@@ -157,11 +172,13 @@ impl SkeletalAnimationClip {
         }
     }
 
+    /// Set whether this clip loops.
     pub fn looping(mut self, looping: bool) -> Self {
         self.looping = looping;
         self
     }
 
+    /// Add a position track for the given joint name.
     pub fn with_position_track(
         mut self,
         joint_name: impl Into<String>,
@@ -171,6 +188,7 @@ impl SkeletalAnimationClip {
         self
     }
 
+    /// Add a rotation track for the given joint name.
     pub fn with_rotation_track(
         mut self,
         joint_name: impl Into<String>,
@@ -180,6 +198,7 @@ impl SkeletalAnimationClip {
         self
     }
 
+    /// Add a scale track for the given joint name.
     pub fn with_scale_track(
         mut self,
         joint_name: impl Into<String>,
@@ -220,16 +239,22 @@ impl SkeletalAnimationClip {
 /// Player that advances a skeletal animation and produces a joint matrix palette.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkeletalAnimationPlayer {
+    /// Name of the current clip.
     pub clip_name: String,
+    /// Current playback time in seconds.
     pub time: f32,
+    /// Playback speed multiplier.
     pub speed: f32,
+    /// Whether the player is currently playing.
     pub playing: bool,
+    /// Number of times the clip has looped.
     pub loop_count: i32,
     /// Per-joint local transforms for the current pose (indexed by joint index).
     local_pose: Vec<JointTransform>,
 }
 
 impl SkeletalAnimationPlayer {
+    /// Create a new player for the given clip, initializing local pose from the skeleton's bind pose.
     pub fn new(clip_name: impl Into<String>, skeleton: &Skeleton) -> Self {
         let local_pose = skeleton
             .joints()
@@ -246,20 +271,24 @@ impl SkeletalAnimationPlayer {
         }
     }
 
+    /// Resume playback.
     pub fn play(&mut self) {
         self.playing = true;
     }
 
+    /// Pause playback without resetting time.
     pub fn pause(&mut self) {
         self.playing = false;
     }
 
+    /// Stop playback and reset time to zero.
     pub fn stop(&mut self) {
         self.playing = false;
         self.time = 0.0;
         self.loop_count = 0;
     }
 
+    /// Return the current local pose (per-joint transforms).
     pub fn local_pose(&self) -> &[JointTransform] {
         &self.local_pose
     }
