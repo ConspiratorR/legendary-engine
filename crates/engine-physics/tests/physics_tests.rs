@@ -779,8 +779,8 @@ fn joint_solver_remove_for_entity() {
 
 #[cfg(test)]
 mod physics_2d_tests {
-    use engine_physics::physics_2d::{AABB2D, BodyType2D, Collider2D, PhysicsWorld2D, RigidBody2D};
     use engine_math::Vec2;
+    use engine_physics::physics_2d::{AABB2D, BodyType2D, Collider2D, PhysicsWorld2D, RigidBody2D};
 
     #[test]
     fn test_aabb_overlap() {
@@ -842,14 +842,19 @@ mod physics_2d_tests {
     fn test_physics_world_2d_gravity() {
         let mut world = engine_ecs::world::World::new();
         let entity = world.spawn();
-        world.add_component(entity, engine_core::transform::Transform::from_xyz(0.0, 10.0, 0.0));
+        world.add_component(
+            entity,
+            engine_core::transform::Transform::from_xyz(0.0, 10.0, 0.0),
+        );
         world.add_component(entity, RigidBody2D::new_dynamic());
         world.add_component(entity, Collider2D::aabb(0.5, 0.5));
 
         let mut physics = PhysicsWorld2D::new();
         physics.step(&mut world, 1.0 / 60.0);
 
-        let transform = world.get_by_index::<engine_core::transform::Transform>(entity.index()).unwrap();
+        let transform = world
+            .get_by_index::<engine_core::transform::Transform>(entity.index())
+            .unwrap();
         assert!(transform.position.y < 10.0);
     }
 
@@ -858,12 +863,18 @@ mod physics_2d_tests {
         let mut world = engine_ecs::world::World::new();
 
         let player = world.spawn();
-        world.add_component(player, engine_core::transform::Transform::from_xyz(0.0, 0.6, 0.0));
+        world.add_component(
+            player,
+            engine_core::transform::Transform::from_xyz(0.0, 0.6, 0.0),
+        );
         world.add_component(player, RigidBody2D::new_dynamic());
         world.add_component(player, Collider2D::aabb(0.5, 0.5));
 
         let floor = world.spawn();
-        world.add_component(floor, engine_core::transform::Transform::from_xyz(0.0, 0.0, 0.0));
+        world.add_component(
+            floor,
+            engine_core::transform::Transform::from_xyz(0.0, 0.0, 0.0),
+        );
         world.add_component(floor, RigidBody2D::new_static());
         world.add_component(floor, Collider2D::aabb(50.0, 0.5));
 
@@ -873,6 +884,9 @@ mod physics_2d_tests {
         }
 
         let body = world.get_by_index::<RigidBody2D>(player.index()).unwrap();
-        assert!(body.grounded, "Player should be grounded after falling onto floor");
+        assert!(
+            body.grounded,
+            "Player should be grounded after falling onto floor"
+        );
     }
 }
