@@ -6,8 +6,11 @@ use std::collections::HashMap;
 /// Summary of memory usage for a single component type.
 #[derive(Debug, Clone)]
 pub struct ComponentMemoryInfo {
+    /// The [`TypeId`] of the component stored in this slot.
     pub type_id: TypeId,
+    /// Number of currently occupied entries.
     pub live_entries: usize,
+    /// Number of empty (wasted) sparse-array slots.
     pub wasted_slots: usize,
 }
 
