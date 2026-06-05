@@ -13,6 +13,7 @@ impl Default for TaskId {
 }
 
 impl TaskId {
+    /// Create a new unique task identifier.
     pub fn new() -> Self {
         Self(NEXT_TASK_ID.fetch_add(1, Ordering::Relaxed))
     }
@@ -25,6 +26,7 @@ pub struct Task {
 }
 
 impl Task {
+    /// Create a new task with the given work closure.
     pub fn new<F: FnOnce() + Send + 'static>(work: F) -> Self {
         Self {
             id: TaskId::new(),
