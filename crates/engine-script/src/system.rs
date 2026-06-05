@@ -41,6 +41,11 @@ pub struct ScriptSystem {
 }
 
 impl ScriptSystem {
+    /// Create a new Lua script system by compiling `source` inline.
+    ///
+    /// The source is loaded and executed once at creation time. The global
+    /// `update(dt)` function (if defined) will be called each tick via
+    /// the [`System`](engine_ecs::system::System) trait.
     pub fn new(
         name: impl Into<String>,
         source: &str,
@@ -56,6 +61,10 @@ impl ScriptSystem {
         })
     }
 
+    /// Create a new Lua script system by reading source from a file path.
+    ///
+    /// This is a convenience wrapper around [`new`](Self::new) that reads
+    /// the file contents for you.
     pub fn from_file(
         name: impl Into<String>,
         path: impl AsRef<std::path::Path>,
@@ -67,6 +76,10 @@ impl ScriptSystem {
         Self::new(name, &source, bridge)
     }
 
+    /// Replace the Lua state with freshly compiled `source`.
+    ///
+    /// The previous Lua state is discarded. This is used by the
+    /// [`HotReloader`](crate::hot_reload::HotReloader) to apply file changes.
     pub fn reload(&mut self, source: &str) -> LuaResult<()> {
         let lua = Lua::new();
         Self::setup_globals(&lua)?;
@@ -75,6 +88,9 @@ impl ScriptSystem {
         Ok(())
     }
 
+    /// Reload the Lua state from a file path.
+    ///
+    /// Convenience wrapper around [`reload`](Self::reload).
     pub fn reload_from_file(&mut self, path: impl AsRef<std::path::Path>) -> LuaResult<()> {
         let source = std::fs::read_to_string(path.as_ref()).map_err(|e| {
             LuaError::runtime(format!("Failed to read {}: {}", path.as_ref().display(), e))
@@ -82,6 +98,7 @@ impl ScriptSystem {
         self.reload(&source)
     }
 
+    /// Return the human-readable name assigned to this system.
     pub fn script_name(&self) -> &str {
         &self.name
     }

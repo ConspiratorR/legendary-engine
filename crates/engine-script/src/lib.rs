@@ -1,14 +1,20 @@
-//! Lua scripting integration for the RustEngine ECS.
+//! Lua and WASM scripting integration for the RustEngine ECS.
 //!
-//! This crate provides:
+//! This crate bridges the engine's Entity Component System with script
+//! runtimes, enabling gameplay logic to be written in Lua or compiled
+//! WASM modules while retaining full ECS access.
+//!
+//! # Features
+//!
 //! - **[`ComponentBridge`](bridge::ComponentBridge)**: Register Rust component types for Lua access
 //! - **[`ScriptSystem`](system::ScriptSystem)**: Execute Lua scripts as ECS systems
+//! - **[`WasmSystem`](wasm::WasmSystem)**: Execute WASM modules as ECS systems
 //! - **[`HotReloader`](hot_reload::HotReloader)**: Watch `.lua` files for automatic reloading
 //! - **[`TypeRegistry`](type_registry::TypeRegistry)**: Unified Rust ↔ Lua/WASM type mapping for engine math types
 //! - **[`CallbackRegistry`](callback::CallbackRegistry)**: Register Rust callbacks callable from scripts
 //! - **[`ScriptEventBus`](event_bridge::ScriptEventBus)**: Bridge engine events to/from scripts
 //!
-//! # Quick Start
+//! # Quick Start — Lua
 //!
 //! ```rust,no_run
 //! use engine_script::prelude::*;
@@ -26,12 +32,37 @@
 //! let bridge = Arc::new(RwLock::new(bridge));
 //! let system = ScriptSystem::new("movement", r#"
 //!     function update(dt)
-//!         -- access world through the 'world' global
+//!         -- access entity components through the 'world' global
+//!         -- world:spawn(), world:get(e, "Health"), world:set(e, "Health", 50)
 //!     end
 //! "#, bridge).unwrap();
 //!
 //! // 3. Add to your ECS schedule like any other system
 //! ```
+//!
+//! # Quick Start — WASM
+//!
+//! ```rust,no_run
+//! use engine_script::prelude::*;
+//! use std::sync::{Arc, RwLock};
+//!
+//! let runtime = Arc::new(WasmRuntime::new().unwrap());
+//! let mut bridge = WasmComponentBridge::new();
+//! // bridge.register::<Position>("Position", 12, to_bytes, from_bytes);
+//! let bridge = Arc::new(RwLock::new(bridge));
+//! // let system = WasmSystem::new("ai", &wasm_bytes, runtime, bridge).unwrap();
+//! ```
+//!
+//! # Architecture
+//!
+//! The scripting layer is designed around three principles:
+//!
+//! 1. **Type-safe bridging**: Rust components are registered by type, with
+//!    closures that handle conversion to/from Lua values or WASM bytes.
+//! 2. **Sandbox isolation**: WASM modules run inside a [`WasmSandbox`](wasm::WasmSandbox)
+//!    with configurable memory, fuel, and table limits.
+//! 3. **Hot-reload support**: Lua scripts can be watched on disk and reloaded
+//!    at runtime via [`HotReloader`](hot_reload::HotReloader).
 
 pub use error::ScriptError;
 

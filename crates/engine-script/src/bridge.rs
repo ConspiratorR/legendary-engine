@@ -27,6 +27,7 @@ pub struct ComponentBridge {
 }
 
 impl ComponentBridge {
+    /// Create an empty component bridge with no registered types.
     pub fn new() -> Self {
         Self {
             getters: HashMap::new(),

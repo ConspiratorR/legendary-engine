@@ -82,6 +82,7 @@ pub struct WasmComponentBridge {
 }
 
 impl WasmComponentBridge {
+    /// Create an empty WASM component bridge with no registered types.
     pub fn new() -> Self {
         Self {
             getters: HashMap::new(),
@@ -348,6 +349,7 @@ unsafe impl Sync for WasmSystem {}
 
 impl WasmSystem {
     /// Create a new WASM system from compiled module bytes.
+    /// Create a new WASM system by compiling `wasm_bytes` through `runtime`.
     pub fn new(
         name: impl Into<String>,
         wasm_bytes: &[u8],
@@ -364,6 +366,7 @@ impl WasmSystem {
     }
 
     /// Create a new WASM system from a file path.
+    /// Create a new WASM system by loading a `.wasm` file from disk.
     pub fn from_file(
         name: impl Into<String>,
         path: impl AsRef<std::path::Path>,
@@ -380,17 +383,20 @@ impl WasmSystem {
     }
 
     /// Reload the WASM module from new bytes.
+    /// Replace the WASM module with freshly compiled bytes.
     pub fn reload(&mut self, wasm_bytes: &[u8]) -> anyhow::Result<()> {
         self.module = self.runtime.compile(wasm_bytes)?;
         Ok(())
     }
 
     /// Reload the WASM module from a file path.
+    /// Reload the WASM module from a file path.
     pub fn reload_from_file(&mut self, path: impl AsRef<std::path::Path>) -> anyhow::Result<()> {
         self.module = self.runtime.compile_file(path)?;
         Ok(())
     }
 
+    /// Return the human-readable name assigned to this system.
     pub fn script_name(&self) -> &str {
         &self.name
     }
