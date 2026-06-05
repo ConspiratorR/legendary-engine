@@ -67,5 +67,5 @@ pub use collider::{
     check_obb_obb, check_sphere_box, check_sphere_capsule, check_sphere_obb, check_sphere_sphere,
 };
 pub use contact::{ContactManifold, ContactPoint, ContactSolver};
-pub use plugin::PhysicsPlugin;
+pub use plugin::{Physics2DPlugin, PhysicsPlugin};
 pub use world::{CollisionEvent, PhysicsWorld, SensorEvent};
