@@ -251,7 +251,9 @@ impl PhysicsWorld2D {
             }
             let vel = body.velocity;
             // Read position from Transform
-            if let Some(transform) = world.get_by_index_mut::<engine_core::transform::Transform>(eid) {
+            if let Some(transform) =
+                world.get_by_index_mut::<engine_core::transform::Transform>(eid)
+            {
                 transform.position.x += vel.x * dt;
                 transform.position.y += vel.y * dt;
             }
@@ -265,10 +267,10 @@ impl PhysicsWorld2D {
         // Reset grounded for all dynamic bodies
         let entities: Vec<u32> = world.component_entities::<RigidBody2D>();
         for &eid in &entities {
-            if let Some(body) = world.get_by_index_mut::<RigidBody2D>(eid) {
-                if body.body_type == BodyType2D::Dynamic {
-                    body.grounded = false;
-                }
+            if let Some(body) = world.get_by_index_mut::<RigidBody2D>(eid)
+                && body.body_type == BodyType2D::Dynamic
+            {
+                body.grounded = false;
             }
         }
 
@@ -328,6 +330,7 @@ impl PhysicsWorld2D {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn resolve_collision(
         &self,
         world: &mut engine_ecs::world::World,
@@ -354,7 +357,9 @@ impl PhysicsWorld2D {
         };
 
         // Push out
-        if let Some(transform) = world.get_by_index_mut::<engine_core::transform::Transform>(push_eid) {
+        if let Some(transform) =
+            world.get_by_index_mut::<engine_core::transform::Transform>(push_eid)
+        {
             transform.position.x += push_normal.x * pen;
             transform.position.y += push_normal.y * pen;
         }
