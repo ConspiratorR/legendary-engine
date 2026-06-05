@@ -1,3 +1,4 @@
+use crate::error::EcsError;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
@@ -110,7 +111,12 @@ impl<T> SparseSet<T> {
             return freed;
         }
 
-        let max_index = *self.entities.iter().max().unwrap() as usize;
+        let max_index = *self
+            .entities
+            .iter()
+            .max()
+            .expect("entities non-empty: guarded by is_empty above")
+            as usize;
         let old_len = self.sparse.len();
 
         if max_index + 1 >= old_len {
@@ -198,15 +204,25 @@ impl ComponentRegistry {
         }
     }
 
-    /// Get (or create) the sparse-set storage for type `T`.
-    pub fn storage<T: Send + Sync + 'static>(&mut self) -> &mut SparseSet<T> {
+    /// Try to get (or create) the sparse-set storage for type `T`.
+    pub fn try_storage<T: Send + Sync + 'static>(&mut self) -> Result<&mut SparseSet<T>, EcsError> {
         let tid = TypeId::of::<T>();
         self.storages
             .entry(tid)
             .or_insert_with(|| Box::new(SparseSet::<T>::new()))
             .as_any_mut()
             .downcast_mut::<SparseSet<T>>()
-            .expect("Type mismatch in ComponentRegistry")
+            .ok_or_else(|| EcsError::ComponentNotRegistered(std::any::type_name::<T>().to_string()))
+    }
+
+    /// Get (or create) the sparse-set storage for type `T`.
+    ///
+    /// # Panics
+    /// Panics if the internal type-id to storage mapping is corrupted
+    /// (should be impossible under normal operation).
+    pub fn storage<T: Send + Sync + 'static>(&mut self) -> &mut SparseSet<T> {
+        self.try_storage::<T>()
+            .expect("TypeId-to-SparseSet invariant violated")
     }
 
     /// Try to get shared access to the storage for type `T`.
