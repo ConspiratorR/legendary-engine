@@ -1,13 +1,27 @@
-//! Terrain system for the RustEngine.
+//! # engine-terrain
 //!
-//! Provides heightmap-based terrain with:
-//! - Chunked mesh generation from heightmap data
-//! - Sculpting brushes (raise, lower, smooth, flatten)
-//! - Splat map texture painting (up to 4 layers)
-//! - Vegetation system with density maps and LOD
-//! - Editor panel integration
+//! Heightmap-based terrain system for the RustEngine.
 //!
-//! # Quick Start
+//! ## Architecture
+//!
+//! The terrain is split into a grid of **chunks**, each backed by its own GPU mesh.
+//! A single [`Terrain`] component holds the full heightmap; chunk entities
+//! ([`TerrainChunk`]) are parented to it and lazily rebuild their meshes when
+//! marked dirty.
+//!
+//! ### Modules
+//!
+//! | Module | Purpose |
+//! |--------|---------|
+//! | [`components`] | Core data types: `Terrain`, `TerrainChunk`, `SplatMap`, `BrushSettings`, `VegetationData` |
+//! | [`brush`] | Sculpting brushes (raise, lower, smooth, flatten) that modify the heightmap |
+//! | [`paint`] | Splat-map texture painting with up to 4 blend layers |
+//! | [`mesh_gen`] | Chunk mesh generation (vertices, indices, normals) |
+//! | [`raycast`] | Screen-to-world raycasting and height sampling |
+//! | [`vegetation`] | Vegetation placement with density maps, slope/height filters, and LOD |
+//! | [`plugin`] | ECS plugin that wires mesh rebuild and vegetation systems |
+//!
+//! ## Quick Start
 //!
 //! ```rust
 //! use engine_terrain::components::{Terrain, SplatMap, TerrainTextureLayers};
