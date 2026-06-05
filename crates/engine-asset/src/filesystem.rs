@@ -1,15 +1,23 @@
 //! File system integration for resource management.
+//!
+//! Provides [`ResourceManager`] for scanning directories and building
+//! a catalog of available assets with metadata.
+
 use crate::types::{ResourceMeta, ResourceType};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Resource manager that handles file system operations.
+///
+/// Recursively scans a root directory to build a list of available
+/// resources with their metadata (type, size, path).
 pub struct ResourceManager {
     root_path: PathBuf,
     resources: Vec<ResourceMeta>,
 }
 
 impl ResourceManager {
+    /// Create a new resource manager rooted at the given path.
     pub fn new(root_path: impl AsRef<Path>) -> Self {
         Self {
             root_path: root_path.as_ref().to_path_buf(),
@@ -17,6 +25,7 @@ impl ResourceManager {
         }
     }
 
+    /// Rescan the root directory, rebuilding the resource list.
     pub fn refresh(&mut self) -> Result<(), String> {
         self.resources.clear();
         self.scan_directory(&self.root_path.clone())?;
@@ -75,10 +84,12 @@ impl ResourceManager {
         Ok(())
     }
 
+    /// Get all discovered resources.
     pub fn get_resources(&self) -> &[ResourceMeta] {
         &self.resources
     }
 
+    /// Get resources that are direct children of the given directory.
     pub fn get_resources_in_directory(&self, dir: &Path) -> Vec<&ResourceMeta> {
         self.resources
             .iter()
@@ -86,6 +97,7 @@ impl ResourceManager {
             .collect()
     }
 
+    /// Get the root path this manager is scanning.
     pub fn root_path(&self) -> &Path {
         &self.root_path
     }

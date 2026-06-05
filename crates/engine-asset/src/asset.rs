@@ -9,6 +9,9 @@ use std::sync::{
 pub struct HandleId(usize);
 
 impl HandleId {
+    /// Derive a [`HandleId`] from a [`Handle`]'s inner Arc pointer.
+    ///
+    /// All clones of the same handle produce the same [`HandleId`].
     pub fn from_handle<T: Asset>(handle: &Handle<T>) -> Self {
         Self(Arc::as_ptr(&handle.inner) as *const () as usize)
     }

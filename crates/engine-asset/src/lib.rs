@@ -1,13 +1,24 @@
-//! Asset loading, storage, and format handling.
+//! # engine-asset
 //!
-//! Provides [`Handle<T>](asset::Handle) for reference-counted asset
-//! handles, [`Registry`](registry::Registry) for asset storage, and
-//! typed asset definitions in [`types`](types) (textures, meshes,
-//! materials, audio clips, scripts).
+//! Asset loading and management for the RustEngine.
 //!
-//! ## v2 Pipeline
+//! Provides handle-based asset management with reference counting,
+//! type registration, file system scanning, and loaders for
+//! images, glTF models, and audio files.
 //!
-//! The new asset pipeline adds:
+//! ## Quick Start
+//!
+//! ```rust,no_run
+//! use engine_asset::manager::AssetManager;
+//!
+//! let mut assets = AssetManager::with_defaults();
+//! // let texture = assets.import::<Texture>(Path::new("textures/player.png"))?;
+//! ```
+//!
+//! ## Core Concepts
+//!
+//! - [`asset::Handle<T>`] — reference-counted asset handles
+//! - [`registry::Registry`] — type-erased asset store keyed by path
 //! - [`pipeline::ImportPipeline`] — unified import with format-specific importers
 //! - [`cache::AssetCache`] — hash-based cache invalidation
 //! - [`watcher::FileWatcher`] — debounced file system monitoring
