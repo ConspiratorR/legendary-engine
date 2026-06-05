@@ -674,6 +674,176 @@ pub fn check_obb_capsule(
 }
 
 // ---------------------------------------------------------------------------
+// Cylinder collision
+// ---------------------------------------------------------------------------
+
+/// Cylinder-sphere collision detection.
+///
+/// The cylinder is centered at `cyl_pos` with its axis along local Y.
+/// Finds the closest point on the cylinder surface to the sphere center,
+/// then checks distance against the sphere radius.
+/// Returns `Some(CollisionInfo)` on overlap, `None` otherwise.
+pub fn check_cylinder_sphere(
+    cyl_pos: Vec3,
+    cyl_radius: f32,
+    cyl_height: f32,
+    sphere_pos: Vec3,
+    sphere_radius: f32,
+) -> Option<CollisionInfo> {
+    let diff = sphere_pos - cyl_pos;
+    let half_h = cyl_height * 0.5;
+
+    // Horizontal distance from cylinder axis
+    let horiz = Vec3::new(diff.x, 0.0, diff.z);
+    let horiz_dist_sq = horiz.length_squared();
+
+    // Project sphere center Y onto cylinder axis range
+    let clamped_y = diff.y.clamp(-half_h, half_h);
+
+    if horiz_dist_sq < f32::EPSILON {
+        // Sphere on cylinder axis
+        if diff.y.abs() <= half_h {
+            // Inside height range — side contact
+            if sphere_radius <= cyl_radius {
+                return None;
+            }
+            let depth = sphere_radius - cyl_radius;
+            return Some(CollisionInfo {
+                other_entity: 0,
+                normal: Vec3::X,
+                depth,
+                point: sphere_pos - Vec3::X * sphere_radius,
+            });
+        }
+        // On cap
+        let depth = sphere_radius + half_h - diff.y.abs();
+        if depth <= 0.0 {
+            return None;
+        }
+        let normal = if diff.y > 0.0 { Vec3::Y } else { -Vec3::Y };
+        return Some(CollisionInfo {
+            other_entity: 0,
+            normal,
+            depth,
+            point: sphere_pos - normal * sphere_radius,
+        });
+    }
+
+    let horiz_dist = horiz_dist_sq.sqrt();
+    let horiz_dir = horiz / horiz_dist;
+
+    if diff.y.abs() <= half_h {
+        // Sphere center within height range — test against cylinder side
+        let surface_dist = horiz_dist - cyl_radius;
+        if surface_dist >= sphere_radius {
+            return None;
+        }
+        let depth = sphere_radius - surface_dist;
+        return Some(CollisionInfo {
+            other_entity: 0,
+            normal: horiz_dir,
+            depth,
+            point: cyl_pos + horiz_dir * cyl_radius + Vec3::new(0.0, clamped_y, 0.0),
+        });
+    }
+
+    // Sphere center above/below cylinder — test against cap edge ring
+    let edge_point = cyl_pos
+        + horiz_dir * cyl_radius
+        + Vec3::new(0.0, if diff.y > 0.0 { half_h } else { -half_h }, 0.0);
+    let to_sphere = sphere_pos - edge_point;
+    let dist_sq = to_sphere.length_squared();
+
+    if dist_sq >= sphere_radius * sphere_radius {
+        return None;
+    }
+
+    let dist = dist_sq.sqrt();
+    if dist < f32::EPSILON {
+        return Some(CollisionInfo {
+            other_entity: 0,
+            normal: horiz_dir,
+            depth: sphere_radius,
+            point: edge_point,
+        });
+    }
+
+    Some(CollisionInfo {
+        other_entity: 0,
+        normal: to_sphere / dist,
+        depth: sphere_radius - dist,
+        point: sphere_pos - (to_sphere / dist) * sphere_radius,
+    })
+}
+
+/// Cylinder-AABB collision detection.
+///
+/// The cylinder is centered at `cyl_pos` with its axis along local Y.
+/// Uses axis projection: tests the cylinder against 3 AABB face normals (X, Y, Z).
+/// Returns `Some(CollisionInfo)` on overlap, `None` otherwise.
+pub fn check_cylinder_aabb(
+    cyl_pos: Vec3,
+    cyl_radius: f32,
+    cyl_height: f32,
+    aabb_pos: Vec3,
+    aabb_half: Vec3,
+) -> Option<CollisionInfo> {
+    let delta = aabb_pos - cyl_pos;
+    let half_h = cyl_height * 0.5;
+
+    let overlap_x = (aabb_half.x + cyl_radius) - delta.x.abs();
+    if overlap_x <= 0.0 {
+        return None;
+    }
+
+    let overlap_z = (aabb_half.z + cyl_radius) - delta.z.abs();
+    if overlap_z <= 0.0 {
+        return None;
+    }
+
+    let proj_cyl_y = if delta.y >= 0.0 {
+        half_h + cyl_radius
+    } else {
+        half_h - cyl_radius
+    };
+    let overlap_y = (aabb_half.y + proj_cyl_y) - delta.y.abs();
+    if overlap_y <= 0.0 {
+        return None;
+    }
+
+    let (normal, depth) = if overlap_x < overlap_y && overlap_x < overlap_z {
+        (
+            Vec3::new(if delta.x >= 0.0 { 1.0 } else { -1.0 }, 0.0, 0.0),
+            overlap_x,
+        )
+    } else if overlap_y < overlap_z {
+        (
+            Vec3::new(0.0, if delta.y >= 0.0 { 1.0 } else { -1.0 }, 0.0),
+            overlap_y,
+        )
+    } else {
+        (
+            Vec3::new(0.0, 0.0, if delta.z >= 0.0 { 1.0 } else { -1.0 }),
+            overlap_z,
+        )
+    };
+
+    let point = if normal.y != 0.0 {
+        let clamped_y = delta.y.clamp(-half_h, half_h);
+        cyl_pos + Vec3::new(0.0, clamped_y, 0.0)
+    } else {
+        cyl_pos + normal * cyl_radius
+    };
+
+    Some(CollisionInfo {
+        other_entity: 0,
+        normal,
+        depth,
+        point,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Dispatcher
 // ---------------------------------------------------------------------------
 
@@ -770,7 +940,49 @@ pub fn check_collision(
             info.normal = -info.normal;
             info
         }),
-        // Cylinder and other combinations fall back to bounding sphere
+        // Cylinder-Sphere
+        (
+            ColliderShape::Cylinder {
+                radius: cr,
+                height: ch,
+            },
+            ColliderShape::Sphere { radius },
+        ) => check_cylinder_sphere(a_pos, *cr, *ch, b_pos, *radius),
+        // Sphere-Cylinder
+        (
+            ColliderShape::Sphere { radius },
+            ColliderShape::Cylinder {
+                radius: cr,
+                height: ch,
+            },
+        ) => check_cylinder_sphere(b_pos, *cr, *ch, a_pos, *radius).map(|mut info| {
+            info.normal = -info.normal;
+            info
+        }),
+        // Cylinder-Box (AABB/OBB: box is treated as AABB for cylinder collision)
+        (
+            ColliderShape::Cylinder {
+                radius: cr,
+                height: ch,
+            },
+            ColliderShape::Box {
+                half_extents: h, ..
+            },
+        ) => check_cylinder_aabb(a_pos, *cr, *ch, b_pos, *h),
+        // Box-Cylinder
+        (
+            ColliderShape::Box {
+                half_extents: h, ..
+            },
+            ColliderShape::Cylinder {
+                radius: cr,
+                height: ch,
+            },
+        ) => check_cylinder_aabb(b_pos, *cr, *ch, a_pos, *h).map(|mut info| {
+            info.normal = -info.normal;
+            info
+        }),
+        // Remaining combinations fall back to bounding sphere
         _ => {
             let r_a = collider_a.shape.get_bounding_sphere();
             let r_b = collider_b.shape.get_bounding_sphere();
