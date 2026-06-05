@@ -12,6 +12,7 @@ pub struct AudioBus {
 }
 
 impl AudioBus {
+    /// Create a new bus with the given name and default volume (1.0).
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -20,6 +21,7 @@ impl AudioBus {
         }
     }
 
+    /// Set the initial volume (0.0 – 1.0) using the builder pattern.
     pub fn with_volume(mut self, volume: f32) -> Self {
         self.volume = volume.clamp(0.0, 1.0);
         self
@@ -41,6 +43,7 @@ impl Default for AudioMixer {
 }
 
 impl AudioMixer {
+    /// Create a new mixer with default buses: master, sfx, music, ambient, voice, ui.
     pub fn new() -> Self {
         let mut mixer = Self {
             master_volume: 1.0,

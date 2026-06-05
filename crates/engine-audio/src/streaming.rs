@@ -114,11 +114,13 @@ impl Default for StreamingConfig {
 }
 
 impl StreamingConfig {
+    /// Enable or disable looping for the stream.
     pub fn with_looping(mut self, looping: bool) -> Self {
         self.looping = looping;
         self
     }
 
+    /// Set the buffer size in bytes.
     pub fn with_buffer_size(mut self, size: usize) -> Self {
         self.buffer_size = size;
         self
