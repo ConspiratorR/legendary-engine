@@ -10,5 +10,6 @@ engine-ecs = { path = "../engine-ecs" }
 engine-render = { path = "../engine-render" }
 engine-math = { path = "../engine-math" }
 engine-core = { path = "../engine-core" }
+thiserror = "2"
 log = "0.4"
 rand = "0.9"

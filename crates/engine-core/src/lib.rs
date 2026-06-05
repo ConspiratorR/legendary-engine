@@ -1,5 +1,8 @@
 //! Engine entry point, plugin system, and app builder.
 
+pub mod error;
+pub use error::EngineError;
+
 pub mod app;
 pub mod color;
 pub mod config;

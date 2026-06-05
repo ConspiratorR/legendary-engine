@@ -12,6 +12,9 @@
 //! - Matchmaking (rooms, lobbies, player matching)
 //! - Reconnection v2 (session resumption, snapshot recovery)
 
+pub mod error;
+pub use error::NetworkError;
+
 pub mod authority;
 pub mod client;
 pub mod connection;

@@ -33,6 +33,8 @@
 //! // 3. Add to your ECS schedule like any other system
 //! ```
 
+pub use error::ScriptError;
+
 pub mod bridge;
 pub mod callback;
 pub mod error;
@@ -46,7 +48,7 @@ pub mod wasm;
 pub mod prelude {
     pub use crate::bridge::ComponentBridge;
     pub use crate::callback::{CallbackArg, CallbackRegistry, CallbackResult};
-    pub use crate::error::{BridgeError, BridgeResult};
+    pub use crate::error::{BridgeError, BridgeResult, ScriptError};
     pub use crate::event_bridge::{EventData, ScriptEventBus};
     pub use crate::hot_reload::HotReloader;
     pub use crate::system::ScriptSystem;

@@ -5,6 +5,9 @@
 //! The [`GameFlowPlugin`] wires the standard
 //! state machine into an [`AppBuilder`](engine_core::app::AppBuilder).
 
+pub mod error;
+pub use error::FrameworkError;
+
 pub mod action;
 pub mod ctx;
 pub mod flow;

@@ -47,3 +47,25 @@ pub enum BridgeError {
 
 /// Result type alias for bridge operations.
 pub type BridgeResult<T> = Result<T, BridgeError>;
+
+/// High-level script system errors.
+#[derive(Error, Debug)]
+pub enum ScriptError {
+    #[error("script compilation failed: {0}")]
+    CompilationFailed(String),
+
+    #[error("script runtime error: {0}")]
+    RuntimeError(String),
+
+    #[error("Lua error: {0}")]
+    LuaError(String),
+
+    #[error("WASM error: {0}")]
+    WasmError(String),
+
+    #[error("hot reload failed: {0}")]
+    HotReloadFailed(String),
+
+    #[error("sandbox violation: {0}")]
+    SandboxViolation(String),
+}

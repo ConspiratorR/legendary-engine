@@ -6,6 +6,9 @@
 //! - Simple physics shapes
 //! - Gravity and other forces
 
+pub mod error;
+pub use error::PhysicsError;
+
 pub mod body;
 pub mod broadphase;
 pub mod ccd;

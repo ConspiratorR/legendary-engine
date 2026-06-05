@@ -12,6 +12,9 @@
 //! - **Animation**: sprite sheet and skeletal animation
 //! - **Tilemap**: tile-based level rendering
 
+pub mod error;
+pub use error::RenderError;
+
 pub mod animation;
 pub mod atmosphere;
 pub mod bloom;

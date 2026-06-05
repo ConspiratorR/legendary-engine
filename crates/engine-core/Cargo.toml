@@ -17,6 +17,7 @@ engine-audio = { path = "../engine-audio", optional = true }
 engine-asset = { path = "../engine-asset" }
 engine-window = { path = "../engine-window" }
 engine-math = { path = "../engine-math" }
+thiserror = "2"
 winit = "0.30"
 log = "0.4"
 env_logger = "0.11"

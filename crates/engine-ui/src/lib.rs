@@ -5,6 +5,9 @@
 //! with wgpu. Use [`EguiPlugin`] or
 //! [`ImGuiPlugin`] to wire into the engine.
 
+pub mod error;
+pub use error::UiError;
+
 pub mod animation;
 pub mod gui;
 pub mod imgui_plugin;

@@ -7,6 +7,9 @@
 //! - Vegetation system with density maps and LOD
 //! - Editor panel integration
 
+pub mod error;
+pub use error::TerrainError;
+
 pub mod brush;
 pub mod components;
 pub mod mesh_gen;
