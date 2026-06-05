@@ -56,12 +56,14 @@ pub struct SplatMapSnapshot {
 }
 
 impl SplatMapSnapshot {
+    /// Capture the current splat map state for later undo.
     pub fn capture(splat_map: &SplatMap) -> Self {
         Self {
             data: splat_map.data.clone(),
         }
     }
 
+    /// Restore a previously captured splat map state.
     pub fn restore(&self, splat_map: &mut SplatMap) {
         splat_map.data.clone_from(&self.data);
     }

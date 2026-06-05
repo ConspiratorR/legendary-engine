@@ -96,6 +96,7 @@ pub struct TerrainChunk {
 }
 
 impl TerrainChunk {
+    /// Create a new chunk at the given grid coordinate, marked dirty for initial mesh generation.
     pub fn new(chunk_coord: (u32, u32)) -> Self {
         Self {
             chunk_coord,
@@ -305,6 +306,7 @@ impl Default for TerrainTextureLayers {
 }
 
 impl TerrainTextureLayers {
+    /// Add a new texture layer and return its index.
     pub fn add_layer(&mut self, name: String) -> usize {
         self.layers.push(TextureLayer {
             name,
@@ -313,6 +315,7 @@ impl TerrainTextureLayers {
         self.layers.len() - 1
     }
 
+    /// Remove a texture layer by index. The base layer (index 0) cannot be removed.
     pub fn remove_layer(&mut self, index: usize) {
         if index > 0 && index < self.layers.len() {
             self.layers.remove(index);
@@ -418,12 +421,14 @@ pub struct VegetationData {
 }
 
 impl VegetationData {
+    /// Add a vegetation type and mark instances for regeneration. Returns the new type index.
     pub fn add_type(&mut self, veg_type: VegetationType) -> usize {
         self.types.push(veg_type);
         self.dirty = true;
         self.types.len() - 1
     }
 
+    /// Remove a vegetation type by index, cleaning up associated instances and adjusting indices.
     pub fn remove_type(&mut self, index: usize) {
         if index < self.types.len() {
             self.types.remove(index);
