@@ -3,6 +3,9 @@ use crate::{GameState, StateCtx};
 use engine_input::input_manager::InputManager;
 use engine_input::keyboard::KeyCode;
 
+/// The pause overlay state.
+///
+/// Pushed on top of gameplay; resumes on Escape, returns to menu on `Q`.
 pub struct PauseState;
 
 impl GameState for PauseState {

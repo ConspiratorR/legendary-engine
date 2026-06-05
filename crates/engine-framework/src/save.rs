@@ -36,6 +36,7 @@ pub enum SaveValue {
 }
 
 impl SaveData {
+    /// Create a new save data snapshot with the given name and current timestamp.
     pub fn new(name: impl Into<String>) -> Self {
         Self {
             version: 1,
@@ -169,10 +170,15 @@ impl SaveManager {
 /// Error type for save/load operations.
 #[derive(Debug, Clone)]
 pub enum SaveError {
+    /// The requested slot index exceeds the configured maximum.
     InvalidSlot(usize),
+    /// The requested slot does not contain any saved data.
     SlotEmpty(usize),
+    /// An I/O error occurred while reading or writing.
     Io(String),
+    /// Failed to serialize save data to JSON.
     Serialization(String),
+    /// Failed to deserialize JSON into save data.
     Deserialization(String),
 }
 

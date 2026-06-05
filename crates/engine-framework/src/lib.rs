@@ -4,6 +4,36 @@
 //! transitions between title, menu, pause, and game-over screens.
 //! The [`GameFlowPlugin`] wires the standard
 //! state machine into an [`AppBuilder`](engine_core::app::AppBuilder).
+//!
+//! # Quick Start
+//!
+//! ```rust
+//! use engine_framework::{StateStack, GameState, StateCtx, FrameworkPlugin, GameFlowPlugin};
+//! use engine_core::app::AppBuilder;
+//!
+//! // 1. Build an app and register the framework + game-flow plugins.
+//! let mut builder = AppBuilder::new();
+//! builder.add_plugin(FrameworkPlugin);
+//! builder.add_plugin(GameFlowPlugin);
+//! let mut app = builder.build();
+//!
+//! // 2. The GameFlowPlugin pushes a TitleState automatically.
+//! app.run(); // flushes pending ops → TitleState enters
+//!
+//! // 3. Drive transitions by inserting GameStateAction resources:
+//! //    app.resources_mut().insert(GameStateAction::PushMenu);
+//! //    app.run();
+//! ```
+//!
+//! # Architecture
+//!
+//! | Component | Purpose |
+//! |---|---|
+//! | [`StateStack`] | Deferred push / pop / replace with lifecycle hooks |
+//! | [`GameState`] | Trait for discrete states (title, menu, pause, …) |
+//! | [`GameFlowPlugin`] | Wires the standard state machine into the engine |
+//! | [`FrameworkPlugin`] | Registers [`StateStack`] and hooks updates into the engine loop |
+//! | [`SaveManager`](save::SaveManager) | JSON-based save / load with slot management |
 
 pub mod error;
 pub use error::FrameworkError;

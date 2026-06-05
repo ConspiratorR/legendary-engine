@@ -3,6 +3,10 @@ use crate::{GameState, StateCtx};
 use engine_input::input_manager::InputManager;
 use engine_input::keyboard::KeyCode;
 
+/// The main menu state.
+///
+/// Offers New Game and Quit options. Transitions to gameplay on `[1]`
+/// or requests quit on `[2]` / Escape.
 pub struct MenuState;
 
 impl GameState for MenuState {

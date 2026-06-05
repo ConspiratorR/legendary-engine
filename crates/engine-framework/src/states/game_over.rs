@@ -3,11 +3,15 @@ use crate::{GameState, StateCtx};
 use engine_input::input_manager::InputManager;
 use engine_input::keyboard::KeyCode;
 
+/// The game-over screen state.
+///
+/// Displays the final score and offers Restart (`R`) or Quit to Menu (`Q`).
 pub struct GameOverState {
     score: i32,
 }
 
 impl GameOverState {
+    /// Create a new game-over state with the given final score.
     pub fn new(score: i32) -> Self {
         Self { score }
     }

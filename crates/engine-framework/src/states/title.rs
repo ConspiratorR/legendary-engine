@@ -3,6 +3,10 @@ use crate::{GameState, StateCtx};
 use engine_input::input_manager::InputManager;
 use engine_input::keyboard::KeyCode;
 
+/// The title / splash screen state.
+///
+/// Displayed on startup; transitions to [`MenuState`](super::MenuState)
+/// when the player presses Space, Enter, or Escape.
 pub struct TitleState;
 
 impl GameState for TitleState {
