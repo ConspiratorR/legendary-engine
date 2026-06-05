@@ -7,4 +7,5 @@ license.workspace = true
 [dependencies]
 engine-ecs = { path = "../engine-ecs" }
 engine-window = { path = "../engine-window" }
+thiserror = "2"
 winit = "0.30"
