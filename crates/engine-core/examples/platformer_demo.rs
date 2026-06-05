@@ -333,7 +333,7 @@ fn collectible_system(world: &mut World) {
         };
         pw.contacts
             .iter()
-            .filter(|c| c.is_trigger)  // Only trigger contacts (coins don't block)
+            .filter(|c| c.is_trigger) // Only trigger contacts (coins don't block)
             .map(|c| (c.entity_a, c.entity_b))
             .collect()
     };
@@ -346,7 +346,7 @@ fn collectible_system(world: &mut World) {
         } else if world.get_by_index::<PlayerState>(b).is_some() {
             (b, a)
         } else {
-            continue;  // Neither entity is a player — skip
+            continue; // Neither entity is a player — skip
         };
 
         // Check if already collected to prevent double-counting.
@@ -437,7 +437,7 @@ fn death_zone_system(world: &mut World) {
 fn render_ascii(world: &World) {
     let width = 80usize;
     let height = 25usize;
-    let tile_size = 32.0f32;  // World units per terminal cell
+    let tile_size = 32.0f32; // World units per terminal cell
     let mut buffer = vec![vec![' '; width]; height];
 
     // Render platforms — query entities with Platform component.

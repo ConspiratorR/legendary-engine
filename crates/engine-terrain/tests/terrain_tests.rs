@@ -400,8 +400,10 @@ fn terrain_chunk_loading_unloading() {
         for cx in 0..chunk_count {
             let chunk_world_w = terrain.world_size.x / chunk_count as f32;
             let chunk_world_h = terrain.world_size.y / chunk_count as f32;
-            let chunk_center_x = cx as f32 * chunk_world_w - terrain.world_size.x * 0.5 + chunk_world_w * 0.5;
-            let chunk_center_z = cz as f32 * chunk_world_h - terrain.world_size.y * 0.5 + chunk_world_h * 0.5;
+            let chunk_center_x =
+                cx as f32 * chunk_world_w - terrain.world_size.x * 0.5 + chunk_world_w * 0.5;
+            let chunk_center_z =
+                cz as f32 * chunk_world_h - terrain.world_size.y * 0.5 + chunk_world_h * 0.5;
             let dx = center.x - chunk_center_x;
             let dz = center.z - chunk_center_z;
             let dist = (dx * dx + dz * dz).sqrt();
@@ -410,7 +412,11 @@ fn terrain_chunk_loading_unloading() {
             }
         }
     }
-    assert_eq!(loaded_chunks.len(), 4, "all 4 chunks should be loaded at center");
+    assert_eq!(
+        loaded_chunks.len(),
+        4,
+        "all 4 chunks should be loaded at center"
+    );
 
     // Move position far away — should unload all chunks
     let far_center = Vec3::new(100.0, 0.0, 100.0);
@@ -420,8 +426,10 @@ fn terrain_chunk_loading_unloading() {
         for cx in 0..chunk_count {
             let chunk_world_w = terrain.world_size.x / chunk_count as f32;
             let chunk_world_h = terrain.world_size.y / chunk_count as f32;
-            let chunk_center_x = cx as f32 * chunk_world_w - terrain.world_size.x * 0.5 + chunk_world_w * 0.5;
-            let chunk_center_z = cz as f32 * chunk_world_h - terrain.world_size.y * 0.5 + chunk_world_h * 0.5;
+            let chunk_center_x =
+                cx as f32 * chunk_world_w - terrain.world_size.x * 0.5 + chunk_world_w * 0.5;
+            let chunk_center_z =
+                cz as f32 * chunk_world_h - terrain.world_size.y * 0.5 + chunk_world_h * 0.5;
             let dx = far_center.x - chunk_center_x;
             let dz = far_center.z - chunk_center_z;
             let dist = (dx * dx + dz * dz).sqrt();
