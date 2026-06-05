@@ -19,6 +19,7 @@
 legendary-engine/
 ├── crates/
 │   ├── engine-core/       # 核心引擎，应用系统和插件
+│   │   └── examples/      # 示例程序（basic, platformer, dungeon 等）
 │   ├── engine-ecs/        # 实体组件系统 (ECS)
 │   ├── engine-render/     # wgpu 渲染系统
 │   ├── engine-input/      # 输入管理系统
@@ -28,10 +29,14 @@ legendary-engine/
 │   ├── engine-ui/         # UI 系统 (ImGui)
 │   ├── engine-window/     # 窗口管理 (winit)
 │   ├── engine-math/       # 数学库 (glam)
-│   ├── engine-framework/  # 框架层
-│   └── engine-editor/     # 编辑器
-└── examples/
-    └── ...                # 示例程序
+│   ├── engine-framework/  # 框架层（游戏状态栈）
+│   ├── engine-editor/     # 编辑器
+│   ├── engine-physics/    # 物理引擎（3D + 2D）
+│   ├── engine-network/    # 网络系统
+│   ├── engine-jobs/       # 任务系统
+│   ├── engine-script/     # 脚本系统（Lua/WASM）
+│   └── engine-terrain/    # 地形系统
+└── docs/                  # 教程和文档
 ```
 
 ## 快速开始
