@@ -182,3 +182,170 @@ fn mouse_state_default() {
     assert!(!mouse.right_button);
     assert!(!mouse.middle_button);
 }
+
+#[test]
+fn key_down_reflects_held_state() {
+    let mut input = InputManager::new();
+    assert!(!input.key_down(KeyCode::KeyW));
+
+    input.press(KeyCode::KeyW);
+    // JustPressed counts as down
+    assert!(input.key_down(KeyCode::KeyW));
+
+    input.update_frame();
+    // Pressed still counts as down
+    assert!(input.key_down(KeyCode::KeyW));
+
+    input.release(KeyCode::KeyW);
+    // JustReleased does NOT count as down
+    assert!(!input.key_down(KeyCode::KeyW));
+}
+
+#[test]
+fn key_just_pressed_only_first_frame() {
+    let mut input = InputManager::new();
+
+    input.press(KeyCode::KeyW);
+    assert!(input.key_just_pressed(KeyCode::KeyW));
+
+    input.update_frame();
+    // Pressed is no longer "just" pressed
+    assert!(!input.key_just_pressed(KeyCode::KeyW));
+}
+
+#[test]
+fn key_just_released_only_first_frame() {
+    let mut input = InputManager::new();
+
+    input.press(KeyCode::KeyW);
+    input.update_frame();
+    input.release(KeyCode::KeyW);
+    assert!(input.key_just_released(KeyCode::KeyW));
+
+    input.update_frame();
+    // Fully released is no longer "just" released
+    assert!(!input.key_just_released(KeyCode::KeyW));
+}
+
+#[test]
+fn double_press_does_not_reset_to_just_pressed() {
+    let mut input = InputManager::new();
+
+    input.press(KeyCode::KeyW);
+    assert_eq!(input.key_state(KeyCode::KeyW), KeyState::JustPressed);
+
+    // Calling press again while already pressed should not re-trigger JustPressed
+    input.press(KeyCode::KeyW);
+    assert_eq!(input.key_state(KeyCode::KeyW), KeyState::JustPressed);
+
+    input.update_frame();
+    assert_eq!(input.key_state(KeyCode::KeyW), KeyState::Pressed);
+
+    // Press again while held — should stay Pressed, not go back to JustPressed
+    input.press(KeyCode::KeyW);
+    assert_eq!(input.key_state(KeyCode::KeyW), KeyState::Pressed);
+}
+
+#[test]
+fn release_on_already_released_key_is_noop() {
+    let mut input = InputManager::new();
+
+    // Release a key that was never pressed
+    input.release(KeyCode::KeyW);
+    assert_eq!(input.key_state(KeyCode::KeyW), KeyState::Released);
+}
+
+#[test]
+fn multiple_keys_independent() {
+    let mut input = InputManager::new();
+
+    input.press(KeyCode::KeyW);
+    input.press(KeyCode::KeyA);
+    assert!(input.key_down(KeyCode::KeyW));
+    assert!(input.key_down(KeyCode::KeyA));
+
+    input.release(KeyCode::KeyW);
+    assert!(!input.key_down(KeyCode::KeyW));
+    assert!(input.key_down(KeyCode::KeyA));
+}
+
+#[test]
+fn action_rebind_at_runtime() {
+    let mut map = ActionMap::new();
+    map.bind_key("jump", KeyCode::Space);
+
+    let mut input = InputManager::new();
+    input.press(KeyCode::Space);
+    map.update(&input);
+    assert!(map.action("jump").just_pressed());
+    input.release(KeyCode::Space);
+    input.update_frame();
+
+    // Rebind: clear and re-bind to a different key
+    let mut map = ActionMap::new();
+    map.bind_key("jump", KeyCode::KeyJ);
+
+    // Space no longer triggers jump
+    input.press(KeyCode::Space);
+    map.update(&input);
+    assert!(!map.action("jump").pressed());
+    input.release(KeyCode::Space);
+    input.update_frame();
+
+    // KeyJ now triggers jump
+    input.press(KeyCode::KeyJ);
+    map.update(&input);
+    assert!(map.action("jump").just_pressed());
+}
+
+#[test]
+fn action_multiple_bindings_same_action_last_wins_on_equal_value() {
+    let mut map = ActionMap::new();
+    map.bind_key("fire", KeyCode::KeyE);
+    map.bind_key("fire", KeyCode::KeyF);
+    map.bind_key("fire", KeyCode::KeyG);
+
+    let mut input = InputManager::new();
+    // All three pressed — value should be 1.0 (all produce same magnitude)
+    input.press(KeyCode::KeyE);
+    input.press(KeyCode::KeyF);
+    input.press(KeyCode::KeyG);
+    map.update(&input);
+    assert!(map.action("fire").pressed());
+    assert_eq!(map.action("fire").value, 1.0);
+}
+
+#[test]
+fn action_held_across_frames_stays_pressed_not_just_pressed() {
+    let mut map = ActionMap::new();
+    map.bind_key("run", KeyCode::ShiftLeft);
+
+    let mut input = InputManager::new();
+    input.press(KeyCode::ShiftLeft);
+    map.update(&input);
+    assert!(map.action("run").just_pressed());
+    assert!(map.action("run").pressed());
+
+    // Next frame: key still held
+    input.update_frame();
+    map.update(&input);
+    assert!(!map.action("run").just_pressed());
+    assert!(map.action("run").pressed());
+}
+
+#[test]
+fn mouse_buttons_all_tracked() {
+    let mut input = InputManager::new();
+
+    input.mouse_mut().left_button = true;
+    input.mouse_mut().right_button = true;
+    input.mouse_mut().middle_button = true;
+
+    assert!(input.mouse().left_button);
+    assert!(input.mouse().right_button);
+    assert!(input.mouse().middle_button);
+
+    input.mouse_mut().left_button = false;
+    assert!(!input.mouse().left_button);
+    assert!(input.mouse().right_button);
+}

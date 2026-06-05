@@ -10,7 +10,6 @@ pub struct ActionState {
     pub value: f32,
     just_pressed: bool,
     just_released: bool,
-    #[allow(dead_code)]
     previous: f32,
 }
 
@@ -26,6 +25,10 @@ impl ActionState {
     /// Returns `true` on the first frame the action becomes inactive.
     pub fn just_released(&self) -> bool {
         self.just_released
+    }
+    /// Returns the axis value from the previous frame.
+    pub fn previous_value(&self) -> f32 {
+        self.previous
     }
 }
 

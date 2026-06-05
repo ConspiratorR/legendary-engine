@@ -62,6 +62,11 @@ impl InputManager {
         self.key_state(key) == KeyState::JustPressed
     }
 
+    /// Returns `true` only on the first frame the key is released.
+    pub fn key_just_released(&self, key: KeyCode) -> bool {
+        self.key_state(key) == KeyState::JustReleased
+    }
+
     /// Advance the frame: `JustPressed` → `Pressed`, `JustReleased` → `Released`,
     /// and reset mouse delta.
     pub fn update_frame(&mut self) {
@@ -108,5 +113,29 @@ mod tests {
         assert_eq!(input.key_state(KeyCode::KeyA), KeyState::JustReleased);
         input.update_frame();
         assert_eq!(input.key_state(KeyCode::KeyA), KeyState::Released);
+    }
+
+    #[test]
+    fn test_key_down_and_just_pressed() {
+        let mut input = InputManager::new();
+        assert!(!input.key_down(KeyCode::Space));
+        assert!(!input.key_just_pressed(KeyCode::Space));
+        assert!(!input.key_just_released(KeyCode::Space));
+
+        input.press(KeyCode::Space);
+        assert!(input.key_down(KeyCode::Space));
+        assert!(input.key_just_pressed(KeyCode::Space));
+
+        input.update_frame();
+        assert!(input.key_down(KeyCode::Space));
+        assert!(!input.key_just_pressed(KeyCode::Space));
+
+        input.release(KeyCode::Space);
+        assert!(!input.key_down(KeyCode::Space));
+        assert!(input.key_just_released(KeyCode::Space));
+
+        input.update_frame();
+        assert!(!input.key_down(KeyCode::Space));
+        assert!(!input.key_just_released(KeyCode::Space));
     }
 }
