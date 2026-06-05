@@ -36,6 +36,13 @@ fmt-check:
 # Run all CI checks (fmt, clippy, build, test)
 ci: fmt-check lint build test
 
+# Quick local validation
+check:
+    cargo fmt --check
+    cargo clippy --all -- -D warnings
+    cargo build --all
+    cargo test --all
+
 # Run a specific example
 run-example name:
     cargo run --example {{name}} -p engine-core
