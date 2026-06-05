@@ -82,6 +82,98 @@ impl From<&PbrMaterial> for MaterialUniform {
     }
 }
 
+use std::collections::HashMap;
+
+/// Material GPU management, stored as a World resource.
+pub struct MaterialStore {
+    materials: HashMap<u64, PbrMaterial>,
+    bind_groups: HashMap<u64, wgpu::BindGroup>,
+    uniform_buffer: wgpu::Buffer,
+    bind_group_layout: wgpu::BindGroupLayout,
+    next_id: u64,
+}
+
+impl MaterialStore {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("material_bind_group_layout"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("material_uniform_buffer"),
+            size: 48 * 64, // 48 bytes per material, up to 64 materials
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        Self {
+            materials: HashMap::new(),
+            bind_groups: HashMap::new(),
+            uniform_buffer,
+            bind_group_layout,
+            next_id: 1,
+        }
+    }
+
+    pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.bind_group_layout
+    }
+
+    /// Add a material, returns material_id.
+    pub fn add(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        material: PbrMaterial,
+    ) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+
+        let uniform = MaterialUniform::from(&material);
+        let offset = ((id - 1) * 48) as u64;
+        queue.write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(&uniform));
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(&format!("material_bind_group_{}", id)),
+            layout: &self.bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &self.uniform_buffer,
+                    offset,
+                    size: Some(std::num::NonZeroU64::new(48).unwrap()),
+                }),
+            }],
+        });
+
+        self.materials.insert(id, material);
+        self.bind_groups.insert(id, bind_group);
+        id
+    }
+
+    pub fn get(&self, id: u64) -> Option<&PbrMaterial> {
+        self.materials.get(&id)
+    }
+
+    pub fn get_bind_group(&self, id: u64) -> Option<&wgpu::BindGroup> {
+        self.bind_groups.get(&id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.materials.len()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
