@@ -3,6 +3,9 @@
 //! Re-exports `glam` types and provides extension traits for common
 //! game engine operations.
 
+pub mod error;
+pub use error::MathError;
+
 pub use glam::{EulerRot, Mat4, Quat, Vec2, Vec3, Vec4};
 
 /// Extension trait for [`Vec3`] providing game-utility methods.
