@@ -17,6 +17,7 @@
 use crate::font::TextPainter;
 use crate::pipeline::sprite::SpritePipeline;
 use crate::renderer::Renderer;
+use crate::shape::{ShapePainter, ShapePipeline};
 use crate::texture_bridge::TextureBridge;
 use std::sync::Arc;
 use winit::window::Window;
@@ -55,6 +56,11 @@ impl RenderPlugin2D {
         let texture_layout_b = SpritePipeline::create_texture_layout(&renderer.device);
         let text_painter = TextPainter::new(&renderer.device, &renderer.queue, texture_layout_b);
         world.insert_resource(text_painter);
+
+        let shape_pipeline = ShapePipeline::new(&renderer.device, wgpu::TextureFormat::Rgba16Float);
+        let shape_painter = ShapePainter::new();
+        world.insert_resource(shape_pipeline);
+        world.insert_resource(shape_painter);
 
         self.renderer = Some(renderer);
     }
