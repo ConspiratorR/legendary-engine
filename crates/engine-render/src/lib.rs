@@ -112,6 +112,7 @@ pub mod post_process;
 pub mod renderer;
 pub mod resource;
 pub mod shadow;
+pub mod shape;
 pub mod sprite;
 pub mod sprite_renderer;
 pub mod ssao;
