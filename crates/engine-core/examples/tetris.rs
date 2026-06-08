@@ -156,13 +156,13 @@ const SRS_KICKS_I: [[[(i32, i32); 5]; 4]; 4] = [
 
 const COLORS: [[f32; 4]; 8] = [
     [0.10, 0.10, 0.13, 1.0],
-    [0.0, 1.0, 1.0, 1.0],
-    [1.0, 1.0, 0.0, 1.0],
-    [0.7, 0.0, 1.0, 1.0],
-    [0.0, 1.0, 0.2, 1.0],
-    [1.0, 0.15, 0.15, 1.0],
-    [0.2, 0.3, 1.0, 1.0],
-    [1.0, 0.55, 0.0, 1.0],
+    [0.0, 0.85, 0.85, 1.0],
+    [0.85, 0.85, 0.0, 1.0],
+    [0.55, 0.0, 0.75, 1.0],
+    [0.0, 0.85, 0.0, 1.0],
+    [0.85, 0.0, 0.0, 1.0],
+    [0.0, 0.0, 0.85, 1.0],
+    [0.85, 0.45, 0.0, 1.0],
 ];
 
 const DIGIT_MAP: [[[u8; 3]; 4]; 10] = [
@@ -276,6 +276,8 @@ fn main() {
     println!("    Combo bonus = 50 x combo x level");
     println!("    Hard drop = 2 per cell");
     println!("    Soft drop = 1 per cell");
+    println!();
+    println!("  >>> Press SPACE to start! <<<");
     println!();
     println!("========================================");
     println!();
@@ -761,17 +763,13 @@ fn redraw(world: &mut World, g: &Game, entities: &[Entity]) {
 
     // Start screen overlay
     if !g.started {
+        let pulse = ((g.over_timer * 2.0).sin() * 0.5 + 0.5) as f32;
         for row in 0..VISIBLE_ROWS {
             for col in 0..COLS {
                 let idx = row * COLS + col;
                 let e = entities[idx];
-                let is_center = (4..=5).contains(&col) && (9..=10).contains(&row);
-                let color = if is_center {
-                    let pulse = ((g.over_timer * 3.0).sin() * 0.5 + 0.5) as f32;
-                    [0.8 + pulse * 0.2, 0.8 + pulse * 0.2, 0.8 + pulse * 0.2, 1.0]
-                } else {
-                    [0.05, 0.05, 0.07, 1.0]
-                };
+                let base = 0.05 + pulse * 0.12;
+                let color = [base, base, base + 0.03, 1.0];
                 if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
                     sprite.color = color;
                     sprite.size = Vec2::new(CELL, CELL);
