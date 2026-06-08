@@ -37,17 +37,17 @@ const ROWS: usize = 22;
 const VISIBLE_ROWS: usize = 20;
 const CELL: f32 = 28.0;
 const BLK: f32 = 26.0;
-const GX: f32 = 140.0;
-const GY: f32 = 580.0;
-const PREVIEW_X: f32 = 480.0;
-const PREVIEW_Y: f32 = 480.0;
-const HOLD_X: f32 = 60.0;
-const HOLD_Y: f32 = 480.0;
-const SCORE_X: f32 = 480.0;
-const SCORE_Y: f32 = 200.0;
-const WIN_W: u32 = 640;
-const WIN_H: u32 = 620;
-const TOTAL_ENTITIES: usize = COLS * VISIBLE_ROWS + 16 + 16 + 128 + 64 + 28;
+const GX: f32 = 260.0;
+const GY: f32 = 640.0;
+const PREVIEW_X: f32 = 590.0;
+const PREVIEW_Y: f32 = 160.0;
+const HOLD_X: f32 = 70.0;
+const HOLD_Y: f32 = 160.0;
+const SCORE_X: f32 = 590.0;
+const SCORE_Y: f32 = 420.0;
+const WIN_W: u32 = 840;
+const WIN_H: u32 = 720;
+const TOTAL_ENTITIES: usize = COLS * VISIBLE_ROWS + 48 + 16 + 128 + 64 + 64;
 
 const DAS_DELAY: f32 = 0.167;
 const DAS_REPEAT: f32 = 0.033;
@@ -156,13 +156,13 @@ const SRS_KICKS_I: [[[(i32, i32); 5]; 4]; 4] = [
 
 const COLORS: [[f32; 4]; 8] = [
     [0.10, 0.10, 0.13, 1.0],
-    [0.0, 0.85, 0.85, 1.0],
-    [0.85, 0.85, 0.0, 1.0],
-    [0.55, 0.0, 0.75, 1.0],
-    [0.0, 0.85, 0.0, 1.0],
-    [0.85, 0.0, 0.0, 1.0],
-    [0.0, 0.0, 0.85, 1.0],
-    [0.85, 0.45, 0.0, 1.0],
+    [0.0, 1.0, 1.0, 1.0],
+    [1.0, 1.0, 0.0, 1.0],
+    [0.7, 0.0, 1.0, 1.0],
+    [0.0, 1.0, 0.2, 1.0],
+    [1.0, 0.15, 0.15, 1.0],
+    [0.2, 0.3, 1.0, 1.0],
+    [1.0, 0.55, 0.0, 1.0],
 ];
 
 const DIGIT_MAP: [[[u8; 3]; 4]; 10] = [
@@ -226,6 +226,7 @@ struct Game {
     combo: i32,
     over: bool,
     paused: bool,
+    started: bool,
     fall_acc: f32,
     fall_speed: f32,
     lock_acc: f32,
@@ -237,6 +238,8 @@ struct Game {
     soft_drop: bool,
     clear_flash: f32,
     clear_rows: Vec<usize>,
+    over_timer: f32,
+    level_up_timer: f32,
 }
 
 fn main() {
@@ -352,6 +355,7 @@ fn main() {
         combo: -1,
         over: false,
         paused: false,
+        started: false,
         fall_acc: 0.0,
         fall_speed: 0.8,
         lock_acc: 0.0,
@@ -363,6 +367,8 @@ fn main() {
         soft_drop: false,
         clear_flash: 0.0,
         clear_rows: Vec::new(),
+        over_timer: 0.0,
+        level_up_timer: 0.0,
     };
 
     let mut plugin = RenderPlugin2D::new(window.clone());
@@ -429,6 +435,12 @@ fn main() {
 }
 
 fn process_input(input: &InputManager, g: &mut Game, dt: f32) {
+    if !g.started {
+        if input.key_just_pressed(KeyCode::Space) {
+            g.started = true;
+        }
+        return;
+    }
     if input.key_just_pressed(KeyCode::Escape) {
         if g.over {
             reset(g);
@@ -546,8 +558,19 @@ fn process_input(input: &InputManager, g: &mut Game, dt: f32) {
 }
 
 fn update(g: &mut Game, dt: f32) {
-    if g.over || g.paused {
+    if !g.started {
+        g.over_timer += dt;
         return;
+    }
+    if g.over {
+        g.over_timer += dt;
+        return;
+    }
+    if g.paused {
+        return;
+    }
+    if g.level_up_timer > 0.0 {
+        g.level_up_timer -= dt;
     }
     if g.clear_flash > 0.0 {
         g.clear_flash -= dt * 8.0;
@@ -626,9 +649,10 @@ fn redraw(world: &mut World, g: &Game, entities: &[Entity]) {
                 (COLORS[g.piece + 1], Vec2::new(BLK, BLK))
             } else if is_ghost {
                 let c = COLORS[g.piece + 1];
-                ([c[0], c[1], c[2], 0.25], Vec2::new(BLK, BLK))
+                ([c[0], c[1], c[2], 0.35], Vec2::new(BLK, BLK))
             } else {
-                (COLORS[0], Vec2::new(CELL, CELL))
+                let shade = if (row + col) % 2 == 0 { 0.10 } else { 0.12 };
+                ([shade, shade, shade + 0.03, 1.0], Vec2::new(CELL, CELL))
             };
             let px = GX + col as f32 * CELL;
             let py = GY - (VISIBLE_ROWS as f32 - row as f32) * CELL;
@@ -734,6 +758,74 @@ fn redraw(world: &mut World, g: &Game, entities: &[Entity]) {
         4,
         [0.7, 0.7, 0.9, 1.0],
     );
+
+    // Start screen overlay
+    if !g.started {
+        for row in 0..VISIBLE_ROWS {
+            for col in 0..COLS {
+                let idx = row * COLS + col;
+                let e = entities[idx];
+                let is_center = (4..=5).contains(&col) && (9..=10).contains(&row);
+                let color = if is_center {
+                    let pulse = ((g.over_timer * 3.0).sin() * 0.5 + 0.5) as f32;
+                    [0.8 + pulse * 0.2, 0.8 + pulse * 0.2, 0.8 + pulse * 0.2, 1.0]
+                } else {
+                    [0.05, 0.05, 0.07, 1.0]
+                };
+                if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
+                    sprite.color = color;
+                    sprite.size = Vec2::new(CELL, CELL);
+                    sprite.transform = Mat4::from_translation(Vec3::new(
+                        GX + col as f32 * CELL,
+                        GY - (VISIBLE_ROWS as f32 - row as f32) * CELL,
+                        0.0,
+                    ));
+                }
+            }
+        }
+        return;
+    }
+
+    // Game over overlay
+    if g.over {
+        let pulse = ((g.over_timer * 2.0).sin() * 0.5 + 0.5) as f32;
+        for row in 0..VISIBLE_ROWS {
+            for col in 0..COLS {
+                let idx = row * COLS + col;
+                let e = entities[idx];
+                if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
+                    sprite.color = [0.3 + pulse * 0.2, 0.0, 0.0, 0.8];
+                    sprite.size = Vec2::new(CELL, CELL);
+                    sprite.transform = Mat4::from_translation(Vec3::new(
+                        GX + col as f32 * CELL,
+                        GY - (VISIBLE_ROWS as f32 - row as f32) * CELL,
+                        0.0,
+                    ));
+                }
+            }
+        }
+        return;
+    }
+
+    // Level up flash
+    if g.level_up_timer > 0.0 {
+        let flash = g.level_up_timer;
+        for row in 0..VISIBLE_ROWS {
+            for col in 0..COLS {
+                let idx = row * COLS + col;
+                let e = entities[idx];
+                if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
+                    sprite.color = [1.0, 1.0, 1.0, flash * 0.3];
+                    sprite.size = Vec2::new(CELL, CELL);
+                    sprite.transform = Mat4::from_translation(Vec3::new(
+                        GX + col as f32 * CELL,
+                        GY - (VISIBLE_ROWS as f32 - row as f32) * CELL,
+                        0.0,
+                    ));
+                }
+            }
+        }
+    }
 
     // Paused overlay
     if g.paused {
@@ -914,6 +1006,7 @@ fn lock_piece(g: &mut Game) {
 
 fn actually_clear(g: &mut Game) {
     let n = g.clear_rows.len() as u32;
+    let old_level = g.level;
     let mut write = ROWS;
     for read in (0..ROWS).rev() {
         if g.clear_rows.contains(&read) {
@@ -940,6 +1033,9 @@ fn actually_clear(g: &mut Game) {
     g.lines += n;
     g.level = g.lines / 10 + 1;
     g.fall_speed = (0.8 - (g.level as f32 - 1.0) * 0.07).max(0.05);
+    if g.level > old_level {
+        g.level_up_timer = 1.0;
+    }
 }
 
 fn spawn_next(g: &mut Game) {
