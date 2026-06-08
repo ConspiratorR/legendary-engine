@@ -4,6 +4,10 @@
 //! [`I18nStore`] for locale-aware translations, and [`TextRenderer`] for
 //! cached text layout and draw command generation.
 
+pub mod atlas_adapter;
+
+pub use atlas_adapter::FontAtlasAdapter;
+
 use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
