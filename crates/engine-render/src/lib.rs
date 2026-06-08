@@ -93,6 +93,7 @@ pub mod command_batch;
 pub mod culling;
 pub mod culling_system;
 pub mod deferred;
+pub mod font;
 pub mod frustum;
 pub mod gpu_profiler;
 pub mod graph;
