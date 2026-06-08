@@ -77,3 +77,33 @@ pub enum ShapeCommand {
         width: f32,
     },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_color_to_array() {
+        let c = Color::new(0.5, 0.6, 0.7, 0.8);
+        assert_eq!(c.to_array(), [0.5, 0.6, 0.7, 0.8]);
+    }
+
+    #[test]
+    fn test_color_constants() {
+        assert_eq!(Color::WHITE.to_array(), [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(Color::BLACK.to_array(), [0.0, 0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn test_shape_command_clone() {
+        let cmd = ShapeCommand::Rect {
+            position: [10.0, 20.0],
+            size: [100.0, 50.0],
+            fill: FillMode::Solid(Color::RED),
+            stroke: Some(Stroke::new(Color::WHITE, 2.0)),
+            corner_radius: 0.0,
+        };
+        let cmd2 = cmd.clone();
+        assert_eq!(cmd, cmd2);
+    }
+}
