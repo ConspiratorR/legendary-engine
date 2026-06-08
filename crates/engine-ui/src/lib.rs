@@ -76,6 +76,7 @@ pub mod retained;
 pub mod skin;
 pub mod text;
 pub mod theme;
+pub mod widgets;
 
 pub use gui::Gui;
 pub use imgui_plugin::ImGuiPlugin;
