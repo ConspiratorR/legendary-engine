@@ -48,5 +48,6 @@ mod tests {
         let style = UiStyle::default();
         assert_eq!(style.font_size, 20.0);
         assert_eq!(style.spacing, 6.0);
+        assert_eq!(style.corner_radius, 4.0);
     }
 }
