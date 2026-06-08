@@ -12,7 +12,7 @@ pub struct UiContext<'a> {
     pub(crate) mouse_pos: [f32; 2],
     pub(crate) mouse_down: bool,
     pub(crate) mouse_clicked: bool,
-    pub(crate) _focused_id: Option<u64>,
+    pub(crate) focused_id: Option<u64>,
     pub(crate) next_id: u64,
 }
 
@@ -38,7 +38,7 @@ impl<'a> UiContext<'a> {
             mouse_pos,
             mouse_down,
             mouse_clicked,
-            _focused_id: None,
+            focused_id: None,
             next_id: 0,
         }
     }
