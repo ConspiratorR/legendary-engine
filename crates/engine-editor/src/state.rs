@@ -838,6 +838,9 @@ impl EditorState {
             EditorAction::DeselectAll => {
                 self.selected_nodes.clear();
             }
+            EditorAction::FocusOnSelection => {
+                self.focus_on_selection();
+            }
             EditorAction::TranslateTool => {
                 self.active_tool = ToolType::Translate;
             }
@@ -903,6 +906,17 @@ impl EditorState {
         }
         self.selected_nodes.clear();
         self.status_message = Some(format!("Deleted {} nodes", selected.len()));
+    }
+
+    /// Focus camera on the first selected object.
+    fn focus_on_selection(&mut self) {
+        if let Some(&first_id) = self.selected_nodes.first()
+            && let Some(t) = self.node_transforms.get(&first_id)
+        {
+            self.camera.target = engine_math::Vec3::new(t[0], t[1], t[2]);
+            self.camera.distance = 5.0;
+            self.status_message = Some("Focused on selection".into());
+        }
     }
 
     /// Build scene data for 3D rendering from the current editor state.
