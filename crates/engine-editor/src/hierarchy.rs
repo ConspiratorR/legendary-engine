@@ -5,6 +5,16 @@ use crate::state::EditorState;
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::Gui;
 
+/// Available object types for creation.
+const CREATE_TYPES: &[(&str, &str)] = &[
+    ("空节点", "📄"),
+    ("立方体", "📦"),
+    ("球体", "🔮"),
+    ("方向光", "☀"),
+    ("点光源", "💡"),
+    ("聚光灯", "🔦"),
+];
+
 pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
     let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
@@ -60,13 +70,8 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         }
         if response.clicked() {
             if i == 0 {
-                // "+" button: add node under selected or root
-                let parent = state.selected_nodes.first().copied().or(state
-                    .scene_tree
-                    .root_ids
-                    .first()
-                    .copied());
-                state.scene_tree.add_node("New Node", parent);
+                // "+" button: toggle creation menu
+                state.show_create_menu = !state.show_create_menu;
             } else if i == 1 && !state.selected_nodes.is_empty() {
                 // "✕" button: delete selected nodes
                 let to_delete: Vec<u64> = state.selected_nodes.clone();
@@ -83,6 +88,128 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             FontId::proportional(14.0 * h_scale),
             Color32::from_gray(90),
         );
+    }
+
+    // Object creation menu
+    if state.show_create_menu {
+        let menu_x = rect.right() - 140.0 * w_scale;
+        let menu_y = header_rect.bottom() + 2.0;
+        let item_h = 28.0 * h_scale;
+        let menu_w = 130.0 * w_scale;
+        let menu_h = item_h * CREATE_TYPES.len() as f32;
+        let menu_rect = Rect::from_min_size(
+            Pos2::new(menu_x, menu_y),
+            Vec2::new(menu_w, menu_h),
+        );
+        painter.add(Shape::rect_filled(
+            menu_rect,
+            Rounding::same(4.0 * h_scale),
+            Color32::from_rgb(35, 35, 40),
+        ));
+        painter.rect_stroke(
+            menu_rect,
+            Rounding::same(4.0 * h_scale),
+            Stroke::new(1.0_f32, Color32::from_rgb(55, 55, 60)),
+        );
+
+        for (j, (label, icon)) in CREATE_TYPES.iter().enumerate() {
+            let item_y = menu_y + j as f32 * item_h;
+            let item_rect = Rect::from_min_size(
+                Pos2::new(menu_x, item_y),
+                Vec2::new(menu_w, item_h),
+            );
+            let item_id = egui::Id::new("create_item").with(j as u64);
+            let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
+            if item_resp.hovered() {
+                painter.add(Shape::rect_filled(
+                    item_rect,
+                    Rounding::ZERO,
+                    Color32::from_rgb(0, 80, 60),
+                ));
+            }
+            painter.text(
+                Pos2::new(menu_x + 8.0 * w_scale, item_rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                format!("{} {}", icon, label),
+                FontId::proportional(11.0 * h_scale),
+                Color32::from_gray(200),
+            );
+            if item_resp.clicked() {
+                let parent = state
+                    .selected_nodes
+                    .first()
+                    .copied()
+                    .or(state.scene_tree.root_ids.first().copied());
+                let new_id = state.scene_tree.add_node(label, parent);
+                // Initialize transform and component data based on type
+                state
+                    .node_transforms
+                    .insert(new_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+                match j {
+                    1 => {
+                        // Cube
+                        state
+                            .node_render
+                            .insert(new_id, ("Default".into(), "Cube".into(), true));
+                        state
+                            .node_materials
+                            .insert(new_id, crate::state::MaterialData::default());
+                    }
+                    2 => {
+                        // Sphere
+                        state
+                            .node_render
+                            .insert(new_id, ("Default".into(), "Sphere".into(), true));
+                        state.node_materials.insert(
+                            new_id,
+                            crate::state::MaterialData {
+                                base_color: [0.2, 0.6, 1.0, 1.0],
+                                metallic: 0.8,
+                                roughness: 0.1,
+                                ..Default::default()
+                            },
+                        );
+                    }
+                    3 => {
+                        // Directional light
+                        state
+                            .node_lights
+                            .insert(new_id, crate::state::LightData::default());
+                    }
+                    4 => {
+                        // Point light
+                        state.node_lights.insert(
+                            new_id,
+                            crate::state::LightData {
+                                light_type: crate::state::LightType::Point,
+                                color: [1.0, 1.0, 1.0],
+                                intensity: 1.0,
+                                range: 10.0,
+                                ..Default::default()
+                            },
+                        );
+                    }
+                    5 => {
+                        // Spot light
+                        state.node_lights.insert(
+                            new_id,
+                            crate::state::LightData {
+                                light_type: crate::state::LightType::Spot,
+                                color: [1.0, 1.0, 1.0],
+                                intensity: 1.0,
+                                range: 15.0,
+                                inner_angle: 15.0,
+                                outer_angle: 30.0,
+                                ..Default::default()
+                            },
+                        );
+                    }
+                    _ => {} // Empty node
+                }
+                state.show_create_menu = false;
+                state.selected_nodes = vec![new_id];
+            }
+        }
     }
 
     let line_y = header_rect.bottom() - 1.0;

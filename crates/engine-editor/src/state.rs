@@ -567,6 +567,8 @@ pub struct EditorState {
     pub gizmo_drag_start_screen: Option<(f32, f32)>,
     /// Object position when gizmo drag started.
     pub gizmo_drag_start_pos: Option<[f32; 3]>,
+    /// Whether the object creation menu is open.
+    pub show_create_menu: bool,
 }
 
 impl Default for EditorState {
@@ -659,6 +661,7 @@ impl EditorState {
             gizmo_drag_axis: None,
             gizmo_drag_start_screen: None,
             gizmo_drag_start_pos: None,
+            show_create_menu: false,
         }
     }
 
