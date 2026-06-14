@@ -595,10 +595,16 @@ impl EditorState {
         let mut node_lights = HashMap::new();
         let mut node_materials = HashMap::new();
         for i in 1..=6 {
-            node_transforms.insert(i, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
             node_render.insert(i, ("Default".into(), "Cube".into(), true));
             node_physics.insert(i, ("Static".into(), "Box".into()));
         }
+        // Spread objects out so they're visible in the viewport
+        node_transforms.insert(1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Root
+        node_transforms.insert(2, [-3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Player
+        node_transforms.insert(3, [0.0, -0.5, 0.0, 0.0, 0.0, 0.0, 10.0, 0.1, 10.0]); // Terrain (flat)
+        node_transforms.insert(4, [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Cube
+        node_transforms.insert(5, [3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Sphere
+        node_transforms.insert(6, [0.0, 5.0, -3.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Light
         // Add a directional light to the Light node (id=6)
         node_lights.insert(6, LightData::default());
         // Add a material to Cube (id=4) and Sphere (id=5)
@@ -612,6 +618,8 @@ impl EditorState {
                 ..Default::default()
             },
         );
+        // Make Player (id=2) dynamic for physics testing
+        node_physics.insert(2, ("Dynamic".into(), "Box".into()));
         Self {
             selected_nodes: Vec::new(),
             active_menu: None,
