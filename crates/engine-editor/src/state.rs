@@ -14,6 +14,17 @@ use engine_render::resource::mesh::MeshStore;
 use engine_render::shadow::ShadowMapConfig;
 use engine_ui::GuiSkin;
 
+/// Editor play mode state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlayState {
+    /// Normal editing mode.
+    Editing,
+    /// Game is running.
+    Playing,
+    /// Game is paused (state preserved, but not stepping).
+    Paused,
+}
+
 /// Active transform tool in the viewport toolbar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolType {
@@ -532,6 +543,12 @@ pub struct EditorState {
     pub node_scripts: HashMap<u64, ScriptData>,
     pub node_tags: HashMap<u64, Vec<String>>,
     pub viewport_layout: crate::viewport_renderer::ViewportLayout,
+    /// Current play mode state.
+    pub play_state: PlayState,
+    /// Snapshot of editor transforms before play (for restoring on stop).
+    pub editor_transform_snapshot: HashMap<u64, [f32; 9]>,
+    /// Elapsed time since play started.
+    pub runtime_elapsed: f32,
 }
 
 impl Default for EditorState {
@@ -604,6 +621,9 @@ impl EditorState {
             node_scripts: HashMap::new(),
             node_tags: HashMap::new(),
             viewport_layout: crate::viewport_renderer::ViewportLayout::default(),
+            play_state: PlayState::Editing,
+            editor_transform_snapshot: HashMap::new(),
+            runtime_elapsed: 0.0,
         }
     }
 
@@ -617,6 +637,65 @@ impl EditorState {
         egui_state: &mut engine_ui::EguiState,
     ) {
         crate::layout::frame(self, ctx, skin, renderer, vp_renderer, egui_state);
+    }
+
+    /// Enter play mode: snapshot editor state and begin runtime.
+    pub fn play(&mut self) {
+        if self.play_state == PlayState::Playing {
+            return;
+        }
+        self.editor_transform_snapshot = self.node_transforms.clone();
+        self.runtime_elapsed = 0.0;
+        self.play_state = PlayState::Playing;
+        self.status_message = Some("Playing".into());
+    }
+
+    /// Pause the runtime (freeze simulation, keep state).
+    pub fn pause(&mut self) {
+        if self.play_state == PlayState::Playing {
+            self.play_state = PlayState::Paused;
+            self.status_message = Some("Paused".into());
+        } else if self.play_state == PlayState::Paused {
+            self.play_state = PlayState::Playing;
+            self.status_message = Some("Playing".into());
+        }
+    }
+
+    /// Stop play mode: restore editor state.
+    pub fn stop(&mut self) {
+        if self.play_state == PlayState::Editing {
+            return;
+        }
+        self.node_transforms = self.editor_transform_snapshot.clone();
+        self.play_state = PlayState::Editing;
+        self.status_message = Some("Stopped".into());
+    }
+
+    /// Step the runtime (called each frame while Playing).
+    ///
+    /// Currently applies simple gravity to dynamic objects. Full ECS/physics
+    /// integration will be added when engine-physics is wired as a dependency.
+    pub fn step_runtime(&mut self, dt: f32) {
+        if self.play_state != PlayState::Playing {
+            return;
+        }
+        self.runtime_elapsed += dt;
+
+        // Simple gravity simulation for nodes with "Dynamic" physics type
+        for node in &self.scene_tree.nodes {
+            if node.parent.is_none() {
+                continue;
+            }
+            if let Some((body_type, _)) = self.node_physics.get(&node.id)
+                && body_type == "Dynamic"
+                && let Some(t) = self.node_transforms.get_mut(&node.id)
+            {
+                t[1] -= 9.81 * dt;
+                if t[1] < 0.0 {
+                    t[1] = 0.0;
+                }
+            }
+        }
     }
 
     /// Build scene data for 3D rendering from the current editor state.

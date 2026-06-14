@@ -87,6 +87,9 @@ fn main() -> anyhow::Result<()> {
                                 let dt = (now - last_time).as_secs_f64();
                                 last_time = now;
 
+                                // Step runtime if playing
+                                editor_state.step_runtime(dt as f32);
+
                                 // Begin frame
                                 e.begin_frame(dt);
 

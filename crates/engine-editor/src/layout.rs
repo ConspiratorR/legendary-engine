@@ -1,7 +1,7 @@
 //! Top-level editor layout — composes all panels into the main window with
 //! menu bar, toolbar, and dockable panel regions.
 
-use crate::state::{EditorState, ToolType};
+use crate::state::{EditorState, PlayState, ToolType};
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::{Gui, GuiSkin};
 use std::path::PathBuf;
@@ -476,9 +476,19 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
     draw_separator(&painter, x, rect.top(), rect.bottom(), h_scale);
     x += pad;
 
-    for icon in ["▶", "⏸", "⏹"].iter() {
+    // Play/Pause/Stop buttons
+    let play_icons = ["▶", "⏸", "⏹"];
+    let play_states = [state.play_state == PlayState::Playing, state.play_state == PlayState::Paused, state.play_state != PlayState::Editing];
+    for (i, icon) in play_icons.iter().enumerate() {
         let btn_rect = Rect::from_min_size(Pos2::new(x, cy), Vec2::new(btn_size, btn_size));
-        gui.tool_button(btn_rect, icon, false);
+        if gui.tool_button(btn_rect, icon, play_states[i]) {
+            match i {
+                0 => state.play(),
+                1 => state.pause(),
+                2 => state.stop(),
+                _ => {}
+            }
+        }
         x += btn_size + gap;
     }
     x += 8.0 * w_scale;
