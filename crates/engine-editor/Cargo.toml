@@ -24,6 +24,8 @@ pollster = "0.4"
 log = "0.4"
 env_logger = "0.11"
 winit = "0.30"
+notify = "6"
+notify-debouncer-mini = "0.4"
 
 [[bin]]
 name = "engine-editor"

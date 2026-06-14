@@ -40,6 +40,7 @@ pub mod camera;
 pub mod commands;
 pub mod gizmo;
 pub mod hierarchy;
+pub mod hot_reload;
 pub mod inspector;
 pub mod layout;
 pub mod material_editor;
@@ -54,6 +55,7 @@ pub mod shortcuts;
 pub mod state;
 pub mod terrain_panel;
 pub mod viewport;
+pub mod viewport_renderer;
 
 mod plugin;
 pub use plugin::EditorPlugin;
