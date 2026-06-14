@@ -443,6 +443,29 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
         gui.tool_button(btn_rect, mode, state.active_viewport_tab == i);
     }
     x += 4.0 * (btn_size + gap) + pad;
+
+    // Viewport layout buttons
+    draw_separator(&painter, x, rect.top(), rect.bottom(), h_scale);
+    x += pad;
+    let layouts = &["1", "⬌", "⬍", "⊞"];
+    for (i, icon) in layouts.iter().enumerate() {
+        let btn_rect = Rect::from_min_size(
+            Pos2::new(x + i as f32 * (btn_size + gap), cy),
+            Vec2::new(btn_size, btn_size),
+        );
+        if gui.tool_button(btn_rect, icon, false) {
+            use crate::viewport_renderer::{ViewportLayout, ViewportType};
+            state.viewport_layout = match i {
+                0 => ViewportLayout::Single(ViewportType::Perspective),
+                1 => ViewportLayout::Horizontal(ViewportType::Perspective, ViewportType::Top),
+                2 => ViewportLayout::Vertical(ViewportType::Perspective, ViewportType::Top),
+                3 => ViewportLayout::Quad,
+                _ => state.viewport_layout,
+            };
+        }
+    }
+    x += 4.0 * (btn_size + gap) + pad;
+
     draw_separator(&painter, x, rect.top(), rect.bottom(), h_scale);
     x += pad;
 

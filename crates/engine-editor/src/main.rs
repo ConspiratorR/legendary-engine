@@ -29,6 +29,8 @@ fn main() -> anyhow::Result<()> {
     // Pollster (for async)
     let mut render = None;
     let mut egui_state = None;
+    let mut viewport_renderer_opt = None;
+    let mut hot_reload_opt = None;
     let mut editor_state = EditorState::new();
 
     pollster::block_on(async {
@@ -38,8 +40,27 @@ fn main() -> anyhow::Result<()> {
         let scale_factor = window.scale_factor() as f32;
         let egui_state_local = EguiState::new(&renderer.device, &renderer.config, scale_factor);
 
+        // Initialize ViewportRenderer
+        let vp_renderer = std::sync::Arc::new(std::sync::Mutex::new(
+            engine_editor::viewport_renderer::ViewportRenderer::new(
+                renderer.device.0.clone(),
+                renderer.queue.0.clone(),
+            ),
+        ));
+
+        // Initialize hot reload manager
+        let hot_reload = std::sync::Arc::new(std::sync::Mutex::new(
+            engine_editor::hot_reload::ReloadManager::new(std::path::Path::new("assets"))
+                .unwrap_or_else(|e| {
+                    log::warn!("Failed to init hot reload: {}", e);
+                    engine_editor::hot_reload::ReloadManager::new(std::path::Path::new(".")).unwrap()
+                }),
+        ));
+
         render = Some(renderer);
         egui_state = Some(egui_state_local);
+        viewport_renderer_opt = Some(vp_renderer);
+        hot_reload_opt = Some(hot_reload);
 
         // Run the event loop
         let mut last_time = std::time::Instant::now();
