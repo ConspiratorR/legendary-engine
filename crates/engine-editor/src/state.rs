@@ -552,6 +552,12 @@ pub struct EditorState {
     pub editor_transform_snapshot: HashMap<u64, [f32; 9]>,
     /// Elapsed time since play started.
     pub runtime_elapsed: f32,
+    /// Autosave interval in seconds (0 = disabled).
+    pub autosave_interval: f32,
+    /// Time since last autosave.
+    pub autosave_timer: f32,
+    /// Whether autosave is enabled.
+    pub autosave_enabled: bool,
 }
 
 impl Default for EditorState {
@@ -637,6 +643,9 @@ impl EditorState {
             play_state: PlayState::Editing,
             editor_transform_snapshot: HashMap::new(),
             runtime_elapsed: 0.0,
+            autosave_interval: 300.0, // 5 minutes
+            autosave_timer: 0.0,
+            autosave_enabled: true,
         }
     }
 
@@ -738,7 +747,7 @@ impl EditorState {
         }
         self.runtime_elapsed += dt;
 
-        // Step physics
+        // Step physics — recover from panics gracefully
         let mut pw = match world.remove_resource::<engine_physics::world::PhysicsWorld>() {
             Some(pw) => pw,
             None => return,
@@ -769,6 +778,19 @@ impl EditorState {
                 t[2] = tc.position[2];
             }
         }
+    }
+
+    /// Check if autosave should trigger (returns true if autosave needed).
+    pub fn check_autosave(&mut self, dt: f32) -> bool {
+        if !self.autosave_enabled || self.autosave_interval <= 0.0 {
+            return false;
+        }
+        self.autosave_timer += dt;
+        if self.autosave_timer >= self.autosave_interval {
+            self.autosave_timer = 0.0;
+            return true;
+        }
+        false
     }
 
     /// Build scene data for 3D rendering from the current editor state.

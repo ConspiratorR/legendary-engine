@@ -97,6 +97,16 @@ fn main() -> anyhow::Result<()> {
                                     editor_state.step_runtime(world, dt as f32);
                                 }
 
+                                // Check autosave
+                                if editor_state.check_autosave(dt as f32) {
+                                    if let Err(e) = editor_state.scene_manager.save_current_scene()
+                                    {
+                                        log::warn!("Autosave failed: {}", e);
+                                    } else {
+                                        log::info!("Autosave completed");
+                                    }
+                                }
+
                                 // Begin frame
                                 e.begin_frame(dt);
 
@@ -137,15 +147,29 @@ fn main() -> anyhow::Result<()> {
                                 let (paint_jobs, textures_delta) = e.end_frame();
 
                                 // Render
-                                if let Ok(output) = r.surface.get_current_texture() {
-                                    e.paint(
-                                        &r.device,
-                                        &r.queue,
-                                        &output,
-                                        &paint_jobs,
-                                        &textures_delta,
-                                    );
-                                    output.present();
+                                match r.surface.get_current_texture() {
+                                    Ok(output) => {
+                                        e.paint(
+                                            &r.device,
+                                            &r.queue,
+                                            &output,
+                                            &paint_jobs,
+                                            &textures_delta,
+                                        );
+                                        output.present();
+                                    }
+                                    Err(wgpu::SurfaceError::Lost) => {
+                                        let size = window.inner_size();
+                                        r.resize(size.width, size.height);
+                                        log::warn!("Surface lost, recreated");
+                                    }
+                                    Err(wgpu::SurfaceError::OutOfMemory) => {
+                                        log::error!("Out of GPU memory!");
+                                        elwt.exit();
+                                    }
+                                    Err(e) => {
+                                        log::warn!("Surface error: {:?}", e);
+                                    }
                                 }
                             }
                         }
