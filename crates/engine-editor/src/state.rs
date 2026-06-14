@@ -61,7 +61,7 @@ pub struct SceneTree {
     pub nodes: Vec<TreeNode>,
     /// IDs of root-level nodes.
     pub root_ids: Vec<u64>,
-    next_id: u64,
+    pub(crate) next_id: u64,
 }
 
 impl SceneTree {

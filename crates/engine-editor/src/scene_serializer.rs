@@ -8,6 +8,8 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::state::EditorState;
+
 /// A complete scene containing entities and global settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Scene {
@@ -26,6 +28,91 @@ pub struct SceneEntity {
     pub children: Vec<u64>,
     pub parent: Option<u64>,
     pub active: bool,
+    #[serde(default)]
+    pub material: Option<MaterialDataSer>,
+    #[serde(default)]
+    pub light: Option<LightDataSer>,
+    #[serde(default)]
+    pub sprite: Option<SpriteDataSer>,
+    #[serde(default)]
+    pub particle: Option<ParticleDataSer>,
+    #[serde(default)]
+    pub audio: Option<AudioDataSer>,
+    #[serde(default)]
+    pub script: Option<ScriptDataSer>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub physics: Option<PhysicsDataSer>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MaterialDataSer {
+    pub base_color: [f32; 4],
+    pub metallic: f32,
+    pub roughness: f32,
+    pub ao: f32,
+    pub emissive: [f32; 3],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LightDataSer {
+    pub light_type: String,
+    pub color: [f32; 3],
+    pub intensity: f32,
+    pub range: f32,
+    pub direction: [f32; 3],
+    pub inner_angle: f32,
+    pub outer_angle: f32,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpriteDataSer {
+    pub texture: String,
+    pub size: [f32; 2],
+    pub color: [f32; 4],
+    pub flip_x: bool,
+    pub flip_y: bool,
+    pub uv_region: [f32; 4],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ParticleDataSer {
+    pub emitter_type: String,
+    pub rate: f32,
+    pub lifetime: f32,
+    pub speed: f32,
+    pub size_start: f32,
+    pub size_end: f32,
+    pub color_start: [f32; 4],
+    pub color_end: [f32; 4],
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioDataSer {
+    pub source: String,
+    pub volume: f32,
+    pub looping: bool,
+    pub spatial: bool,
+    pub attenuation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScriptDataSer {
+    pub script_path: String,
+    pub enabled: bool,
+    pub properties: std::collections::HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhysicsDataSer {
+    pub body_type: String,
+    pub collider_type: String,
+    pub mass: f32,
+    pub friction: f32,
+    pub restitution: f32,
+    pub is_sensor: bool,
 }
 
 /// Transform data (translation, rotation as quaternion, scale).
@@ -166,6 +253,14 @@ impl SceneEntity {
             children: Vec::new(),
             parent: None,
             active: true,
+            material: None,
+            light: None,
+            sprite: None,
+            particle: None,
+            audio: None,
+            script: None,
+            tags: Vec::new(),
+            physics: None,
         }
     }
 
@@ -342,6 +437,251 @@ impl Default for SceneManager {
     }
 }
 
+impl EditorState {
+    pub fn to_scene(&self, name: &str) -> Scene {
+        let mut scene = Scene::new(name.to_string());
+        for node in &self.scene_tree.nodes {
+            let transform = self
+                .node_transforms
+                .get(&node.id)
+                .copied()
+                .unwrap_or([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+            let mut entity = SceneEntity::new(node.id, node.name.clone());
+            entity.transform = TransformData {
+                translation: [transform[0], transform[1], transform[2]],
+                rotation: [0.0, 0.0, 0.0, 1.0],
+                scale: [transform[6], transform[7], transform[8]],
+            };
+            entity.parent = node.parent;
+            entity.children = node.children.clone();
+
+            if let Some(mat) = self.node_materials.get(&node.id) {
+                entity.material = Some(MaterialDataSer {
+                    base_color: mat.base_color,
+                    metallic: mat.metallic,
+                    roughness: mat.roughness,
+                    ao: mat.ao,
+                    emissive: mat.emissive,
+                });
+            }
+            if let Some(light) = self.node_lights.get(&node.id) {
+                entity.light = Some(LightDataSer {
+                    light_type: format!("{:?}", light.light_type).to_lowercase(),
+                    color: light.color,
+                    intensity: light.intensity,
+                    range: light.range,
+                    direction: light.direction,
+                    inner_angle: light.inner_angle,
+                    outer_angle: light.outer_angle,
+                    enabled: light.enabled,
+                });
+            }
+            if let Some(sprite) = self.node_sprites.get(&node.id) {
+                entity.sprite = Some(SpriteDataSer {
+                    texture: sprite.texture.clone(),
+                    size: sprite.size,
+                    color: sprite.color,
+                    flip_x: sprite.flip_x,
+                    flip_y: sprite.flip_y,
+                    uv_region: sprite.uv_region,
+                });
+            }
+            if let Some(particle) = self.node_particles.get(&node.id) {
+                entity.particle = Some(ParticleDataSer {
+                    emitter_type: particle.emitter_type.clone(),
+                    rate: particle.rate,
+                    lifetime: particle.lifetime,
+                    speed: particle.speed,
+                    size_start: particle.size_start,
+                    size_end: particle.size_end,
+                    color_start: particle.color_start,
+                    color_end: particle.color_end,
+                });
+            }
+            if let Some(audio) = self.node_audio.get(&node.id) {
+                entity.audio = Some(AudioDataSer {
+                    source: audio.source.clone(),
+                    volume: audio.volume,
+                    looping: audio.looping,
+                    spatial: audio.spatial,
+                    attenuation: audio.attenuation.clone(),
+                });
+            }
+            if let Some(script) = self.node_scripts.get(&node.id) {
+                entity.script = Some(ScriptDataSer {
+                    script_path: script.script_path.clone(),
+                    enabled: script.enabled,
+                    properties: script.properties.clone(),
+                });
+            }
+            if let Some(tags) = self.node_tags.get(&node.id) {
+                entity.tags = tags.clone();
+            }
+            if let Some((body, col)) = self.node_physics.get(&node.id) {
+                entity.physics = Some(PhysicsDataSer {
+                    body_type: body.clone(),
+                    collider_type: col.clone(),
+                    mass: 1.0,
+                    friction: 0.5,
+                    restitution: 0.3,
+                    is_sensor: false,
+                });
+            }
+            scene.add_entity(entity);
+        }
+        scene
+    }
+
+    pub fn load_from_scene(&mut self, scene: &Scene) {
+        self.scene_tree = crate::state::SceneTree {
+            nodes: Vec::new(),
+            root_ids: Vec::new(),
+            next_id: 1,
+        };
+        self.node_transforms.clear();
+        self.node_materials.clear();
+        self.node_lights.clear();
+        self.node_sprites.clear();
+        self.node_particles.clear();
+        self.node_audio.clear();
+        self.node_scripts.clear();
+        self.node_tags.clear();
+        self.node_render.clear();
+        self.node_physics.clear();
+        self.selected_nodes.clear();
+
+        let mut next_id = 1u64;
+        for entity in &scene.entities {
+            let node = crate::state::TreeNode {
+                id: entity.id,
+                name: entity.name.clone(),
+                icon: "📦".into(),
+                expanded: false,
+                parent: entity.parent,
+                children: entity.children.clone(),
+            };
+            self.scene_tree.nodes.push(node);
+            if entity.parent.is_none() {
+                self.scene_tree.root_ids.push(entity.id);
+            }
+            if entity.id >= next_id {
+                next_id = entity.id + 1;
+            }
+
+            self.node_transforms.insert(
+                entity.id,
+                [
+                    entity.transform.translation[0],
+                    entity.transform.translation[1],
+                    entity.transform.translation[2],
+                    0.0,
+                    0.0,
+                    0.0,
+                    entity.transform.scale[0],
+                    entity.transform.scale[1],
+                    entity.transform.scale[2],
+                ],
+            );
+
+            if let Some(ref mat) = entity.material {
+                self.node_materials.insert(
+                    entity.id,
+                    crate::state::MaterialData {
+                        base_color: mat.base_color,
+                        metallic: mat.metallic,
+                        roughness: mat.roughness,
+                        ao: mat.ao,
+                        emissive: mat.emissive,
+                    },
+                );
+            }
+            if let Some(ref light) = entity.light {
+                let lt = match light.light_type.as_str() {
+                    "directional" => crate::state::LightType::Directional,
+                    "point" => crate::state::LightType::Point,
+                    "spot" => crate::state::LightType::Spot,
+                    _ => crate::state::LightType::Directional,
+                };
+                self.node_lights.insert(
+                    entity.id,
+                    crate::state::LightData {
+                        light_type: lt,
+                        color: light.color,
+                        intensity: light.intensity,
+                        range: light.range,
+                        direction: light.direction,
+                        inner_angle: light.inner_angle,
+                        outer_angle: light.outer_angle,
+                        enabled: light.enabled,
+                    },
+                );
+            }
+            if let Some(ref sprite) = entity.sprite {
+                self.node_sprites.insert(
+                    entity.id,
+                    crate::state::SpriteData {
+                        texture: sprite.texture.clone(),
+                        size: sprite.size,
+                        color: sprite.color,
+                        flip_x: sprite.flip_x,
+                        flip_y: sprite.flip_y,
+                        uv_region: sprite.uv_region,
+                    },
+                );
+            }
+            if let Some(ref particle) = entity.particle {
+                self.node_particles.insert(
+                    entity.id,
+                    crate::state::ParticleData {
+                        emitter_type: particle.emitter_type.clone(),
+                        rate: particle.rate,
+                        lifetime: particle.lifetime,
+                        speed: particle.speed,
+                        size_start: particle.size_start,
+                        size_end: particle.size_end,
+                        color_start: particle.color_start,
+                        color_end: particle.color_end,
+                    },
+                );
+            }
+            if let Some(ref audio) = entity.audio {
+                self.node_audio.insert(
+                    entity.id,
+                    crate::state::AudioData {
+                        source: audio.source.clone(),
+                        volume: audio.volume,
+                        looping: audio.looping,
+                        spatial: audio.spatial,
+                        attenuation: audio.attenuation.clone(),
+                    },
+                );
+            }
+            if let Some(ref script) = entity.script {
+                self.node_scripts.insert(
+                    entity.id,
+                    crate::state::ScriptData {
+                        script_path: script.script_path.clone(),
+                        enabled: script.enabled,
+                        properties: script.properties.clone(),
+                    },
+                );
+            }
+            if !entity.tags.is_empty() {
+                self.node_tags.insert(entity.id, entity.tags.clone());
+            }
+            if let Some(ref physics) = entity.physics {
+                self.node_physics.insert(
+                    entity.id,
+                    (physics.body_type.clone(), physics.collider_type.clone()),
+                );
+            }
+            self.node_render
+                .insert(entity.id, ("Default".into(), "Cube".into(), true));
+        }
+        self.scene_tree.next_id = next_id;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -403,5 +743,50 @@ mod tests {
         let mut mgr = SceneManager::new();
         mgr.create_scene("NoPath".to_string());
         assert!(mgr.save_current_scene().is_err());
+    }
+
+    #[test]
+    fn test_extended_entity_serialization() {
+        let mut scene = Scene::new("ExtendedTest".to_string());
+        let mut entity = SceneEntity::new(1, "Player".to_string());
+        entity.material = Some(MaterialDataSer {
+            base_color: [0.8, 0.2, 0.1, 1.0],
+            metallic: 0.5,
+            roughness: 0.3,
+            ao: 1.0,
+            emissive: [0.0; 3],
+        });
+        entity.light = Some(LightDataSer {
+            light_type: "point".into(),
+            color: [1.0, 1.0, 1.0],
+            intensity: 2.0,
+            range: 10.0,
+            direction: [0.0, -1.0, 0.0],
+            inner_angle: 15.0,
+            outer_angle: 30.0,
+            enabled: true,
+        });
+        entity.sprite = Some(SpriteDataSer {
+            texture: "player.png".into(),
+            size: [64.0, 64.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
+        });
+        entity.tags = vec!["player".into(), "entity".into()];
+        scene.add_entity(entity);
+
+        let json = serde_json::to_string_pretty(&scene).unwrap();
+        let loaded: Scene = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(loaded.entities.len(), 1);
+        let e = &loaded.entities[0];
+        assert!(e.material.is_some());
+        assert!(e.light.is_some());
+        assert!(e.sprite.is_some());
+        assert_eq!(e.tags, vec!["player", "entity"]);
+        assert_eq!(e.material.as_ref().unwrap().metallic, 0.5);
+        assert_eq!(e.light.as_ref().unwrap().intensity, 2.0);
     }
 }
