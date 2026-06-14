@@ -331,6 +331,7 @@ impl Default for EditorCamera {
 }
 
 use crate::animation_editor::AnimationEditorState;
+use crate::commands::CommandManager;
 use crate::material_editor::MaterialEditorState;
 use crate::node_graph::NodeGraphState;
 use crate::performance_overlay::PerformanceOverlay;
@@ -505,7 +506,7 @@ pub struct EditorSceneData {
 }
 
 /// Central editor state holding all panel data, selections, and tool state.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct EditorState {
     pub selected_nodes: Vec<u64>,
     pub active_menu: Option<usize>,
@@ -569,6 +570,12 @@ pub struct EditorState {
     pub gizmo_drag_start_pos: Option<[f32; 3]>,
     /// Whether the object creation menu is open.
     pub show_create_menu: bool,
+    /// Node currently being dragged in hierarchy (for reparent).
+    pub drag_source: Option<u64>,
+    /// Node being hovered during drag (drop target).
+    pub drag_hover_target: Option<u64>,
+    /// Undo/redo command manager.
+    pub command_manager: CommandManager,
 }
 
 impl Default for EditorState {
@@ -662,6 +669,9 @@ impl EditorState {
             gizmo_drag_start_screen: None,
             gizmo_drag_start_pos: None,
             show_create_menu: false,
+            drag_source: None,
+            drag_hover_target: None,
+            command_manager: CommandManager::default(),
         }
     }
 
@@ -868,14 +878,30 @@ impl EditorState {
 
     /// Undo the last action.
     fn undo(&mut self) {
-        // TODO: wire undo/redo command system
-        self.status_message = Some("Undo".into());
+        let mut cm = std::mem::take(&mut self.command_manager);
+        if cm.undo(self).is_some() {
+            self.status_message = Some(format!(
+                "Undo: {}",
+                cm.redo_description().unwrap_or_default()
+            ));
+        } else {
+            self.status_message = Some("Nothing to undo".into());
+        }
+        self.command_manager = cm;
     }
 
     /// Redo the last undone action.
     fn redo(&mut self) {
-        // TODO: wire undo/redo command system
-        self.status_message = Some("Redo".into());
+        let mut cm = std::mem::take(&mut self.command_manager);
+        if cm.redo(self).is_some() {
+            self.status_message = Some(format!(
+                "Redo: {}",
+                cm.undo_description().unwrap_or_default()
+            ));
+        } else {
+            self.status_message = Some("Nothing to redo".into());
+        }
+        self.command_manager = cm;
     }
 
     /// Duplicate selected nodes.

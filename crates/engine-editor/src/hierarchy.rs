@@ -15,6 +15,22 @@ const CREATE_TYPES: &[(&str, &str)] = &[
     ("聚光灯", "🔦"),
 ];
 
+/// Check if `target_id` is a descendant of `ancestor_id` in the scene tree.
+fn is_descendant(tree: &crate::state::SceneTree, target_id: u64, ancestor_id: u64) -> bool {
+    let mut current = Some(target_id);
+    while let Some(id) = current {
+        if id == ancestor_id {
+            return true;
+        }
+        current = tree
+            .nodes
+            .iter()
+            .find(|n| n.id == id)
+            .and_then(|n| n.parent);
+    }
+    false
+}
+
 pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
     let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
@@ -311,6 +327,17 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             &search_results,
         );
     }
+
+    // Clear drag state if mouse released without dropping on a target
+    if gui.ui.input(|i| i.pointer.any_released()) && state.drag_source.is_some() {
+        state.drag_source = None;
+        state.drag_hover_target = None;
+    }
+
+    // Reset hover target each frame (will be set by hovered nodes)
+    if state.drag_source.is_some() {
+        state.drag_hover_target = None;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -349,11 +376,15 @@ fn draw_node(
 
     let id_rect = Rect::from_min_size(Pos2::new(indent, *y), Vec2::new(right - indent, item_h));
     let id = egui::Id::new("tree").with(node_id);
-    let response = gui.ui.interact(id_rect, id, egui::Sense::click());
+    let response = gui
+        .ui
+        .interact(id_rect, id, egui::Sense::click_and_drag());
 
     let painter = gui.ui.painter_at(id_rect);
     let is_selected = state.selected_nodes.contains(&node_id);
     let is_search_match = search_results.contains(&node_id);
+    let is_drag_hover = state.drag_hover_target == Some(node_id);
+    let is_dragging = state.drag_source == Some(node_id);
 
     if is_selected {
         painter.add(Shape::rect_filled(
@@ -361,6 +392,18 @@ fn draw_node(
             Rounding::same(rounding),
             Color32::from_rgba_premultiplied(0, 212, 170, 30),
         ));
+    } else if is_drag_hover {
+        // Drop target highlight
+        painter.add(Shape::rect_filled(
+            id_rect,
+            Rounding::same(rounding),
+            Color32::from_rgba_premultiplied(0, 212, 170, 60),
+        ));
+        painter.rect_stroke(
+            id_rect,
+            Rounding::same(rounding),
+            Stroke::new(2.0_f32, Color32::from_rgb(0, 212, 170)),
+        );
     } else if is_search_match {
         painter.add(Shape::rect_filled(
             id_rect,
@@ -372,6 +415,15 @@ fn draw_node(
             id_rect,
             Rounding::same(rounding),
             Color32::from_rgb(30, 30, 34),
+        ));
+    }
+
+    // Drag source: dim the node being dragged
+    if is_dragging {
+        painter.add(Shape::rect_filled(
+            id_rect,
+            Rounding::same(rounding),
+            Color32::from_rgba_premultiplied(0, 0, 0, 80),
         ));
     }
 
@@ -420,6 +472,54 @@ fn draw_node(
     if response.clicked() {
         state.selected_nodes.clear();
         state.selected_nodes.push(node_id);
+    }
+
+    // Drag initiation
+    if response.drag_started() {
+        state.drag_source = Some(node_id);
+    }
+
+    // Drag hover detection
+    if state.drag_source.is_some() && response.hovered() {
+        state.drag_hover_target = Some(node_id);
+    }
+
+    // Drop: reparent dragged node to hovered node
+    if response.hovered()
+        && gui.ui.input(|i| i.pointer.any_released())
+        && let Some(source_id) = state.drag_source
+    {
+        if source_id != node_id {
+            // Check that target is not a descendant of source
+            if !is_descendant(&state.scene_tree, node_id, source_id) {
+                let old_parent = state
+                    .scene_tree
+                    .nodes
+                    .iter()
+                    .find(|n| n.id == source_id)
+                    .and_then(|n| n.parent);
+                state.scene_tree.reparent(source_id, Some(node_id));
+                // Expand target to show the moved node
+                if let Some(n) =
+                    state.scene_tree.nodes.iter_mut().find(|n| n.id == node_id)
+                {
+                    n.expanded = true;
+                }
+                // Record command for undo (take command_manager out to avoid borrow conflict)
+                let mut cm = std::mem::take(&mut state.command_manager);
+                cm.execute(
+                    Box::new(crate::commands::MoveEntityCommand::new(
+                        source_id,
+                        old_parent,
+                        Some(node_id),
+                    )),
+                    state,
+                );
+                state.command_manager = cm;
+            }
+        }
+        state.drag_source = None;
+        state.drag_hover_target = None;
     }
 
     *y += item_h;

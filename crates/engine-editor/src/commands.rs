@@ -5,16 +5,17 @@
 //! should be reversible implements [`Command`] with paired `execute`/`undo`
 //! methods.
 
+use crate::state::EditorState;
 use std::collections::VecDeque;
 
 /// Trait for undoable editor commands.
-pub trait Command: std::fmt::Debug {
+pub trait Command: std::fmt::Debug + Send {
     /// Executes the command (first time or redo).
-    fn execute(&mut self);
+    fn execute(&mut self, state: &mut EditorState);
     /// Reverses the command.
-    fn undo(&mut self);
+    fn undo(&mut self, state: &mut EditorState);
     /// Re-applies the command after an undo.
-    fn redo(&mut self);
+    fn redo(&mut self, state: &mut EditorState);
     /// Human-readable description for the undo/redo menu.
     fn description(&self) -> String;
 }
@@ -24,6 +25,15 @@ pub struct CommandManager {
     undo_stack: VecDeque<Box<dyn Command>>,
     redo_stack: VecDeque<Box<dyn Command>>,
     max_history: usize,
+}
+
+impl std::fmt::Debug for CommandManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CommandManager")
+            .field("undo_count", &self.undo_stack.len())
+            .field("redo_count", &self.redo_stack.len())
+            .finish()
+    }
 }
 
 impl CommandManager {
@@ -37,56 +47,48 @@ impl CommandManager {
     }
 
     /// Executes a command, pushing it onto the undo stack and clearing the redo stack.
-    pub fn execute(&mut self, command: Box<dyn Command>) {
-        let mut cmd = command;
-        cmd.execute();
-
-        self.undo_stack.push_back(cmd);
+    pub fn execute(&mut self, mut command: Box<dyn Command>, state: &mut EditorState) {
+        command.execute(state);
+        self.undo_stack.push_back(command);
         self.redo_stack.clear();
-
         while self.undo_stack.len() > self.max_history {
             self.undo_stack.pop_front();
         }
     }
 
-    /// Undoes the last command. Returns `Some(())` if a command was undone.
-    pub fn undo(&mut self) -> Option<()> {
+    /// Undoes the last command.
+    pub fn undo(&mut self, state: &mut EditorState) -> Option<()> {
         let mut cmd = self.undo_stack.pop_back()?;
-        cmd.undo();
+        cmd.undo(state);
         self.redo_stack.push_back(cmd);
         Some(())
     }
 
-    /// Redoes the last undone command. Returns `Some(())` if a command was redone.
-    pub fn redo(&mut self) -> Option<()> {
+    /// Redoes the last undone command.
+    pub fn redo(&mut self, state: &mut EditorState) -> Option<()> {
         let mut cmd = self.redo_stack.pop_back()?;
-        cmd.redo();
+        cmd.redo(state);
         self.undo_stack.push_back(cmd);
         Some(())
     }
 
-    /// Returns `true` if there are commands to undo.
     pub fn can_undo(&self) -> bool {
         !self.undo_stack.is_empty()
     }
 
-    /// Returns `true` if there are commands to redo.
     pub fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
     }
 
-    /// Clears both undo and redo stacks.
     pub fn clear(&mut self) {
         self.undo_stack.clear();
         self.redo_stack.clear();
     }
 
-    /// Returns the description of the next command to undo, if any.
     pub fn undo_description(&self) -> Option<String> {
         self.undo_stack.back().map(|cmd| cmd.description())
     }
 
-    /// Returns the description of the next command to redo, if any.
     pub fn redo_description(&self) -> Option<String> {
         self.redo_stack.back().map(|cmd| cmd.description())
     }
@@ -98,81 +100,7 @@ impl Default for CommandManager {
     }
 }
 
-// 具体命令实现示例
-#[derive(Debug)]
-pub struct CreateEntityCommand {
-    entity_id: u64,
-    entity_name: String,
-    _parent_id: Option<u64>,
-}
-
-impl CreateEntityCommand {
-    pub fn new(entity_id: u64, entity_name: String, parent_id: Option<u64>) -> Self {
-        Self {
-            entity_id,
-            entity_name,
-            _parent_id: parent_id,
-        }
-    }
-}
-
-impl Command for CreateEntityCommand {
-    fn execute(&mut self) {
-        println!(
-            "Creating entity: {} (ID: {})",
-            self.entity_name, self.entity_id
-        );
-    }
-
-    fn undo(&mut self) {
-        println!("Undo: Delete entity {}", self.entity_id);
-    }
-
-    fn redo(&mut self) {
-        println!("Redo: Recreate entity {}", self.entity_id);
-    }
-
-    fn description(&self) -> String {
-        format!("Create {}", self.entity_name)
-    }
-}
-
-#[derive(Debug)]
-pub struct DeleteEntityCommand {
-    entity_id: u64,
-    entity_name: String,
-}
-
-impl DeleteEntityCommand {
-    pub fn new(entity_id: u64, entity_name: String) -> Self {
-        Self {
-            entity_id,
-            entity_name,
-        }
-    }
-}
-
-impl Command for DeleteEntityCommand {
-    fn execute(&mut self) {
-        println!(
-            "Deleting entity: {} (ID: {})",
-            self.entity_name, self.entity_id
-        );
-    }
-
-    fn undo(&mut self) {
-        println!("Undo: Restore entity {}", self.entity_id);
-    }
-
-    fn redo(&mut self) {
-        println!("Redo: Delete entity again {}", self.entity_id);
-    }
-
-    fn description(&self) -> String {
-        format!("Delete {}", self.entity_name)
-    }
-}
-
+// 具体命令实现
 #[derive(Debug)]
 pub struct MoveEntityCommand {
     entity_id: u64,
@@ -191,25 +119,16 @@ impl MoveEntityCommand {
 }
 
 impl Command for MoveEntityCommand {
-    fn execute(&mut self) {
-        println!(
-            "Moving entity {} to parent {:?}",
-            self.entity_id, self.to_parent
-        );
+    fn execute(&mut self, state: &mut EditorState) {
+        state.scene_tree.reparent(self.entity_id, self.to_parent);
     }
 
-    fn undo(&mut self) {
-        println!(
-            "Undo: Move entity {} back to parent {:?}",
-            self.entity_id, self.from_parent
-        );
+    fn undo(&mut self, state: &mut EditorState) {
+        state.scene_tree.reparent(self.entity_id, self.from_parent);
     }
 
-    fn redo(&mut self) {
-        println!(
-            "Redo: Move entity {} to parent {:?}",
-            self.entity_id, self.to_parent
-        );
+    fn redo(&mut self, state: &mut EditorState) {
+        state.scene_tree.reparent(self.entity_id, self.to_parent);
     }
 
     fn description(&self) -> String {
@@ -218,105 +137,39 @@ impl Command for MoveEntityCommand {
 }
 
 #[derive(Debug)]
-pub struct RenameEntityCommand {
-    entity_id: u64,
-    old_name: String,
-    new_name: String,
-}
-
-impl RenameEntityCommand {
-    pub fn new(entity_id: u64, old_name: String, new_name: String) -> Self {
-        Self {
-            entity_id,
-            old_name,
-            new_name,
-        }
-    }
-}
-
-impl Command for RenameEntityCommand {
-    fn execute(&mut self) {
-        println!("Renaming entity {} to '{}'", self.entity_id, self.new_name);
-    }
-
-    fn undo(&mut self) {
-        println!(
-            "Undo: Rename entity {} back to '{}'",
-            self.entity_id, self.old_name
-        );
-    }
-
-    fn redo(&mut self) {
-        println!(
-            "Redo: Rename entity {} to '{}'",
-            self.entity_id, self.new_name
-        );
-    }
-
-    fn description(&self) -> String {
-        format!("Rename to '{}'", self.new_name)
-    }
-}
-
-#[derive(Debug)]
 pub struct TransformEntityCommand {
     entity_id: u64,
-    old_position: (f32, f32, f32),
-    new_position: (f32, f32, f32),
-    old_rotation: (f32, f32, f32),
-    new_rotation: (f32, f32, f32),
-    old_scale: (f32, f32, f32),
-    new_scale: (f32, f32, f32),
+    old_transform: [f32; 9],
+    new_transform: [f32; 9],
 }
 
 impl TransformEntityCommand {
-    pub fn new(
-        entity_id: u64,
-        old_pos: (f32, f32, f32),
-        new_pos: (f32, f32, f32),
-        old_rot: (f32, f32, f32),
-        new_rot: (f32, f32, f32),
-        old_scale: (f32, f32, f32),
-        new_scale: (f32, f32, f32),
-    ) -> Self {
+    pub fn new(entity_id: u64, old_transform: [f32; 9], new_transform: [f32; 9]) -> Self {
         Self {
             entity_id,
-            old_position: old_pos,
-            new_position: new_pos,
-            old_rotation: old_rot,
-            new_rotation: new_rot,
-            old_scale,
-            new_scale,
+            old_transform,
+            new_transform,
         }
     }
 }
 
 impl Command for TransformEntityCommand {
-    fn execute(&mut self) {
-        println!(
-            "Transform entity {}: pos {:?} -> {:?}, rot {:?} -> {:?}, scale {:?} -> {:?}",
-            self.entity_id,
-            self.old_position,
-            self.new_position,
-            self.old_rotation,
-            self.new_rotation,
-            self.old_scale,
-            self.new_scale
-        );
+    fn execute(&mut self, state: &mut EditorState) {
+        if let Some(t) = state.node_transforms.get_mut(&self.entity_id) {
+            *t = self.new_transform;
+        }
     }
 
-    fn undo(&mut self) {
-        println!(
-            "Undo: Restore entity {} transform to pos {:?}, rot {:?}, scale {:?}",
-            self.entity_id, self.old_position, self.old_rotation, self.old_scale
-        );
+    fn undo(&mut self, state: &mut EditorState) {
+        if let Some(t) = state.node_transforms.get_mut(&self.entity_id) {
+            *t = self.old_transform;
+        }
     }
 
-    fn redo(&mut self) {
-        println!(
-            "Redo: Apply entity {} transform to pos {:?}, rot {:?}, scale {:?}",
-            self.entity_id, self.new_position, self.new_rotation, self.new_scale
-        );
+    fn redo(&mut self, state: &mut EditorState) {
+        if let Some(t) = state.node_transforms.get_mut(&self.entity_id) {
+            *t = self.new_transform;
+        }
     }
 
     fn description(&self) -> String {
@@ -324,10 +177,58 @@ impl Command for TransformEntityCommand {
     }
 }
 
+#[derive(Debug)]
+pub struct DeleteEntityCommand {
+    entity_id: u64,
+    entity_name: String,
+    transform: Option<[f32; 9]>,
+    parent: Option<u64>,
+}
+
+impl DeleteEntityCommand {
+    pub fn new(state: &EditorState, entity_id: u64) -> Self {
+        let node = state.scene_tree.nodes.iter().find(|n| n.id == entity_id);
+        Self {
+            entity_id,
+            entity_name: node.map(|n| n.name.clone()).unwrap_or_default(),
+            transform: state.node_transforms.get(&entity_id).copied(),
+            parent: node.and_then(|n| n.parent),
+        }
+    }
+}
+
+impl Command for DeleteEntityCommand {
+    fn execute(&mut self, state: &mut EditorState) {
+        state.scene_tree.remove_node(self.entity_id);
+        state.node_transforms.remove(&self.entity_id);
+        state.node_materials.remove(&self.entity_id);
+        state.node_lights.remove(&self.entity_id);
+        state.selected_nodes.retain(|&id| id != self.entity_id);
+    }
+
+    fn undo(&mut self, state: &mut EditorState) {
+        let new_id = state.scene_tree.add_node(&self.entity_name, self.parent);
+        if let Some(t) = self.transform {
+            state.node_transforms.insert(new_id, t);
+        }
+        // Update the entity_id to the new ID for future redo
+        self.entity_id = new_id;
+    }
+
+    fn redo(&mut self, state: &mut EditorState) {
+        state.scene_tree.remove_node(self.entity_id);
+        state.node_transforms.remove(&self.entity_id);
+        state.node_materials.remove(&self.entity_id);
+        state.node_lights.remove(&self.entity_id);
+        state.selected_nodes.retain(|&id| id != self.entity_id);
+    }
+
+    fn description(&self) -> String {
+        format!("Delete {}", self.entity_name)
+    }
+}
+
 /// Command for terrain sculpting operations.
-///
-/// Captures a heightmap snapshot of the affected region before a sculpt
-/// brush is applied, enabling undo/redo of the modification.
 #[derive(Debug)]
 pub struct SculptCommand {
     pub entity_id: u64,
@@ -382,15 +283,15 @@ impl SculptCommand {
 }
 
 impl Command for SculptCommand {
-    fn execute(&mut self) {
-        // Brush already applied by the sculpt system — nothing to do here.
+    fn execute(&mut self, _state: &mut EditorState) {
+        // Brush already applied by the sculpt system.
     }
 
-    fn undo(&mut self) {
+    fn undo(&mut self, _state: &mut EditorState) {
         // Restoration requires World access — handled by editor integration.
     }
 
-    fn redo(&mut self) {
+    fn redo(&mut self, _state: &mut EditorState) {
         // Re-application requires World access — handled by editor integration.
     }
 
