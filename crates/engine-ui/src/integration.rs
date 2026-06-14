@@ -329,4 +329,24 @@ mod tests {
         assert_eq!(state.height, 768);
         assert_eq!(state.scale_factor, 1.0);
     }
+
+    #[test]
+    fn test_callback_resources() {
+        let mut state = dummy_state(1024, 768, 1.0);
+
+        // Insert a value
+        state.insert_callback_resource(42i32);
+
+        // Get a reference
+        assert_eq!(state.callback_resource::<i32>(), Some(&42));
+
+        // Get a mutable reference and modify
+        if let Some(val) = state.callback_resource_mut::<i32>() {
+            *val = 100;
+        }
+        assert_eq!(state.callback_resource::<i32>(), Some(&100));
+
+        // Non-existent type returns None
+        assert!(state.callback_resource::<f64>().is_none());
+    }
 }
