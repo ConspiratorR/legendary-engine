@@ -79,31 +79,51 @@ fn draw_viewport_header(
     let tool_btn = 24.0 * h_scale;
     let tool_gap = 4.0 * w_scale;
     let tool_font = 12.0 * h_scale;
-    let tool_icons = &["📐", "#", "⌖"];
+    let tool_icons = &["📐", "#", "⌖", "🐛"];
+    let tool_active = [false, state.show_grid, false, state.show_debug_overlay];
     let rounding = 4.0 * h_scale;
     let mut tool_x =
         rect.right() - 12.0 * w_scale - tool_icons.len() as f32 * (tool_btn + tool_gap);
-    for icon in tool_icons {
+    for (i, icon) in tool_icons.iter().enumerate() {
         let tool_rect = Rect::from_min_size(
             Pos2::new(tool_x, rect.top() + (header_h - tool_btn) / 2.0),
             Vec2::new(tool_btn, tool_btn),
         );
         let id = egui::Id::new("vp_tool").with(tool_x as u64);
         let response = gui.ui.interact(tool_rect, id, egui::Sense::click());
-        if response.hovered() {
+        let bg_color = if tool_active[i] {
+            Color32::from_rgb(0, 80, 60)
+        } else if response.hovered() {
+            Color32::from_rgb(30, 30, 34)
+        } else {
+            Color32::TRANSPARENT
+        };
+        if bg_color != Color32::TRANSPARENT {
             painter.add(Shape::rect_filled(
                 tool_rect,
                 Rounding::same(rounding),
-                Color32::from_rgb(30, 30, 34),
+                bg_color,
             ));
         }
+        let text_color = if tool_active[i] {
+            Color32::from_rgb(0, 212, 170)
+        } else {
+            Color32::from_gray(90)
+        };
         painter.text(
             tool_rect.center(),
             egui::Align2::CENTER_CENTER,
             *icon,
             FontId::proportional(tool_font),
-            Color32::from_gray(90),
+            text_color,
         );
+        if response.clicked() {
+            match i {
+                1 => state.show_grid = !state.show_grid,
+                3 => state.show_debug_overlay = !state.show_debug_overlay,
+                _ => {}
+            }
+        }
         tool_x += tool_btn + tool_gap;
     }
 }
@@ -296,6 +316,44 @@ fn draw_single_viewport(
                     overlay.scale_gizmo(pos, gizmo_scale);
                 }
                 _ => {}
+            }
+        }
+
+        // Debug overlay: wireframe AABBs and velocity vectors
+        if state.show_debug_overlay {
+            let debug_color = [0.0, 1.0, 1.0, 0.6]; // cyan
+            let dynamic_color = [1.0, 1.0, 0.0, 0.8]; // yellow for dynamic
+            for node in &state.scene_tree.nodes {
+                if node.parent.is_none() {
+                    continue;
+                }
+                if let Some(t) = state.node_transforms.get(&node.id) {
+                    let pos = [t[0], t[1], t[2]];
+                    let is_dynamic = state
+                        .node_physics
+                        .get(&node.id)
+                        .map(|(bt, _)| bt == "Dynamic")
+                        .unwrap_or(false);
+                    let c = if is_dynamic {
+                        dynamic_color
+                    } else {
+                        debug_color
+                    };
+                    // Wireframe unit cube around object
+                    overlay.aabb(
+                        [pos[0] - 0.5, pos[1] - 0.5, pos[2] - 0.5],
+                        [pos[0] + 0.5, pos[1] + 0.5, pos[2] + 0.5],
+                        c,
+                    );
+                    // Velocity vector for dynamic objects
+                    if is_dynamic {
+                        overlay.line(
+                            pos,
+                            [pos[0], pos[1] - 2.0, pos[2]],
+                            [1.0, 0.3, 0.0, 1.0],
+                        );
+                    }
+                }
             }
         }
 
