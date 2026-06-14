@@ -286,7 +286,11 @@ pub const GEOMETRY_PUSH_CONSTANT_SIZE: u32 = 128;
 
 impl DeferredPass {
     /// Create a new deferred pass with geometry and lighting pipelines.
-    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        shadow_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
         // Geometry pass shader
         let geometry_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("deferred_geometry_shader"),
@@ -469,6 +473,7 @@ impl DeferredPass {
                 &camera_bind_group_layout,
                 &light_bind_group_layout,
                 &gbuffer_bind_group_layout,
+                shadow_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -710,7 +715,39 @@ mod tests {
         let device = create_test_device();
         let format = wgpu::TextureFormat::Bgra8UnormSrgb;
 
-        let deferred = DeferredPass::new(&device, format);
+        let shadow_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("test_shadow_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let deferred = DeferredPass::new(&device, format, &shadow_layout);
 
         // Verify pipelines were created (they hold valid handles)
         // We can't directly check pipeline validity, but creation succeeding

@@ -86,6 +86,8 @@ pub struct Renderer {
     deferred_camera_bind_group: Option<wgpu::BindGroup>,
     light_uniform_buffer: Option<wgpu::Buffer>,
     light_bind_group: Option<wgpu::BindGroup>,
+    shadow_uniform_buffer: Option<wgpu::Buffer>,
+    shadow_lighting_bind_group: Option<wgpu::BindGroup>,
 }
 
 impl Renderer {
@@ -175,6 +177,8 @@ impl Renderer {
             deferred_camera_bind_group: None,
             light_uniform_buffer: None,
             light_bind_group: None,
+            shadow_uniform_buffer: None,
+            shadow_lighting_bind_group: None,
         })
     }
 
@@ -505,8 +509,14 @@ impl Renderer {
         let w = self.config.width.max(1);
         let h = self.config.height.max(1);
 
+        // Shadow pass (created first so its layout can be passed to deferred)
+        let shadow_bind_group_layout = ShadowPass::create_bind_group_layout(device);
+        let shadow_pass =
+            ShadowPass::new(device, ShadowMapConfig::default(), shadow_bind_group_layout);
+
         // Deferred pass (geometry + lighting pipelines)
-        let deferred_pass = DeferredPass::new(device, self.config.format);
+        let deferred_pass =
+            DeferredPass::new(device, self.config.format, &shadow_pass.bind_group_layout);
 
         // Camera uniform for deferred path (80 bytes)
         let deferred_camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
@@ -543,8 +553,17 @@ impl Renderer {
         // G-Buffer
         let gbuffer = GBuffer::new(device, w, h);
 
-        // Shadow pass
-        let shadow_pass = ShadowPass::new(device, ShadowMapConfig::default());
+        // Shadow uniform buffer
+        let shadow_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("shadow_uniform_buffer"),
+            size: std::mem::size_of::<ShadowUniform>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Shadow lighting bind group
+        let shadow_lighting_bind_group =
+            shadow_pass.create_lighting_bind_group(device, &shadow_uniform_buffer);
 
         self.deferred_pass = Some(deferred_pass);
         self.gbuffer = Some(gbuffer);
@@ -553,6 +572,8 @@ impl Renderer {
         self.deferred_camera_bind_group = Some(deferred_camera_bind_group);
         self.light_uniform_buffer = Some(light_uniform_buffer);
         self.light_bind_group = Some(light_bind_group);
+        self.shadow_uniform_buffer = Some(shadow_uniform_buffer);
+        self.shadow_lighting_bind_group = Some(shadow_lighting_bind_group);
     }
 
     /// Render a 3D scene through the deferred rendering pipeline.
@@ -618,6 +639,13 @@ impl Renderer {
             _pad: 0.0,
         };
 
+        // Upload shadow uniform to GPU
+        let shadow_buf = self
+            .shadow_uniform_buffer
+            .as_ref()
+            .expect("shadow uniform buffer must be initialized");
+        queue.write_buffer(shadow_buf, 0, bytemuck::bytes_of(&shadow_uniform));
+
         let output = self.surface.get_current_texture()?;
         let swapchain_view = output
             .texture
@@ -639,7 +667,7 @@ impl Renderer {
         );
 
         // ── Deferred Lighting Pass ──────────────────────────
-        self.record_deferred_lighting_pass(&mut encoder, &shadow_uniform);
+        self.record_deferred_lighting_pass(&mut encoder);
 
         // ── Post-process (with G-Buffer inputs) ─────────────
         let gbuffer_inputs = GBufferInputs {
@@ -827,11 +855,7 @@ impl Renderer {
     }
 
     /// Record the deferred lighting pass: full-screen triangle lighting computation.
-    fn record_deferred_lighting_pass(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        _shadow_uniform: &ShadowUniform,
-    ) {
+    fn record_deferred_lighting_pass(&self, encoder: &mut wgpu::CommandEncoder) {
         let deferred = self
             .deferred_pass
             .as_ref()
@@ -873,11 +897,12 @@ impl Renderer {
         pass.set_bind_group(1, light_bg, &[]);
         pass.set_bind_group(2, &gbuffer_bg, &[]);
 
-        // Shadow map sampling is not yet wired into the lighting shader.
-        // The shadow depth texture and uniform are prepared but the lighting
-        // pipeline layout does not include a shadow bind group. This will be
-        // integrated when the deferred_lighting.wgsl shader is updated to
-        // sample the shadow map.
+        // Shadow bind group
+        let shadow_bg = self
+            .shadow_lighting_bind_group
+            .as_ref()
+            .expect("shadow bind group must be initialized");
+        pass.set_bind_group(3, shadow_bg, &[]);
 
         pass.draw(0..3, 0..1);
     }

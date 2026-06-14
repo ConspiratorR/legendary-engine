@@ -43,6 +43,24 @@ var gbuffer_material: texture_2d<f32>;
 @group(2) @binding(4)
 var gbuffer_sampler: sampler;
 
+// Shadow mapping
+struct ShadowUniform {
+    light_vp: mat4x4<f32>,
+    shadow_bias: f32,
+    normal_bias: f32,
+    cascade_count: u32,
+    _pad: f32,
+}
+
+@group(3) @binding(0)
+var shadow_map: texture_depth_2d;
+
+@group(3) @binding(1)
+var shadow_sampler: sampler_comparison;
+
+@group(3) @binding(2)
+var<uniform> shadow: ShadowUniform;
+
 // ── Full-screen triangle vertex shader ──────────────────────────────
 
 struct VertexOutput {
@@ -66,6 +84,40 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
 fn saturate(x: f32) -> f32 {
     return clamp(x, 0.0, 1.0);
+}
+
+fn sample_shadow(world_position: vec3<f32>, normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
+    let light_pos = shadow.light_vp * vec4(world_position, 1.0);
+    let ndc = light_pos.xyz / light_pos.w;
+    let shadow_uv = vec2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    let shadow_depth = ndc.z;
+
+    let n_dot_l = saturate(dot(normal, light_dir));
+    let bias = shadow.shadow_bias + shadow.normal_bias * (1.0 - n_dot_l);
+
+    if shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0 {
+        return 1.0;
+    }
+    if shadow_depth < 0.0 || shadow_depth > 1.0 {
+        return 1.0;
+    }
+
+    let texel_size = 1.0 / 2048.0;
+    let offsets = array<vec2<f32>, 5>(
+        vec2(0.0, 0.0),
+        vec2(-1.0, 0.0) * texel_size,
+        vec2(1.0, 0.0) * texel_size,
+        vec2(0.0, -1.0) * texel_size,
+        vec2(0.0, 1.0) * texel_size,
+    );
+
+    var shadow_acc = 0.0;
+    for (var i = 0u; i < 5u; i++) {
+        let uv = shadow_uv + offsets[i];
+        shadow_acc += textureSampleCompare(shadow_map, shadow_sampler, uv, shadow_depth - bias);
+    }
+
+    return shadow_acc / 5.0;
 }
 
 @fragment
@@ -107,7 +159,13 @@ fn fs_lighting(input: VertexOutput) -> @location(0) vec4<f32> {
         let spec = pow(ndoth, mix(8.0, 256.0, 1.0 - roughness));
         let specular = light_color * spec * mix(0.04, 1.0, metallic);
 
-        total_light += diffuse + specular;
+        // Shadow attenuation (first directional light only)
+        var shadow_factor = 1.0;
+        if i == 0u {
+            shadow_factor = sample_shadow(world_position, normal, light_dir);
+        }
+
+        total_light += (diffuse + specular) * shadow_factor;
     }
 
     // ── Point lights ──

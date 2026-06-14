@@ -103,8 +103,12 @@ pub struct ShadowPass {
 }
 
 impl ShadowPass {
-    /// Create a new shadow pass with the given device and configuration.
-    pub fn new(device: &wgpu::Device, config: ShadowMapConfig) -> Self {
+    /// Create a new shadow pass with the given device, configuration, and bind group layout.
+    pub fn new(
+        device: &wgpu::Device,
+        config: ShadowMapConfig,
+        bind_group_layout: wgpu::BindGroupLayout,
+    ) -> Self {
         let depth_texture = Self::create_depth_texture(device, &config);
         let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -116,28 +120,6 @@ impl ShadowPass {
             min_filter: wgpu::FilterMode::Linear,
             compare: Some(wgpu::CompareFunction::LessEqual),
             ..Default::default()
-        });
-
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("shadow_bind_group_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Depth,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-                    count: None,
-                },
-            ],
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -196,6 +178,41 @@ impl ShadowPass {
         }
     }
 
+    /// Create the bind group layout for shadow sampling (depth texture + comparison sampler + uniform).
+    pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("shadow_bind_group_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        })
+    }
+
     /// Create the depth texture for shadow mapping.
     fn create_depth_texture(device: &wgpu::Device, config: &ShadowMapConfig) -> wgpu::Texture {
         device.create_texture(&wgpu::TextureDescriptor {
@@ -214,10 +231,14 @@ impl ShadowPass {
         })
     }
 
-    /// Create a bind group for the shadow depth texture.
-    pub fn create_bind_group(&self, device: &wgpu::Device) -> wgpu::BindGroup {
+    /// Create a bind group for the lighting pass that includes the shadow uniform buffer.
+    pub fn create_lighting_bind_group(
+        &self,
+        device: &wgpu::Device,
+        uniform_buffer: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("shadow_bind_group"),
+            label: Some("shadow_lighting_bind_group"),
             layout: &self.bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -227,6 +248,10 @@ impl ShadowPass {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: uniform_buffer.as_entire_binding(),
                 },
             ],
         })
