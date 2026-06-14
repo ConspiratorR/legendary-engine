@@ -192,23 +192,64 @@ impl ViewportRenderer {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_viewport_layout_default() {
-        let layout = ViewportLayout::default();
-        assert_eq!(layout, ViewportLayout::Single(ViewportType::Perspective));
+    fn try_create_renderer() -> Option<ViewportRenderer> {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::default(),
+            compatible_surface: None,
+            force_fallback_adapter: true,
+        }))
+        .or_else(|| {
+            pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            }))
+        });
+        let adapter = adapter?;
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default(), None))
+                .ok()?;
+
+        Some(ViewportRenderer::new(Arc::new(device), Arc::new(queue)))
     }
 
     #[test]
-    fn test_quad_active_viewports() {
-        let viewports = match ViewportLayout::Quad {
-            ViewportLayout::Quad => vec![
-                ViewportType::Perspective,
-                ViewportType::Top,
-                ViewportType::Front,
-                ViewportType::Right,
-            ],
-            _ => unreachable!(),
+    fn test_viewport_renderer_new() {
+        let Some(renderer) = try_create_renderer() else {
+            return;
         };
+        assert_eq!(
+            renderer.layout(),
+            ViewportLayout::Single(ViewportType::Perspective)
+        );
+    }
+
+    #[test]
+    fn test_set_layout() {
+        let Some(mut renderer) = try_create_renderer() else {
+            return;
+        };
+        renderer.set_layout(ViewportLayout::Quad);
+        assert_eq!(renderer.layout(), ViewportLayout::Quad);
+    }
+
+    #[test]
+    fn test_active_viewports_single() {
+        let Some(renderer) = try_create_renderer() else {
+            return;
+        };
+        let viewports = renderer.active_viewports();
+        assert_eq!(viewports, vec![ViewportType::Perspective]);
+    }
+
+    #[test]
+    fn test_active_viewports_quad() {
+        let Some(mut renderer) = try_create_renderer() else {
+            return;
+        };
+        renderer.set_layout(ViewportLayout::Quad);
+        let viewports = renderer.active_viewports();
         assert_eq!(viewports.len(), 4);
         assert!(viewports.contains(&ViewportType::Perspective));
         assert!(viewports.contains(&ViewportType::Top));
@@ -217,12 +258,16 @@ mod tests {
     }
 
     #[test]
-    fn test_single_active_viewports() {
-        let viewports = match ViewportLayout::Single(ViewportType::Top) {
-            ViewportLayout::Single(vt) => vec![vt],
-            _ => unreachable!(),
+    fn test_ensure_target() {
+        let Some(mut renderer) = try_create_renderer() else {
+            return;
         };
-        assert_eq!(viewports.len(), 1);
-        assert_eq!(viewports[0], ViewportType::Top);
+
+        renderer.ensure_target(ViewportType::Perspective, 800, 600);
+        assert!(renderer.target_view(ViewportType::Perspective).is_some());
+        assert_eq!(
+            renderer.target_size(ViewportType::Perspective),
+            Some((800, 600))
+        );
     }
 }
