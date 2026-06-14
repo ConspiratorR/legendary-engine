@@ -7,6 +7,11 @@
 
 use egui::{Context, Pos2};
 use engine_math::{Mat4, Vec3};
+use engine_render::instancing::{InstanceBatch, InstanceKey};
+use engine_render::light::LightingUniform;
+use engine_render::resource::material::MaterialStore;
+use engine_render::resource::mesh::MeshStore;
+use engine_render::shadow::ShadowMapConfig;
 use engine_ui::GuiSkin;
 
 /// Active transform tool in the viewport toolbar.
@@ -473,6 +478,20 @@ impl Default for ScriptData {
     }
 }
 
+/// Scene data built from the editor state for 3D rendering.
+pub struct EditorSceneData {
+    pub mesh_store: MeshStore,
+    pub material_store: MaterialStore,
+    pub batches: Vec<InstanceBatch>,
+    pub lighting: LightingUniform,
+    pub light_direction: [f32; 3],
+    pub camera_vp: Mat4,
+    pub camera_pos: [f32; 3],
+    pub shadow_config: ShadowMapConfig,
+    pub scene_aabb_min: Vec3,
+    pub scene_aabb_max: Vec3,
+}
+
 /// Central editor state holding all panel data, selections, and tool state.
 #[derive(Debug, Clone)]
 pub struct EditorState {
@@ -589,9 +608,210 @@ impl EditorState {
     }
 
     /// Runs one frame of the editor UI, drawing all panels via egui.
-    pub fn frame(&mut self, ctx: &Context, skin: &GuiSkin) {
-        crate::layout::frame(self, ctx, skin);
+    pub fn frame(
+        &mut self,
+        ctx: &Context,
+        skin: &GuiSkin,
+        renderer: &mut engine_render::renderer::Renderer,
+        vp_renderer: &mut crate::viewport_renderer::ViewportRenderer,
+        egui_state: &mut engine_ui::EguiState,
+    ) {
+        crate::layout::frame(self, ctx, skin, renderer, vp_renderer, egui_state);
     }
+
+    /// Build scene data for 3D rendering from the current editor state.
+    pub fn build_scene(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        aspect: f32,
+    ) -> EditorSceneData {
+        let mut mesh_store = MeshStore::new();
+        let mut material_store = MaterialStore::new(device);
+
+        // Upload a default cube mesh
+        let cube_mesh_id = mesh_store.upload(device, &cube_vertices(), Some(&cube_indices()));
+
+        // Create a default PBR material
+        let default_mat = engine_render::resource::material::PbrMaterial {
+            base_color: [0.8, 0.8, 0.8, 1.0],
+            metallic: 0.0,
+            roughness: 0.5,
+            ao: 1.0,
+            emissive: [0.0; 3],
+            base_color_texture: None,
+            normal_texture: None,
+            metallic_roughness_texture: None,
+        };
+        let default_mat_id = material_store.add(device, queue, default_mat);
+
+        // Build instance batches from scene tree nodes
+        let mut batches: Vec<InstanceBatch> = Vec::new();
+        let mut batch_map: std::collections::HashMap<(u64, u64), usize> = std::collections::HashMap::new();
+
+        for node in &self.scene_tree.nodes {
+            if node.parent.is_none() {
+                continue;
+            }
+            let t = self
+                .node_transforms
+                .get(&node.id)
+                .copied()
+                .unwrap_or([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+
+            // Check if this node has a material override
+            let mat_id = if let Some(mat_data) = self.node_materials.get(&node.id) {
+                let mat = engine_render::resource::material::PbrMaterial {
+                    base_color: mat_data.base_color,
+                    metallic: mat_data.metallic,
+                    roughness: mat_data.roughness,
+                    ao: mat_data.ao,
+                    emissive: mat_data.emissive,
+                    base_color_texture: None,
+                    normal_texture: None,
+                    metallic_roughness_texture: None,
+                };
+                material_store.add(device, queue, mat)
+            } else {
+                default_mat_id
+            };
+
+            let key = (cube_mesh_id, mat_id);
+            let batch_idx = if let Some(&idx) = batch_map.get(&key) {
+                idx
+            } else {
+                let idx = batches.len();
+                batches.push(InstanceBatch::new(InstanceKey::new(key.0, key.1)));
+                batch_map.insert(key, idx);
+                idx
+            };
+
+            // Build transform matrix from [pos, rot, scale]
+            let pos = Vec3::new(t[0], t[1], t[2]);
+            let rot = engine_math::Quat::from_xyzw(t[3], t[4], t[5], t[6]);
+            let scale = Vec3::new(t[7], t[8], 1.0); // 2D scale for now
+            let transform = Mat4::from_scale_rotation_translation(scale, rot, pos);
+            batches[batch_idx].push(transform);
+        }
+
+        // If no nodes have transforms, add a default cube at origin
+        if batches.is_empty() {
+            let mut batch = InstanceBatch::new(InstanceKey::new(cube_mesh_id, default_mat_id));
+            batch.push(Mat4::IDENTITY);
+            batches.push(batch);
+        }
+
+        // Build lighting from scene light data
+        let mut lighting = LightingUniform::default();
+        let mut light_direction = [0.3_f32, -1.0, -0.5];
+
+        for light_data in self.node_lights.values() {
+            match light_data.light_type {
+                LightType::Directional => {
+                    light_direction = light_data.direction;
+                    let dir_light = engine_render::light::DirectionalLight {
+                        direction: light_data.direction,
+                        color: [
+                            light_data.color[0] * light_data.intensity,
+                            light_data.color[1] * light_data.intensity,
+                            light_data.color[2] * light_data.intensity,
+                        ],
+                        intensity: 1.0,
+                        enabled: light_data.enabled,
+                    };
+                    let pos = [0.0_f32; 3];
+                    lighting.set_directional_lights(&[(&dir_light, &pos)]);
+                }
+                LightType::Point => {
+                    let point_light = engine_render::light::PointLight {
+                        color: light_data.color,
+                        intensity: light_data.intensity,
+                        range: light_data.range,
+                        enabled: light_data.enabled,
+                    };
+                    let pos = [0.0_f32; 3];
+                    lighting.set_point_lights(&[(&point_light, &pos)]);
+                }
+                LightType::Spot => {
+                    let spot_light = engine_render::light::SpotLight {
+                        direction: light_data.direction,
+                        color: light_data.color,
+                        intensity: light_data.intensity,
+                        range: light_data.range,
+                        inner_angle: light_data.inner_angle.to_radians(),
+                        outer_angle: light_data.outer_angle.to_radians(),
+                        enabled: light_data.enabled,
+                    };
+                    let pos = [0.0_f32; 3];
+                    lighting.set_spot_lights(&[(&spot_light, &pos)]);
+                }
+            }
+        }
+
+        // Compute camera VP matrix
+        let camera_vp = self.camera.projection_matrix(aspect) * self.camera.view_matrix();
+        let camera_pos = self.camera.eye().to_array();
+
+        EditorSceneData {
+            mesh_store,
+            material_store,
+            batches,
+            lighting,
+            light_direction,
+            camera_vp,
+            camera_pos,
+            shadow_config: ShadowMapConfig::default(),
+            scene_aabb_min: Vec3::new(-50.0, -50.0, -50.0),
+            scene_aabb_max: Vec3::new(50.0, 50.0, 50.0),
+        }
+    }
+}
+
+fn cube_vertices() -> [engine_render::resource::mesh::MeshVertex; 24] {
+    use engine_render::resource::mesh::MeshVertex;
+    [
+        // Front face
+        MeshVertex { position: [-0.5, -0.5,  0.5], normal: [ 0.0,  0.0,  1.0], uv: [0.0, 1.0] },
+        MeshVertex { position: [ 0.5, -0.5,  0.5], normal: [ 0.0,  0.0,  1.0], uv: [1.0, 1.0] },
+        MeshVertex { position: [ 0.5,  0.5,  0.5], normal: [ 0.0,  0.0,  1.0], uv: [1.0, 0.0] },
+        MeshVertex { position: [-0.5,  0.5,  0.5], normal: [ 0.0,  0.0,  1.0], uv: [0.0, 0.0] },
+        // Back face
+        MeshVertex { position: [ 0.5, -0.5, -0.5], normal: [ 0.0,  0.0, -1.0], uv: [0.0, 1.0] },
+        MeshVertex { position: [-0.5, -0.5, -0.5], normal: [ 0.0,  0.0, -1.0], uv: [1.0, 1.0] },
+        MeshVertex { position: [-0.5,  0.5, -0.5], normal: [ 0.0,  0.0, -1.0], uv: [1.0, 0.0] },
+        MeshVertex { position: [ 0.5,  0.5, -0.5], normal: [ 0.0,  0.0, -1.0], uv: [0.0, 0.0] },
+        // Top face
+        MeshVertex { position: [-0.5,  0.5,  0.5], normal: [ 0.0,  1.0,  0.0], uv: [0.0, 1.0] },
+        MeshVertex { position: [ 0.5,  0.5,  0.5], normal: [ 0.0,  1.0,  0.0], uv: [1.0, 1.0] },
+        MeshVertex { position: [ 0.5,  0.5, -0.5], normal: [ 0.0,  1.0,  0.0], uv: [1.0, 0.0] },
+        MeshVertex { position: [-0.5,  0.5, -0.5], normal: [ 0.0,  1.0,  0.0], uv: [0.0, 0.0] },
+        // Bottom face
+        MeshVertex { position: [-0.5, -0.5, -0.5], normal: [ 0.0, -1.0,  0.0], uv: [0.0, 1.0] },
+        MeshVertex { position: [ 0.5, -0.5, -0.5], normal: [ 0.0, -1.0,  0.0], uv: [1.0, 1.0] },
+        MeshVertex { position: [ 0.5, -0.5,  0.5], normal: [ 0.0, -1.0,  0.0], uv: [1.0, 0.0] },
+        MeshVertex { position: [-0.5, -0.5,  0.5], normal: [ 0.0, -1.0,  0.0], uv: [0.0, 0.0] },
+        // Right face
+        MeshVertex { position: [ 0.5, -0.5,  0.5], normal: [ 1.0,  0.0,  0.0], uv: [0.0, 1.0] },
+        MeshVertex { position: [ 0.5, -0.5, -0.5], normal: [ 1.0,  0.0,  0.0], uv: [1.0, 1.0] },
+        MeshVertex { position: [ 0.5,  0.5, -0.5], normal: [ 1.0,  0.0,  0.0], uv: [1.0, 0.0] },
+        MeshVertex { position: [ 0.5,  0.5,  0.5], normal: [ 1.0,  0.0,  0.0], uv: [0.0, 0.0] },
+        // Left face
+        MeshVertex { position: [-0.5, -0.5, -0.5], normal: [-1.0,  0.0,  0.0], uv: [0.0, 1.0] },
+        MeshVertex { position: [-0.5, -0.5,  0.5], normal: [-1.0,  0.0,  0.0], uv: [1.0, 1.0] },
+        MeshVertex { position: [-0.5,  0.5,  0.5], normal: [-1.0,  0.0,  0.0], uv: [1.0, 0.0] },
+        MeshVertex { position: [-0.5,  0.5, -0.5], normal: [-1.0,  0.0,  0.0], uv: [0.0, 0.0] },
+    ]
+}
+
+fn cube_indices() -> [u32; 36] {
+    [
+         0,  1,  2,  2,  3,  0, // front
+         4,  5,  6,  6,  7,  4, // back
+         8,  9, 10, 10, 11,  8, // top
+        12, 13, 14, 14, 15, 12, // bottom
+        16, 17, 18, 18, 19, 16, // right
+        20, 21, 22, 22, 23, 20, // left
+    ]
 }
 
 #[cfg(test)]

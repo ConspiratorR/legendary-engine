@@ -3,7 +3,6 @@
 
 use crate::state::EditorState;
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
-use engine_math::Vec3Ext;
 use engine_ui::Gui;
 
 fn draw_viewport_header(
@@ -109,7 +108,14 @@ fn draw_viewport_header(
     }
 }
 
-pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
+pub fn draw(
+    state: &mut EditorState,
+    gui: &mut Gui,
+    rect: Rect,
+    renderer: &mut engine_render::renderer::Renderer,
+    vp_renderer: &mut crate::viewport_renderer::ViewportRenderer,
+    egui_state: &mut engine_ui::EguiState,
+) {
     let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
     let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
 
@@ -124,7 +130,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     use crate::viewport_renderer::ViewportLayout;
     match state.viewport_layout {
         ViewportLayout::Single(_) => {
-            draw_single_viewport(state, gui, canvas_rect, h_scale, w_scale);
+            draw_single_viewport(state, gui, canvas_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
         }
         ViewportLayout::Horizontal(_, _) => {
             let half_w = canvas_rect.width() / 2.0;
@@ -136,8 +142,8 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                 Pos2::new(canvas_rect.left() + half_w, canvas_rect.top()),
                 Vec2::new(half_w, canvas_rect.height()),
             );
-            draw_single_viewport(state, gui, left_rect, h_scale, w_scale);
-            draw_single_viewport(state, gui, right_rect, h_scale, w_scale);
+            draw_single_viewport(state, gui, left_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
+            draw_single_viewport(state, gui, right_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
         }
         ViewportLayout::Vertical(_, _) => {
             let half_h = canvas_rect.height() / 2.0;
@@ -149,8 +155,8 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                 Pos2::new(canvas_rect.left(), canvas_rect.top() + half_h),
                 Vec2::new(canvas_rect.width(), half_h),
             );
-            draw_single_viewport(state, gui, top_rect, h_scale, w_scale);
-            draw_single_viewport(state, gui, bottom_rect, h_scale, w_scale);
+            draw_single_viewport(state, gui, top_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
+            draw_single_viewport(state, gui, bottom_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
         }
         ViewportLayout::Quad => {
             let half_w = canvas_rect.width() / 2.0;
@@ -171,21 +177,26 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                 ),
             ];
             for rect in &rects {
-                draw_single_viewport(state, gui, *rect, h_scale, w_scale);
+                draw_single_viewport(state, gui, *rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
             }
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_single_viewport(
     state: &mut EditorState,
     gui: &mut Gui,
     canvas_rect: Rect,
     h_scale: f32,
     w_scale: f32,
+    renderer: &mut engine_render::renderer::Renderer,
+    vp_renderer: &mut crate::viewport_renderer::ViewportRenderer,
+    egui_state: &mut engine_ui::EguiState,
 ) {
     let painter = gui.ui.painter_at(canvas_rect);
 
+    // Background gradient
     let gradient_steps = 20;
     let step_h = canvas_rect.height() / gradient_steps as f32;
     for i in 0..gradient_steps {
@@ -204,33 +215,110 @@ fn draw_single_viewport(
         ));
     }
 
-    if state.show_grid {
-        let grid_size = 50.0 * w_scale;
-        let grid_color = Color32::from_rgba_premultiplied(37, 37, 48, 128);
-        let mut x = canvas_rect.left();
-        while x <= canvas_rect.right() {
-            painter.add(Shape::line(
-                vec![
-                    Pos2::new(x, canvas_rect.top()),
-                    Pos2::new(x, canvas_rect.bottom()),
-                ],
-                Stroke::new(1.0_f32, grid_color),
-            ));
-            x += grid_size;
+    // Render 3D scene to offscreen viewport texture
+    let vp_w = canvas_rect.width().max(1.0) as u32;
+    let vp_h = canvas_rect.height().max(1.0) as u32;
+    let aspect = vp_w as f32 / vp_h.max(1) as f32;
+
+    let viewport_type = match state.viewport_layout {
+        crate::viewport_renderer::ViewportLayout::Single(vt) => vt,
+        crate::viewport_renderer::ViewportLayout::Horizontal(a, _) => a,
+        crate::viewport_renderer::ViewportLayout::Vertical(a, _) => a,
+        crate::viewport_renderer::ViewportLayout::Quad => {
+            crate::viewport_renderer::ViewportType::Perspective
         }
-        let mut y = canvas_rect.top();
-        while y <= canvas_rect.bottom() {
-            painter.add(Shape::line(
-                vec![
-                    Pos2::new(canvas_rect.left(), y),
-                    Pos2::new(canvas_rect.right(), y),
-                ],
-                Stroke::new(1.0_f32, grid_color),
-            ));
-            y += grid_size;
+    };
+
+    vp_renderer.ensure_target(viewport_type, vp_w, vp_h);
+    if let Some(target_view) = vp_renderer.target_view(viewport_type) {
+        let scene_data = state.build_scene(&renderer.device, &renderer.queue, aspect);
+        let scene = engine_render::renderer::Scene3d {
+            mesh_store: &scene_data.mesh_store,
+            material_store: &scene_data.material_store,
+            lighting_uniform: &scene_data.lighting,
+            camera_vp: &scene_data.camera_vp,
+            camera_pos: &scene_data.camera_pos,
+            light_direction: &scene_data.light_direction,
+            batches: &scene_data.batches,
+            scene_aabb_min: scene_data.scene_aabb_min,
+            scene_aabb_max: scene_data.scene_aabb_max,
+            shadow_config: scene_data.shadow_config,
+        };
+        renderer.render_frame_3d_to_target(target_view, vp_w, vp_h, &scene);
+
+        // Build 3D overlay batch (grid, gizmo, selection highlights)
+        let mut overlay = engine_render::line3d::Line3dBatch::new();
+
+        // Ground grid
+        if state.show_grid {
+            overlay.grid_xz(
+                [0.0, 0.0, 0.0],
+                50.0,
+                25,
+                [0.25, 0.25, 0.35, 0.5],
+            );
+            // Axis lines (thicker via brighter color)
+            overlay.line(
+                [-25.0, 0.001, 0.0],
+                [25.0, 0.001, 0.0],
+                [1.0, 0.3, 0.3, 0.8],
+            );
+            overlay.line(
+                [0.0, 0.001, -25.0],
+                [0.0, 0.001, 25.0],
+                [0.3, 0.6, 1.0, 0.8],
+            );
         }
+
+        // Selection highlight: draw wireframe for selected nodes
+        let select_color = [1.0, 0.6, 0.0, 1.0];
+        for &node_id in &state.selected_nodes {
+            if let Some(t) = state.node_transforms.get(&node_id) {
+                let pos = [t[0], t[1], t[2]];
+                overlay.selection_sphere(pos, 0.8, select_color);
+            }
+        }
+
+        // Transform gizmo at first selected node
+        if let Some(&first_id) = state.selected_nodes.first()
+            && let Some(t) = state.node_transforms.get(&first_id)
+        {
+            let pos = [t[0], t[1], t[2]];
+            let gizmo_scale = state.camera.distance * 0.15;
+            match state.active_tool {
+                crate::state::ToolType::Translate => {
+                    overlay.translate_gizmo(pos, gizmo_scale);
+                }
+                crate::state::ToolType::Rotate => {
+                    overlay.rotate_gizmo(pos, gizmo_scale);
+                }
+                crate::state::ToolType::Scale => {
+                    overlay.scale_gizmo(pos, gizmo_scale);
+                }
+                _ => {}
+            }
+        }
+
+        // Update line camera and render overlays
+        vp_renderer.update_line_camera(&renderer.queue, &scene_data.camera_vp);
+        let target_view = vp_renderer.target_view(viewport_type).unwrap();
+        vp_renderer.render_overlays(target_view, &overlay, renderer);
+
+        // Register viewport texture with egui and display it
+        let target_view = vp_renderer.target_view(viewport_type).unwrap();
+        let tex_id = egui_state.register_native_texture(&renderer.device, target_view);
+        let img_rect = Rect::from_min_size(
+            Pos2::new(canvas_rect.left(), canvas_rect.top() + 32.0 * h_scale),
+            Vec2::new(canvas_rect.width(), canvas_rect.height() - 32.0 * h_scale),
+        );
+        egui::widgets::Image::new(egui::load::SizedTexture::new(
+            tex_id,
+            egui::vec2(img_rect.width(), img_rect.height()),
+        ))
+        .paint_at(gui.ui, img_rect);
     }
 
+    // Axis label indicators (HUD overlay)
     let axes = [
         ("X", Color32::from_rgb(255, 107, 107)),
         ("Y", Color32::from_rgb(46, 213, 115)),
@@ -240,7 +328,7 @@ fn draw_single_viewport(
         painter.text(
             egui::pos2(
                 canvas_rect.left() + 20.0 * w_scale,
-                canvas_rect.top() + 20.0 * h_scale + i as f32 * 14.0 * h_scale,
+                canvas_rect.top() + 50.0 * h_scale + i as f32 * 14.0 * h_scale,
             ),
             egui::Align2::LEFT_CENTER,
             *label,
@@ -249,90 +337,9 @@ fn draw_single_viewport(
         );
     }
 
-    draw_scene_objects(state, gui, canvas_rect, h_scale, w_scale);
-
-    if !state.selected_nodes.is_empty() {
-        crate::gizmo::draw(state, &painter, canvas_rect, h_scale, w_scale);
-    }
-
     draw_transform_overlay(state, &painter, canvas_rect, h_scale, w_scale);
 
     handle_camera_input(state, gui, canvas_rect);
-}
-
-fn draw_scene_objects(
-    state: &mut EditorState,
-    gui: &mut Gui,
-    canvas_rect: Rect,
-    h_scale: f32,
-    _w_scale: f32,
-) {
-    let painter = gui.ui.painter_at(canvas_rect);
-    let aspect = canvas_rect.width() / canvas_rect.height().max(1.0);
-    let view_proj = state.camera.projection_matrix(aspect) * state.camera.view_matrix();
-
-    for node in &state.scene_tree.nodes {
-        if node.parent.is_none() {
-            continue;
-        }
-        let t = state
-            .node_transforms
-            .get(&node.id)
-            .copied()
-            .unwrap_or([0.0; 9]);
-        let world_pos = engine_math::Vec3::new(t[0], t[1], t[2]);
-        let clip = view_proj * world_pos.extend_with_w(1.0);
-        if clip.w <= 0.0 {
-            continue;
-        }
-        let ndc = clip.truncate() / clip.w;
-        let screen_x = canvas_rect.center().x + ndc.x * canvas_rect.width() * 0.5;
-        let screen_y = canvas_rect.center().y - ndc.y * canvas_rect.height() * 0.5;
-
-        let size = 50.0 * h_scale;
-        let obj_rect = Rect::from_center_size(Pos2::new(screen_x, screen_y), Vec2::new(size, size));
-
-        let is_selected = state.selected_nodes.contains(&node.id);
-        let border_color = if is_selected {
-            Color32::from_rgb(255, 107, 53)
-        } else {
-            Color32::from_rgb(0, 212, 170)
-        };
-
-        let glow_expand = 8.0 * h_scale;
-        let glow_rect = obj_rect.expand(glow_expand);
-        painter.add(Shape::rect_filled(
-            glow_rect,
-            Rounding::same(glow_expand),
-            Color32::from_rgba_premultiplied(0, 212, 170, 20),
-        ));
-        painter.add(Shape::rect_filled(
-            obj_rect,
-            Rounding::same(4.0 * h_scale),
-            Color32::from_rgb(42, 42, 53),
-        ));
-        let inner_grad = Rect::from_min_size(
-            obj_rect.left_top(),
-            Vec2::new(obj_rect.width(), obj_rect.height() / 2.0),
-        );
-        painter.add(Shape::rect_filled(
-            inner_grad,
-            Rounding::same(4.0 * h_scale),
-            Color32::from_rgba_premultiplied(255, 255, 255, 8),
-        ));
-        painter.rect_stroke(
-            obj_rect,
-            Rounding::same(4.0 * h_scale),
-            Stroke::new(2.0_f32, border_color),
-        );
-        painter.text(
-            obj_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            &node.icon,
-            FontId::proportional(22.0 * h_scale),
-            Color32::WHITE,
-        );
-    }
 }
 
 fn draw_transform_overlay(

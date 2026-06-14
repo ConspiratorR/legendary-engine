@@ -16,6 +16,7 @@ engine-asset = { path = "../engine-asset" }
 engine-render = { path = "../engine-render" }
 engine-window = { path = "../engine-window" }
 engine-terrain = { path = "../engine-terrain" }
+bytemuck = { version = "1", features = ["derive"] }
 egui = "=0.30.0"
 wgpu = "23"
 anyhow = "1.0"

@@ -3,6 +3,7 @@
 //! Provides split-screen and multi-viewport rendering capabilities
 //! using wgpu render targets.
 
+use engine_render::line3d::{Line3dBatch, Line3dPipeline};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -66,6 +67,12 @@ pub struct ViewportRenderer {
     queue: Arc<wgpu::Queue>,
     targets: HashMap<ViewportType, ViewportTarget>,
     current_layout: ViewportLayout,
+    /// 3D line rendering pipeline for overlays (grid, gizmos, highlights).
+    pub line_pipeline: Line3dPipeline,
+    /// Camera bind group for the 3D line pipeline (updated each frame).
+    pub line_camera_bind_group: Option<wgpu::BindGroup>,
+    /// Camera uniform buffer for the 3D line pipeline.
+    pub line_camera_buffer: wgpu::Buffer,
 }
 
 /// Thread-safe shared viewport renderer.
@@ -79,11 +86,30 @@ const TARGET_USAGE: wgpu::TextureUsages = wgpu::TextureUsages::RENDER_ATTACHMENT
 impl ViewportRenderer {
     /// Creates a new viewport renderer.
     pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+        let line_pipeline = Line3dPipeline::new(&device, TARGET_FORMAT);
+        let line_camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("line3d_camera_buffer"),
+            size: std::mem::size_of::<engine_render::line3d::LineCameraUniform>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let line_camera_bind_group =
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("line3d_camera_bind_group"),
+                layout: &line_pipeline.camera_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: line_camera_buffer.as_entire_binding(),
+                }],
+            });
         Self {
             device,
             queue,
             targets: HashMap::new(),
             current_layout: ViewportLayout::default(),
+            line_pipeline,
+            line_camera_bind_group: Some(line_camera_bind_group),
+            line_camera_buffer,
         }
     }
 
@@ -158,6 +184,35 @@ impl ViewportRenderer {
     /// Returns the (width, height) of a viewport target, if it exists.
     pub fn target_size(&self, viewport: ViewportType) -> Option<(u32, u32)> {
         self.targets.get(&viewport).map(|t| (t.width, t.height))
+    }
+
+    /// Update the camera uniform for the 3D line overlay pipeline.
+    pub fn update_line_camera(&self, queue: &wgpu::Queue, view_proj: &engine_math::Mat4) {
+        let uniform = engine_render::line3d::LineCameraUniform {
+            view_proj: view_proj.to_cols_array_2d(),
+        };
+        queue.write_buffer(
+            &self.line_camera_buffer,
+            0,
+            bytemuck::bytes_of(&uniform),
+        );
+    }
+
+    /// Render 3D line overlays into the given viewport target.
+    pub fn render_overlays(
+        &self,
+        target_view: &wgpu::TextureView,
+        batch: &Line3dBatch,
+        renderer: &mut engine_render::renderer::Renderer,
+    ) {
+        if batch.is_empty() {
+            return;
+        }
+        let camera_bg = self
+            .line_camera_bind_group
+            .as_ref()
+            .expect("line camera bind group must be initialized");
+        renderer.render_overlay_to_target(target_view, batch, &self.line_pipeline, camera_bg);
     }
 
     /// Clears the render target for a viewport with the given color.

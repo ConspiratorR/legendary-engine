@@ -261,6 +261,22 @@ impl EguiState {
     pub fn ctx(&self) -> &Context {
         &self.ctx
     }
+
+    /// Register a native wgpu texture with the egui renderer and return its texture ID.
+    ///
+    /// The returned ID can be used with `egui::Image::new()` to display the texture
+    /// in the egui UI. The texture view must remain valid until after `paint()` is called.
+    pub fn register_native_texture(
+        &mut self,
+        device: &wgpu::Device,
+        view: &wgpu::TextureView,
+    ) -> egui::TextureId {
+        let renderer = self
+            .renderer
+            .as_mut()
+            .expect("egui renderer must be initialized");
+        renderer.register_native_texture(device, view, wgpu::FilterMode::Linear)
+    }
 }
 
 #[cfg(test)]

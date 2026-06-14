@@ -6,7 +6,14 @@ use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::{Gui, GuiSkin};
 use std::path::PathBuf;
 
-pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
+pub fn frame(
+    state: &mut EditorState,
+    ctx: &egui::Context,
+    skin: &GuiSkin,
+    renderer: &mut engine_render::renderer::Renderer,
+    vp_renderer: &mut crate::viewport_renderer::ViewportRenderer,
+    egui_state: &mut engine_ui::EguiState,
+) {
     let screen_rect = ctx.screen_rect();
     let h_scale = screen_rect.height() / 1080.0;
     let w_scale = screen_rect.width() / 1920.0;
@@ -75,7 +82,7 @@ pub fn frame(state: &mut EditorState, ctx: &egui::Context, skin: &GuiSkin) {
                 if state.show_left_panel {
                     crate::hierarchy::draw(state, &mut gui, hierarchy_rect);
                 }
-                crate::viewport::draw(state, &mut gui, viewport_rect);
+                crate::viewport::draw(state, &mut gui, viewport_rect, renderer, vp_renderer, egui_state);
                 if state.show_right_panel {
                     crate::inspector::draw(state, &mut gui, inspector_rect);
                 }

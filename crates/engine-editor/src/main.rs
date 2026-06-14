@@ -90,8 +90,20 @@ fn main() -> anyhow::Result<()> {
                                 // Begin frame
                                 e.begin_frame(dt);
 
-                                // Update editor
-                                editor_state.frame(e.ctx(), &GuiSkin::default());
+                                // Update editor with renderer context
+                                let mut vp_guard = viewport_renderer_opt
+                                    .as_ref()
+                                    .unwrap()
+                                    .lock()
+                                    .unwrap();
+                                let egui_ctx = e.ctx().clone();
+                                editor_state.frame(
+                                    &egui_ctx,
+                                    &GuiSkin::default(),
+                                    r,
+                                    &mut vp_guard,
+                                    e,
+                                );
 
                                 // End frame and render
                                 let (paint_jobs, textures_delta) = e.end_frame();

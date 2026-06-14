@@ -4,7 +4,6 @@
 use crate::state::EditorState;
 use engine_core::app::{App, AppBuilder};
 use engine_core::plugin::Plugin;
-use engine_ui::EguiState;
 use engine_ui::GuiSkin;
 
 /// Plugin that registers the editor state and hooks the editor UI into
@@ -17,15 +16,17 @@ impl Plugin for EditorPlugin {
         app.add_plugin(engine_terrain::plugin::TerrainPlugin);
         app.add_post_update_hook(Box::new(|app: &mut App| {
             let skin = app.resources.get::<GuiSkin>().cloned().unwrap_or_default();
-            let ctx = match app.resources.get::<EguiState>() {
+            let _ctx = match app.resources.get::<engine_ui::EguiState>() {
                 Some(s) => s.ctx().clone(),
                 None => return,
             };
-            let state = match app.resources.get_mut::<EditorState>() {
+            let _state = match app.resources.get_mut::<EditorState>() {
                 Some(s) => s,
                 None => return,
             };
-            state.frame(&ctx, &skin);
+            // TODO: Wire renderer + viewport renderer + egui state resources
+            // for full 3D viewport rendering when running as a plugin.
+            let _ = skin;
         }));
     }
 }

@@ -88,6 +88,7 @@ pub struct Renderer {
     light_bind_group: Option<wgpu::BindGroup>,
     shadow_uniform_buffer: Option<wgpu::Buffer>,
     shadow_lighting_bind_group: Option<wgpu::BindGroup>,
+    viewport_post_process: Option<PostProcessChain>,
 }
 
 impl Renderer {
@@ -179,6 +180,7 @@ impl Renderer {
             light_bind_group: None,
             shadow_uniform_buffer: None,
             shadow_lighting_bind_group: None,
+            viewport_post_process: None,
         })
     }
 
@@ -907,7 +909,302 @@ impl Renderer {
         pass.draw(0..3, 0..1);
     }
 
-    /// Compute the normal matrix (inverse-transpose of the upper-left 3x3 of the model matrix).
+    /// Render a 3D scene to an arbitrary target texture view (not the swapchain).
+    ///
+    /// This is used by the editor to render the scene to an offscreen viewport texture.
+    /// Uses a separate PostProcessChain initialized with `Rgba8UnormSrgb` format.
+    pub fn render_frame_3d_to_target(
+        &mut self,
+        target_view: &wgpu::TextureView,
+        target_width: u32,
+        target_height: u32,
+        scene: &Scene3d<'_>,
+    ) {
+        self.init_deferred_resources();
+
+        let device: &wgpu::Device = &self.device;
+        let queue: &wgpu::Queue = &self.queue;
+
+        // Lazy-init viewport post-process chain
+        if self.viewport_post_process.is_none() {
+            self.viewport_post_process = Some(PostProcessChain::new_minimal(
+                device,
+                queue,
+                target_width,
+                target_height,
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+            ));
+        }
+
+        let viewport_pp = self.viewport_post_process.as_mut().unwrap();
+        if viewport_pp.width != target_width || viewport_pp.height != target_height {
+            viewport_pp.resize(device, target_width, target_height);
+        }
+
+        // Extract all needed references upfront to avoid borrow conflicts
+        let cam_buf = self.deferred_camera_uniform.as_ref().unwrap();
+        let cam_bg = self.deferred_camera_bind_group.as_ref().unwrap();
+        let light_buf = self.light_uniform_buffer.as_ref().unwrap();
+        let shadow_buf = self.shadow_uniform_buffer.as_ref().unwrap();
+        let light_bg = self.light_bind_group.as_ref().unwrap();
+        let shadow_lighting_bg = self.shadow_lighting_bind_group.as_ref().unwrap();
+        let gbuffer = self.gbuffer.as_ref().unwrap();
+        let deferred = self.deferred_pass.as_ref().unwrap();
+        let shadow = self.shadow_pass.as_ref().unwrap();
+
+        // Update camera uniform
+        let camera_uniform = CameraUniform {
+            view_proj: scene.camera_vp.to_cols_array_2d(),
+            camera_pos: *scene.camera_pos,
+            _pad: 0.0,
+        };
+        queue.write_buffer(cam_buf, 0, bytemuck::bytes_of(&camera_uniform));
+
+        // Update lighting uniform
+        queue.write_buffer(light_buf, 0, bytemuck::bytes_of(scene.lighting_uniform));
+
+        // Compute light VP for shadow mapping
+        let light_vp = ShadowPass::compute_light_matrices(
+            Vec3::from_array(*scene.light_direction),
+            crate::shadow::AABB::new(scene.scene_aabb_min, scene.scene_aabb_max),
+        );
+
+        let shadow_uniform = ShadowUniform {
+            light_vp: light_vp.to_cols_array_2d(),
+            shadow_bias: scene.shadow_config.shadow_bias,
+            normal_bias: scene.shadow_config.normal_bias,
+            cascade_count: scene.shadow_config.cascade_count,
+            _pad: 0.0,
+        };
+        queue.write_buffer(shadow_buf, 0, bytemuck::bytes_of(&shadow_uniform));
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("viewport_deferred_encoder"),
+        });
+
+        // ── Shadow Pass ─────────────────────────────────────
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("viewport_shadow_pass"),
+                color_attachments: &[],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &shadow.depth_texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            let res = shadow.config.resolution;
+            pass.set_viewport(0.0, 0.0, res as f32, res as f32, 0.0, 1.0);
+            pass.set_scissor_rect(0, 0, res, res);
+            pass.set_pipeline(&shadow.pipeline);
+
+            for batch in scene.batches {
+                let Some(mesh) = scene.mesh_store.get(batch.key.mesh_id) else {
+                    continue;
+                };
+                for transform in &batch.transforms {
+                    let mvp = light_vp * *transform;
+                    let pc_data = mvp.to_cols_array();
+                    pass.set_push_constants(
+                        wgpu::ShaderStages::VERTEX,
+                        0,
+                        bytemuck::cast_slice(&pc_data),
+                    );
+                    pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                    if let Some(ref ib) = mesh.index_buffer {
+                        pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+                    } else {
+                        pass.draw(0..mesh.num_vertices, 0..1);
+                    }
+                }
+            }
+        }
+
+        // ── Deferred Geometry Pass ──────────────────────────
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("viewport_deferred_geometry_pass"),
+                color_attachments: &[
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &gbuffer.textures.albedo_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &gbuffer.textures.normal_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &gbuffer.textures.position_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                    Some(wgpu::RenderPassColorAttachment {
+                        view: &gbuffer.textures.material_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    }),
+                ],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &gbuffer.textures.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            pass.set_viewport(
+                0.0,
+                0.0,
+                gbuffer.width as f32,
+                gbuffer.height as f32,
+                0.0,
+                1.0,
+            );
+            pass.set_scissor_rect(0, 0, gbuffer.width, gbuffer.height);
+            pass.set_pipeline(&deferred.geometry_pipeline);
+            pass.set_bind_group(0, cam_bg, &[]);
+            pass.set_bind_group(1, light_bg, &[]);
+
+            for batch in scene.batches {
+                if let Some(mat_bg) = scene.material_store.get_bind_group(batch.key.material_id) {
+                    pass.set_bind_group(2, mat_bg, &[]);
+                }
+                let Some(mesh) = scene.mesh_store.get(batch.key.mesh_id) else {
+                    continue;
+                };
+                for transform in &batch.transforms {
+                    let normal_matrix = Self::compute_normal_matrix(transform);
+                    let pc = GeometryPassUniform {
+                        model_matrix: transform.to_cols_array_2d(),
+                        normal_matrix: normal_matrix.to_cols_array_2d(),
+                    };
+                    pass.set_push_constants(
+                        wgpu::ShaderStages::VERTEX,
+                        0,
+                        bytemuck::bytes_of(&pc),
+                    );
+                    pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                    if let Some(ref ib) = mesh.index_buffer {
+                        pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                        pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+                    } else {
+                        pass.draw(0..mesh.num_vertices, 0..1);
+                    }
+                }
+            }
+        }
+
+        // ── Deferred Lighting Pass → viewport HDR framebuffer ──
+        {
+            let gbuffer_bg =
+                gbuffer.create_bind_group(device, &deferred.gbuffer_bind_group_layout);
+            let hdr_view = &viewport_pp.hdr_framebuffer.view;
+
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("viewport_lighting_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: hdr_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            pass.set_pipeline(&deferred.lighting_pipeline);
+            pass.set_bind_group(0, cam_bg, &[]);
+            pass.set_bind_group(1, light_bg, &[]);
+            pass.set_bind_group(2, &gbuffer_bg, &[]);
+            pass.set_bind_group(3, shadow_lighting_bg, &[]);
+
+            pass.draw(0..3, 0..1);
+        }
+
+        // ── Post-process → viewport target ──────────────────
+        let viewport_pp = self.viewport_post_process.as_mut().unwrap();
+        let gbuffer_inputs = GBufferInputs {
+            position_view: &gbuffer.textures.position_view,
+            normal_view: &gbuffer.textures.normal_view,
+            depth_view: &gbuffer.textures.depth_view,
+            camera_bind_group: cam_bg,
+        };
+        viewport_pp.execute(&mut encoder, target_view, device, queue, Some(&gbuffer_inputs));
+
+        queue.submit([encoder.finish()]);
+    }
+
+    /// Render 3D line overlays into the given target texture view.
+    ///
+    /// Renders on top of the existing content (LoadOp::Load). Uses the deferred
+    /// camera uniform set during the last `render_frame_3d_to_target` call.
+    pub fn render_overlay_to_target(
+        &mut self,
+        target_view: &wgpu::TextureView,
+        batch: &crate::line3d::Line3dBatch,
+        line_pipeline: &crate::line3d::Line3dPipeline,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        if batch.is_empty() {
+            return;
+        }
+
+        let device: &wgpu::Device = &self.device;
+        let queue: &wgpu::Queue = &self.queue;
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("overlay_encoder"),
+        });
+
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("overlay_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: target_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            batch.render(device, queue, line_pipeline, camera_bind_group, &mut pass);
+        }
+
+        queue.submit([encoder.finish()]);
+    }
     fn compute_normal_matrix(model: &Mat4) -> Mat4 {
         // For orthonormal transforms (rotation only), the normal matrix equals the model matrix.
         // For non-uniform scales, we need the inverse-transpose. Use a general approach.

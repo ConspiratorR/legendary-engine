@@ -101,6 +101,7 @@ pub mod ibl;
 pub mod indirect;
 pub mod instancing;
 pub mod light;
+pub mod line3d;
 pub mod lod;
 pub mod mesh_bridge;
 pub mod occlusion;
