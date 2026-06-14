@@ -707,9 +707,9 @@ fn draw_status_bar(state: &EditorState, gui: &mut Gui, rect: Rect, h_scale: f32,
 const DEFAULT_SCENE_FILE: &str = "scenes/untitled.json";
 
 fn save_scene(state: &mut EditorState) {
-    if state.scene_manager.current_scene().is_none() {
-        state.scene_manager.create_scene("Untitled".to_string());
-    }
+    // Sync EditorState to scene before saving
+    let scene = state.to_scene("Untitled");
+    state.scene_manager.set_current_scene(scene);
 
     let path = state
         .scene_manager
@@ -728,9 +728,9 @@ fn save_scene(state: &mut EditorState) {
 }
 
 fn save_scene_as(state: &mut EditorState) {
-    if state.scene_manager.current_scene().is_none() {
-        state.scene_manager.create_scene("Untitled".to_string());
-    }
+    // Sync EditorState to scene before saving
+    let scene = state.to_scene("Untitled");
+    state.scene_manager.set_current_scene(scene);
 
     let path = PathBuf::from(DEFAULT_SCENE_FILE);
     match state.scene_manager.save_scene(&path) {
@@ -757,6 +757,11 @@ fn load_scene(state: &mut EditorState) {
 
     match state.scene_manager.load_scene(&path) {
         Ok(()) => {
+            // Sync loaded scene to EditorState
+            if let Some(scene) = state.scene_manager.current_scene() {
+                let scene_clone = scene.clone();
+                state.load_from_scene(&scene_clone);
+            }
             let name = state
                 .scene_manager
                 .current_scene()

@@ -338,6 +338,12 @@ impl SceneManager {
         self.is_modified = false;
     }
 
+    /// Sets the current scene (e.g., after syncing from EditorState).
+    pub fn set_current_scene(&mut self, scene: Scene) {
+        self.current_scene = Some(scene);
+        self.is_modified = true;
+    }
+
     /// Returns a reference to the current scene, if loaded.
     pub fn current_scene(&self) -> Option<&Scene> {
         self.current_scene.as_ref()
