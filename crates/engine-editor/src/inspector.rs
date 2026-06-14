@@ -3,7 +3,7 @@
 
 use crate::material_editor::MaterialEditorState;
 use crate::state::{EditorState, LightType};
-use egui::{Color32, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
+use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::Gui;
 
 pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
@@ -124,6 +124,7 @@ fn section_header(painter: &egui::Painter, x: f32, y: f32, label: &str) -> f32 {
     y + 18.0
 }
 
+#[allow(invalid_reference_casting)]
 fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id: u64, name: &str) {
     let painter = gui.ui.painter_at(rect);
     let row_h = 26.0;
@@ -323,5 +324,214 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
 
         let cr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
         gui.input_labeled(cr, "碰撞", col);
+    }
+
+    // ── Sprite ──
+    if let Some(sprite) = state.node_sprites.get_mut(&id) {
+        y = separator(&painter, x, y, w);
+        y = section_header(&painter, x, y, "精灵");
+
+        // 纹理路径（可编辑文本）
+        let tr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        painter.text(
+            egui::pos2(x, tr.center().y),
+            egui::Align2::LEFT_CENTER,
+            "纹理",
+            FontId::proportional(12.0),
+            Color32::from_gray(152),
+        );
+        let input_rect = Rect::from_min_size(
+            Pos2::new(x + 80.0, tr.top()),
+            Vec2::new(w - 80.0, tr.height()),
+        );
+        // SAFETY: inspector has exclusive access to the UI
+        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
+        let mut tex_edit = sprite.texture.clone();
+        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+            egui::TextEdit::singleline(&mut tex_edit)
+                .desired_width(input_rect.width() - 8.0)
+                .show(ui);
+        });
+        sprite.texture = tex_edit;
+        y += row_h + 6.0;
+
+        let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.slider_f32(sr, "宽度", &mut sprite.size[0], 0.0, 100.0);
+        y += row_h + 6.0;
+
+        let sr2 = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.slider_f32(sr2, "高度", &mut sprite.size[1], 0.0, 100.0);
+        y += row_h + 6.0;
+
+        let cr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        let (mut r, mut g, mut b) = (sprite.color[0], sprite.color[1], sprite.color[2]);
+        gui.vec3_input(cr, "颜色", &mut r, &mut g, &mut b);
+        sprite.color[0] = r;
+        sprite.color[1] = g;
+        sprite.color[2] = b;
+        y += row_h + 6.0;
+
+        let fr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.checkbox(fr, "水平翻转", &mut sprite.flip_x);
+        y += row_h + 6.0;
+
+        let flr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.checkbox(flr, "垂直翻转", &mut sprite.flip_y);
+        y += row_h + 6.0;
+    }
+
+    // ── Particle ──
+    if let Some(particle) = state.node_particles.get_mut(&id) {
+        y = separator(&painter, x, y, w);
+        y = section_header(&painter, x, y, "粒子系统");
+
+        let er = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        painter.text(
+            egui::pos2(x, er.center().y),
+            egui::Align2::LEFT_CENTER,
+            "发射器",
+            FontId::proportional(12.0),
+            Color32::from_gray(152),
+        );
+        let input_rect = Rect::from_min_size(
+            Pos2::new(x + 80.0, er.top()),
+            Vec2::new(w - 80.0, er.height()),
+        );
+        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
+        let mut emitter_edit = particle.emitter_type.clone();
+        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+            egui::TextEdit::singleline(&mut emitter_edit)
+                .desired_width(input_rect.width() - 8.0)
+                .show(ui);
+        });
+        particle.emitter_type = emitter_edit;
+        y += row_h + 6.0;
+
+        let rr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.slider_f32(rr, "发射速率", &mut particle.rate, 0.0, 100.0);
+        y += row_h + 6.0;
+
+        let lr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.slider_f32(lr, "生命周期", &mut particle.lifetime, 0.1, 10.0);
+        y += row_h + 6.0;
+
+        let spr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.slider_f32(spr, "速度", &mut particle.speed, 0.0, 50.0);
+        y += row_h + 6.0;
+
+        let szr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.slider_f32(szr, "起始大小", &mut particle.size_start, 0.0, 10.0);
+        y += row_h + 6.0;
+
+        let ser = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.slider_f32(ser, "结束大小", &mut particle.size_end, 0.0, 10.0);
+        y += row_h + 6.0;
+    }
+
+    // ── Audio ──
+    if let Some(audio) = state.node_audio.get_mut(&id) {
+        y = separator(&painter, x, y, w);
+        y = section_header(&painter, x, y, "音频");
+
+        let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        painter.text(
+            egui::pos2(x, sr.center().y),
+            egui::Align2::LEFT_CENTER,
+            "音频源",
+            FontId::proportional(12.0),
+            Color32::from_gray(152),
+        );
+        let input_rect = Rect::from_min_size(
+            Pos2::new(x + 80.0, sr.top()),
+            Vec2::new(w - 80.0, sr.height()),
+        );
+        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
+        let mut source_edit = audio.source.clone();
+        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+            egui::TextEdit::singleline(&mut source_edit)
+                .desired_width(input_rect.width() - 8.0)
+                .show(ui);
+        });
+        audio.source = source_edit;
+        y += row_h + 6.0;
+
+        let vr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.slider_f32(vr, "音量", &mut audio.volume, 0.0, 1.0);
+        y += row_h + 6.0;
+
+        let lr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.checkbox(lr, "循环", &mut audio.looping);
+        y += row_h + 6.0;
+
+        let spr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.checkbox(spr, "空间音频", &mut audio.spatial);
+        y += row_h + 6.0;
+    }
+
+    // ── Script ──
+    if let Some(script) = state.node_scripts.get_mut(&id) {
+        y = separator(&painter, x, y, w);
+        y = section_header(&painter, x, y, "脚本");
+
+        let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        painter.text(
+            egui::pos2(x, sr.center().y),
+            egui::Align2::LEFT_CENTER,
+            "脚本路径",
+            FontId::proportional(12.0),
+            Color32::from_gray(152),
+        );
+        let input_rect = Rect::from_min_size(
+            Pos2::new(x + 80.0, sr.top()),
+            Vec2::new(w - 80.0, sr.height()),
+        );
+        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
+        let mut path_edit = script.script_path.clone();
+        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+            egui::TextEdit::singleline(&mut path_edit)
+                .desired_width(input_rect.width() - 8.0)
+                .show(ui);
+        });
+        script.script_path = path_edit;
+        y += row_h + 6.0;
+
+        let er = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        gui.checkbox(er, "启用", &mut script.enabled);
+        y += row_h + 6.0;
+    }
+
+    // ── Tags ──
+    if let Some(tags) = state.node_tags.get_mut(&id) {
+        y = separator(&painter, x, y, w);
+        y = section_header(&painter, x, y, "标签");
+
+        let tr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+        painter.text(
+            egui::pos2(x, tr.center().y),
+            egui::Align2::LEFT_CENTER,
+            "标签",
+            FontId::proportional(12.0),
+            Color32::from_gray(152),
+        );
+        let input_rect = Rect::from_min_size(
+            Pos2::new(x + 80.0, tr.top()),
+            Vec2::new(w - 80.0, tr.height()),
+        );
+        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
+        let tag_str = tags.join(", ");
+        let mut tag_edit = tag_str.clone();
+        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+            egui::TextEdit::singleline(&mut tag_edit)
+                .desired_width(input_rect.width() - 8.0)
+                .show(ui);
+        });
+        if tag_edit != tag_str {
+            *tags = tag_edit
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+        }
+        y += row_h + 6.0;
     }
 }
