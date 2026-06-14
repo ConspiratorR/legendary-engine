@@ -381,6 +381,98 @@ impl Default for MaterialData {
     }
 }
 
+/// Sprite 组件数据
+#[derive(Debug, Clone)]
+pub struct SpriteData {
+    pub texture: String,
+    pub size: [f32; 2],
+    pub color: [f32; 4],
+    pub flip_x: bool,
+    pub flip_y: bool,
+    pub uv_region: [f32; 4],
+}
+
+impl Default for SpriteData {
+    fn default() -> Self {
+        Self {
+            texture: String::new(),
+            size: [1.0, 1.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
+        }
+    }
+}
+
+/// 粒子系统组件数据
+#[derive(Debug, Clone)]
+pub struct ParticleData {
+    pub emitter_type: String,
+    pub rate: f32,
+    pub lifetime: f32,
+    pub speed: f32,
+    pub size_start: f32,
+    pub size_end: f32,
+    pub color_start: [f32; 4],
+    pub color_end: [f32; 4],
+}
+
+impl Default for ParticleData {
+    fn default() -> Self {
+        Self {
+            emitter_type: "point".into(),
+            rate: 10.0,
+            lifetime: 2.0,
+            speed: 1.0,
+            size_start: 1.0,
+            size_end: 0.0,
+            color_start: [1.0, 1.0, 1.0, 1.0],
+            color_end: [1.0, 1.0, 1.0, 0.0],
+        }
+    }
+}
+
+/// 音频组件数据
+#[derive(Debug, Clone)]
+pub struct AudioData {
+    pub source: String,
+    pub volume: f32,
+    pub looping: bool,
+    pub spatial: bool,
+    pub attenuation: String,
+}
+
+impl Default for AudioData {
+    fn default() -> Self {
+        Self {
+            source: String::new(),
+            volume: 1.0,
+            looping: false,
+            spatial: false,
+            attenuation: "linear".into(),
+        }
+    }
+}
+
+/// 脚本组件数据
+#[derive(Debug, Clone)]
+pub struct ScriptData {
+    pub script_path: String,
+    pub enabled: bool,
+    pub properties: std::collections::HashMap<String, String>,
+}
+
+impl Default for ScriptData {
+    fn default() -> Self {
+        Self {
+            script_path: String::new(),
+            enabled: true,
+            properties: std::collections::HashMap::new(),
+        }
+    }
+}
+
 /// Central editor state holding all panel data, selections, and tool state.
 #[derive(Debug, Clone)]
 pub struct EditorState {
@@ -415,6 +507,12 @@ pub struct EditorState {
     pub terrain_panel: crate::terrain_panel::TerrainPanel,
     pub terrain_sculpt_active: bool,
     pub terrain_sculpt_screen_pos: Option<(f32, f32)>,
+    pub node_sprites: HashMap<u64, SpriteData>,
+    pub node_particles: HashMap<u64, ParticleData>,
+    pub node_audio: HashMap<u64, AudioData>,
+    pub node_scripts: HashMap<u64, ScriptData>,
+    pub node_tags: HashMap<u64, Vec<String>>,
+    pub viewport_layout: crate::viewport_renderer::ViewportLayout,
 }
 
 impl Default for EditorState {
@@ -481,6 +579,12 @@ impl EditorState {
             terrain_panel: crate::terrain_panel::TerrainPanel::default(),
             terrain_sculpt_active: false,
             terrain_sculpt_screen_pos: None,
+            node_sprites: HashMap::new(),
+            node_particles: HashMap::new(),
+            node_audio: HashMap::new(),
+            node_scripts: HashMap::new(),
+            node_tags: HashMap::new(),
+            viewport_layout: crate::viewport_renderer::ViewportLayout::default(),
         }
     }
 
