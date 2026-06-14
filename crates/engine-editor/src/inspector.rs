@@ -136,9 +136,9 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     painter.text(
         egui::pos2(x, y),
         egui::Align2::LEFT_CENTER,
-        name,
-        egui::FontId::proportional(13.0),
-        Color32::WHITE,
+        format!("{} [{}]", name, id),
+        FontId::proportional(13.0),
+        Color32::from_rgb(220, 220, 224),
     );
     y += 24.0;
 
