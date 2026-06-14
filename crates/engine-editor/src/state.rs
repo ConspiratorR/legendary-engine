@@ -949,13 +949,16 @@ impl EditorState {
     /// Delete selected nodes.
     fn delete_selected(&mut self) {
         let selected = self.selected_nodes.clone();
-        for &node_id in &selected {
-            self.scene_tree.remove_node(node_id);
-            self.node_transforms.remove(&node_id);
-            self.node_materials.remove(&node_id);
-            self.node_lights.remove(&node_id);
-            self.node_physics.remove(&node_id);
+        if selected.is_empty() {
+            return;
         }
+        // Record undo commands for each deleted node
+        let mut cm = std::mem::take(&mut self.command_manager);
+        for &node_id in &selected {
+            let cmd = crate::commands::DeleteEntityCommand::new(self, node_id);
+            cm.execute(Box::new(cmd), self);
+        }
+        self.command_manager = cm;
         self.selected_nodes.clear();
         self.status_message = Some(format!("Deleted {} nodes", selected.len()));
     }
