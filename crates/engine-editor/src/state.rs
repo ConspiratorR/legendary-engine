@@ -576,6 +576,8 @@ pub struct EditorState {
     pub drag_hover_target: Option<u64>,
     /// Undo/redo command manager.
     pub command_manager: CommandManager,
+    /// Pending transform edit: (node_id, original_transform) — captured when editing starts.
+    pub pending_transform_edit: Option<(u64, [f32; 9])>,
 }
 
 impl Default for EditorState {
@@ -672,6 +674,7 @@ impl EditorState {
             drag_source: None,
             drag_hover_target: None,
             command_manager: CommandManager::default(),
+            pending_transform_edit: None,
         }
     }
 
@@ -955,6 +958,7 @@ impl EditorState {
     ) -> EditorSceneData {
         let mut mesh_store = MeshStore::new();
         let mut material_store = MaterialStore::new(device);
+        material_store.init_default_texture(queue);
 
         // Upload a default cube mesh
         let cube_mesh_id = mesh_store.upload(device, &cube_vertices(), Some(&cube_indices()));

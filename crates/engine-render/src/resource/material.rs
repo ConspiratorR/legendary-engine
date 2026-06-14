@@ -243,7 +243,7 @@ impl MaterialStore {
         let id = self.next_id;
         self.next_id += 1;
 
-        let offset = (id - 1) as u64 * MATERIAL_STRIDE;
+        let offset = (id - 1) * MATERIAL_STRIDE;
 
         // Write base_color (vec4) to base_color_buffer
         queue.write_buffer(

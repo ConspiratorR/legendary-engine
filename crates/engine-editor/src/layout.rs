@@ -686,21 +686,53 @@ fn draw_status_bar(state: &EditorState, gui: &mut Gui, rect: Rect, h_scale: f32,
     painter.text(
         egui::pos2(rect.left() + 160.0 * w_scale, rect.center().y),
         egui::Align2::LEFT_CENTER,
-        "三角形: 45K",
+        "三角形: 45K".to_string(),
         FontId::proportional(status_font),
         Color32::from_gray(90),
+    );
+
+    // Undo/redo status
+    let undo_text = state
+        .command_manager
+        .undo_description()
+        .map(|d| format!("撤销: {}", d))
+        .unwrap_or_else(|| "无可撤销".into());
+    let redo_text = state
+        .command_manager
+        .redo_description()
+        .map(|d| format!("重做: {}", d))
+        .unwrap_or_else(|| "无可重做".into());
+    painter.text(
+        egui::pos2(rect.left() + 300.0 * w_scale, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        format!("{} | {}", undo_text, redo_text),
+        FontId::proportional(status_font),
+        if state.command_manager.can_undo() {
+            Color32::from_gray(120)
+        } else {
+            Color32::from_gray(60)
+        },
     );
 
     let view_modes = ["场景", "游戏", "物理"];
     let view_names = ["perspective", "top", "front", "right"];
     let view_mode = view_modes.get(state.active_viewport_tab).unwrap_or(&"场景");
     let view_name = view_names.first().unwrap_or(&"perspective");
+    let play_str = match state.play_state {
+        crate::state::PlayState::Playing => " ▶ 运行中",
+        crate::state::PlayState::Paused => " ⏸ 暂停",
+        crate::state::PlayState::Editing => "",
+    };
     painter.text(
         egui::pos2(rect.right() - pad12, rect.center().y),
         egui::Align2::RIGHT_CENTER,
-        format!("{} 视图  |  {}", view_mode, view_name),
+        format!("{} 视图  |  {}{}", view_mode, view_name, play_str),
         FontId::proportional(status_font),
-        Color32::from_gray(90),
+        match state.play_state {
+            crate::state::PlayState::Playing => Color32::from_rgb(46, 213, 115),
+            crate::state::PlayState::Paused => Color32::from_rgb(255, 184, 0),
+            _ => Color32::from_gray(90),
+        },
     );
 }
 

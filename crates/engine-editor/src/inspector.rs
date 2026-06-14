@@ -144,6 +144,9 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
 
     // ── Transform ──
     if let Some(t) = state.node_transforms.get_mut(&id) {
+        // Snapshot transform before editing for undo
+        let old_transform = *t;
+
         y = separator(&painter, x, y, w);
         y = section_header(&painter, x, y, "变换");
 
@@ -170,6 +173,27 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
         t[7] = sy;
         t[8] = sz;
         y += 16.0;
+
+        // Detect transform changes for undo
+        let new_transform = *t;
+        if new_transform != old_transform {
+            if state.pending_transform_edit.is_none() {
+                // Editing just started — capture original state
+                state.pending_transform_edit = Some((id, old_transform));
+            }
+        } else if let Some((pending_id, pending_old)) = state.pending_transform_edit.take()
+            && pending_id == id
+        {
+            // Values returned to original or editing stopped — record command
+            let mut cm = std::mem::take(&mut state.command_manager);
+            cm.execute(
+                Box::new(crate::commands::TransformEntityCommand::new(
+                    id, pending_old, new_transform,
+                )),
+                state,
+            );
+            state.command_manager = cm;
+        }
     }
 
     // ── Material (PBR) ──
