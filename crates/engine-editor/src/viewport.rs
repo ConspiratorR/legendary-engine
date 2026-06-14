@@ -499,16 +499,125 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         .ui
         .interact(canvas_rect, canvas_id, egui::Sense::click_and_drag());
 
+    // Gizmo drag: translate selected object with left-click when translate tool active
+    if state.active_tool == crate::state::ToolType::Translate
+        && !state.selected_nodes.is_empty()
+    {
+        let primary_down = ctx.input(|i| i.pointer.primary_down());
+        let pointer_pos = ctx.pointer_interact_pos().unwrap_or(Pos2::ZERO);
+
+        if primary_down && canvas_rect.contains(pointer_pos) {
+            if state.gizmo_drag_axis.is_none() {
+                // Start gizmo drag
+                state.gizmo_drag_axis = Some(0); // default: move on XZ plane
+                state.gizmo_drag_start_screen = Some((pointer_pos.x, pointer_pos.y));
+                let first_id = state.selected_nodes[0];
+                state.gizmo_drag_start_pos =
+                    state.node_transforms.get(&first_id).map(|t| [t[0], t[1], t[2]]);
+            } else if let (Some((sx, sy)), Some(start_pos)) = (
+                state.gizmo_drag_start_screen,
+                state.gizmo_drag_start_pos,
+            ) {
+                // Compute drag delta in screen space
+                let dx = pointer_pos.x - sx;
+                let dy = pointer_pos.y - sy;
+
+                // Convert screen delta to world movement
+                // Scale factor: pixels to world units (adjustable sensitivity)
+                let sensitivity = state.camera.distance * 0.003;
+                let world_dx = dx * sensitivity;
+                let world_dz = dy * sensitivity; // screen Y → world Z
+
+                // Apply to first selected node
+                if let Some(&first_id) = state.selected_nodes.first()
+                    && let Some(t) = state.node_transforms.get_mut(&first_id)
+                {
+                    t[0] = start_pos[0] + world_dx;
+                    t[2] = start_pos[2] + world_dz;
+                }
+            }
+        } else if state.gizmo_drag_axis.is_some() {
+            // Release gizmo drag
+            state.gizmo_drag_axis = None;
+            state.gizmo_drag_start_screen = None;
+            state.gizmo_drag_start_pos = None;
+        }
+    }
+
+    // Left-click selection: click on viewport to select nearest object
+    if canvas_response.clicked()
+        && state.active_tool != crate::state::ToolType::Terrain
+        && state.gizmo_drag_axis.is_none()
+        && let Some(click_pos) = ctx.pointer_interact_pos()
+    {
+        let rel_x = click_pos.x - canvas_rect.left();
+        let rel_y = click_pos.y - canvas_rect.top();
+        let canvas_w = canvas_rect.width();
+        let canvas_h = canvas_rect.height();
+
+        // Project each object to screen space and find nearest to click
+        let aspect = canvas_w / canvas_h.max(1.0);
+        let vp = state.camera.projection_matrix(aspect) * state.camera.view_matrix();
+
+        let mut best_id = None;
+        let mut best_dist_sq = f32::MAX;
+
+        for node in &state.scene_tree.nodes {
+            if node.parent.is_none() {
+                continue;
+            }
+            if let Some(t) = state.node_transforms.get(&node.id) {
+                let world_pos = engine_math::Vec3::new(t[0], t[1], t[2]);
+                let clip = vp * world_pos.extend(1.0);
+                if clip.w <= 0.001 {
+                    continue;
+                }
+                let ndc = clip.truncate() / clip.w;
+                let screen_x = canvas_w * 0.5 * (ndc.x + 1.0);
+                let screen_y = canvas_h * 0.5 * (1.0 - ndc.y);
+                let dx = screen_x - rel_x;
+                let dy = screen_y - rel_y;
+                let dist_sq = dx * dx + dy * dy;
+                if dist_sq < best_dist_sq {
+                    best_dist_sq = dist_sq;
+                    best_id = Some(node.id);
+                }
+            }
+        }
+
+        // Select if within reasonable distance (25 pixels)
+        if best_dist_sq < 625.0 {
+            if let Some(id) = best_id {
+                let ctrl = ctx.input(|i| i.modifiers.ctrl);
+                if ctrl {
+                    // Toggle selection
+                    if let Some(pos) = state.selected_nodes.iter().position(|&n| n == id) {
+                        state.selected_nodes.remove(pos);
+                    } else {
+                        state.selected_nodes.push(id);
+                    }
+                } else {
+                    state.selected_nodes = vec![id];
+                }
+            }
+        } else if !ctx.input(|i| i.modifiers.ctrl) {
+            state.selected_nodes.clear();
+        }
+    }
+
+    // Camera orbit: right-click drag
     if canvas_response.dragged_by(egui::PointerButton::Secondary) {
         let delta = canvas_response.drag_delta();
         state.camera.orbit(delta.x, -delta.y);
     }
 
+    // Camera pan: middle-click drag
     if canvas_response.dragged_by(egui::PointerButton::Middle) {
         let delta = canvas_response.drag_delta();
         state.camera.pan(delta.x, delta.y);
     }
 
+    // Camera zoom: scroll
     let scroll = ctx.input(|i| i.raw_scroll_delta);
     if scroll.y != 0.0 {
         state.camera.zoom(scroll.y / 120.0);

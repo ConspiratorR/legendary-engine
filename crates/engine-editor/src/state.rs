@@ -561,6 +561,12 @@ pub struct EditorState {
     pub autosave_enabled: bool,
     /// Keyboard shortcut manager.
     pub shortcuts: ShortcutManager,
+    /// Gizmo drag state (axis index 0=X, 1=Y, 2=Z, None=not dragging).
+    pub gizmo_drag_axis: Option<u8>,
+    /// Screen position where gizmo drag started.
+    pub gizmo_drag_start_screen: Option<(f32, f32)>,
+    /// Object position when gizmo drag started.
+    pub gizmo_drag_start_pos: Option<[f32; 3]>,
 }
 
 impl Default for EditorState {
@@ -650,6 +656,9 @@ impl EditorState {
             autosave_timer: 0.0,
             autosave_enabled: true,
             shortcuts: ShortcutManager::new(),
+            gizmo_drag_axis: None,
+            gizmo_drag_start_screen: None,
+            gizmo_drag_start_pos: None,
         }
     }
 
