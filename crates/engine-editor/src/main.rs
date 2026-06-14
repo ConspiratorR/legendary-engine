@@ -8,6 +8,13 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
 };
 
+#[derive(Clone, Copy)]
+struct Modifiers {
+    ctrl: bool,
+    shift: bool,
+    alt: bool,
+}
+
 #[allow(deprecated, unused_assignments)]
 fn main() -> anyhow::Result<()> {
     // Initialize logging
@@ -34,6 +41,7 @@ fn main() -> anyhow::Result<()> {
     let mut editor_state = EditorState::new();
     let mut runtime_world: Option<engine_ecs::world::World> = None;
     let mut prev_play_state = engine_editor::state::PlayState::Editing;
+    let mut window_modifiers = Modifiers { ctrl: false, shift: false, alt: false };
 
     pollster::block_on(async {
         // Initialize renderer
@@ -191,6 +199,31 @@ fn main() -> anyhow::Result<()> {
                                     winit::event::ElementState::Released => e.release_button(idx),
                                 }
                             }
+                        }
+                        WindowEvent::KeyboardInput {
+                            event:
+                                winit::event::KeyEvent {
+                                    physical_key: winit::keyboard::PhysicalKey::Code(keycode),
+                                    state: winit::event::ElementState::Pressed,
+                                    ..
+                                },
+                            ..
+                        } => {
+                            // engine_input::KeyCode is a re-export of winit::keyboard::KeyCode
+                            let mods = window_modifiers;
+                            if let Some(action) = editor_state
+                                .shortcuts
+                                .get_action(keycode, mods.ctrl, mods.shift, mods.alt)
+                            {
+                                editor_state.handle_shortcut(action);
+                            }
+                        }
+                        WindowEvent::ModifiersChanged(modifiers) => {
+                            window_modifiers = Modifiers {
+                                ctrl: modifiers.state().control_key(),
+                                shift: modifiers.state().shift_key(),
+                                alt: modifiers.state().alt_key(),
+                            };
                         }
                         _ => {}
                     }

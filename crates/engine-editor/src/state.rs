@@ -338,6 +338,7 @@ use crate::performance_profiler::PerformanceProfilerState;
 use crate::resource_browser::ResourceBrowser;
 use crate::scene_serializer::SceneManager;
 use crate::script_editor::ScriptEditorState;
+use crate::shortcuts::{EditorAction, ShortcutManager};
 use std::collections::HashMap;
 
 /// Light property data for the editor inspector.
@@ -558,6 +559,8 @@ pub struct EditorState {
     pub autosave_timer: f32,
     /// Whether autosave is enabled.
     pub autosave_enabled: bool,
+    /// Keyboard shortcut manager.
+    pub shortcuts: ShortcutManager,
 }
 
 impl Default for EditorState {
@@ -646,6 +649,7 @@ impl EditorState {
             autosave_interval: 300.0, // 5 minutes
             autosave_timer: 0.0,
             autosave_enabled: true,
+            shortcuts: ShortcutManager::new(),
         }
     }
 
@@ -791,6 +795,102 @@ impl EditorState {
             return true;
         }
         false
+    }
+
+    /// Process a keyboard shortcut action.
+    pub fn handle_shortcut(&mut self, action: EditorAction) {
+        match action {
+            EditorAction::SaveScene => {
+                let _ = self.scene_manager.save_current_scene();
+                self.status_message = Some("Scene saved".into());
+            }
+            EditorAction::NewScene => {
+                self.scene_manager.create_scene("Untitled".into());
+                self.status_message = Some("New scene created".into());
+            }
+            EditorAction::Undo => {
+                self.undo();
+            }
+            EditorAction::Redo => {
+                self.redo();
+            }
+            EditorAction::Duplicate => {
+                self.duplicate_selected();
+            }
+            EditorAction::Delete => {
+                self.delete_selected();
+            }
+            EditorAction::SelectAll => {
+                self.selected_nodes = self.scene_tree.nodes.iter().map(|n| n.id).collect();
+            }
+            EditorAction::DeselectAll => {
+                self.selected_nodes.clear();
+            }
+            EditorAction::TranslateTool => {
+                self.active_tool = ToolType::Translate;
+            }
+            EditorAction::RotateTool => {
+                self.active_tool = ToolType::Rotate;
+            }
+            EditorAction::ScaleTool => {
+                self.active_tool = ToolType::Scale;
+            }
+            EditorAction::TerrainTool => {
+                self.active_tool = ToolType::Terrain;
+            }
+            EditorAction::Play => {
+                self.play();
+            }
+            EditorAction::Stop => {
+                self.stop();
+            }
+            EditorAction::ToggleGrid => {
+                self.show_grid = !self.show_grid;
+            }
+            _ => {}
+        }
+    }
+
+    /// Undo the last action.
+    fn undo(&mut self) {
+        // TODO: wire undo/redo command system
+        self.status_message = Some("Undo".into());
+    }
+
+    /// Redo the last undone action.
+    fn redo(&mut self) {
+        // TODO: wire undo/redo command system
+        self.status_message = Some("Redo".into());
+    }
+
+    /// Duplicate selected nodes.
+    fn duplicate_selected(&mut self) {
+        let selected = self.selected_nodes.clone();
+        self.selected_nodes.clear();
+        for &node_id in &selected {
+            let new_id = self.scene_tree.add_node("Duplicate", Some(node_id));
+            if let Some(t) = self.node_transforms.get(&node_id) {
+                let mut new_t = *t;
+                new_t[0] += 1.0; // offset slightly
+                self.node_transforms.insert(new_id, new_t);
+            }
+            self.selected_nodes.push(new_id);
+        }
+        self.status_message = Some(format!("Duplicated {} nodes", selected.len()));
+    }
+
+    /// Delete selected nodes.
+    fn delete_selected(&mut self) {
+        let selected = self.selected_nodes.clone();
+        for &node_id in &selected {
+            self.scene_tree.remove_node(node_id);
+            self.node_transforms.remove(&node_id);
+            self.node_materials.remove(&node_id);
+            self.node_lights.remove(&node_id);
+            self.node_physics.remove(&node_id);
+        }
+        self.selected_nodes.clear();
+        self.status_message = Some(format!("Deleted {} nodes", selected.len()));
     }
 
     /// Build scene data for 3D rendering from the current editor state.

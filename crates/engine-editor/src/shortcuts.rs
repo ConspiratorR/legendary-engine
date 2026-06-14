@@ -80,10 +80,10 @@ pub enum EditorAction {
     ShowProject,
 }
 
-/// Maps [`EditorAction`]s to key bindings and handler callbacks.
+/// Maps [`EditorAction`]s to key bindings.
+#[derive(Debug, Clone)]
 pub struct ShortcutManager {
     bindings: HashMap<EditorAction, KeyBinding>,
-    action_handlers: HashMap<EditorAction, Box<dyn Fn()>>,
 }
 
 impl ShortcutManager {
@@ -91,7 +91,6 @@ impl ShortcutManager {
     pub fn new() -> Self {
         let mut manager = Self {
             bindings: HashMap::new(),
-            action_handlers: HashMap::new(),
         };
         manager.register_defaults();
         manager
@@ -188,21 +187,6 @@ impl ShortcutManager {
             }
         }
         None
-    }
-
-    /// Registers a callback handler for an action.
-    pub fn register_handler<F>(&mut self, action: EditorAction, handler: F)
-    where
-        F: Fn() + 'static,
-    {
-        self.action_handlers.insert(action, Box::new(handler));
-    }
-
-    /// Executes the handler for the given action, if registered.
-    pub fn execute(&self, action: &EditorAction) {
-        if let Some(handler) = self.action_handlers.get(action) {
-            handler();
-        }
     }
 
     /// Returns a human-readable string for the action's key binding (e.g. "Ctrl+S").
