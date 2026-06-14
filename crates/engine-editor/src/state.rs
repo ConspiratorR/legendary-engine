@@ -516,6 +516,8 @@ pub struct EditorState {
     pub show_right_panel: bool,
     pub scene_tree: SceneTree,
     pub camera: EditorCamera,
+    /// Camera used for the Game viewport tab (runtime perspective).
+    pub game_camera: EditorCamera,
     pub show_grid: bool,
     pub show_debug_overlay: bool,
     pub gizmo_interaction: Option<GizmoInteraction>,
@@ -595,6 +597,15 @@ impl EditorState {
             show_right_panel: true,
             scene_tree: SceneTree::new(),
             camera: EditorCamera::new(),
+            game_camera: EditorCamera {
+                target: Vec3::new(0.0, 1.0, 0.0),
+                distance: 8.0,
+                yaw: 0.0,
+                pitch: -0.2,
+                fov: 60.0_f64.to_radians(),
+                near: 0.1,
+                far: 1000.0,
+            },
             show_grid: true,
             show_debug_overlay: false,
             gizmo_interaction: None,
@@ -766,6 +777,7 @@ impl EditorState {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         aspect: f32,
+        camera: &EditorCamera,
     ) -> EditorSceneData {
         let mut mesh_store = MeshStore::new();
         let mut material_store = MaterialStore::new(device);
@@ -890,8 +902,8 @@ impl EditorState {
         }
 
         // Compute camera VP matrix
-        let camera_vp = self.camera.projection_matrix(aspect) * self.camera.view_matrix();
-        let camera_pos = self.camera.eye().to_array();
+        let camera_vp = camera.projection_matrix(aspect) * camera.view_matrix();
+        let camera_pos = camera.eye().to_array();
 
         EditorSceneData {
             mesh_store,

@@ -251,7 +251,13 @@ fn draw_single_viewport(
 
     vp_renderer.ensure_target(viewport_type, vp_w, vp_h);
     if let Some(target_view) = vp_renderer.target_view(viewport_type) {
-        let scene_data = state.build_scene(&renderer.device, &renderer.queue, aspect);
+        // Select camera based on active viewport tab
+        let camera = if state.active_viewport_tab == 1 && state.play_state != crate::state::PlayState::Editing {
+            &state.game_camera
+        } else {
+            &state.camera
+        };
+        let scene_data = state.build_scene(&renderer.device, &renderer.queue, aspect, camera);
         let scene = engine_render::renderer::Scene3d {
             mesh_store: &scene_data.mesh_store,
             material_store: &scene_data.material_store,
@@ -451,6 +457,11 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
     let ctx = gui.ui.ctx();
 
     if !canvas_rect.contains(ctx.pointer_interact_pos().unwrap_or(Pos2::ZERO)) {
+        return;
+    }
+
+    // Disable camera controls in Game tab during play mode
+    if state.active_viewport_tab == 1 && state.play_state != crate::state::PlayState::Editing {
         return;
     }
 
