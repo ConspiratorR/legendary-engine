@@ -121,6 +121,69 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         Vec2::new(rect.width(), rect.height() - header_h),
     );
 
+    use crate::viewport_renderer::ViewportLayout;
+    match state.viewport_layout {
+        ViewportLayout::Single(_) => {
+            draw_single_viewport(state, gui, canvas_rect, h_scale, w_scale);
+        }
+        ViewportLayout::Horizontal(_, _) => {
+            let half_w = canvas_rect.width() / 2.0;
+            let left_rect = Rect::from_min_size(
+                canvas_rect.left_top(),
+                Vec2::new(half_w, canvas_rect.height()),
+            );
+            let right_rect = Rect::from_min_size(
+                Pos2::new(canvas_rect.left() + half_w, canvas_rect.top()),
+                Vec2::new(half_w, canvas_rect.height()),
+            );
+            draw_single_viewport(state, gui, left_rect, h_scale, w_scale);
+            draw_single_viewport(state, gui, right_rect, h_scale, w_scale);
+        }
+        ViewportLayout::Vertical(_, _) => {
+            let half_h = canvas_rect.height() / 2.0;
+            let top_rect = Rect::from_min_size(
+                canvas_rect.left_top(),
+                Vec2::new(canvas_rect.width(), half_h),
+            );
+            let bottom_rect = Rect::from_min_size(
+                Pos2::new(canvas_rect.left(), canvas_rect.top() + half_h),
+                Vec2::new(canvas_rect.width(), half_h),
+            );
+            draw_single_viewport(state, gui, top_rect, h_scale, w_scale);
+            draw_single_viewport(state, gui, bottom_rect, h_scale, w_scale);
+        }
+        ViewportLayout::Quad => {
+            let half_w = canvas_rect.width() / 2.0;
+            let half_h = canvas_rect.height() / 2.0;
+            let rects = [
+                Rect::from_min_size(canvas_rect.left_top(), Vec2::new(half_w, half_h)),
+                Rect::from_min_size(
+                    Pos2::new(canvas_rect.left() + half_w, canvas_rect.top()),
+                    Vec2::new(half_w, half_h),
+                ),
+                Rect::from_min_size(
+                    Pos2::new(canvas_rect.left(), canvas_rect.top() + half_h),
+                    Vec2::new(half_w, half_h),
+                ),
+                Rect::from_min_size(
+                    Pos2::new(canvas_rect.left() + half_w, canvas_rect.top() + half_h),
+                    Vec2::new(half_w, half_h),
+                ),
+            ];
+            for rect in &rects {
+                draw_single_viewport(state, gui, *rect, h_scale, w_scale);
+            }
+        }
+    }
+}
+
+fn draw_single_viewport(
+    state: &mut EditorState,
+    gui: &mut Gui,
+    canvas_rect: Rect,
+    h_scale: f32,
+    w_scale: f32,
+) {
     let painter = gui.ui.painter_at(canvas_rect);
 
     let gradient_steps = 20;
