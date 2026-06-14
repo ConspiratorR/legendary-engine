@@ -883,6 +883,21 @@ impl EditorState {
             EditorAction::ToggleGrid => {
                 self.show_grid = !self.show_grid;
             }
+            EditorAction::NextFrame => {
+                self.active_viewport_tab = (self.active_viewport_tab + 1) % 3;
+            }
+            EditorAction::PrevFrame => {
+                self.active_viewport_tab = if self.active_viewport_tab == 0 { 2 } else { self.active_viewport_tab - 1 };
+            }
+            EditorAction::ViewportScene => {
+                self.active_viewport_tab = 0;
+            }
+            EditorAction::ViewportGame => {
+                self.active_viewport_tab = 1;
+            }
+            EditorAction::ViewportPhysics => {
+                self.active_viewport_tab = 2;
+            }
             _ => {}
         }
     }
