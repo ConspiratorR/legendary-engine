@@ -403,6 +403,52 @@ fn draw_single_viewport(
 
     draw_transform_overlay(state, &painter, canvas_rect, h_scale, w_scale);
 
+    // Viewport info overlay (top-right corner)
+    let info_font = FontId::proportional(10.0 * h_scale);
+    let info_x = canvas_rect.right() - 10.0 * w_scale;
+    let info_color = Color32::from_gray(160);
+
+    // Object count
+    let obj_count = state.scene_tree.nodes.iter().filter(|n| n.parent.is_some()).count();
+    painter.text(
+        egui::pos2(info_x, canvas_rect.top() + 50.0 * h_scale),
+        egui::Align2::RIGHT_CENTER,
+        format!("对象: {}", obj_count),
+        info_font.clone(),
+        info_color,
+    );
+
+    // Selected object info
+    if let Some(&sel_id) = state.selected_nodes.first() {
+        if let Some(node) = state.scene_tree.nodes.iter().find(|n| n.id == sel_id) {
+            painter.text(
+                egui::pos2(info_x, canvas_rect.top() + 64.0 * h_scale),
+                egui::Align2::RIGHT_CENTER,
+                format!("选中: {} ({})", node.name, sel_id),
+                info_font.clone(),
+                Color32::from_rgb(0, 212, 170),
+            );
+        }
+        if let Some(t) = state.node_transforms.get(&sel_id) {
+            painter.text(
+                egui::pos2(info_x, canvas_rect.top() + 78.0 * h_scale),
+                egui::Align2::RIGHT_CENTER,
+                format!("位置: {:.1}, {:.1}, {:.1}", t[0], t[1], t[2]),
+                info_font.clone(),
+                info_color,
+            );
+        }
+    }
+
+    // Camera info
+    painter.text(
+        egui::pos2(info_x, canvas_rect.top() + 92.0 * h_scale),
+        egui::Align2::RIGHT_CENTER,
+        format!("距离: {:.1}", state.camera.distance),
+        info_font,
+        info_color,
+    );
+
     handle_camera_input(state, gui, canvas_rect);
 }
 
