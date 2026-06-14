@@ -32,6 +32,8 @@ fn main() -> anyhow::Result<()> {
     let mut viewport_renderer_opt = None;
     let mut hot_reload_opt = None;
     let mut editor_state = EditorState::new();
+    let mut runtime_world: Option<engine_ecs::world::World> = None;
+    let mut prev_play_state = engine_editor::state::PlayState::Editing;
 
     pollster::block_on(async {
         // Initialize renderer
@@ -88,7 +90,12 @@ fn main() -> anyhow::Result<()> {
                                 last_time = now;
 
                                 // Step runtime if playing
-                                editor_state.step_runtime(dt as f32);
+                                if editor_state.play_state
+                                    == engine_editor::state::PlayState::Playing
+                                    && let Some(ref mut world) = runtime_world
+                                {
+                                    editor_state.step_runtime(world, dt as f32);
+                                }
 
                                 // Begin frame
                                 e.begin_frame(dt);
@@ -107,6 +114,24 @@ fn main() -> anyhow::Result<()> {
                                     &mut vp_guard,
                                     e,
                                 );
+
+                                // Manage runtime world on play state transitions
+                                use engine_editor::state::PlayState;
+                                match (prev_play_state, editor_state.play_state) {
+                                    (PlayState::Editing, PlayState::Playing) => {
+                                        // Entering play mode: create runtime world
+                                        runtime_world =
+                                            Some(editor_state.build_runtime_world());
+                                        info!("Runtime world created");
+                                    }
+                                    (_, PlayState::Editing) if prev_play_state != PlayState::Editing => {
+                                        // Leaving play mode: destroy runtime world
+                                        runtime_world = None;
+                                        info!("Runtime world destroyed");
+                                    }
+                                    _ => {}
+                                }
+                                prev_play_state = editor_state.play_state;
 
                                 // End frame and render
                                 let (paint_jobs, textures_delta) = e.end_frame();

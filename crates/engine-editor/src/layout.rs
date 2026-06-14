@@ -483,9 +483,9 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
         let btn_rect = Rect::from_min_size(Pos2::new(x, cy), Vec2::new(btn_size, btn_size));
         if gui.tool_button(btn_rect, icon, play_states[i]) {
             match i {
-                0 => state.play(),
-                1 => state.pause(),
-                2 => state.stop(),
+                0 => { state.play(); }
+                1 => { state.pause(); }
+                2 => { state.stop(); }
                 _ => {}
             }
         }

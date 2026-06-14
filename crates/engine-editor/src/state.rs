@@ -641,15 +641,17 @@ impl EditorState {
         crate::layout::frame(self, ctx, skin, renderer, vp_renderer, egui_state);
     }
 
-    /// Enter play mode: snapshot editor state and begin runtime.
-    pub fn play(&mut self) {
+    /// Enter play mode: snapshot editor state.
+    /// Returns true if state changed to Playing.
+    pub fn play(&mut self) -> bool {
         if self.play_state == PlayState::Playing {
-            return;
+            return false;
         }
         self.editor_transform_snapshot = self.node_transforms.clone();
         self.runtime_elapsed = 0.0;
         self.play_state = PlayState::Playing;
         self.status_message = Some("Playing".into());
+        true
     }
 
     /// Pause the runtime (freeze simulation, keep state).
@@ -664,38 +666,96 @@ impl EditorState {
     }
 
     /// Stop play mode: restore editor state.
-    pub fn stop(&mut self) {
+    /// Returns true if state changed to Editing.
+    pub fn stop(&mut self) -> bool {
         if self.play_state == PlayState::Editing {
-            return;
+            return false;
         }
         self.node_transforms = self.editor_transform_snapshot.clone();
         self.play_state = PlayState::Editing;
         self.status_message = Some("Stopped".into());
+        true
     }
 
-    /// Step the runtime (called each frame while Playing).
-    ///
-    /// Currently applies simple gravity to dynamic objects. Full ECS/physics
-    /// integration will be added when engine-physics is wired as a dependency.
-    pub fn step_runtime(&mut self, dt: f32) {
+    /// Build a runtime ECS World from the current scene tree.
+    pub fn build_runtime_world(&self) -> engine_ecs::world::World {
+        let mut world = engine_ecs::world::World::new();
+
+        // Add physics world resource
+        world.insert_resource(engine_physics::world::PhysicsWorld::default());
+
+        // Spawn entities from scene tree
+        for node in &self.scene_tree.nodes {
+            if node.parent.is_none() {
+                continue;
+            }
+            let entity = world.spawn();
+            let t = self
+                .node_transforms
+                .get(&node.id)
+                .copied()
+                .unwrap_or([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+
+            // Add Transform component
+            world.add_component(
+                entity,
+                RuntimeTransform {
+                    position: [t[0], t[1], t[2]],
+                    rotation: [t[3], t[4], t[5], t[6]],
+                    scale: [t[7], t[8], 1.0],
+                },
+            );
+
+            // Add RigidBody if physics data exists
+            if let Some((body_type, _collider_type)) = self.node_physics.get(&node.id) {
+                let rb = match body_type.as_str() {
+                    "Dynamic" => engine_physics::RigidBody::new_dynamic(),
+                    "Kinematic" => engine_physics::RigidBody::new_kinematic(),
+                    _ => engine_physics::RigidBody::new_static(),
+                };
+                world.add_component(entity, rb);
+            }
+        }
+
+        world
+    }
+
+    /// Step the runtime ECS world and read back transforms.
+    pub fn step_runtime(&mut self, world: &mut engine_ecs::world::World, dt: f32) {
         if self.play_state != PlayState::Playing {
             return;
         }
         self.runtime_elapsed += dt;
 
-        // Simple gravity simulation for nodes with "Dynamic" physics type
-        for node in &self.scene_tree.nodes {
-            if node.parent.is_none() {
-                continue;
+        // Step physics
+        let mut pw = match world.remove_resource::<engine_physics::world::PhysicsWorld>() {
+            Some(pw) => pw,
+            None => return,
+        };
+        pw.step(world);
+        world.insert_resource(pw);
+
+        // Read back transforms from ECS to editor state
+        let transform_indices = world.component_entities::<RuntimeTransform>();
+        let node_ids: Vec<u64> = self
+            .scene_tree
+            .nodes
+            .iter()
+            .filter(|n| n.parent.is_some())
+            .map(|n| n.id)
+            .collect();
+
+        for (i, &idx) in transform_indices.iter().enumerate() {
+            if i >= node_ids.len() {
+                break;
             }
-            if let Some((body_type, _)) = self.node_physics.get(&node.id)
-                && body_type == "Dynamic"
-                && let Some(t) = self.node_transforms.get_mut(&node.id)
+            let node_id = node_ids[i];
+            if let Some(tc) = world.get_by_index::<RuntimeTransform>(idx)
+                && let Some(t) = self.node_transforms.get_mut(&node_id)
             {
-                t[1] -= 9.81 * dt;
-                if t[1] < 0.0 {
-                    t[1] = 0.0;
-                }
+                t[0] = tc.position[0];
+                t[1] = tc.position[1];
+                t[2] = tc.position[2];
             }
         }
     }
@@ -846,6 +906,14 @@ impl EditorState {
             scene_aabb_max: Vec3::new(50.0, 50.0, 50.0),
         }
     }
+}
+
+/// Transform component for runtime ECS entities.
+#[derive(Debug, Clone)]
+pub struct RuntimeTransform {
+    pub position: [f32; 3],
+    pub rotation: [f32; 4],
+    pub scale: [f32; 3],
 }
 
 fn cube_vertices() -> [engine_render::resource::mesh::MeshVertex; 24] {
