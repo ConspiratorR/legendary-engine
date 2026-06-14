@@ -68,6 +68,10 @@ pub struct MaterialUniform {
     pub _pad1: f32,
 }
 
+/// Stride for material uniforms in the buffer, aligned to 256 bytes
+/// (the typical `min_uniform_buffer_offset_alignment` limit).
+const MATERIAL_STRIDE: u64 = 256;
+
 impl From<&PbrMaterial> for MaterialUniform {
     fn from(m: &PbrMaterial) -> Self {
         Self {
@@ -88,45 +92,145 @@ use std::collections::HashMap;
 pub struct MaterialStore {
     materials: HashMap<u64, PbrMaterial>,
     bind_groups: HashMap<u64, wgpu::BindGroup>,
-    uniform_buffer: wgpu::Buffer,
+    base_color_buffer: wgpu::Buffer,
+    material_params_buffer: wgpu::Buffer,
     bind_group_layout: wgpu::BindGroupLayout,
+    default_texture: wgpu::Texture,
+    default_texture_view: wgpu::TextureView,
+    default_sampler: wgpu::Sampler,
     next_id: u64,
 }
 
 impl MaterialStore {
     pub fn new(device: &wgpu::Device) -> Self {
+        // Match the deferred geometry shader's material bind group layout:
+        // @group(2) @binding(0) var<uniform> base_color: vec4<f32>;
+        // @group(2) @binding(1) var<uniform> material_params: vec4<f32>;
+        // @group(2) @binding(2) var albedo_texture: texture_2d<f32>;
+        // @group(2) @binding(3) var albedo_sampler: sampler;
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("material_bind_group_layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+            entries: &[
+                // b0: base_color uniform
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                // b1: material_params uniform
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                // b2: albedo texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // b3: albedo sampler
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
         });
 
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("material_uniform_buffer"),
-            size: 48 * 64, // 48 bytes per material, up to 64 materials
+        // Two separate uniform buffers, each with MATERIAL_STRIDE per material
+        let base_color_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("material_base_color_buffer"),
+            size: MATERIAL_STRIDE * 64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
+        });
+        let material_params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("material_params_buffer"),
+            size: MATERIAL_STRIDE * 64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Default white 1x1 texture
+        let default_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("material_default_texture"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let default_texture_view = default_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let default_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("material_default_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
         });
 
         Self {
             materials: HashMap::new(),
             bind_groups: HashMap::new(),
-            uniform_buffer,
+            base_color_buffer,
+            material_params_buffer,
             bind_group_layout,
+            default_texture,
+            default_texture_view,
+            default_sampler,
             next_id: 1,
         }
     }
 
     pub fn bind_group_layout(&self) -> &wgpu::BindGroupLayout {
         &self.bind_group_layout
+    }
+
+    /// Initialize the default texture with a white pixel. Must be called once with a queue.
+    pub fn init_default_texture(&self, queue: &wgpu::Queue) {
+        let white: &[u8] = &[255, 255, 255, 255];
+        queue.write_texture(
+            wgpu::ImageCopyTexture {
+                texture: &self.default_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            white,
+            wgpu::ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(4),
+                rows_per_image: Some(1),
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
     }
 
     /// Add a material, returns material_id.
@@ -139,21 +243,56 @@ impl MaterialStore {
         let id = self.next_id;
         self.next_id += 1;
 
-        let uniform = MaterialUniform::from(&material);
-        let offset = (id - 1) * 48;
-        queue.write_buffer(&self.uniform_buffer, offset, bytemuck::bytes_of(&uniform));
+        let offset = (id - 1) as u64 * MATERIAL_STRIDE;
+
+        // Write base_color (vec4) to base_color_buffer
+        queue.write_buffer(
+            &self.base_color_buffer,
+            offset,
+            bytemuck::bytes_of(&material.base_color),
+        );
+
+        // Write material_params (metallic, roughness, ao, pad) to material_params_buffer
+        let params: [f32; 4] = [material.metallic, material.roughness, material.ao, 0.0];
+        queue.write_buffer(
+            &self.material_params_buffer,
+            offset,
+            bytemuck::bytes_of(&params),
+        );
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(&format!("material_bind_group_{}", id)),
             layout: &self.bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &self.uniform_buffer,
-                    offset,
-                    size: Some(std::num::NonZeroU64::new(48).unwrap()),
-                }),
-            }],
+            entries: &[
+                // b0: base_color uniform
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.base_color_buffer,
+                        offset,
+                        size: Some(std::num::NonZeroU64::new(16).unwrap()),
+                    }),
+                },
+                // b1: material_params uniform
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.material_params_buffer,
+                        offset,
+                        size: Some(std::num::NonZeroU64::new(16).unwrap()),
+                    }),
+                },
+                // b2: albedo texture (use default white texture)
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&self.default_texture_view),
+                },
+                // b3: albedo sampler
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(&self.default_sampler),
+                },
+            ],
         });
 
         self.materials.insert(id, material);

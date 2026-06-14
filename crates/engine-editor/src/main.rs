@@ -42,6 +42,7 @@ fn main() -> anyhow::Result<()> {
     let mut runtime_world: Option<engine_ecs::world::World> = None;
     let mut prev_play_state = engine_editor::state::PlayState::Editing;
     let mut window_modifiers = Modifiers { ctrl: false, shift: false, alt: false };
+    let start_time = std::time::Instant::now();
 
     pollster::block_on(async {
         // Initialize renderer
@@ -115,8 +116,9 @@ fn main() -> anyhow::Result<()> {
                                     }
                                 }
 
-                                // Begin frame
-                                e.begin_frame(dt);
+                                // Begin frame (pass absolute time, not delta)
+                                let elapsed = (now - start_time).as_secs_f64();
+                                e.begin_frame(elapsed);
 
                                 // Update editor with renderer context
                                 let mut vp_guard = viewport_renderer_opt

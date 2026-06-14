@@ -112,8 +112,11 @@ impl Renderer {
         .ok_or("Failed to find suitable adapter")?;
         let (device, queue) = pollster::block_on(adapter.request_device(
             &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
+                required_features: wgpu::Features::PUSH_CONSTANTS,
+                required_limits: wgpu::Limits {
+                    max_push_constant_size: 128,
+                    ..wgpu::Limits::default()
+                },
                 label: None,
                 memory_hints: wgpu::MemoryHints::Performance,
             },
@@ -518,7 +521,7 @@ impl Renderer {
 
         // Deferred pass (geometry + lighting pipelines)
         let deferred_pass =
-            DeferredPass::new(device, self.config.format, &shadow_pass.bind_group_layout);
+            DeferredPass::new(device, wgpu::TextureFormat::Rgba16Float, &shadow_pass.bind_group_layout);
 
         // Camera uniform for deferred path (80 bytes)
         let deferred_camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
