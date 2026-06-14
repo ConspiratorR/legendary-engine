@@ -532,6 +532,5 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
                 .filter(|s| !s.is_empty())
                 .collect();
         }
-        y += row_h + 6.0;
     }
 }

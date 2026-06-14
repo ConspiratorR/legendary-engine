@@ -53,7 +53,8 @@ fn main() -> anyhow::Result<()> {
             engine_editor::hot_reload::ReloadManager::new(std::path::Path::new("assets"))
                 .unwrap_or_else(|e| {
                     log::warn!("Failed to init hot reload: {}", e);
-                    engine_editor::hot_reload::ReloadManager::new(std::path::Path::new(".")).unwrap()
+                    engine_editor::hot_reload::ReloadManager::new(std::path::Path::new("."))
+                        .unwrap()
                 }),
         ));
 

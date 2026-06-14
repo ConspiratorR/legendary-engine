@@ -51,6 +51,7 @@ impl Default for OrthoCamera {
 }
 
 /// Offscreen render target for a single viewport.
+#[allow(dead_code)] // texture and egui_texture_id are kept for future egui integration
 struct ViewportTarget {
     texture: wgpu::Texture,
     view: wgpu::TextureView,

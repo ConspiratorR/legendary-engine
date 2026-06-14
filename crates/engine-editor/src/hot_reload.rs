@@ -10,7 +10,7 @@ use std::time::Instant;
 use engine_asset::types::ResourceType;
 use log::{info, warn};
 use notify::{RecommendedWatcher, RecursiveMode};
-use notify_debouncer_mini::{new_debouncer, DebouncedEvent, Debouncer};
+use notify_debouncer_mini::{DebouncedEvent, Debouncer, new_debouncer};
 
 /// A pending reload request for a changed file.
 #[derive(Debug, Clone)]
