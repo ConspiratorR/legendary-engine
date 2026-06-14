@@ -7,6 +7,9 @@
 //! [`end_frame`](EguiState::end_frame) and [`paint`](EguiState::paint)
 //! to render via wgpu.
 
+use std::any::TypeId;
+use std::collections::HashMap;
+
 use egui::Context;
 use egui_wgpu::{Renderer, ScreenDescriptor};
 
@@ -27,6 +30,7 @@ pub struct EguiState {
     mouse_buttons: [bool; 3],
     just_pressed: [bool; 3],
     just_released: [bool; 3],
+    callback_resources: HashMap<TypeId, Box<dyn std::any::Any>>,
 }
 
 impl EguiState {
@@ -53,7 +57,28 @@ impl EguiState {
             mouse_buttons: [false; 3],
             just_pressed: [false; 3],
             just_released: [false; 3],
+            callback_resources: HashMap::new(),
         }
+    }
+
+    /// Insert a custom callback resource for use with PaintCallback.
+    pub fn insert_callback_resource<T: 'static>(&mut self, resource: T) {
+        self.callback_resources
+            .insert(TypeId::of::<T>(), Box::new(resource));
+    }
+
+    /// Get a reference to a custom callback resource.
+    pub fn callback_resource<T: 'static>(&self) -> Option<&T> {
+        self.callback_resources
+            .get(&TypeId::of::<T>())
+            .and_then(|r| r.downcast_ref())
+    }
+
+    /// Get a mutable reference to a custom callback resource.
+    pub fn callback_resource_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.callback_resources
+            .get_mut(&TypeId::of::<T>())
+            .and_then(|r| r.downcast_mut())
     }
 
     fn load_fonts() -> egui::FontDefinitions {
@@ -240,6 +265,8 @@ impl EguiState {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::EguiState;
 
     fn dummy_state(width: u32, height: u32, scale_factor: f32) -> EguiState {
@@ -257,6 +284,7 @@ mod tests {
             mouse_buttons: [false; 3],
             just_pressed: [false; 3],
             just_released: [false; 3],
+            callback_resources: HashMap::new(),
         }
     }
 
