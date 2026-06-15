@@ -322,8 +322,32 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
             gui.input_labeled(mr, "材质", mat);
             y += row_h + 6.0;
 
+            // Mesh type dropdown
+            let mesh_types = ["Cube", "Sphere", "Plane", "Cylinder"];
             let mer = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-            gui.input_labeled(mer, "网格", mesh);
+            painter.text(
+                egui::pos2(x, mer.center().y),
+                egui::Align2::LEFT_CENTER,
+                "网格",
+                FontId::proportional(12.0),
+                Color32::from_gray(152),
+            );
+            let combo_rect = Rect::from_min_size(
+                Pos2::new(x + 80.0, mer.top()),
+                Vec2::new(w - 80.0, mer.height()),
+            );
+            let mut selected_idx = mesh_types.iter().position(|&m| m == mesh.as_str()).unwrap_or(0);
+            let combo_id = egui::Id::new("mesh_combo").with(id);
+            let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
+            egui::ComboBox::from_id_salt(combo_id)
+                .width(combo_rect.width())
+                .selected_text(mesh_types[selected_idx])
+                .show_ui(ui_mut, |ui| {
+                    for (i, mt) in mesh_types.iter().enumerate() {
+                        ui.selectable_value(&mut selected_idx, i, *mt);
+                    }
+                });
+            *mesh = mesh_types[selected_idx].to_string();
             y += row_h + 6.0;
 
             let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
