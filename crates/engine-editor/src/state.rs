@@ -1355,6 +1355,24 @@ impl EditorState {
         let camera_vp = camera.projection_matrix(aspect) * camera.view_matrix();
         let camera_pos = camera.eye().to_array();
 
+        // Compute scene AABB from actual object positions
+        let mut aabb_min = Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+        let mut aabb_max = Vec3::new(f32::MIN, f32::MIN, f32::MIN);
+        for node in &self.scene_tree.nodes {
+            if node.parent.is_none() {
+                continue;
+            }
+            if let Some(t) = self.node_transforms.get(&node.id) {
+                let pos = Vec3::new(t[0], t[1], t[2]);
+                let half = Vec3::new(t[6].abs().max(0.5), t[7].abs().max(0.5), t[8].abs().max(0.5));
+                aabb_min = aabb_min.min(pos - half);
+                aabb_max = aabb_max.max(pos + half);
+            }
+        }
+        let margin = Vec3::new(5.0, 5.0, 5.0);
+        aabb_min -= margin;
+        aabb_max += margin;
+
         EditorSceneData {
             mesh_store,
             material_store,
@@ -1364,8 +1382,8 @@ impl EditorState {
             camera_vp,
             camera_pos,
             shadow_config: ShadowMapConfig::default(),
-            scene_aabb_min: Vec3::new(-50.0, -50.0, -50.0),
-            scene_aabb_max: Vec3::new(50.0, 50.0, 50.0),
+            scene_aabb_min: aabb_min,
+            scene_aabb_max: aabb_max,
         }
     }
 }
