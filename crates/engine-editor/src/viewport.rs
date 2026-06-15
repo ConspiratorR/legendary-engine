@@ -326,7 +326,8 @@ fn draw_single_viewport(
         }
 
         // Debug overlay: wireframe AABBs and velocity vectors
-        if state.show_debug_overlay {
+        // Always show in Physics viewport tab, or when debug overlay is toggled
+        if state.show_debug_overlay || state.active_viewport_tab == 2 {
             let debug_color = [0.0, 1.0, 1.0, 0.6]; // cyan
             let dynamic_color = [1.0, 1.0, 0.0, 0.8]; // yellow for dynamic
             for node in &state.scene_tree.nodes {
@@ -358,6 +359,31 @@ fn draw_single_viewport(
                             [pos[0], pos[1] - 2.0, pos[2]],
                             [1.0, 0.3, 0.0, 1.0],
                         );
+                    }
+                    // Show collider type label position in Physics tab
+                    if state.active_viewport_tab == 2
+                        && let Some((_, collider)) = state.node_physics.get(&node.id)
+                    {
+                        let collider_color = match collider.as_str() {
+                            "Box" => [0.0, 0.8, 1.0, 0.8],
+                            "Sphere" => [1.0, 0.5, 0.0, 0.8],
+                            "Capsule" => [0.5, 1.0, 0.5, 0.8],
+                            _ => [0.5, 0.5, 0.5, 0.6],
+                        };
+                        // Draw collider wireframe based on type
+                        match collider.as_str() {
+                            "Sphere" => {
+                                overlay.selection_sphere(pos, 0.6, collider_color);
+                            }
+                            _ => {
+                                // Box collider (default)
+                                overlay.aabb(
+                                    [pos[0] - 0.5, pos[1] - 0.5, pos[2] - 0.5],
+                                    [pos[0] + 0.5, pos[1] + 0.5, pos[2] + 0.5],
+                                    collider_color,
+                                );
+                            }
+                        }
                     }
                 }
             }
