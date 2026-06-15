@@ -74,6 +74,12 @@ fn main() -> anyhow::Result<()> {
         viewport_renderer_opt = Some(vp_renderer);
         hot_reload_opt = Some(hot_reload);
 
+        // Log startup messages
+        editor_state.log_info("编辑器已启动");
+        editor_state.log_info("项目已加载: RustEngine");
+        editor_state.log_info("着色器编译完成");
+        editor_state.log_info("渲染器初始化成功 (wgpu + 延迟渲染管线)");
+
         // Run the event loop
         let mut last_time = std::time::Instant::now();
         event_loop.run(move |event, elwt| {

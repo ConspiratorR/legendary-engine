@@ -645,43 +645,54 @@ fn draw_bottom_panel(
     let log_step = 18.0 * h_scale;
     match state.active_bottom_tab {
         0 => {
-            let logs = [
-                ("10:23:15", "info", "编辑器已启动"),
-                ("10:23:16", "info", "项目已加载: MyGame"),
-                ("10:23:18", "info", "着色器编译完成 (12个)"),
-                ("10:23:20", "warn", "缺少法线贴图: Materials/Wood"),
-                ("10:23:22", "info", "场景保存成功"),
-            ];
-            let mut y = content_rect.top() + 8.0 * h_scale;
-            for (time, level, msg) in &logs {
-                let time_color = Color32::from_gray(90);
-                let level_color = match *level {
-                    "info" => Color32::from_gray(152),
-                    "warn" => Color32::from_rgb(255, 184, 0),
-                    _ => Color32::from_rgb(255, 71, 87),
-                };
+            if state.log_messages.is_empty() {
                 painter.text(
-                    egui::pos2(content_rect.left() + 12.0 * w_scale, y),
-                    egui::Align2::LEFT_CENTER,
-                    *time,
+                    content_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    "暂无日志",
                     FontId::proportional(log_font),
-                    time_color,
+                    Color32::from_gray(60),
                 );
-                painter.text(
-                    egui::pos2(content_rect.left() + 72.0 * w_scale, y),
-                    egui::Align2::LEFT_CENTER,
-                    *level,
-                    FontId::proportional(log_font),
-                    level_color,
-                );
-                painter.text(
-                    egui::pos2(content_rect.left() + 122.0 * w_scale, y),
-                    egui::Align2::LEFT_CENTER,
-                    *msg,
-                    FontId::proportional(log_font),
-                    Color32::from_rgb(232, 232, 236),
-                );
-                y += log_step;
+            } else {
+                let mut y = content_rect.top() + 8.0 * h_scale;
+                for entry in state.log_messages.iter().rev() {
+                    if y > content_rect.bottom() {
+                        break;
+                    }
+                    let time_color = Color32::from_gray(90);
+                    let level_color = match entry.level {
+                        crate::state::LogLevel::Info => Color32::from_gray(152),
+                        crate::state::LogLevel::Warn => Color32::from_rgb(255, 184, 0),
+                        crate::state::LogLevel::Error => Color32::from_rgb(255, 71, 87),
+                    };
+                    let level_str = match entry.level {
+                        crate::state::LogLevel::Info => "info",
+                        crate::state::LogLevel::Warn => "warn",
+                        crate::state::LogLevel::Error => "error",
+                    };
+                    painter.text(
+                        egui::pos2(content_rect.left() + 12.0 * w_scale, y),
+                        egui::Align2::LEFT_CENTER,
+                        &entry.timestamp,
+                        FontId::proportional(log_font),
+                        time_color,
+                    );
+                    painter.text(
+                        egui::pos2(content_rect.left() + 72.0 * w_scale, y),
+                        egui::Align2::LEFT_CENTER,
+                        level_str,
+                        FontId::proportional(log_font),
+                        level_color,
+                    );
+                    painter.text(
+                        egui::pos2(content_rect.left() + 122.0 * w_scale, y),
+                        egui::Align2::LEFT_CENTER,
+                        &entry.message,
+                        FontId::proportional(log_font),
+                        Color32::from_rgb(232, 232, 236),
+                    );
+                    y += log_step;
+                }
             }
         }
         1 => {

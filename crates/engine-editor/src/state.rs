@@ -580,6 +580,24 @@ pub struct EditorState {
     pub pending_transform_edit: Option<(u64, [f32; 9])>,
     /// Clipboard for copy/paste: (transform, material).
     pub clipboard: Vec<([f32; 9], Option<MaterialData>)>,
+    /// Log messages for the console panel.
+    pub log_messages: Vec<LogEntry>,
+}
+
+/// A single log entry for the console panel.
+#[derive(Debug, Clone)]
+pub struct LogEntry {
+    pub timestamp: String,
+    pub level: LogLevel,
+    pub message: String,
+}
+
+/// Log level for console display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogLevel {
+    Info,
+    Warn,
+    Error,
 }
 
 impl Default for EditorState {
@@ -686,6 +704,7 @@ impl EditorState {
             command_manager: CommandManager::default(),
             pending_transform_edit: None,
             clipboard: Vec::new(),
+            log_messages: Vec::new(),
         }
     }
 
@@ -711,6 +730,7 @@ impl EditorState {
         self.runtime_elapsed = 0.0;
         self.play_state = PlayState::Playing;
         self.status_message = Some("Playing".into());
+        self.log_info("运行模式已启动");
         true
     }
 
@@ -719,9 +739,11 @@ impl EditorState {
         if self.play_state == PlayState::Playing {
             self.play_state = PlayState::Paused;
             self.status_message = Some("Paused".into());
+            self.log_info("运行模式已暂停");
         } else if self.play_state == PlayState::Paused {
             self.play_state = PlayState::Playing;
             self.status_message = Some("Playing".into());
+            self.log_info("运行模式已恢复");
         }
     }
 
@@ -734,6 +756,7 @@ impl EditorState {
         self.node_transforms = self.editor_transform_snapshot.clone();
         self.play_state = PlayState::Editing;
         self.status_message = Some("Stopped".into());
+        self.log_info("运行模式已停止");
         true
     }
 
@@ -1014,6 +1037,42 @@ impl EditorState {
             self.selected_nodes.push(new_id);
         }
         self.status_message = Some(format!("已粘贴 {} 个对象", self.clipboard.len()));
+    }
+
+    /// Add a log message to the console.
+    pub fn log(&mut self, level: LogLevel, message: String) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default();
+        let secs = now.as_secs();
+        let hours = (secs / 3600) % 24;
+        let minutes = (secs / 60) % 60;
+        let seconds = secs % 60;
+        let timestamp = format!("{:02}:{:02}:{:02}", hours, minutes, seconds);
+        self.log_messages.push(LogEntry {
+            timestamp,
+            level,
+            message,
+        });
+        // Keep last 1000 messages
+        if self.log_messages.len() > 1000 {
+            self.log_messages.remove(0);
+        }
+    }
+
+    /// Add an info log message.
+    pub fn log_info(&mut self, msg: &str) {
+        self.log(LogLevel::Info, msg.to_string());
+    }
+
+    /// Add a warning log message.
+    pub fn log_warn(&mut self, msg: &str) {
+        self.log(LogLevel::Warn, msg.to_string());
+    }
+
+    /// Add an error log message.
+    pub fn log_error(&mut self, msg: &str) {
+        self.log(LogLevel::Error, msg.to_string());
     }
 
     /// Build scene data for 3D rendering from the current editor state.
