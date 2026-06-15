@@ -586,14 +586,12 @@ pub struct EditorState {
     pub autosave_enabled: bool,
     /// Keyboard shortcut manager.
     pub shortcuts: ShortcutManager,
-    /// Gizmo drag state (axis index 0=X, 1=Y, 2=Z, None=not dragging).
-    pub gizmo_drag_axis: Option<u8>,
-    /// Screen position where gizmo drag started.
-    pub gizmo_drag_start_screen: Option<(f32, f32)>,
-    /// Object position when gizmo drag started.
-    pub gizmo_drag_start_pos: Option<[f32; 3]>,
-    /// Whether the object creation menu is open.
-    pub show_create_menu: bool,
+    /// Whether the add component menu is open.
+    pub show_add_component_menu: bool,
+    /// Whether the remove component menu is open.
+    pub show_remove_component_menu: bool,
+    /// Sky/background color for the viewport (RGB 0.0-1.0).
+    pub sky_color: [f32; 3],
     /// Node currently being dragged in hierarchy (for reparent).
     pub drag_source: Option<u64>,
     /// Node being hovered during drag (drop target).
@@ -608,10 +606,14 @@ pub struct EditorState {
     pub log_messages: Vec<LogEntry>,
     /// Inspector search filter text.
     pub inspector_search: String,
-    /// Whether the add component menu is open.
-    pub show_add_component_menu: bool,
-    /// Whether the remove component menu is open.
-    pub show_remove_component_menu: bool,
+    /// Gizmo drag state (axis index 0=X, 1=Y, 2=Z, None=not dragging).
+    pub gizmo_drag_axis: Option<u8>,
+    /// Screen position where gizmo drag started.
+    pub gizmo_drag_start_screen: Option<(f32, f32)>,
+    /// Object position when gizmo drag started.
+    pub gizmo_drag_start_pos: Option<[f32; 3]>,
+    /// Whether the object creation menu is open.
+    pub show_create_menu: bool,
 }
 
 /// A single log entry for the console panel.
@@ -756,6 +758,7 @@ impl EditorState {
             inspector_search: String::new(),
             show_add_component_menu: false,
             show_remove_component_menu: false,
+            sky_color: [0.15, 0.20, 0.30],
         }
     }
 

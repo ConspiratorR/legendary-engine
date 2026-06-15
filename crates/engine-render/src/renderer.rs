@@ -922,6 +922,7 @@ impl Renderer {
         target_width: u32,
         target_height: u32,
         scene: &Scene3d<'_>,
+        clear_color: Option<wgpu::Color>,
     ) {
         self.init_deferred_resources();
 
@@ -1134,7 +1135,12 @@ impl Renderer {
                     view: hdr_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        load: wgpu::LoadOp::Clear(clear_color.unwrap_or(wgpu::Color {
+                            r: 0.15,
+                            g: 0.20,
+                            b: 0.30,
+                            a: 1.0,
+                        })),
                         store: wgpu::StoreOp::Store,
                     },
                 })],

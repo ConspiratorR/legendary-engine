@@ -216,25 +216,6 @@ fn draw_single_viewport(
 ) {
     let painter = gui.ui.painter_at(canvas_rect);
 
-    // Background gradient
-    let gradient_steps = 20;
-    let step_h = canvas_rect.height() / gradient_steps as f32;
-    for i in 0..gradient_steps {
-        let t = i as f32 / (gradient_steps - 1) as f32;
-        let r = (10.0 + t * 10.0) as u8;
-        let g = (10.0 + t * 10.0) as u8;
-        let b = (12.0 + t * 16.0) as u8;
-        let strip = Rect::from_min_size(
-            Pos2::new(canvas_rect.left(), canvas_rect.top() + i as f32 * step_h),
-            Vec2::new(canvas_rect.width(), step_h + 1.0),
-        );
-        painter.add(Shape::rect_filled(
-            strip,
-            Rounding::ZERO,
-            Color32::from_rgb(r, g, b),
-        ));
-    }
-
     // Render 3D scene to offscreen viewport texture
     let vp_w = canvas_rect.width().max(1.0) as u32;
     let vp_h = canvas_rect.height().max(1.0) as u32;
@@ -270,7 +251,13 @@ fn draw_single_viewport(
             scene_aabb_max: scene_data.scene_aabb_max,
             shadow_config: scene_data.shadow_config,
         };
-        renderer.render_frame_3d_to_target(target_view, vp_w, vp_h, &scene);
+        let clear_color = Some(wgpu::Color {
+            r: state.sky_color[0] as f64,
+            g: state.sky_color[1] as f64,
+            b: state.sky_color[2] as f64,
+            a: 1.0,
+        });
+        renderer.render_frame_3d_to_target(target_view, vp_w, vp_h, &scene, clear_color);
 
         // Build 3D overlay batch (grid, gizmo, selection highlights)
         let mut overlay = engine_render::line3d::Line3dBatch::new();
