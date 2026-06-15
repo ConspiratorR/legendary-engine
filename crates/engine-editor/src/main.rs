@@ -19,6 +19,8 @@ struct Modifiers {
 fn main() -> anyhow::Result<()> {
     // Initialize logging
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    // Initialize tracing for performance profiling
+    tracing_subscriber::fmt::init();
     info!("Starting RustEngine Editor");
 
     // Create event loop and window

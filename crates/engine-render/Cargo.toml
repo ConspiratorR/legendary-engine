@@ -21,3 +21,4 @@ parking_lot = "0.12"
 rayon = "1.10"
 rand = "0.9"
 fontdue = "0.9"
+tracing = { workspace = true }

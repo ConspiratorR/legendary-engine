@@ -865,6 +865,7 @@ impl EditorState {
 
     /// Step the runtime ECS world and read back transforms.
     pub fn step_runtime(&mut self, world: &mut engine_ecs::world::World, dt: f32) {
+        let _span = tracing::info_span!("step_runtime").entered();
         if self.play_state != PlayState::Playing {
             return;
         }
@@ -1252,6 +1253,7 @@ impl EditorState {
         aspect: f32,
         camera: &EditorCamera,
     ) -> EditorSceneData {
+        let _span = tracing::info_span!("build_scene").entered();
         let mut mesh_store = MeshStore::new();
         let mut material_store = MaterialStore::new(device);
         material_store.init_default_texture(queue);

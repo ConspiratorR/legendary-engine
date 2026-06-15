@@ -924,6 +924,7 @@ impl Renderer {
         scene: &Scene3d<'_>,
         clear_color: Option<wgpu::Color>,
     ) {
+        let _span = tracing::info_span!("render_frame_3d_to_target").entered();
         self.init_deferred_resources();
 
         let device: &wgpu::Device = &self.device;
@@ -1182,6 +1183,7 @@ impl Renderer {
         line_pipeline: &crate::line3d::Line3dPipeline,
         camera_bind_group: &wgpu::BindGroup,
     ) {
+        let _span = tracing::info_span!("render_overlay_to_target").entered();
         if batch.is_empty() {
             return;
         }
