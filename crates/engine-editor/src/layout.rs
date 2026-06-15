@@ -317,6 +317,21 @@ fn draw_dropdown_menu(
                             // 另存为
                             save_scene_as(state);
                         }
+                        4 => {
+                            // 退出
+                            std::process::exit(0);
+                        }
+                        _ => {}
+                    }
+                }
+                1 => {
+                    // 编辑菜单
+                    match i {
+                        0 => state.undo(),    // 撤销
+                        1 => state.redo(),    // 重做
+                        2 => state.cut_selected(),   // 剪切
+                        3 => state.copy_selected(),  // 复制
+                        4 => state.paste(),          // 粘贴
                         _ => {}
                     }
                 }
@@ -325,6 +340,13 @@ fn draw_dropdown_menu(
                     match i {
                         0 => state.show_left_panel = !state.show_left_panel,
                         1 => state.show_right_panel = !state.show_right_panel,
+                        2 => {
+                            // 重置布局
+                            state.show_left_panel = true;
+                            state.show_right_panel = true;
+                            state.viewport_layout = crate::viewport_renderer::ViewportLayout::default();
+                            state.status_message = Some("布局已重置".into());
+                        }
                         _ => {}
                     }
                 }
@@ -347,6 +369,35 @@ fn draw_dropdown_menu(
                         _ => {}
                     }
                 }
+                4 => {
+                    // 资源菜单
+                    match i {
+                        0 => {
+                            // 导入资源
+                            state.status_message = Some("导入资源: 功能开发中".into());
+                        }
+                        1 => {
+                            // 刷新资源
+                            state.resource_browser.refresh();
+                            state.status_message = Some("资源已刷新".into());
+                        }
+                        _ => {}
+                    }
+                }
+                5 => {
+                    // 构建菜单
+                    match i {
+                        0 => {
+                            // 构建项目
+                            state.status_message = Some("构建项目: 功能开发中".into());
+                        }
+                        1 => {
+                            // 运行项目
+                            state.play();
+                        }
+                        _ => {}
+                    }
+                }
                 6 => {
                     // 窗口菜单
                     match i {
@@ -360,6 +411,20 @@ fn draw_dropdown_menu(
                             // 性能叠加层
                             state.performance_overlay.config.visible =
                                 !state.performance_overlay.config.visible;
+                        }
+                        _ => {}
+                    }
+                }
+                7 => {
+                    // 帮助菜单
+                    match i {
+                        0 => {
+                            // 关于
+                            state.status_message = Some("RustEngine v0.1.0 — 基于 Rust 的高性能游戏引擎".into());
+                        }
+                        1 => {
+                            // 文档
+                            state.status_message = Some("文档: docs/ 目录下包含完整教程".into());
                         }
                         _ => {}
                     }

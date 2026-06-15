@@ -578,6 +578,8 @@ pub struct EditorState {
     pub command_manager: CommandManager,
     /// Pending transform edit: (node_id, original_transform) — captured when editing starts.
     pub pending_transform_edit: Option<(u64, [f32; 9])>,
+    /// Clipboard for copy/paste: (transform, material).
+    pub clipboard: Vec<([f32; 9], Option<MaterialData>)>,
 }
 
 impl Default for EditorState {
@@ -683,6 +685,7 @@ impl EditorState {
             drag_hover_target: None,
             command_manager: CommandManager::default(),
             pending_transform_edit: None,
+            clipboard: Vec::new(),
         }
     }
 
@@ -903,7 +906,7 @@ impl EditorState {
     }
 
     /// Undo the last action.
-    fn undo(&mut self) {
+    pub fn undo(&mut self) {
         let mut cm = std::mem::take(&mut self.command_manager);
         if cm.undo(self).is_some() {
             self.status_message = Some(format!(
@@ -917,7 +920,7 @@ impl EditorState {
     }
 
     /// Redo the last undone action.
-    fn redo(&mut self) {
+    pub fn redo(&mut self) {
         let mut cm = std::mem::take(&mut self.command_manager);
         if cm.redo(self).is_some() {
             self.status_message = Some(format!(
@@ -972,6 +975,45 @@ impl EditorState {
             self.camera.distance = 5.0;
             self.status_message = Some("Focused on selection".into());
         }
+    }
+
+    /// Cut selected nodes (copy + delete).
+    pub fn cut_selected(&mut self) {
+        self.copy_selected();
+        self.delete_selected();
+        self.status_message = Some("已剪切".into());
+    }
+
+    /// Copy selected nodes to clipboard (stores transform data).
+    pub fn copy_selected(&mut self) {
+        self.clipboard.clear();
+        for &id in &self.selected_nodes {
+            if let Some(t) = self.node_transforms.get(&id) {
+                self.clipboard.push((*t, self.node_materials.get(&id).cloned()));
+            }
+        }
+        self.status_message = Some(format!("已复制 {} 个对象", self.clipboard.len()));
+    }
+
+    /// Paste clipboard contents as new nodes.
+    pub fn paste(&mut self) {
+        if self.clipboard.is_empty() {
+            self.status_message = Some("剪贴板为空".into());
+            return;
+        }
+        self.selected_nodes.clear();
+        let parent = self.scene_tree.root_ids.first().copied();
+        for (transform, material) in &self.clipboard {
+            let new_id = self.scene_tree.add_node("Pasted", parent);
+            let mut t = *transform;
+            t[0] += 1.0; // offset slightly
+            self.node_transforms.insert(new_id, t);
+            if let Some(mat) = material {
+                self.node_materials.insert(new_id, mat.clone());
+            }
+            self.selected_nodes.push(new_id);
+        }
+        self.status_message = Some(format!("已粘贴 {} 个对象", self.clipboard.len()));
     }
 
     /// Build scene data for 3D rendering from the current editor state.

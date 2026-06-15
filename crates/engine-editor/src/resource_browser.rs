@@ -119,6 +119,47 @@ impl ResourceBrowser {
         file_type.icon()
     }
 
+    /// Refresh the resource browser by scanning the filesystem.
+    pub fn refresh(&mut self) {
+        self.entries.clear();
+        self.selected_entry = None;
+
+        let path = std::path::Path::new(&self.current_path);
+        if !path.exists() {
+            return;
+        }
+
+        if let Ok(read_dir) = std::fs::read_dir(path) {
+            for entry in read_dir.flatten() {
+                let file_name = entry.file_name().to_string_lossy().to_string();
+                if file_name.starts_with('.') {
+                    continue;
+                }
+                let metadata = entry.metadata().ok();
+                let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+                let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+                let file_type = if is_dir {
+                    ResourceType::Directory
+                } else {
+                    let ext = std::path::Path::new(&file_name)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("");
+                    ResourceType::from_extension(ext)
+                };
+                self.entries.push(ResourceEntry {
+                    name: file_name,
+                    file_type,
+                    size,
+                    is_directory: is_dir,
+                });
+            }
+            self.entries.sort_by(|a, b| {
+                b.is_directory.cmp(&a.is_directory).then(a.name.cmp(&b.name))
+            });
+        }
+    }
+
     fn format_size(&self, size: u64) -> String {
         if size < 1024 {
             format!("{} B", size)
