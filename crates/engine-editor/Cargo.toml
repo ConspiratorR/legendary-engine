@@ -17,6 +17,8 @@ engine-render = { path = "../engine-render" }
 engine-window = { path = "../engine-window" }
 engine-terrain = { path = "../engine-terrain" }
 engine-physics = { path = "../engine-physics" }
+engine-audio = { path = "../engine-audio" }
+engine-script = { path = "../engine-script" }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "=0.30.0"
 wgpu = "23"

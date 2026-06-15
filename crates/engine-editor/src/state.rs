@@ -770,6 +770,9 @@ impl EditorState {
         // Add physics world resource
         world.insert_resource(engine_physics::world::PhysicsWorld::default());
 
+        // Add input manager resource
+        world.insert_resource(engine_input::input_manager::InputManager::new());
+
         // Spawn entities from scene tree
         for node in &self.scene_tree.nodes {
             if node.parent.is_none() {
@@ -812,6 +815,11 @@ impl EditorState {
             return;
         }
         self.runtime_elapsed += dt;
+
+        // Step input
+        if let Some(input) = world.get_resource_mut::<engine_input::input_manager::InputManager>() {
+            input.update_frame();
+        }
 
         // Step physics — recover from panics gracefully
         let mut pw = match world.remove_resource::<engine_physics::world::PhysicsWorld>() {

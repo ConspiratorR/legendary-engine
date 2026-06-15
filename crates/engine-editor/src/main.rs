@@ -40,6 +40,7 @@ fn main() -> anyhow::Result<()> {
     let mut hot_reload_opt = None;
     let mut editor_state = EditorState::new();
     let mut runtime_world: Option<engine_ecs::world::World> = None;
+    let mut _runtime_audio: Option<engine_audio::audio_manager::AudioManager> = None;
     let mut prev_play_state = engine_editor::state::PlayState::Editing;
     let mut window_modifiers = Modifiers { ctrl: false, shift: false, alt: false };
     let start_time = std::time::Instant::now();
@@ -148,12 +149,49 @@ fn main() -> anyhow::Result<()> {
                                         // Entering play mode: create runtime world
                                         runtime_world =
                                             Some(editor_state.build_runtime_world());
-                                        info!("Runtime world created");
+                                        // Create audio manager for runtime
+                                        match engine_audio::audio_manager::AudioManager::new() {
+                                            Ok(mut am) => {
+                                                // Collect audio sources to play
+                                                let audio_sources: Vec<(String, bool)> = editor_state.scene_tree.nodes.iter()
+                                                    .filter_map(|node| {
+                                                        editor_state.node_audio.get(&node.id).map(|a| {
+                                                            (a.source.clone(), a.source.contains("music") || a.source.contains("bg"))
+                                                        })
+                                                    })
+                                                    .filter(|(source, _)| !source.is_empty())
+                                                    .collect();
+
+                                                // Play audio for nodes with AudioData
+                                                for (source, is_music) in audio_sources {
+                                                    let channel = if is_music {
+                                                        engine_audio::audio_manager::AudioChannel::Music
+                                                    } else {
+                                                        engine_audio::audio_manager::AudioChannel::Sfx
+                                                    };
+                                                    match am.play(&source, channel) {
+                                                        Ok(handle) => {
+                                                            editor_state.log_info(&format!("播放音频: {} (handle: {:?})", source, handle));
+                                                        }
+                                                        Err(e) => {
+                                                            editor_state.log_warn(&format!("音频播放失败 {}: {}", source, e));
+                                                        }
+                                                    }
+                                                }
+                                                _runtime_audio = Some(am);
+                                                editor_state.log_info("音频系统已初始化");
+                                            }
+                                            Err(e) => {
+                                                editor_state.log_warn(&format!("音频初始化失败: {}", e));
+                                            }
+                                        }
+                                        editor_state.log_info("运行时世界已创建");
                                     }
                                     (_, PlayState::Editing) if prev_play_state != PlayState::Editing => {
-                                        // Leaving play mode: destroy runtime world
+                                        // Leaving play mode: destroy runtime world and audio
                                         runtime_world = None;
-                                        info!("Runtime world destroyed");
+                                        _runtime_audio = None;
+                                        editor_state.log_info("运行时世界已销毁");
                                     }
                                     _ => {}
                                 }

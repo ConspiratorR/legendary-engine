@@ -115,6 +115,13 @@ impl ScriptSystem {
         Ok(())
     }
 
+    /// Execute the script's `update(dt)` function with the given delta time.
+    pub fn step(&self, world: &mut World, dt: f32) {
+        if let Err(e) = self.execute(world, dt) {
+            eprintln!("[ScriptSystem:{}] Lua error: {}", self.name, e);
+        }
+    }
+
     fn execute(&self, world: &mut World, dt: f32) -> LuaResult<()> {
         let bridge = self.bridge.read().unwrap_or_else(|e| e.into_inner());
         let lua = &self.lua.0;
