@@ -67,7 +67,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     let btn_sz = 24.0 * h_scale;
     let spacing = 28.0 * w_scale;
     let rounding = 4.0 * h_scale;
-    for (i, icon) in ["+", "✕"].iter().enumerate() {
+    for (i, icon) in ["+", "✕", "📦"].iter().enumerate() {
         let btn_rect = Rect::from_min_size(
             Pos2::new(
                 rect.right() - spacing - i as f32 * spacing,
@@ -95,6 +95,13 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                     state.scene_tree.remove_node(node_id);
                 }
                 state.selected_nodes.clear();
+            } else if i == 2 && !state.selected_nodes.is_empty() {
+                // "📦" button: save selection as prefab
+                let name = state.scene_tree.nodes.iter()
+                    .find(|n| n.id == state.selected_nodes[0])
+                    .map(|n| n.name.clone())
+                    .unwrap_or_else(|| "Prefab".into());
+                state.create_prefab_from_selection(&name);
             }
         }
         painter.text(

@@ -594,6 +594,8 @@ pub struct EditorState {
     pub sky_color: [f32; 3],
     /// Loaded model meshes: name → (vertices, indices)
     pub loaded_models: std::collections::HashMap<String, (Vec<engine_render::resource::mesh::MeshVertex>, Vec<u32>)>,
+    /// Loaded prefab definitions: name → PrefabDef
+    pub prefabs: std::collections::HashMap<String, engine_scene::prefab::PrefabDef>,
     /// Node currently being dragged in hierarchy (for reparent).
     pub drag_source: Option<u64>,
     /// Node being hovered during drag (drop target).
@@ -762,6 +764,7 @@ impl EditorState {
             show_remove_component_menu: false,
             sky_color: [0.15, 0.20, 0.30],
             loaded_models: std::collections::HashMap::new(),
+            prefabs: std::collections::HashMap::new(),
         }
     }
 
@@ -1122,6 +1125,123 @@ impl EditorState {
                 self.status_message = Some(format!("模型加载失败: {}", e));
             }
         }
+    }
+
+    /// Create a prefab from the selected nodes.
+    pub fn create_prefab_from_selection(&mut self, name: &str) {
+        use engine_scene::prefab::{PrefabDef, PrefabNode, ComponentTemplate};
+        use engine_scene::serialization::PropertyValue;
+
+        if self.selected_nodes.is_empty() {
+            self.status_message = Some("请先选择对象".into());
+            return;
+        }
+
+        let root_id = self.selected_nodes[0];
+        let root_node = match self.scene_tree.nodes.iter().find(|n| n.id == root_id) {
+            Some(n) => n,
+            None => return,
+        };
+
+        let mut prefab = PrefabDef::new(name);
+        prefab.root.name = root_node.name.clone();
+
+        // Set transform from node
+        if let Some(t) = self.node_transforms.get(&root_id) {
+            prefab.root.transform = engine_scene::serialization::TransformData {
+                translation: [t[0], t[1], t[2]],
+                rotation: [0.0, 0.0, 0.0, 1.0],
+                scale: [t[6], t[7], t[8]],
+            };
+        }
+
+        // Add material component if exists
+        if let Some(mat) = self.node_materials.get(&root_id) {
+            prefab.root.components.push(
+                ComponentTemplate::new("Material")
+                    .with_property("base_color", PropertyValue::Vec4(mat.base_color))
+                    .with_property("metallic", PropertyValue::Float(mat.metallic))
+                    .with_property("roughness", PropertyValue::Float(mat.roughness)),
+            );
+        }
+
+        // Add child nodes
+        for child_id in &root_node.children {
+            if let Some(child) = self.scene_tree.nodes.iter().find(|n| n.id == *child_id) {
+                let mut child_node = PrefabNode::new(&child.name);
+                if let Some(t) = self.node_transforms.get(child_id) {
+                    child_node.transform = engine_scene::serialization::TransformData {
+                        translation: [t[0], t[1], t[2]],
+                        rotation: [0.0, 0.0, 0.0, 1.0],
+                        scale: [t[6], t[7], t[8]],
+                    };
+                }
+                prefab.root.children.push(child_node);
+            }
+        }
+
+        self.prefabs.insert(name.to_string(), prefab);
+        self.log_info(&format!("预制件已创建: {}", name));
+        self.status_message = Some(format!("预制件已创建: {}", name));
+    }
+
+    /// Instantiate a prefab into the scene.
+    pub fn instantiate_prefab(&mut self, name: &str, position: [f32; 3]) {
+        let prefab = match self.prefabs.get(name) {
+            Some(p) => p,
+            None => {
+                self.status_message = Some(format!("预制件不存在: {}", name));
+                return;
+            }
+        };
+
+        let parent = self.scene_tree.root_ids.first().copied();
+        let root_id = self.scene_tree.add_node(&prefab.root.name, parent);
+
+        // Set root transform
+        let mut t = [0.0; 9];
+        t[0] = position[0] + prefab.root.transform.translation[0];
+        t[1] = position[1] + prefab.root.transform.translation[1];
+        t[2] = position[2] + prefab.root.transform.translation[2];
+        t[6] = prefab.root.transform.scale[0];
+        t[7] = prefab.root.transform.scale[1];
+        t[8] = prefab.root.transform.scale[2];
+        self.node_transforms.insert(root_id, t);
+
+        // Create child nodes
+        for child_node in &prefab.root.children {
+            let child_id = self.scene_tree.add_node(&child_node.name, Some(root_id));
+            let mut ct = [0.0; 9];
+            ct[0] = position[0] + child_node.transform.translation[0];
+            ct[1] = position[1] + child_node.transform.translation[1];
+            ct[2] = position[2] + child_node.transform.translation[2];
+            ct[6] = child_node.transform.scale[0];
+            ct[7] = child_node.transform.scale[1];
+            ct[8] = child_node.transform.scale[2];
+            self.node_transforms.insert(child_id, ct);
+        }
+
+        self.selected_nodes = vec![root_id];
+        self.log_info(&format!("预制件已实例化: {}", name));
+        self.status_message = Some(format!("预制件已实例化: {}", name));
+    }
+
+    /// Save a prefab to a file.
+    pub fn save_prefab(&self, name: &str, path: &std::path::Path) -> anyhow::Result<()> {
+        let prefab = self.prefabs.get(name).ok_or_else(|| anyhow::anyhow!("预制件不存在: {}", name))?;
+        let json = serde_json::to_string_pretty(prefab)?;
+        std::fs::write(path, json)?;
+        Ok(())
+    }
+
+    /// Load a prefab from a file.
+    pub fn load_prefab(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
+        let json = std::fs::read_to_string(path)?;
+        let prefab: engine_scene::prefab::PrefabDef = serde_json::from_str(&json)?;
+        let name = prefab.name.clone();
+        self.prefabs.insert(name.clone(), prefab);
+        self.log_info(&format!("预制件已加载: {}", name));
+        Ok(())
     }
 
     /// Cut selected nodes (copy + delete).

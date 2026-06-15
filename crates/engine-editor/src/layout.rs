@@ -224,7 +224,7 @@ fn draw_dropdown_menu(
         1 => vec!["撤销", "重做", "剪切", "复制", "粘贴"],           // 编辑
         2 => vec!["切换左侧面板", "切换右侧面板", "重置布局"],       // 视图
         3 => vec!["新建场景", "保存场景", "加载场景"],               // 场景
-        4 => vec!["导入资源", "加载模型", "刷新资源"],                      // 资源
+        4 => vec!["导入资源", "加载模型", "加载预制件", "刷新资源"],                // 资源
         5 => vec!["构建项目", "运行项目"],                           // 构建
         6 => vec![
             "控制台",
@@ -381,6 +381,10 @@ fn draw_dropdown_menu(
                             load_model(state);
                         }
                         2 => {
+                            // 加载预制件
+                            load_prefab(state);
+                        }
+                        3 => {
                             // 刷新资源
                             state.resource_browser.refresh();
                             state.status_message = Some("资源已刷新".into());
@@ -1099,6 +1103,33 @@ fn load_model(state: &mut EditorState) {
     if let Some(path) = path {
         if path.exists() {
             state.load_model(&path);
+        } else {
+            state.status_message = Some(format!("文件不存在: {}", path.display()));
+        }
+    } else {
+        state.status_message = Some("已取消加载".into());
+    }
+}
+
+fn load_prefab(state: &mut EditorState) {
+    let path = rfd::FileDialog::new()
+        .set_title("加载预制件")
+        .add_filter("预制件文件", &["json", "prefab"])
+        .add_filter("所有文件", &["*"])
+        .set_directory(".")
+        .pick_file();
+
+    if let Some(path) = path {
+        if path.exists() {
+            match state.load_prefab(&path) {
+                Ok(()) => {
+                    state.status_message = Some(format!("预制件已加载: {}", path.display()));
+                }
+                Err(e) => {
+                    state.log_error(&format!("预制件加载失败: {}", e));
+                    state.status_message = Some(format!("预制件加载失败: {}", e));
+                }
+            }
         } else {
             state.status_message = Some(format!("文件不存在: {}", path.display()));
         }
