@@ -378,3 +378,60 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// WASM entry point — uses spawn_local for async initialization.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen::prelude::wasm_bindgen(start)]
+pub fn wasm_main() {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    wasm_bindgen_futures::spawn_local(async {
+        if let Err(e) = run_wasm().await {
+            log::error!("WASM init failed: {}", e);
+        }
+    });
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn run_wasm() -> Result<(), Box<dyn std::error::Error>> {
+    use engine_window::{WindowConfig, create_window};
+    use winit::event_loop::EventLoop;
+
+    let event_loop = EventLoop::new()?;
+    let window = std::sync::Arc::new(create_window(
+        &WindowConfig {
+            title: "RustEngine Editor (Web)".to_string(),
+            width: 1280,
+            height: 720,
+            vsync: true,
+        },
+        &event_loop,
+    )?);
+
+    let renderer = Renderer::new_async(std::sync::Arc::clone(&window)).await?;
+    let scale_factor = window.scale_factor() as f32;
+    let egui_state = EguiState::new(&renderer.device, &renderer.config, scale_factor);
+
+    log::info!("RustEngine Editor initialized on WASM");
+
+    // WASM event loop runs via browser requestAnimationFrame
+    let mut editor_state = EditorState::new();
+    let mut last_time = std::time::Instant::now();
+
+    event_loop.run(move |event, elwt| {
+        elwt.set_control_flow(winit::event_loop::ControlFlow::Poll);
+        match event {
+            Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
+                let now = std::time::Instant::now();
+                let _dt = (now - last_time).as_secs_f32();
+                last_time = now;
+                // TODO: render frame
+            }
+            Event::AboutToWait => {
+                elwt.target().request_redraw();
+            }
+            _ => {}
+        }
+    })?;
+
+    Ok(())
+}

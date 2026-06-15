@@ -92,10 +92,11 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// Create a new renderer for the given window.
+    /// Create a new renderer for the given window (native only — uses blocking calls).
     ///
     /// Initializes the wgpu adapter, device, queue, and surface. Returns an
     /// error if no suitable GPU adapter is found.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(
         window: std::sync::Arc<winit::window::Window>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -156,6 +157,107 @@ impl Renderer {
             SpriteRenderer::new(&device, sprite_pipeline.clone(), DEFAULT_SPRITE_CAPACITY);
 
         let post_process = PostProcessChain::new_minimal(
+            &device,
+            &queue,
+            config.width,
+            config.height,
+            config.format,
+        );
+
+        Ok(Self {
+            device: GpuDevice(Arc::new(device)),
+            queue: GpuQueue(Arc::new(queue)),
+            surface,
+            config,
+            graph: crate::graph::RenderGraph::new(),
+            sprite_pipeline,
+            camera_uniform,
+            camera_bind_group,
+            sprite_renderer,
+            post_process,
+            deferred_pass: None,
+            gbuffer: None,
+            shadow_pass: None,
+            deferred_camera_uniform: None,
+            deferred_camera_bind_group: None,
+            light_uniform_buffer: None,
+            light_bind_group: None,
+            shadow_uniform_buffer: None,
+            shadow_lighting_bind_group: None,
+            viewport_post_process: None,
+        })
+    }
+
+    /// Create a new renderer asynchronously (for WASM targets).
+    ///
+    /// WASM cannot use `pollster::block_on`, so this version uses `await`.
+    #[cfg(target_arch = "wasm32")]
+    pub async fn new_async(
+        window: std::sync::Arc<winit::window::Window>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            ..Default::default()
+        });
+        let surface = instance.create_surface(window.clone())?;
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
+            .await
+            .ok_or("Failed to find suitable adapter")?;
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    required_features: wgpu::Features::PUSH_CONSTANTS,
+                    required_limits: wgpu::Limits {
+                        max_push_constant_size: 128,
+                        ..wgpu::Limits::default()
+                    },
+                    label: None,
+                    memory_hints: wgpu::MemoryHints::Performance,
+                },
+                None,
+            )
+            .await
+            .map_err(|e| format!("Failed to create device: {}", e))?;
+        let size = window.inner_size();
+        let mut config = surface
+            .get_default_config(&adapter, size.width, size.height)
+            .ok_or("Failed to get surface config")?;
+        config.present_mode = wgpu::PresentMode::Fifo;
+        surface.configure(&device, &config);
+
+        let sprite_pipeline = Arc::new(crate::pipeline::sprite::SpritePipeline::new(
+            &device,
+            wgpu::TextureFormat::Rgba16Float,
+        ));
+
+        let camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("camera_uniform"),
+            size: CAMERA_UNIFORM_SIZE,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("camera_bind_group"),
+            layout: &sprite_pipeline.camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_uniform.as_entire_binding(),
+            }],
+        });
+
+        let sprite_renderer = crate::sprite_renderer::SpriteRenderer::new(
+            &device,
+            sprite_pipeline.clone(),
+            DEFAULT_SPRITE_CAPACITY,
+        );
+
+        let post_process = crate::post_process::PostProcessChain::new_minimal(
             &device,
             &queue,
             config.width,
