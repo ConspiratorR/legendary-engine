@@ -26,23 +26,70 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
 
     let search_h = 36.0 * h_scale;
     let pad8 = 8.0 * w_scale;
+    let search_rect = Rect::from_min_size(
+        Pos2::new(rect.left() + pad8, rect.top() + 8.0 * h_scale),
+        Vec2::new(rect.width() - pad8 * 2.0, search_h),
+    );
     painter.add(Shape::rect_filled(
-        Rect::from_min_size(
-            Pos2::new(rect.left() + pad8, rect.top() + 8.0 * h_scale),
-            Vec2::new(rect.width() - pad8 * 2.0, search_h),
-        ),
+        search_rect,
         Rounding::same(6.0 * h_scale),
         Color32::from_rgb(30, 30, 34),
     ));
+    // Search input field
+    let search_id = egui::Id::new("inspector_search");
+    let search_response = gui.ui.interact(search_rect, search_id, egui::Sense::click());
+    if search_response.clicked() {
+        gui.ui.ctx().memory_mut(|m| m.request_focus(search_id));
+    }
+    let has_focus = gui.ui.ctx().memory(|m| m.has_focus(search_id));
+    if has_focus {
+        // Handle text input for search
+        gui.ui.ctx().input(|i| {
+            for event in &i.events {
+                if let egui::Event::Text(text) = event {
+                    state.inspector_search.push_str(text);
+                }
+                if let egui::Event::Key {
+                    key: egui::Key::Backspace,
+                    pressed: true,
+                    ..
+                } = event
+                {
+                    state.inspector_search.pop();
+                }
+                if let egui::Event::Key {
+                    key: egui::Key::Escape,
+                    pressed: true,
+                    ..
+                } = event
+                {
+                    state.inspector_search.clear();
+                    gui.ui.ctx().memory_mut(|m| m.surrender_focus(search_id));
+                }
+            }
+        });
+    }
+    let search_display = if state.inspector_search.is_empty() && !has_focus {
+        "🔍 搜索属性...".to_string()
+    } else {
+        format!("🔍 {}", state.inspector_search)
+    };
+    let search_color = if has_focus {
+        Color32::from_rgb(220, 220, 224)
+    } else if state.inspector_search.is_empty() {
+        Color32::from_gray(90)
+    } else {
+        Color32::from_rgb(0, 212, 170)
+    };
     painter.text(
         egui::pos2(
             rect.left() + 20.0 * w_scale,
             rect.top() + (8.0 * h_scale + search_h / 2.0),
         ),
         egui::Align2::LEFT_CENTER,
-        "🔍 搜索属性...",
+        search_display,
         egui::FontId::proportional(12.0 * h_scale),
-        Color32::from_gray(90),
+        search_color,
     );
 
     let content_top = rect.top() + (8.0 * h_scale + search_h + 8.0 * h_scale);
@@ -61,7 +108,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             .find(|n| n.id == id)
             .map(|n| n.name.clone())
             .unwrap_or_else(|| "—".into());
-        draw_transform_section(gui, content_rect, state, id, &name);
+        draw_transform_section(gui, content_rect, state, id, &name, &state.inspector_search.clone());
     } else {
         let painter = gui.ui.painter_at(content_rect);
         painter.text(
@@ -125,7 +172,7 @@ fn section_header(painter: &egui::Painter, x: f32, y: f32, label: &str) -> f32 {
 }
 
 #[allow(invalid_reference_casting)]
-fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id: u64, name: &str) {
+fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id: u64, name: &str, _search: &str) {
     let painter = gui.ui.painter_at(rect);
     let row_h = 26.0;
     let x = rect.left();

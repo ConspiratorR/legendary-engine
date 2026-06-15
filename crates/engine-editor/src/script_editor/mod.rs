@@ -496,7 +496,7 @@ fn draw_code_area(
     let font_id = FontId::monospace(font_sz);
 
     // Get active script data
-    let (content, language, paused_line) = {
+    let (mut content, language, paused_line) = {
         let script = &state.script_editor.open_scripts[state.script_editor.active_script];
         let paused = state.script_editor.breakpoints.paused_line;
         (script.content.clone(), script.language, paused)
@@ -595,9 +595,83 @@ fn draw_code_area(
                 }
             }
 
-            // Syntax highlighted code rendered as a label
+            // Editable code area with syntax highlighting
+            let code_rect = Rect::from_min_size(
+                Pos2::new(gutter_w, editor_rect.top()),
+                Vec2::new(editor_rect.width() - gutter_w, editor_rect.height()),
+            );
+            let code_id = Id::new("code_editor").with(state.script_editor.active_script as u64);
+            let code_response = ui.interact(code_rect, code_id, egui::Sense::click());
+            if code_response.clicked() {
+                ui.ctx().memory_mut(|m| m.request_focus(code_id));
+            }
+            let has_code_focus = ui.ctx().memory(|m| m.has_focus(code_id));
+            if has_code_focus {
+                // Handle text input for code editing
+                let mut content_changed = false;
+                ui.ctx().input(|i| {
+                    for event in &i.events {
+                        if let egui::Event::Text(text) = event {
+                            content.push_str(text);
+                            content_changed = true;
+                        }
+                        if let egui::Event::Key {
+                            key: egui::Key::Backspace,
+                            pressed: true,
+                            ..
+                        } = event
+                        {
+                            content.pop();
+                            content_changed = true;
+                        }
+                        if let egui::Event::Key {
+                            key: egui::Key::Enter,
+                            pressed: true,
+                            ..
+                        } = event
+                        {
+                            content.push('\n');
+                            content_changed = true;
+                        }
+                        if let egui::Event::Key {
+                            key: egui::Key::Tab,
+                            pressed: true,
+                            ..
+                        } = event
+                        {
+                            content.push_str("    ");
+                            content_changed = true;
+                        }
+                    }
+                });
+                if content_changed {
+                    state.script_editor.open_scripts[state.script_editor.active_script].content =
+                        content.clone();
+                }
+            }
+            // Render syntax-highlighted code
             let highlighted = highlight(&content, language, font_id);
             ui.add(egui::Label::new(highlighted).extend());
+            // Show edit indicator
+            if has_code_focus {
+                let indicator_rect = Rect::from_min_size(
+                    Pos2::new(editor_rect.right() - 60.0, editor_rect.top() + 4.0),
+                    Vec2::new(56.0, 18.0),
+                );
+                let painter = ui.painter_at(indicator_rect);
+                painter.add(Shape::rect_filled(
+                    indicator_rect,
+                    Rounding::same(4.0),
+                    Color32::from_rgb(0, 80, 60),
+                ));
+                painter.text(
+                    indicator_rect.center(),
+                    Align2::CENTER_CENTER,
+                    "编辑中",
+                    FontId::proportional(10.0),
+                    Color32::from_rgb(0, 212, 170),
+                );
+            }
         });
 }
 

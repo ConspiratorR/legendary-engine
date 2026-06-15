@@ -582,6 +582,8 @@ pub struct EditorState {
     pub clipboard: Vec<([f32; 9], Option<MaterialData>)>,
     /// Log messages for the console panel.
     pub log_messages: Vec<LogEntry>,
+    /// Inspector search filter text.
+    pub inspector_search: String,
 }
 
 /// A single log entry for the console panel.
@@ -705,6 +707,7 @@ impl EditorState {
             pending_transform_edit: None,
             clipboard: Vec::new(),
             log_messages: Vec::new(),
+            inspector_search: String::new(),
         }
     }
 

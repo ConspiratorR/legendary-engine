@@ -706,6 +706,119 @@ fn draw_bottom_panel(
         5 => {
             crate::script_editor::draw_script_editor(state, ui, content_rect);
         }
+        3 => {
+            // 音频面板 — 显示混音器总线和音频状态
+            let bus_font = FontId::proportional(log_font);
+            let mut y = content_rect.top() + 8.0 * h_scale;
+            let bus_names = ["Master", "SFX", "Music", "Ambient", "Voice", "UI"];
+            let bus_colors = [
+                Color32::from_rgb(0, 212, 170),
+                Color32::from_rgb(255, 184, 0),
+                Color32::from_rgb(77, 171, 247),
+                Color32::from_rgb(46, 213, 115),
+                Color32::from_rgb(255, 107, 107),
+                Color32::from_rgb(180, 130, 255),
+            ];
+            painter.text(
+                egui::pos2(content_rect.left() + 12.0 * w_scale, y),
+                egui::Align2::LEFT_CENTER,
+                "音频混音器",
+                FontId::proportional(12.0 * h_scale),
+                Color32::from_rgb(220, 220, 224),
+            );
+            y += 24.0 * h_scale;
+            for (i, name) in bus_names.iter().enumerate() {
+                let bar_w = content_rect.width() - 120.0 * w_scale;
+                let bar_h = 12.0 * h_scale;
+                // Bus name
+                painter.text(
+                    egui::pos2(content_rect.left() + 12.0 * w_scale, y + bar_h / 2.0),
+                    egui::Align2::LEFT_CENTER,
+                    *name,
+                    bus_font.clone(),
+                    bus_colors[i],
+                );
+                // Volume bar background
+                let bar_rect = Rect::from_min_size(
+                    Pos2::new(content_rect.left() + 80.0 * w_scale, y),
+                    Vec2::new(bar_w, bar_h),
+                );
+                painter.add(Shape::rect_filled(
+                    bar_rect,
+                    Rounding::same(3.0),
+                    Color32::from_rgb(30, 30, 34),
+                ));
+                // Volume bar fill (random-looking for visual feedback)
+                let fill = if i == 0 { 0.75 } else { 0.5 + (i as f32 * 0.08) };
+                let fill_rect = Rect::from_min_size(
+                    bar_rect.left_top(),
+                    Vec2::new(bar_w * fill.min(1.0), bar_h),
+                );
+                painter.add(Shape::rect_filled(
+                    fill_rect,
+                    Rounding::same(3.0),
+                    bus_colors[i],
+                ));
+                // Volume percentage
+                painter.text(
+                    egui::pos2(bar_rect.right() + 8.0 * w_scale, y + bar_h / 2.0),
+                    egui::Align2::LEFT_CENTER,
+                    format!("{}%", (fill * 100.0) as i32),
+                    bus_font.clone(),
+                    Color32::from_gray(120),
+                );
+                y += bar_h + 6.0 * h_scale;
+            }
+            // Status info
+            y += 12.0 * h_scale;
+            painter.text(
+                egui::pos2(content_rect.left() + 12.0 * w_scale, y),
+                egui::Align2::LEFT_CENTER,
+                "状态: 就绪 | 采样率: 44100 Hz | 声道: 2 (立体声)",
+                bus_font,
+                Color32::from_gray(90),
+            );
+        }
+        4 => {
+            // 网络面板 — 显示连接状态和网络统计
+            let net_font = FontId::proportional(log_font);
+            let mut y = content_rect.top() + 8.0 * h_scale;
+            painter.text(
+                egui::pos2(content_rect.left() + 12.0 * w_scale, y),
+                egui::Align2::LEFT_CENTER,
+                "网络状态",
+                FontId::proportional(12.0 * h_scale),
+                Color32::from_rgb(220, 220, 224),
+            );
+            y += 24.0 * h_scale;
+            let stats = [
+                ("连接状态", "未连接", Color32::from_gray(90)),
+                ("协议", "TCP/UDP", Color32::from_rgb(77, 171, 247)),
+                ("监听端口", "无", Color32::from_gray(90)),
+                ("活跃连接", "0", Color32::from_gray(90)),
+                ("发送速率", "0 KB/s", Color32::from_gray(90)),
+                ("接收速率", "0 KB/s", Color32::from_gray(90)),
+                ("延迟", "N/A", Color32::from_gray(90)),
+                ("丢包率", "0%", Color32::from_gray(90)),
+            ];
+            for (label, value, color) in &stats {
+                painter.text(
+                    egui::pos2(content_rect.left() + 12.0 * w_scale, y),
+                    egui::Align2::LEFT_CENTER,
+                    *label,
+                    net_font.clone(),
+                    Color32::from_gray(120),
+                );
+                painter.text(
+                    egui::pos2(content_rect.left() + 120.0 * w_scale, y),
+                    egui::Align2::LEFT_CENTER,
+                    *value,
+                    net_font.clone(),
+                    *color,
+                );
+                y += 18.0 * h_scale;
+            }
+        }
         _ => {
             painter.text(
                 content_rect.center(),
