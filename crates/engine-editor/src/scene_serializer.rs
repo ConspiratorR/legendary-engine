@@ -14,8 +14,14 @@ use crate::state::EditorState;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Scene {
     pub name: String,
+    #[serde(default = "default_version")]
+    pub version: u32,
     pub entities: Vec<SceneEntity>,
     pub settings: SceneSettings,
+}
+
+fn default_version() -> u32 {
+    1
 }
 
 /// A single entity in a scene with transform, components, and hierarchy.
@@ -44,6 +50,8 @@ pub struct SceneEntity {
     pub tags: Vec<String>,
     #[serde(default)]
     pub physics: Option<PhysicsDataSer>,
+    #[serde(default)]
+    pub render: Option<RenderDataSer>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +123,13 @@ pub struct PhysicsDataSer {
     pub is_sensor: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenderDataSer {
+    pub material_name: String,
+    pub mesh_name: String,
+    pub cast_shadow: bool,
+}
+
 /// Transform data (translation, rotation as quaternion, scale).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransformData {
@@ -181,6 +196,7 @@ impl Scene {
     pub fn new(name: String) -> Self {
         Self {
             name,
+            version: 1,
             entities: Vec::new(),
             settings: SceneSettings::default(),
         }
@@ -261,6 +277,7 @@ impl SceneEntity {
             script: None,
             tags: Vec::new(),
             physics: None,
+            render: None,
         }
     }
 
@@ -453,9 +470,18 @@ impl EditorState {
                 .copied()
                 .unwrap_or([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
             let mut entity = SceneEntity::new(node.id, node.name.clone());
+
+            // Convert Euler angles (radians) to quaternion for serialization
+            let quat = engine_math::Quat::from_euler(
+                engine_math::EulerRot::XYZ,
+                transform[3],
+                transform[4],
+                transform[5],
+            );
+
             entity.transform = TransformData {
                 translation: [transform[0], transform[1], transform[2]],
-                rotation: [0.0, 0.0, 0.0, 1.0],
+                rotation: [quat.x, quat.y, quat.z, quat.w],
                 scale: [transform[6], transform[7], transform[8]],
             };
             entity.parent = node.parent;
@@ -533,6 +559,13 @@ impl EditorState {
                     is_sensor: false,
                 });
             }
+            if let Some((mat_name, mesh_name, cast_shadow)) = self.node_render.get(&node.id) {
+                entity.render = Some(RenderDataSer {
+                    material_name: mat_name.clone(),
+                    mesh_name: mesh_name.clone(),
+                    cast_shadow: *cast_shadow,
+                });
+            }
             scene.add_entity(entity);
         }
         scene
@@ -574,15 +607,24 @@ impl EditorState {
                 next_id = entity.id + 1;
             }
 
+            // Convert quaternion back to Euler angles (radians) for editor storage
+            let quat = engine_math::Quat::from_xyzw(
+                entity.transform.rotation[0],
+                entity.transform.rotation[1],
+                entity.transform.rotation[2],
+                entity.transform.rotation[3],
+            );
+            let (rx, ry, rz) = quat.to_euler(engine_math::EulerRot::XYZ);
+
             self.node_transforms.insert(
                 entity.id,
                 [
                     entity.transform.translation[0],
                     entity.transform.translation[1],
                     entity.transform.translation[2],
-                    0.0,
-                    0.0,
-                    0.0,
+                    rx,
+                    ry,
+                    rz,
                     entity.transform.scale[0],
                     entity.transform.scale[1],
                     entity.transform.scale[2],
@@ -681,8 +723,19 @@ impl EditorState {
                     (physics.body_type.clone(), physics.collider_type.clone()),
                 );
             }
-            self.node_render
-                .insert(entity.id, ("Default".into(), "Cube".into(), true));
+            if let Some(ref render) = entity.render {
+                self.node_render.insert(
+                    entity.id,
+                    (
+                        render.material_name.clone(),
+                        render.mesh_name.clone(),
+                        render.cast_shadow,
+                    ),
+                );
+            } else {
+                self.node_render
+                    .insert(entity.id, ("Default".into(), "Cube".into(), true));
+            }
         }
         self.scene_tree.next_id = next_id;
     }

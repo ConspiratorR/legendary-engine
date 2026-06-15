@@ -940,10 +940,13 @@ fn save_scene(state: &mut EditorState) {
 
     match state.scene_manager.save_scene(&path) {
         Ok(()) => {
-            state.status_message = Some(format!("Scene saved: {}", path.display()));
+            let entity_count = state.scene_manager.current_scene().map(|s| s.entities.len()).unwrap_or(0);
+            state.log_info(&format!("场景已保存: {} ({} 个实体)", path.display(), entity_count));
+            state.status_message = Some(format!("已保存: {}", path.display()));
         }
         Err(e) => {
-            state.status_message = Some(format!("Save failed: {}", e));
+            state.log_error(&format!("保存失败: {}", e));
+            state.status_message = Some(format!("保存失败: {}", e));
         }
     }
 }
@@ -1007,17 +1010,26 @@ fn load_scene(state: &mut EditorState) {
             // Sync loaded scene to EditorState
             if let Some(scene) = state.scene_manager.current_scene() {
                 let scene_clone = scene.clone();
+                let entity_count = scene_clone.entities.len();
+                let version = scene_clone.version;
                 state.load_from_scene(&scene_clone);
+                state.log_info(&format!(
+                    "场景已加载: {} (版本 {}, {} 个实体)",
+                    path.display(),
+                    version,
+                    entity_count
+                ));
             }
             let name = state
                 .scene_manager
                 .current_scene()
                 .map(|s| s.name.clone())
                 .unwrap_or_default();
-            state.status_message = Some(format!("Scene loaded: {}", name));
+            state.status_message = Some(format!("已加载: {}", name));
         }
         Err(e) => {
-            state.status_message = Some(format!("Load failed: {}", e));
+            state.log_error(&format!("加载失败: {}", e));
+            state.status_message = Some(format!("加载失败: {}", e));
         }
     }
 }
