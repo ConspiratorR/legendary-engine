@@ -44,6 +44,7 @@ fn main() -> anyhow::Result<()> {
     let mut runtime_world: Option<engine_ecs::world::World> = None;
     let mut _runtime_audio: Option<engine_audio::audio_manager::AudioManager> = None;
     let mut runtime_scripts: Vec<engine_script::system::ScriptSystem> = Vec::new();
+    let mut runtime_blueprints: Vec<engine_editor::node_graph::blueprint_component::BlueprintComponent> = Vec::new();
     let mut prev_play_state = engine_editor::state::PlayState::Editing;
     let mut window_modifiers = Modifiers { ctrl: false, shift: false, alt: false };
     let start_time = std::time::Instant::now();
@@ -118,6 +119,14 @@ fn main() -> anyhow::Result<()> {
                                     // Step script systems
                                     for script in &runtime_scripts {
                                         script.step(world, dt as f32);
+                                    }
+
+                                    // Tick blueprints
+                                    for bp in &mut runtime_blueprints {
+                                        let result = bp.tick(dt as f32);
+                                        for msg in &result.print_buffer {
+                                            editor_state.log_info(&format!("[Blueprint] {}", msg));
+                                        }
                                     }
                                 }
 
@@ -250,13 +259,32 @@ fn main() -> anyhow::Result<()> {
                                                 }
                                             }
                                         }
+                                        // Initialize blueprints from node graph state
+                                        let bp = engine_editor::node_graph::blueprint_component::BlueprintComponent::from_state(
+                                            "EditorBlueprint",
+                                            &editor_state.node_graph_state,
+                                        );
+                                        if !bp.graph.nodes.is_empty() {
+                                            runtime_blueprints.push(bp);
+                                            if let Some(last) = runtime_blueprints.last_mut() {
+                                                let result = last.begin_play();
+                                                for msg in &result.print_buffer {
+                                                    editor_state.log_info(&format!("[Blueprint] {}", msg));
+                                                }
+                                                for err in &result.errors {
+                                                    editor_state.log_warn(&format!("[Blueprint Error] {}", err));
+                                                }
+                                                editor_state.log_info("蓝图已初始化");
+                                            }
+                                        }
                                         editor_state.log_info("运行时世界已创建");
                                     }
                                     (_, PlayState::Editing) if prev_play_state != PlayState::Editing => {
-                                        // Leaving play mode: destroy runtime world, audio, and scripts
+                                        // Leaving play mode: destroy runtime world, audio, scripts, and blueprints
                                         runtime_world = None;
                                         _runtime_audio = None;
                                         runtime_scripts.clear();
+                                        runtime_blueprints.clear();
                                         editor_state.log_info("运行时世界已销毁");
                                     }
                                     _ => {}
