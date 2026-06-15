@@ -157,6 +157,16 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                     .copied()
                     .or(state.scene_tree.root_ids.first().copied());
                 let new_id = state.scene_tree.add_node(label, parent);
+                // Record undo command
+                let mut cm = std::mem::take(&mut state.command_manager);
+                cm.execute(
+                    Box::new(crate::commands::CreateNodeCommand::new(
+                        label.to_string(),
+                        parent,
+                    )),
+                    state,
+                );
+                state.command_manager = cm;
                 // Initialize transform and component data based on type
                 state
                     .node_transforms

@@ -299,3 +299,99 @@ impl Command for SculptCommand {
         self.description.clone()
     }
 }
+
+/// Command to create a new node (undo removes it, redo recreates it).
+#[derive(Debug)]
+pub struct CreateNodeCommand {
+    node_name: String,
+    parent_id: Option<u64>,
+    created_id: Option<u64>,
+    transform: [f32; 9],
+}
+
+impl CreateNodeCommand {
+    pub fn new(name: String, parent_id: Option<u64>) -> Self {
+        Self {
+            node_name: name,
+            parent_id,
+            created_id: None,
+            transform: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+        }
+    }
+}
+
+impl Command for CreateNodeCommand {
+    fn execute(&mut self, state: &mut EditorState) {
+        let new_id = state.scene_tree.add_node(&self.node_name, self.parent_id);
+        state.node_transforms.insert(new_id, self.transform);
+        state.selected_nodes = vec![new_id];
+        self.created_id = Some(new_id);
+    }
+
+    fn undo(&mut self, state: &mut EditorState) {
+        if let Some(id) = self.created_id {
+            state.scene_tree.remove_node(id);
+            state.node_transforms.remove(&id);
+            state.node_materials.remove(&id);
+            state.node_lights.remove(&id);
+            state.selected_nodes.retain(|&nid| nid != id);
+        }
+    }
+
+    fn redo(&mut self, state: &mut EditorState) {
+        self.execute(state);
+    }
+
+    fn description(&self) -> String {
+        format!("Create {}", self.node_name)
+    }
+}
+
+/// Command to change a node's material (undo restores old material).
+#[derive(Debug)]
+pub struct MaterialChangeCommand {
+    node_id: u64,
+    old_material: Option<crate::state::MaterialData>,
+    new_material: crate::state::MaterialData,
+}
+
+impl MaterialChangeCommand {
+    pub fn new(
+        node_id: u64,
+        old_material: Option<crate::state::MaterialData>,
+        new_material: crate::state::MaterialData,
+    ) -> Self {
+        Self {
+            node_id,
+            old_material,
+            new_material,
+        }
+    }
+}
+
+impl Command for MaterialChangeCommand {
+    fn execute(&mut self, state: &mut EditorState) {
+        state
+            .node_materials
+            .insert(self.node_id, self.new_material.clone());
+    }
+
+    fn undo(&mut self, state: &mut EditorState) {
+        match &self.old_material {
+            Some(mat) => {
+                state.node_materials.insert(self.node_id, mat.clone());
+            }
+            None => {
+                state.node_materials.remove(&self.node_id);
+            }
+        }
+    }
+
+    fn redo(&mut self, state: &mut EditorState) {
+        self.execute(state);
+    }
+
+    fn description(&self) -> String {
+        "Change Material".to_string()
+    }
+}
