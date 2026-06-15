@@ -877,12 +877,28 @@ impl EditorState {
     pub fn handle_shortcut(&mut self, action: EditorAction) {
         match action {
             EditorAction::SaveScene => {
-                let _ = self.scene_manager.save_current_scene();
-                self.status_message = Some("Scene saved".into());
+                // Sync EditorState to scene before saving
+                let scene = self.to_scene("Untitled");
+                self.scene_manager.set_current_scene(scene);
+                match self.scene_manager.save_current_scene() {
+                    Ok(()) => {
+                        let entity_count = self.scene_manager.current_scene().map(|s| s.entities.len()).unwrap_or(0);
+                        self.log_info(&format!("场景已保存 ({} 个实体)", entity_count));
+                        self.status_message = Some("场景已保存".into());
+                    }
+                    Err(e) => {
+                        self.log_error(&format!("保存失败: {}", e));
+                        self.status_message = Some(format!("保存失败: {}", e));
+                    }
+                }
+            }
+            EditorAction::LoadScene => {
+                // This is handled in main.rs with file dialog
+                self.status_message = Some("请使用文件菜单加载场景".into());
             }
             EditorAction::NewScene => {
                 self.scene_manager.create_scene("Untitled".into());
-                self.status_message = Some("New scene created".into());
+                self.status_message = Some("新场景已创建".into());
             }
             EditorAction::Undo => {
                 self.undo();

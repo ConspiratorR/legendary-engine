@@ -541,6 +541,36 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
     draw_separator(&painter, x, rect.top(), rect.bottom(), h_scale);
     x += pad;
 
+    // Scene management buttons
+    let scene_icons = &["📄", "💾", "📂"];
+    for (i, icon) in scene_icons.iter().enumerate() {
+        let btn_rect = Rect::from_min_size(
+            Pos2::new(x + i as f32 * (btn_size + gap), cy),
+            Vec2::new(btn_size, btn_size),
+        );
+        let is_modified = state.scene_manager.is_modified();
+        let is_active = i == 1 && is_modified; // Highlight save button when modified
+        if gui.tool_button(btn_rect, icon, is_active) {
+            match i {
+                0 => {
+                    // New scene
+                    state.scene_manager.create_scene("Untitled".to_string());
+                    state.status_message = Some("新场景已创建".into());
+                }
+                1 => {
+                    // Save scene
+                    save_scene(state);
+                }
+                2 => {
+                    // Load scene
+                    load_scene(state);
+                }
+                _ => {}
+            }
+        }
+    }
+    x += 3.0 * (btn_size + gap) + pad;
+
     // Play/Pause/Stop buttons
     let play_icons = ["▶", "⏸", "⏹"];
     let play_states = [state.play_state == PlayState::Playing, state.play_state == PlayState::Paused, state.play_state != PlayState::Editing];
@@ -857,11 +887,31 @@ fn draw_status_bar(state: &EditorState, gui: &mut Gui, rect: Rect, h_scale: f32,
         Color32::from_rgb(46, 213, 115),
     );
 
+    // Scene file path and modification indicator
+    let scene_path = state.scene_manager.scene_path()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "未保存".into());
+    let is_modified = state.scene_manager.is_modified();
+    let modified_indicator = if is_modified { " ●" } else { "" };
+    let scene_display = format!("{}{}", scene_path, modified_indicator);
+
+    painter.text(
+        egui::pos2(rect.left() + 80.0 * w_scale, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        &scene_display,
+        FontId::proportional(status_font),
+        if is_modified {
+            Color32::from_rgb(255, 184, 0)
+        } else {
+            Color32::from_gray(120)
+        },
+    );
+
     let default_status = format!("对象: {}", state.scene_tree.nodes.len());
     let status_text = state.status_message.as_deref().unwrap_or(&default_status);
 
     painter.text(
-        egui::pos2(rect.left() + 80.0 * w_scale, rect.center().y),
+        egui::pos2(rect.left() + 300.0 * w_scale, rect.center().y),
         egui::Align2::LEFT_CENTER,
         status_text,
         FontId::proportional(status_font),
@@ -873,7 +923,7 @@ fn draw_status_bar(state: &EditorState, gui: &mut Gui, rect: Rect, h_scale: f32,
     );
 
     painter.text(
-        egui::pos2(rect.left() + 160.0 * w_scale, rect.center().y),
+        egui::pos2(rect.left() + 420.0 * w_scale, rect.center().y),
         egui::Align2::LEFT_CENTER,
         "三角形: 45K".to_string(),
         FontId::proportional(status_font),
