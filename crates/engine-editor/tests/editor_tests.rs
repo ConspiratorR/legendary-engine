@@ -10,7 +10,7 @@ use engine_editor::state::{EditorCamera, EditorState, SceneTree, ToolType};
 #[test]
 fn editor_state_new_has_default_tree() {
     let state = EditorState::new();
-    assert_eq!(state.scene_tree.nodes.len(), 6);
+    assert_eq!(state.scene_tree.nodes.len(), 9);
     assert_eq!(state.scene_tree.root_ids.len(), 1);
 }
 
@@ -53,7 +53,7 @@ fn scene_tree_new_creates_root_with_children() {
     let root = tree.nodes.iter().find(|n| n.id == root_id).unwrap();
     assert_eq!(root.name, "Root");
     assert!(root.parent.is_none());
-    assert_eq!(root.children.len(), 5);
+    assert_eq!(root.children.len(), 8);
 }
 
 #[test]
@@ -163,8 +163,8 @@ fn scene_tree_search_finds_all_matching() {
 #[test]
 fn editor_state_has_node_transforms() {
     let state = EditorState::new();
-    assert_eq!(state.node_transforms.len(), 6);
-    for i in 1..=6 {
+    assert_eq!(state.node_transforms.len(), 9);
+    for i in 1..=9 {
         assert!(state.node_transforms.contains_key(&i));
     }
 }
@@ -185,7 +185,7 @@ fn editor_state_has_node_lights() {
 #[test]
 fn editor_state_has_node_physics() {
     let state = EditorState::new();
-    assert_eq!(state.node_physics.len(), 6);
+    assert_eq!(state.node_physics.len(), 9);
 }
 
 #[test]
