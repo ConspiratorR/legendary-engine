@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::SystemTime;
 
 use crate::asset::Asset;
 
@@ -307,19 +306,100 @@ pub fn hash_file(path: &Path) -> Result<u64, ImportError> {
     Ok(hash_bytes(&data))
 }
 
-/// Metadata about an imported asset for cache tracking.
-#[derive(Debug, Clone)]
+/// Metadata about an imported asset for cache tracking and .meta files.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AssetMeta {
+    /// Stable unique identifier for this asset (GUID).
+    pub guid: String,
     /// The file path of the source asset.
     pub source_path: PathBuf,
     /// Content hash at time of import.
     pub content_hash: u64,
-    /// File modification time at time of import.
-    pub modified_at: SystemTime,
+    /// File modification time (seconds since epoch).
+    pub modified_at_secs: u64,
     /// Paths of dependency assets.
     pub dependencies: Vec<PathBuf>,
     /// Whether the importer supports hot-reload.
     pub hot_reloadable: bool,
+    /// Import settings for this asset type.
+    pub import_settings: ImportSettings,
+}
+
+/// Per-asset import settings.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub enum ImportSettings {
+    /// Texture import settings.
+    Texture {
+        max_size: u32,
+        generate_mipmaps: bool,
+        compression: String,
+    },
+    /// Mesh import settings.
+    Mesh {
+        generate_lod: bool,
+        scale: f32,
+    },
+    /// Audio import settings.
+    Audio {
+        sample_rate: u32,
+        streaming: bool,
+    },
+    /// Default settings.
+    #[default]
+    Default,
+}
+
+impl AssetMeta {
+    /// Create a new asset meta with a generated GUID.
+    pub fn new(source_path: PathBuf) -> Self {
+        Self {
+            guid: Self::generate_guid(),
+            source_path,
+            content_hash: 0,
+            modified_at_secs: 0,
+            dependencies: Vec::new(),
+            hot_reloadable: false,
+            import_settings: ImportSettings::default(),
+        }
+    }
+
+    /// Save this meta to a `.meta` file alongside the source asset.
+    pub fn save(&self) -> Result<(), std::io::Error> {
+        let meta_path = Self::meta_path_for(&self.source_path);
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        std::fs::write(&meta_path, json)
+    }
+
+    /// Load a `.meta` file for the given asset path, if it exists.
+    pub fn load(source_path: &Path) -> Option<Self> {
+        let meta_path = Self::meta_path_for(source_path);
+        if !meta_path.exists() {
+            return None;
+        }
+        let json = std::fs::read_to_string(&meta_path).ok()?;
+        serde_json::from_str(&json).ok()
+    }
+
+    /// Get the `.meta` file path for a given asset path.
+    pub fn meta_path_for(asset_path: &Path) -> PathBuf {
+        let mut meta_path = asset_path.to_path_buf();
+        let extension = meta_path.extension()
+            .map(|e| format!("{}.meta", e.to_string_lossy()))
+            .unwrap_or_else(|| "meta".to_string());
+        meta_path.set_extension(extension);
+        meta_path
+    }
+
+    /// Generate a simple GUID (hex string based on timestamp + counter).
+    fn generate_guid() -> String {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let t = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        format!("{:032x}", t)
+    }
 }
 
 #[cfg(test)]
