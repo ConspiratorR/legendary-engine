@@ -545,8 +545,10 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         .ui
         .interact(canvas_rect, canvas_id, egui::Sense::click_and_drag());
 
-    // Gizmo drag: translate selected object with left-click when translate tool active
-    if state.active_tool == crate::state::ToolType::Translate
+    // Gizmo drag: translate/rotate/scale selected object with left-click
+    if (state.active_tool == crate::state::ToolType::Translate
+        || state.active_tool == crate::state::ToolType::Rotate
+        || state.active_tool == crate::state::ToolType::Scale)
         && !state.selected_nodes.is_empty()
     {
         let primary_down = ctx.input(|i| i.pointer.primary_down());
@@ -555,7 +557,7 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         if primary_down && canvas_rect.contains(pointer_pos) {
             if state.gizmo_drag_axis.is_none() {
                 // Start gizmo drag
-                state.gizmo_drag_axis = Some(0); // default: move on XZ plane
+                state.gizmo_drag_axis = Some(0);
                 state.gizmo_drag_start_screen = Some((pointer_pos.x, pointer_pos.y));
                 let first_id = state.selected_nodes[0];
                 state.gizmo_drag_start_pos =
@@ -564,22 +566,44 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
                 state.gizmo_drag_start_screen,
                 state.gizmo_drag_start_pos,
             ) {
-                // Compute drag delta in screen space
                 let dx = pointer_pos.x - sx;
                 let dy = pointer_pos.y - sy;
-
-                // Convert screen delta to world movement
-                // Scale factor: pixels to world units (adjustable sensitivity)
                 let sensitivity = state.camera.distance * 0.003;
-                let world_dx = dx * sensitivity;
-                let world_dz = dy * sensitivity; // screen Y → world Z
 
-                // Apply to first selected node
-                if let Some(&first_id) = state.selected_nodes.first()
-                    && let Some(t) = state.node_transforms.get_mut(&first_id)
-                {
-                    t[0] = start_pos[0] + world_dx;
-                    t[2] = start_pos[2] + world_dz;
+                match state.active_tool {
+                    crate::state::ToolType::Translate => {
+                        // Move on XZ plane
+                        let world_dx = dx * sensitivity;
+                        let world_dz = dy * sensitivity;
+                        if let Some(&first_id) = state.selected_nodes.first()
+                            && let Some(t) = state.node_transforms.get_mut(&first_id)
+                        {
+                            t[0] = start_pos[0] + world_dx;
+                            t[2] = start_pos[2] + world_dz;
+                        }
+                    }
+                    crate::state::ToolType::Rotate => {
+                        // Rotate around Y axis (horizontal) and X axis (vertical)
+                        let rot_sensitivity = 0.01;
+                        if let Some(&first_id) = state.selected_nodes.first()
+                            && let Some(t) = state.node_transforms.get_mut(&first_id)
+                        {
+                            t[4] += dx * rot_sensitivity; // Y rotation
+                            t[3] += dy * rot_sensitivity; // X rotation
+                        }
+                    }
+                    crate::state::ToolType::Scale => {
+                        // Uniform scale based on vertical drag
+                        let scale_sensitivity = 0.005;
+                        let scale_factor = 1.0 + dy * scale_sensitivity;
+                        if let Some(&first_id) = state.selected_nodes.first()
+                            && let Some(t) = state.node_transforms.get_mut(&first_id)
+                        {
+                            t[6] = (start_pos[0] * scale_factor).max(0.01); // scale X
+                            t[7] = (start_pos[1] * scale_factor).max(0.01); // scale Y
+                        }
+                    }
+                    _ => {}
                 }
             }
         } else if state.gizmo_drag_axis.is_some() {
