@@ -1225,6 +1225,7 @@ dependencies = [
  "engine-framework",
  "engine-input",
  "engine-math",
+ "engine-physics",
  "engine-render",
  "engine-scene",
  "engine-terrain",

@@ -17,30 +17,97 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+// ── Grid ──────────────────────────────────────────────────
 const COLS: usize = 10;
 const ROWS: usize = 22;
 const VISIBLE_ROWS: usize = 20;
-const CELL: f32 = 36.0;
-const BLK: f32 = 34.0;
-const GX: f32 = 300.0;
-const GY: f32 = 730.0;
-const NEXT_X: f32 = 700.0;
-const NEXT_Y: f32 = 80.0;
-const HOLD_X: f32 = 100.0;
-const HOLD_Y: f32 = 80.0;
-const WIN_W: u32 = 960;
-const WIN_H: u32 = 800;
-const GRID_ENT: usize = COLS * VISIBLE_ROWS;
-const NEXT_ENT: usize = 3 * 16;
-const HOLD_ENT: usize = 16;
-const TOTAL_ENTITIES: usize = GRID_ENT + NEXT_ENT + HOLD_ENT;
+const CELL: f32 = 34.0;
+const BLK: f32 = 32.0;
 
+// ── Window & Layout ──────────────────────────────────────
+const WIN_W: u32 = 1100;
+const WIN_H: u32 = 800;
+const GX: f32 = 350.0;
+const GY_TOP: f32 = 60.0;
+const HOLD_X: f32 = 100.0;
+const HOLD_Y: f32 = 180.0;
+const HOLD_CELL: f32 = 30.0;
+const HOLD_BLK: f32 = 28.0;
+const NEXT_X: f32 = 730.0;
+const NEXT_Y: f32 = 100.0;
+const NEXT_CELL: f32 = 30.0;
+const NEXT_BLK: f32 = 28.0;
+const NEXT_GAP: f32 = 24.0;
+const SCORE_X: f32 = 730.0;
+const SCORE_Y: f32 = 530.0;
+const LEVEL_X: f32 = 730.0;
+const LEVEL_Y: f32 = 600.0;
+const LINES_X: f32 = 730.0;
+const LINES_Y: f32 = 670.0;
+
+// ── Pixel Font ───────────────────────────────────────────
+const PX_SZ: f32 = 8.0;
+const PX_GAP: f32 = 1.0;
+const DIGIT_W: f32 = 3.0 * PX_SZ + 2.0 * PX_GAP;
+const DIGIT_SP: f32 = 5.0;
+
+// ── Entity Budget ────────────────────────────────────────
+const GRID_ENT: usize = COLS * VISIBLE_ROWS;
+const HOLD_ENT: usize = 16;
+const NEXT_ENT: usize = 48;
+const BG_ENT: usize = 10;
+const SCORE_DIGITS: usize = 7;
+const LEVEL_DIGITS: usize = 2;
+const LINES_DIGITS: usize = 3;
+const FONT_ENT: usize = (SCORE_DIGITS + LEVEL_DIGITS + LINES_DIGITS) * 15;
+const TOTAL_ENTITIES: usize = GRID_ENT + HOLD_ENT + NEXT_ENT + BG_ENT + FONT_ENT;
+const GRID_OFF: usize = 0;
+const HOLD_OFF: usize = GRID_OFF + GRID_ENT;
+const NEXT_OFF: usize = HOLD_OFF + HOLD_ENT;
+const BG_OFF: usize = NEXT_OFF + NEXT_ENT;
+const SCORE_OFF: usize = BG_OFF + BG_ENT;
+const LEVEL_OFF: usize = SCORE_OFF + SCORE_DIGITS * 15;
+const LINES_OFF: usize = LEVEL_OFF + LEVEL_DIGITS * 15;
+
+// ── Timing ───────────────────────────────────────────────
 const DAS_DELAY: f32 = 0.167;
 const DAS_REPEAT: f32 = 0.033;
 const LOCK_DELAY: f32 = 0.5;
 const MAX_LOCK_RESETS: u32 = 15;
 const SOFT_DROP_SPEED: f32 = 0.04;
 
+// ── Colors ───────────────────────────────────────────────
+const COLORS: [[f32; 4]; 8] = [
+    [0.06, 0.06, 0.12, 1.0],
+    [0.0, 0.95, 0.95, 1.0],
+    [0.98, 0.95, 0.0, 1.0],
+    [0.78, 0.0, 1.0, 1.0],
+    [0.0, 0.95, 0.3, 1.0],
+    [1.0, 0.15, 0.15, 1.0],
+    [0.15, 0.4, 1.0, 1.0],
+    [1.0, 0.6, 0.0, 1.0],
+];
+const BORDER_CLR: [f32; 4] = [0.28, 0.28, 0.45, 1.0];
+const PANEL_BG_CLR: [f32; 4] = [0.05, 0.05, 0.10, 1.0];
+const SCORE_CLR: [f32; 4] = [0.92, 0.92, 0.96, 1.0];
+const LEVEL_CLR: [f32; 4] = [0.0, 0.85, 0.85, 1.0];
+const LINES_CLR: [f32; 4] = [0.95, 0.9, 0.0, 1.0];
+
+// ── Pixel Font Digits (3x5 bitmaps, row-major) ──────────
+const DIGITS: [[u8; 15]; 10] = [
+    [1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1],
+    [0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1],
+    [1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1],
+    [1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1],
+    [1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1],
+    [1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
+    [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1],
+];
+
+// ── Piece Definitions ────────────────────────────────────
 const PIECES: [[[(i32, i32); 4]; 4]; 7] = [
     [
         [(0, 1), (1, 1), (2, 1), (3, 1)],
@@ -86,6 +153,7 @@ const PIECES: [[[(i32, i32); 4]; 4]; 7] = [
     ],
 ];
 
+// ── SRS Kick Tables ──────────────────────────────────────
 const SRS_KICKS_NORMAL: [[[(i32, i32); 5]; 4]; 4] = [
     [
         [(0, 0), (-1, 0), (-1, 1), (0, -2), (-1, -2)],
@@ -112,7 +180,6 @@ const SRS_KICKS_NORMAL: [[[(i32, i32); 5]; 4]; 4] = [
         [(0, 0), (-1, 0), (-1, -1), (0, 2), (-1, 2)],
     ],
 ];
-
 const SRS_KICKS_I: [[[(i32, i32); 5]; 4]; 4] = [
     [
         [(0, 0), (-2, 0), (1, 0), (-2, -1), (1, 2)],
@@ -140,17 +207,7 @@ const SRS_KICKS_I: [[[(i32, i32); 5]; 4]; 4] = [
     ],
 ];
 
-const COLORS: [[f32; 4]; 8] = [
-    [0.08, 0.08, 0.10, 1.0],
-    [0.0, 0.9, 0.9, 1.0],
-    [0.9, 0.9, 0.0, 1.0],
-    [0.6, 0.0, 0.8, 1.0],
-    [0.0, 0.9, 0.0, 1.0],
-    [0.9, 0.0, 0.0, 1.0],
-    [0.1, 0.1, 0.9, 1.0],
-    [0.9, 0.5, 0.0, 1.0],
-];
-
+// ── 7-Bag Randomizer ────────────────────────────────────
 struct Bag {
     pieces: VecDeque<usize>,
 }
@@ -183,6 +240,7 @@ impl Bag {
     }
 }
 
+// ── Game State ───────────────────────────────────────────
 struct Game {
     grid: [[u8; COLS]; ROWS],
     piece: usize,
@@ -212,25 +270,12 @@ struct Game {
     clear_rows: Vec<usize>,
 }
 
+// ── Main ─────────────────────────────────────────────────
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-
-    println!();
-    println!("========================================");
-    println!("           T E T R I S");
-    println!("========================================");
-    println!();
-    println!("  Left/Right/A/D  Move");
-    println!("  Up/X            Rotate CW");
-    println!("  Z               Rotate CCW");
-    println!("  Down/S          Soft drop");
-    println!("  Space           Hard drop");
-    println!("  C               Hold");
-    println!("  P               Pause");
-    println!("  Esc             Restart");
-    println!();
-    println!("========================================");
-    println!();
+    println!(
+        "\n========================================\n           T E T R I S\n========================================\n\n  Left/Right/A/D  Move\n  Up/X            Rotate CW\n  Z               Rotate CCW\n  Down/S          Soft drop\n  Space           Hard drop\n  C               Hold\n  P               Pause\n  Esc             Restart\n\n========================================\n"
+    );
 
     let event_loop = winit::event_loop::EventLoop::new().unwrap();
     let window = Arc::new(
@@ -262,7 +307,7 @@ fn main() {
     let world = builder.world_mut();
     let cam = world.spawn();
     let mut cam_comp = Camera::orthographic(0.0, WIN_W as f32, WIN_H as f32, 0.0);
-    cam_comp.clear_color = Some(Color::new(0.04, 0.04, 0.06, 1.0));
+    cam_comp.clear_color = Some(Color::new(0.02, 0.02, 0.04, 1.0));
     world.add_component(cam, cam_comp);
 
     let mut entities = Vec::with_capacity(TOTAL_ENTITIES);
@@ -376,6 +421,10 @@ fn main() {
                 process_input(input, &mut game, dt);
                 update(&mut game, dt);
                 redraw(&mut app.world, &game, &entities);
+                window.set_title(&format!(
+                    "Tetris | Score {} | Lv {} | Lines {}",
+                    game.score, game.level, game.lines
+                ));
                 app.run();
                 app.render_phase();
             }
@@ -383,6 +432,7 @@ fn main() {
         .unwrap();
 }
 
+// ── Input ────────────────────────────────────────────────
 fn process_input(input: &InputManager, g: &mut Game, dt: f32) {
     if input.key_just_pressed(KeyCode::Escape) {
         if g.over {
@@ -399,14 +449,12 @@ fn process_input(input: &InputManager, g: &mut Game, dt: f32) {
     if g.over || g.paused {
         return;
     }
-
     if input.key_just_pressed(KeyCode::ArrowUp) || input.key_just_pressed(KeyCode::KeyX) {
         rotate(g, 1);
     }
     if input.key_just_pressed(KeyCode::KeyZ) {
         rotate(g, 3);
     }
-
     if input.key_just_pressed(KeyCode::Space) {
         let mut dist = 0;
         while fits(g, g.piece, g.rot, g.px, g.py + 1) {
@@ -417,7 +465,6 @@ fn process_input(input: &InputManager, g: &mut Game, dt: f32) {
         lock_piece(g);
         return;
     }
-
     if input.key_just_pressed(KeyCode::KeyC) && !g.hold_used {
         let cur = g.piece;
         if let Some(h) = g.hold {
@@ -434,21 +481,18 @@ fn process_input(input: &InputManager, g: &mut Game, dt: f32) {
         g.lock_resets = 0;
         g.lock_active = false;
     }
-
     g.soft_drop = input.key_down(KeyCode::ArrowDown) || input.key_down(KeyCode::KeyS);
     if (input.key_just_pressed(KeyCode::ArrowDown) || input.key_just_pressed(KeyCode::KeyS))
         && try_move(g, 0, 1)
     {
         g.score += 1;
     }
-
     let left = input.key_down(KeyCode::ArrowLeft) || input.key_down(KeyCode::KeyA);
     let right = input.key_down(KeyCode::ArrowRight) || input.key_down(KeyCode::KeyD);
     let left_just =
         input.key_just_pressed(KeyCode::ArrowLeft) || input.key_just_pressed(KeyCode::KeyA);
     let right_just =
         input.key_just_pressed(KeyCode::ArrowRight) || input.key_just_pressed(KeyCode::KeyD);
-
     if left_just {
         try_move(g, -1, 0);
         g.das_dir = -1;
@@ -495,6 +539,7 @@ fn process_input(input: &InputManager, g: &mut Game, dt: f32) {
     }
 }
 
+// ── Update ───────────────────────────────────────────────
 fn update(g: &mut Game, dt: f32) {
     if g.over || g.paused {
         return;
@@ -535,13 +580,93 @@ fn update(g: &mut Game, dt: f32) {
     }
 }
 
+// ── Rendering ────────────────────────────────────────────
+fn sprite_center(left: f32, top: f32, sz: f32) -> (f32, f32) {
+    (left + sz * 0.5, top + sz * 0.5)
+}
+
 fn redraw(world: &mut World, g: &Game, entities: &[Entity]) {
     let ghost_y = ghost_y(g);
     let over_dim = if g.over { 0.3 } else { 1.0 };
+    let grid_w = COLS as f32 * CELL;
+    let grid_h = VISIBLE_ROWS as f32 * CELL;
+
+    // ── Background sprites ───────────────────────────────
+    set_bg(
+        world,
+        entities,
+        BG_OFF,
+        BORDER_CLR,
+        Vec2::new(grid_w + 8.0, grid_h + 8.0),
+        GX + grid_w * 0.5,
+        GY_TOP + grid_h * 0.5,
+    );
+    set_bg(
+        world,
+        entities,
+        BG_OFF + 1,
+        PANEL_BG_CLR,
+        Vec2::new(4.0 * HOLD_CELL + 24.0, 4.0 * HOLD_CELL + 50.0),
+        HOLD_X + 2.0 * HOLD_CELL,
+        HOLD_Y + 2.0 * HOLD_CELL + 7.0,
+    );
+    let nh = 3.0 * (4.0 * NEXT_CELL) + 2.0 * NEXT_GAP + 28.0;
+    set_bg(
+        world,
+        entities,
+        BG_OFF + 2,
+        PANEL_BG_CLR,
+        Vec2::new(4.0 * NEXT_CELL + 24.0, nh),
+        NEXT_X + 2.0 * NEXT_CELL,
+        NEXT_Y + nh * 0.5 - 14.0,
+    );
+    let sph = LINES_Y - SCORE_Y + 44.0 + 20.0;
+    set_bg(
+        world,
+        entities,
+        BG_OFF + 3,
+        PANEL_BG_CLR,
+        Vec2::new(SCORE_DIGITS as f32 * (DIGIT_W + DIGIT_SP) + 20.0, sph),
+        SCORE_X + SCORE_DIGITS as f32 * (DIGIT_W + DIGIT_SP) * 0.5,
+        SCORE_Y + sph * 0.5 - 10.0,
+    );
+    // Score indicators (colored dots)
+    set_bg(
+        world,
+        entities,
+        BG_OFF + 4,
+        SCORE_CLR,
+        Vec2::new(10.0, 10.0),
+        SCORE_X - 16.0,
+        SCORE_Y + 22.0,
+    );
+    set_bg(
+        world,
+        entities,
+        BG_OFF + 5,
+        LEVEL_CLR,
+        Vec2::new(10.0, 10.0),
+        LEVEL_X - 16.0,
+        LEVEL_Y + 22.0,
+    );
+    set_bg(
+        world,
+        entities,
+        BG_OFF + 6,
+        LINES_CLR,
+        Vec2::new(10.0, 10.0),
+        LINES_X - 16.0,
+        LINES_Y + 22.0,
+    );
+    for i in 7..BG_ENT {
+        hide(world, entities, BG_OFF + i);
+    }
+
+    // ── Grid cells ───────────────────────────────────────
     for row in 0..VISIBLE_ROWS {
         let grid_row = row + (ROWS - VISIBLE_ROWS);
         for col in 0..COLS {
-            let idx = row * COLS + col;
+            let idx = GRID_OFF + row * COLS + col;
             let e = entities[idx];
             let cell = g.grid[grid_row][col];
             let is_cur = !g.over
@@ -560,17 +685,28 @@ fn redraw(world: &mut World, g: &Game, entities: &[Entity]) {
                     ghost_y,
                 );
             let is_clearing = g.clear_rows.contains(&grid_row);
+            let cl = GX + col as f32 * CELL;
+            let ct = GY_TOP + row as f32 * CELL;
+
             let (color, size) = if is_clearing {
-                let f = g.clear_flash;
-                (
-                    [
-                        1.0 * f + 0.08 * (1.0 - f),
-                        1.0 * f + 0.08 * (1.0 - f),
-                        1.0 * f + 0.10 * (1.0 - f),
-                        1.0,
-                    ],
-                    Vec2::new(CELL, CELL),
-                )
+                let progress = 1.0 - g.clear_flash;
+                let sweep = progress * COLS as f32;
+                if (col as f32) < sweep {
+                    let a = g.clear_flash;
+                    ([a, a, a * 1.05, 1.0], Vec2::new(CELL, CELL))
+                } else {
+                    let c = COLORS[cell as usize];
+                    let b = 1.0 + g.clear_flash * 0.6;
+                    (
+                        [
+                            (c[0] * b).min(1.0),
+                            (c[1] * b).min(1.0),
+                            (c[2] * b).min(1.0),
+                            1.0,
+                        ],
+                        Vec2::new(BLK, BLK),
+                    )
+                }
             } else if cell != 0 {
                 let c = COLORS[cell as usize];
                 (
@@ -581,58 +717,59 @@ fn redraw(world: &mut World, g: &Game, entities: &[Entity]) {
                 (COLORS[g.piece + 1], Vec2::new(BLK, BLK))
             } else if is_ghost {
                 let c = COLORS[g.piece + 1];
-                ([c[0], c[1], c[2], 0.2], Vec2::new(BLK, BLK))
+                ([c[0], c[1], c[2], 0.18], Vec2::new(CELL - 2.0, CELL - 2.0))
             } else {
                 (COLORS[0], Vec2::new(CELL, CELL))
             };
-            let px = GX + col as f32 * CELL;
-            let py = GY - (VISIBLE_ROWS as f32 - row as f32) * CELL;
-            if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
-                sprite.color = color;
-                sprite.size = size;
-                sprite.transform = Mat4::from_translation(Vec3::new(px + 1.0, py + 1.0, 0.0));
+            let (cx, cy) = sprite_center(cl, ct, CELL);
+            if let Some(sp) = world.get_by_index_mut::<Sprite>(e.index()) {
+                sp.color = color;
+                sp.size = size;
+                sp.transform = Mat4::from_translation(Vec3::new(cx, cy, 0.0));
             }
         }
     }
 
+    // ── Next pieces ──────────────────────────────────────
     for qi in 0..3 {
         let blocks = PIECES[g.next_queue[qi]][0];
         let color = COLORS[g.next_queue[qi] + 1];
         for i in 0..16 {
-            let ei = GRID_ENT + qi * 16 + i;
+            let ei = NEXT_OFF + qi * 16 + i;
             let e = entities[ei];
             let col = i % 4;
             let row = i / 4;
             let is_block = blocks
                 .iter()
                 .any(|&(bx, by)| bx as usize == col && by as usize == row);
-            if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
+            if let Some(sp) = world.get_by_index_mut::<Sprite>(e.index()) {
                 if is_block {
-                    sprite.color = color;
-                    sprite.size = Vec2::new(BLK, BLK);
-                    sprite.transform = Mat4::from_translation(Vec3::new(
-                        NEXT_X + col as f32 * CELL,
-                        NEXT_Y + qi as f32 * 5.0 * CELL + row as f32 * CELL,
-                        0.0,
-                    ));
+                    let px = NEXT_X + col as f32 * NEXT_CELL;
+                    let py =
+                        NEXT_Y + qi as f32 * (4.0 * NEXT_CELL + NEXT_GAP) + row as f32 * NEXT_CELL;
+                    sp.color = color;
+                    sp.size = Vec2::new(NEXT_BLK, NEXT_BLK);
+                    let (cx, cy) = sprite_center(px, py, NEXT_CELL);
+                    sp.transform = Mat4::from_translation(Vec3::new(cx, cy, 0.0));
                 } else {
-                    sprite.color = [0.0; 4];
-                    sprite.transform = Mat4::from_translation(Vec3::new(-300.0, -300.0, 0.0));
+                    sp.color = [0.0; 4];
+                    sp.transform = Mat4::from_translation(Vec3::new(-300.0, -300.0, 0.0));
                 }
             }
         }
     }
 
+    // ── Hold piece ───────────────────────────────────────
     let hold_blocks = g.hold.map(|h| PIECES[h][0]);
     let hold_color = g.hold.map(|h| {
         if g.hold_used {
-            [0.3, 0.3, 0.3, 1.0]
+            [0.3, 0.3, 0.35, 1.0]
         } else {
             COLORS[h + 1]
         }
     });
     for i in 0..16 {
-        let ei = GRID_ENT + NEXT_ENT + i;
+        let ei = HOLD_OFF + i;
         let e = entities[ei];
         let col = i % 4;
         let row = i / 4;
@@ -640,47 +777,172 @@ fn redraw(world: &mut World, g: &Game, entities: &[Entity]) {
             b.iter()
                 .any(|&(bx, by)| bx as usize == col && by as usize == row)
         });
-        if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
+        if let Some(sp) = world.get_by_index_mut::<Sprite>(e.index()) {
             if is_block {
-                sprite.color = hold_color.unwrap();
-                sprite.size = Vec2::new(BLK, BLK);
-                sprite.transform = Mat4::from_translation(Vec3::new(
-                    HOLD_X + col as f32 * CELL,
-                    HOLD_Y + row as f32 * CELL,
-                    0.0,
-                ));
+                let px = HOLD_X + col as f32 * HOLD_CELL;
+                let py = HOLD_Y + row as f32 * HOLD_CELL;
+                sp.color = hold_color.unwrap();
+                sp.size = Vec2::new(HOLD_BLK, HOLD_BLK);
+                let (cx, cy) = sprite_center(px, py, HOLD_CELL);
+                sp.transform = Mat4::from_translation(Vec3::new(cx, cy, 0.0));
             } else {
-                sprite.color = [0.0; 4];
-                sprite.transform = Mat4::from_translation(Vec3::new(-300.0, -300.0, 0.0));
+                sp.color = [0.0; 4];
+                sp.transform = Mat4::from_translation(Vec3::new(-300.0, -300.0, 0.0));
             }
         }
     }
 
+    // ── Score / Level / Lines (pixel font) ───────────────
+    render_number(
+        world,
+        entities,
+        SCORE_OFF,
+        g.score.min(9999999),
+        SCORE_DIGITS,
+        SCORE_X,
+        SCORE_Y,
+        SCORE_CLR,
+    );
+    render_number(
+        world,
+        entities,
+        LEVEL_OFF,
+        g.level.min(99),
+        LEVEL_DIGITS,
+        LEVEL_X,
+        LEVEL_Y,
+        LEVEL_CLR,
+    );
+    render_number(
+        world,
+        entities,
+        LINES_OFF,
+        g.lines.min(999),
+        LINES_DIGITS,
+        LINES_X,
+        LINES_Y,
+        LINES_CLR,
+    );
+
+    // ── Pause overlay ────────────────────────────────────
     if g.paused {
         for row in 0..VISIBLE_ROWS {
             for col in 0..COLS {
-                let idx = row * COLS + col;
+                let idx = GRID_OFF + row * COLS + col;
                 let e = entities[idx];
-                if let Some(sprite) = world.get_by_index_mut::<Sprite>(e.index()) {
-                    sprite.color = [0.0, 0.0, 0.0, 0.7];
-                    sprite.size = Vec2::new(CELL, CELL);
-                    sprite.transform = Mat4::from_translation(Vec3::new(
-                        GX + col as f32 * CELL,
-                        GY - (VISIBLE_ROWS as f32 - row as f32) * CELL,
-                        0.0,
-                    ));
+                let cl = GX + col as f32 * CELL;
+                let ct = GY_TOP + row as f32 * CELL;
+                if let Some(sp) = world.get_by_index_mut::<Sprite>(e.index()) {
+                    sp.color = [0.02, 0.02, 0.05, 0.75];
+                    sp.size = Vec2::new(CELL, CELL);
+                    let (cx, cy) = sprite_center(cl, ct, CELL);
+                    sp.transform = Mat4::from_translation(Vec3::new(cx, cy, 0.0));
                 }
             }
         }
     }
 }
 
+// ── Pixel Font Helpers ───────────────────────────────────
+fn set_bg(
+    world: &mut World,
+    entities: &[Entity],
+    idx: usize,
+    color: [f32; 4],
+    size: Vec2,
+    cx: f32,
+    cy: f32,
+) {
+    let e = entities[idx];
+    if let Some(sp) = world.get_by_index_mut::<Sprite>(e.index()) {
+        sp.color = color;
+        sp.size = size;
+        sp.transform = Mat4::from_translation(Vec3::new(cx, cy, 0.0));
+    }
+}
+
+fn hide(world: &mut World, entities: &[Entity], idx: usize) {
+    let e = entities[idx];
+    if let Some(sp) = world.get_by_index_mut::<Sprite>(e.index()) {
+        sp.color = [0.0; 4];
+        sp.transform = Mat4::from_translation(Vec3::new(-300.0, -300.0, 0.0));
+    }
+}
+
+fn render_digit(
+    world: &mut World,
+    entities: &[Entity],
+    offset: usize,
+    digit: usize,
+    x: f32,
+    y: f32,
+    color: [f32; 4],
+) {
+    let pat = &DIGITS[digit];
+    for i in 0..15 {
+        let e = entities[offset + i];
+        if pat[i] != 0 {
+            let col = i % 3;
+            let row = i / 3;
+            let px = x + col as f32 * (PX_SZ + PX_GAP) + PX_SZ * 0.5;
+            let py = y + row as f32 * (PX_SZ + PX_GAP) + PX_SZ * 0.5;
+            if let Some(sp) = world.get_by_index_mut::<Sprite>(e.index()) {
+                sp.color = color;
+                sp.size = Vec2::new(PX_SZ, PX_SZ);
+                sp.transform = Mat4::from_translation(Vec3::new(px, py, 0.0));
+            }
+        } else {
+            hide(world, entities, offset + i);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_number(
+    world: &mut World,
+    entities: &[Entity],
+    offset: usize,
+    value: u32,
+    max_digits: usize,
+    x: f32,
+    y: f32,
+    color: [f32; 4],
+) {
+    let mut digits = Vec::new();
+    let mut v = value;
+    if v == 0 {
+        digits.push(0);
+    } else {
+        while v > 0 {
+            digits.push((v % 10) as usize);
+            v /= 10;
+        }
+    }
+    digits.reverse();
+    let n = digits.len().min(max_digits);
+    let blanks = max_digits - n;
+    for i in 0..blanks {
+        for j in 0..15 {
+            hide(world, entities, offset + i * 15 + j);
+        }
+    }
+    for (i, &d) in digits.iter().enumerate().take(n) {
+        let dx = x + (blanks + i) as f32 * (DIGIT_W + DIGIT_SP);
+        render_digit(world, entities, offset + (blanks + i) * 15, d, dx, y, color);
+    }
+    for i in (blanks + n)..max_digits {
+        for j in 0..15 {
+            hide(world, entities, offset + i * 15 + j);
+        }
+    }
+}
+
+// ── Game Logic ───────────────────────────────────────────
 fn piece_at(_g: &Game, gx: i32, gy: i32, piece: usize, rot: usize, px: i32, py: i32) -> bool {
     PIECES[piece][rot]
         .iter()
         .any(|&(bx, by)| px + bx == gx && py + by == gy)
 }
-
 fn ghost_y(g: &Game) -> i32 {
     let mut gy = g.py;
     while fits(g, g.piece, g.rot, g.px, gy + 1) {
@@ -688,7 +950,6 @@ fn ghost_y(g: &Game) -> i32 {
     }
     gy
 }
-
 fn try_move(g: &mut Game, dx: i32, dy: i32) -> bool {
     if fits(g, g.piece, g.rot, g.px + dx, g.py + dy) {
         g.px += dx;
@@ -702,7 +963,6 @@ fn try_move(g: &mut Game, dx: i32, dy: i32) -> bool {
         false
     }
 }
-
 fn rotate(g: &mut Game, dir: usize) {
     let nr = (g.rot + dir) % 4;
     let kicks = if g.piece == 0 {
@@ -728,7 +988,6 @@ fn rotate(g: &mut Game, dir: usize) {
         }
     }
 }
-
 fn lock_piece(g: &mut Game) {
     let blocks = PIECES[g.piece][g.rot];
     let cid = (g.piece + 1) as u8;
@@ -758,7 +1017,6 @@ fn lock_piece(g: &mut Game) {
     g.lock_resets = 0;
     spawn_next(g);
 }
-
 fn actually_clear(g: &mut Game) {
     let n = g.clear_rows.len() as u32;
     let mut write = ROWS;
@@ -788,7 +1046,6 @@ fn actually_clear(g: &mut Game) {
     g.level = g.lines / 10 + 1;
     g.fall_speed = (0.8 - (g.level as f32 - 1.0) * 0.07).max(0.05);
 }
-
 fn spawn_next(g: &mut Game) {
     g.piece = g.next_queue.pop_front().unwrap();
     g.next_queue.push_back(g.bag.next());
@@ -803,7 +1060,6 @@ fn spawn_next(g: &mut Game) {
         g.over = true;
     }
 }
-
 fn fits(g: &Game, piece: usize, rot: usize, px: i32, py: i32) -> bool {
     PIECES[piece][rot].iter().all(|&(bx, by)| {
         let gx = px + bx;
@@ -814,7 +1070,6 @@ fn fits(g: &Game, piece: usize, rot: usize, px: i32, py: i32) -> bool {
             && (gy < 0 || g.grid[gy as usize][gx as usize] == 0)
     })
 }
-
 fn reset(g: &mut Game) {
     g.grid = [[0; COLS]; ROWS];
     g.bag = Bag::new();
