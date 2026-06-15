@@ -592,6 +592,8 @@ pub struct EditorState {
     pub show_remove_component_menu: bool,
     /// Sky/background color for the viewport (RGB 0.0-1.0).
     pub sky_color: [f32; 3],
+    /// Loaded model meshes: name → (vertices, indices)
+    pub loaded_models: std::collections::HashMap<String, (Vec<engine_render::resource::mesh::MeshVertex>, Vec<u32>)>,
     /// Node currently being dragged in hierarchy (for reparent).
     pub drag_source: Option<u64>,
     /// Node being hovered during drag (drop target).
@@ -759,6 +761,7 @@ impl EditorState {
             show_add_component_menu: false,
             show_remove_component_menu: false,
             sky_color: [0.15, 0.20, 0.30],
+            loaded_models: std::collections::HashMap::new(),
         }
     }
 
@@ -1078,6 +1081,48 @@ impl EditorState {
         }
     }
 
+    /// Load a glTF/GLB model file and register its meshes.
+    pub fn load_model(&mut self, path: &std::path::Path) {
+        use engine_asset::format::gltf;
+        use engine_render::resource::mesh::MeshVertex;
+
+        match gltf::load_gltf(path) {
+            Ok(data) => {
+                let mut count = 0;
+                for mesh in &data.meshes {
+                    let vertices: Vec<MeshVertex> = mesh
+                        .vertices
+                        .iter()
+                        .map(|v| MeshVertex {
+                            position: v.position,
+                            normal: v.normal,
+                            uv: v.tex_coord,
+                        })
+                        .collect();
+                    let indices = mesh.indices.clone();
+                    let name = if mesh.name.is_empty() {
+                        format!("{}_{}", path.file_stem().unwrap_or_default().to_string_lossy(), count)
+                    } else {
+                        mesh.name.clone()
+                    };
+                    self.loaded_models.insert(name.clone(), (vertices, indices));
+                    self.log_info(&format!("已加载网格: {}", name));
+                    count += 1;
+                }
+                self.log_info(&format!(
+                    "模型已加载: {} ({} 个网格)",
+                    path.display(),
+                    count
+                ));
+                self.status_message = Some(format!("已加载模型: {}", path.display()));
+            }
+            Err(e) => {
+                self.log_error(&format!("模型加载失败: {}", e));
+                self.status_message = Some(format!("模型加载失败: {}", e));
+            }
+        }
+    }
+
     /// Cut selected nodes (copy + delete).
     pub fn cut_selected(&mut self) {
         self.copy_selected();
@@ -1220,12 +1265,18 @@ impl EditorState {
         let (cyl_v, cyl_i) = cylinder_mesh(24);
         let cylinder_mesh_id = mesh_store.upload(device, &cyl_v, Some(&cyl_i));
 
-        let mesh_map: std::collections::HashMap<&str, u64> = [
-            ("Cube", cube_mesh_id),
-            ("Sphere", sphere_mesh_id),
-            ("Plane", plane_mesh_id),
-            ("Cylinder", cylinder_mesh_id),
+        let mut mesh_map: std::collections::HashMap<String, u64> = [
+            ("Cube".to_string(), cube_mesh_id),
+            ("Sphere".to_string(), sphere_mesh_id),
+            ("Plane".to_string(), plane_mesh_id),
+            ("Cylinder".to_string(), cylinder_mesh_id),
         ].into();
+
+        // Upload loaded model meshes
+        for (name, (verts, idxs)) in &self.loaded_models {
+            let mid = mesh_store.upload(device, verts, Some(idxs));
+            mesh_map.insert(name.clone(), mid);
+        }
 
         // Create a default PBR material
         let default_mat = engine_render::resource::material::PbrMaterial {
