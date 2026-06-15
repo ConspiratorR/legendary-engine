@@ -2,6 +2,16 @@
 
 RustEngine includes a built-in physics engine for rigid body dynamics and collision detection.
 
+## Features
+
+- **Rigid Bodies** — Dynamic, static, and kinematic body types
+- **Colliders** — Sphere, cuboid, capsule, cylinder shapes
+- **Collision Detection** — SAT-based collision for all shape combinations
+- **Contact Solving** — Baumgarte stabilization, warm starting, Coulomb friction
+- **Joints** — Hinge, ball-socket, spring constraints
+- **CCD** — Continuous collision detection for fast-moving objects
+- **ECS Integration** — Physics components and systems via the plugin system
+
 ## Setup
 
 Add the physics plugin to your app:

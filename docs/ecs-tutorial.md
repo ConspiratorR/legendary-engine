@@ -2,6 +2,16 @@
 
 The Entity Component System (ECS) is the foundation of RustEngine. This tutorial covers the core concepts.
 
+## Features
+
+- **Sparse-Set Storage** — Efficient component storage with O(1) access
+- **Generational Entities** — Lightweight entity handles with generation tracking
+- **Type-Erased Storage** — Any `'static` type can be a component
+- **Queries** — Iterate over entities with specific components
+- **Systems** — Functions that operate on the world
+- **Resources** — Global singletons stored on the world
+- **Schedules** — Ordered system execution with parallel potential
+
 ## Core Concepts
 
 ### Entities

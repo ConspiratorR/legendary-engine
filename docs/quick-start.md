@@ -57,9 +57,35 @@ fn main() {
 }
 ```
 
+## Running the Editor
+
+The built-in editor provides scene authoring, debugging, and asset management:
+
+```bash
+cargo run -p engine-editor
+```
+
+## Building for Web/WASM
+
+RustEngine supports building for WebAssembly:
+
+```bash
+# Install WASM target
+rustup target add wasm32-unknown-unknown
+
+# Build the renderer
+cargo build -p engine-render --target wasm32-unknown-unknown
+
+# Build the editor library (no binary)
+cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
+```
+
+See [WASM_STATUS.md](../WASM_STATUS.md) for details on WASM support.
+
 ## Next Steps
 
 - [ECS Usage Tutorial](ecs-tutorial.md) — Learn about entities, components, and systems
 - [Rendering Pipeline](rendering-pipeline.md) — Set up rendering
 - [Physics System](physics-system.md) — Add physics simulation
 - [Audio System](audio-system.md) — Play sounds and music
+- [Editor Guide](editor-guide.md) — Use the built-in editor

@@ -13,16 +13,31 @@ The rendering pipeline consists of:
 5. **Lighting** — directional, point, and spot lights
 6. **Shadow Mapping** — cascaded shadow maps
 7. **Sprite Rendering** — 2D sprite batching with indirect draw
+8. **Deferred Rendering** — G-Buffer based deferred shading pipeline
+9. **Post-Processing** — HDR, tone mapping, bloom effects
 
 ## Renderer Initialization
 
 ```rust
 use engine_render::renderer::Renderer;
 
-// Created during app setup via AppBuilder
-let renderer = Renderer::new(window).await;
-app.set_renderer(renderer);
+// Native initialization (blocking)
+let renderer = Renderer::new(window)?;
+
+// WASM initialization (async)
+let renderer = Renderer::new_async(window).await?;
 ```
+
+## Deferred Rendering Pipeline
+
+The engine uses a deferred rendering pipeline for 3D scenes:
+
+1. **Shadow Pass** — Renders depth from light's perspective for cascaded shadow maps
+2. **G-Buffer Pass** — Renders geometry to multiple render targets (albedo, normal, position, material)
+3. **Lighting Pass** — Applies lighting calculations using G-Buffer data
+4. **Post-Processing** — HDR, tone mapping, bloom effects
+5. **Sprite Pass** — Renders 2D sprites on top of the 3D scene
+6. **Final Composite** — Combines all passes for final output
 
 ## Camera System
 

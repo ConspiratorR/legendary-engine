@@ -80,16 +80,40 @@ crates/
 ├── engine-window/     # Window creation and management
 ├── engine-input/      # Keyboard, mouse, gamepad input
 ├── engine-audio/      # Sound playback
-├── engine-asset/      # Asset loading, hot-reload
-├── engine-scene/      # Scene serialization
-├── engine-render/     # wgpu rendering pipeline
-├── engine-physics/    # Physics simulation (partially implemented)
+├── engine-asset/      # Asset loading, hot-reload, .meta files
+├── engine-scene/      # Scene serialization, prefabs
+├── engine-render/     # wgpu rendering pipeline (deferred shading)
+├── engine-physics/    # Physics simulation (rigid bodies, colliders, joints)
 ├── engine-framework/  # Game states, app lifecycle
 ├── engine-script/     # Lua/WASM scripting
 ├── engine-terrain/    # Terrain system
-├── engine-ui/         # UI framework
+├── engine-ui/         # UI framework (egui integration)
 ├── engine-editor/     # Editor application
+├── engine-network/    # Client/server networking
+├── engine-jobs/       # Thread pool and job graphs
 └── engine-core/       # Re-exports and integration
+```
+
+## Building for Different Platforms
+
+### Native (Windows/macOS/Linux)
+
+```bash
+cargo build
+cargo run -p engine-editor
+```
+
+### WASM/Web
+
+```bash
+# Install WASM target
+rustup target add wasm32-unknown-unknown
+
+# Build renderer for WASM
+cargo build -p engine-render --target wasm32-unknown-unknown
+
+# Build editor library for WASM (no binary)
+cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
 ```
 
 ## Adding a New Crate

@@ -1,6 +1,6 @@
 # Architecture Overview
 
-RustEngine is a modular game engine built in Rust with 16 crates organized in layers. This document describes the high-level architecture, crate relationships, and data flow.
+RustEngine is a modular game engine built in Rust with 17 crates organized in layers. This document describes the high-level architecture, crate relationships, and data flow.
 
 ## Validated Dependency Layers
 
@@ -269,11 +269,16 @@ Plugins can:
 |-------|---------|-------------|
 | `engine-core` | `audio` (default) | Enable audio system via `engine-audio` |
 | `engine-ecs` | `jobs-backend` | Use `engine-jobs` for parallel system execution |
+| `engine-editor` | `scripting` (default) | Lua scripting support via `mlua` |
+| `engine-editor` | `native-dialogs` (default) | Native file dialogs via `rfd` |
+| `engine-editor` | `native` (default) | Native platform support |
+| `engine-editor` | `web` | Web/WASM platform support |
 
 ## Cross-Platform Support
 
-The engine supports Windows, macOS, Linux, and Android (experimental) through:
-- **wgpu** for cross-platform GPU abstraction
+The engine supports Windows, macOS, Linux, Android (experimental), and Web/WASM (experimental) through:
+- **wgpu** for cross-platform GPU abstraction (WebGPU/WebGL2 on web)
 - **winit** for window management
 - **rodio** for audio (with platform-specific backends)
-- Conditional compilation via `#[cfg(target_os = "...")]` where needed
+- Conditional compilation via `#[cfg(target_arch = "wasm32")]` for WASM-specific code
+- Feature flags to enable/disable platform-specific features

@@ -105,6 +105,8 @@ Common keyboard shortcuts:
 | `Ctrl+S` | Save scene |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` | Redo |
+| `Ctrl+N` | New scene |
+| `Ctrl+D` | Duplicate selected |
 
 ## Animation Editor
 
@@ -114,3 +116,40 @@ Edit animation clips and state machines:
 - Add keyframes for position, rotation, scale
 - Set up state machine transitions
 - Preview animations in the viewport
+
+## Prefab System
+
+Create reusable scene templates:
+
+- Select nodes in the hierarchy
+- Create prefab from selection (right-click menu)
+- Instantiate prefabs into the scene
+- Save/load prefabs as JSON files
+
+## Visual Scripting (Blueprints)
+
+Create game logic without code:
+
+- Node graph editor for visual scripting
+- Execution flow nodes (Sequence, Branch, Loop, Delay, Event)
+- Data nodes (Math, Transform, Input, Physics Raycast, Spawn Entity)
+- Blueprints run during Play mode (begin_play + tick)
+
+## Asset Management
+
+Manage project assets with .meta files:
+
+- Each asset has a companion `.meta` file with GUID and import settings
+- Import settings: Texture (max size, mipmaps, compression), Mesh (LOD, scale), Audio (sample rate, streaming)
+- Asset browser for file navigation
+- Drag assets into the viewport
+
+## Play Mode
+
+Test your game in the editor:
+
+- **Play** — Start the game runtime (ECS, physics, audio, scripts)
+- **Pause** — Freeze the runtime
+- **Stop** — Return to editor mode
+- Game viewport shows runtime camera view
+- Debug visualization shows colliders and bounding boxes

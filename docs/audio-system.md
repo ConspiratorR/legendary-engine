@@ -2,6 +2,15 @@
 
 RustEngine provides audio playback through `rodio` with mixing, spatial audio, and streaming support.
 
+## Features
+
+- **Playback** — Load and play audio clips (WAV, OGG, MP3, FLAC)
+- **Volume Control** — Master volume, per-channel volume, mute
+- **Audio Mixer** — Bus-based mixing with named buses (master, sfx, music, ambient, voice, ui)
+- **Spatial Audio** — 3D positional audio with distance attenuation, Doppler effect, stereo panning
+- **Streaming** — Stream large audio files without loading entirely into memory
+- **Playback Control** — Play, pause, resume, stop, loop
+
 ## Setup
 
 The audio system is available through `AudioManager`:
