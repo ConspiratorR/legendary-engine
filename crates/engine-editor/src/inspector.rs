@@ -172,12 +172,18 @@ fn section_header(painter: &egui::Painter, x: f32, y: f32, label: &str) -> f32 {
 }
 
 #[allow(invalid_reference_casting)]
-fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id: u64, name: &str, _search: &str) {
+fn section_matches(section_name: &str, search: &str) -> bool {
+    search.is_empty() || section_name.to_lowercase().contains(search)
+}
+
+#[allow(invalid_reference_casting)]
+fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id: u64, name: &str, search: &str) {
     let painter = gui.ui.painter_at(rect);
     let row_h = 26.0;
     let x = rect.left();
     let w = rect.width();
     let mut y = rect.top();
+    let search_lower = search.to_lowercase();
 
     // Node name
     painter.text(
@@ -190,7 +196,9 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     y += 24.0;
 
     // ── Transform ──
-    if let Some(t) = state.node_transforms.get_mut(&id) {
+    if section_matches("变换 位置 旋转 缩放 transform position rotation scale", &search_lower)
+        && let Some(t) = state.node_transforms.get_mut(&id)
+    {
         // Snapshot transform before editing for undo
         let old_transform = *t;
 
@@ -244,7 +252,9 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     }
 
     // ── Material (PBR) ──
-    if let Some(mat) = state.node_materials.get_mut(&id) {
+    if section_matches("材质 pbr material 基础颜色 金属度 粗糙度", &search_lower)
+        && let Some(mat) = state.node_materials.get_mut(&id)
+    {
         y = separator(&painter, x, y, w);
         y = section_header(&painter, x, y, "材质 (PBR)");
 
@@ -304,25 +314,29 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     }
 
     // ── Render ──
-    y = separator(&painter, x, y, w);
-    y = section_header(&painter, x, y, "渲染");
+    if section_matches("渲染 render 材质 网格 阴影 shadow mesh", &search_lower) {
+        y = separator(&painter, x, y, w);
+        y = section_header(&painter, x, y, "渲染");
 
-    if let Some((mat, mesh, shadow)) = state.node_render.get_mut(&id) {
-        let mr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.input_labeled(mr, "材质", mat);
-        y += row_h + 6.0;
+        if let Some((mat, mesh, shadow)) = state.node_render.get_mut(&id) {
+            let mr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+            gui.input_labeled(mr, "材质", mat);
+            y += row_h + 6.0;
 
-        let mer = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.input_labeled(mer, "网格", mesh);
-        y += row_h + 6.0;
+            let mer = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+            gui.input_labeled(mer, "网格", mesh);
+            y += row_h + 6.0;
 
-        let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.checkbox(sr, "投射阴影", shadow);
-        y += 16.0;
+            let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+            gui.checkbox(sr, "投射阴影", shadow);
+            y += 16.0;
+        }
     }
 
     // ── Light ──
-    if let Some(light) = state.node_lights.get_mut(&id) {
+    if section_matches("光照 光 light 方向光 点光源 聚光灯 directional point spot", &search_lower)
+        && let Some(light) = state.node_lights.get_mut(&id)
+    {
         y = separator(&painter, x, y, w);
 
         let type_label = match light.light_type {
@@ -385,20 +399,24 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     }
 
     // ── Physics ──
-    y = separator(&painter, x, y, w);
-    y = section_header(&painter, x, y, "物理");
+    if section_matches("物理 physics 刚体 碰撞 rigidbody collider", &search_lower) {
+        y = separator(&painter, x, y, w);
+        y = section_header(&painter, x, y, "物理");
 
-    if let Some((body, col)) = state.node_physics.get_mut(&id) {
-        let br = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.input_labeled(br, "刚体", body);
-        y += row_h + 6.0;
+        if let Some((body, col)) = state.node_physics.get_mut(&id) {
+            let br = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+            gui.input_labeled(br, "刚体", body);
+            y += row_h + 6.0;
 
-        let cr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.input_labeled(cr, "碰撞", col);
+            let cr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
+            gui.input_labeled(cr, "碰撞", col);
+        }
     }
 
     // ── Sprite ──
-    if let Some(sprite) = state.node_sprites.get_mut(&id) {
+    if section_matches("精灵 sprite 纹理 翻转", &search_lower)
+        && let Some(sprite) = state.node_sprites.get_mut(&id)
+    {
         y = separator(&painter, x, y, w);
         y = section_header(&painter, x, y, "精灵");
 
@@ -452,7 +470,9 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     }
 
     // ── Particle ──
-    if let Some(particle) = state.node_particles.get_mut(&id) {
+    if section_matches("粒子 particle 发射器 粒子系统", &search_lower)
+        && let Some(particle) = state.node_particles.get_mut(&id)
+    {
         y = separator(&painter, x, y, w);
         y = section_header(&painter, x, y, "粒子系统");
 
@@ -500,7 +520,9 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     }
 
     // ── Audio ──
-    if let Some(audio) = state.node_audio.get_mut(&id) {
+    if section_matches("音频 audio 声音 音量", &search_lower)
+        && let Some(audio) = state.node_audio.get_mut(&id)
+    {
         y = separator(&painter, x, y, w);
         y = section_header(&painter, x, y, "音频");
 
@@ -540,7 +562,9 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     }
 
     // ── Script ──
-    if let Some(script) = state.node_scripts.get_mut(&id) {
+    if section_matches("脚本 script lua wasm", &search_lower)
+        && let Some(script) = state.node_scripts.get_mut(&id)
+    {
         y = separator(&painter, x, y, w);
         y = section_header(&painter, x, y, "脚本");
 
@@ -572,7 +596,9 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     }
 
     // ── Tags ──
-    if let Some(tags) = state.node_tags.get_mut(&id) {
+    if section_matches("标签 tags tag", &search_lower)
+        && let Some(tags) = state.node_tags.get_mut(&id)
+    {
         y = separator(&painter, x, y, w);
         y = section_header(&painter, x, y, "标签");
 

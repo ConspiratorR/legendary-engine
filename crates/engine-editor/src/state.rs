@@ -1078,6 +1078,52 @@ impl EditorState {
         self.log(LogLevel::Error, msg.to_string());
     }
 
+    /// Build the project by running `cargo build`.
+    pub fn build_project(&mut self) {
+        self.log_info("开始构建项目...");
+        self.status_message = Some("构建中...".into());
+
+        let output = std::process::Command::new("cargo")
+            .arg("build")
+            .arg("--manifest-path")
+            .arg("Cargo.toml")
+            .output();
+
+        match output {
+            Ok(output) => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+
+                if output.status.success() {
+                    self.log_info("构建成功!");
+                    self.status_message = Some("构建成功".into());
+                    if !stdout.is_empty() {
+                        for line in stdout.lines().take(20) {
+                            self.log_info(line);
+                        }
+                    }
+                } else {
+                    self.log_error("构建失败!");
+                    self.status_message = Some("构建失败".into());
+                    if !stderr.is_empty() {
+                        for line in stderr.lines().take(30) {
+                            self.log_error(line);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                self.log_error(&format!("无法执行 cargo: {}", e));
+                self.status_message = Some(format!("构建错误: {}", e));
+            }
+        }
+    }
+
+    /// Run the project by entering play mode.
+    pub fn run_project(&mut self) {
+        self.play();
+    }
+
     /// Build scene data for 3D rendering from the current editor state.
     pub fn build_scene(
         &self,

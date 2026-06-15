@@ -389,11 +389,11 @@ fn draw_dropdown_menu(
                     match i {
                         0 => {
                             // 构建项目
-                            state.status_message = Some("构建项目: 功能开发中".into());
+                            state.build_project();
                         }
                         1 => {
                             // 运行项目
-                            state.play();
+                            state.run_project();
                         }
                         _ => {}
                     }
@@ -953,26 +953,52 @@ fn save_scene_as(state: &mut EditorState) {
     let scene = state.to_scene("Untitled");
     state.scene_manager.set_current_scene(scene);
 
-    let path = PathBuf::from(DEFAULT_SCENE_FILE);
-    match state.scene_manager.save_scene(&path) {
-        Ok(()) => {
-            state.status_message = Some(format!("Scene saved as: {}", path.display()));
+    // Open native file dialog
+    let path = rfd::FileDialog::new()
+        .set_title("另存为")
+        .add_filter("场景文件", &["json", "scene"])
+        .add_filter("所有文件", &["*"])
+        .set_directory(".")
+        .save_file();
+
+    match path {
+        Some(path) => {
+            match state.scene_manager.save_scene(&path) {
+                Ok(()) => {
+                    state.status_message = Some(format!("已保存: {}", path.display()));
+                    state.log_info(&format!("场景已保存到: {}", path.display()));
+                }
+                Err(e) => {
+                    state.status_message = Some(format!("保存失败: {}", e));
+                    state.log_error(&format!("保存失败: {}", e));
+                }
+            }
         }
-        Err(e) => {
-            state.status_message = Some(format!("Save failed: {}", e));
+        None => {
+            state.status_message = Some("已取消保存".into());
         }
     }
 }
 
 fn load_scene(state: &mut EditorState) {
-    let path = state
-        .scene_manager
-        .scene_path()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_SCENE_FILE));
+    // Open native file dialog
+    let path = rfd::FileDialog::new()
+        .set_title("加载场景")
+        .add_filter("场景文件", &["json", "scene"])
+        .add_filter("所有文件", &["*"])
+        .set_directory(".")
+        .pick_file();
+
+    let path = match path {
+        Some(p) => p,
+        None => {
+            state.status_message = Some("已取消加载".into());
+            return;
+        }
+    };
 
     if !path.exists() {
-        state.status_message = Some(format!("Scene file not found: {}", path.display()));
+        state.status_message = Some(format!("文件不存在: {}", path.display()));
         return;
     }
 
