@@ -92,7 +92,7 @@ impl SceneTree {
                     icon: "📁".into(),
                     expanded: true,
                     parent: None,
-                    children: vec![2, 3, 4, 5, 6],
+                    children: vec![2, 3, 4, 5, 6, 7, 8, 9],
                 },
                 TreeNode {
                     id: 2,
@@ -112,7 +112,7 @@ impl SceneTree {
                 },
                 TreeNode {
                     id: 4,
-                    name: "Cube".into(),
+                    name: "Red Cube".into(),
                     icon: "📦".into(),
                     expanded: false,
                     parent: Some(1),
@@ -120,7 +120,7 @@ impl SceneTree {
                 },
                 TreeNode {
                     id: 5,
-                    name: "Sphere".into(),
+                    name: "Blue Sphere".into(),
                     icon: "🔮".into(),
                     expanded: false,
                     parent: Some(1),
@@ -134,9 +134,33 @@ impl SceneTree {
                     parent: Some(1),
                     children: vec![],
                 },
+                TreeNode {
+                    id: 7,
+                    name: "Green Cylinder".into(),
+                    icon: "🟢".into(),
+                    expanded: false,
+                    parent: Some(1),
+                    children: vec![],
+                },
+                TreeNode {
+                    id: 8,
+                    name: "Gold Sphere".into(),
+                    icon: "🟡".into(),
+                    expanded: false,
+                    parent: Some(1),
+                    children: vec![],
+                },
+                TreeNode {
+                    id: 9,
+                    name: "White Cube".into(),
+                    icon: "⬜".into(),
+                    expanded: false,
+                    parent: Some(1),
+                    children: vec![],
+                },
             ],
             root_ids: vec![root_id],
-            next_id: 7,
+            next_id: 10,
         }
     }
 
@@ -620,36 +644,48 @@ impl EditorState {
         let mut node_physics = HashMap::new();
         let mut node_lights = HashMap::new();
         let mut node_materials = HashMap::new();
-        for i in 1..=6 {
+        for i in 1..=9 {
             node_physics.insert(i, ("Static".into(), "Box".into()));
         }
         // Assign different mesh types per node
-        node_render.insert(1, ("Default".into(), "Cube".into(), true));     // Root
-        node_render.insert(2, ("Default".into(), "Cube".into(), true));     // Player
-        node_render.insert(3, ("Default".into(), "Plane".into(), true));    // Terrain
-        node_render.insert(4, ("Default".into(), "Cube".into(), true));     // Cube
-        node_render.insert(5, ("Default".into(), "Sphere".into(), true));   // Sphere
-        node_render.insert(6, ("Default".into(), "Sphere".into(), true));   // Light (small sphere)
-        // Spread objects out so they're visible in the viewport
-        node_transforms.insert(1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Root
-        node_transforms.insert(2, [-3.0, 0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Player
-        node_transforms.insert(3, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 1.0, 10.0]); // Terrain (flat plane)
-        node_transforms.insert(4, [0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Cube
-        node_transforms.insert(5, [3.0, 0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Sphere
-        node_transforms.insert(6, [0.0, 3.0, -3.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3]); // Light (small)
-        // Add a directional light to the Light node (id=6)
+        node_render.insert(1, ("Default".into(), "Cube".into(), true));         // Root
+        node_render.insert(2, ("Default".into(), "Cube".into(), true));         // Player
+        node_render.insert(3, ("Default".into(), "Plane".into(), true));        // Terrain
+        node_render.insert(4, ("Default".into(), "Cube".into(), true));         // Red Cube
+        node_render.insert(5, ("Default".into(), "Sphere".into(), true));       // Blue Sphere
+        node_render.insert(6, ("Default".into(), "Sphere".into(), true));       // Light marker
+        node_render.insert(7, ("Default".into(), "Cylinder".into(), true));     // Green Cylinder
+        node_render.insert(8, ("Default".into(), "Sphere".into(), true));       // Gold Sphere
+        node_render.insert(9, ("Default".into(), "Cube".into(), true));         // White Cube
+
+        // Position objects in an interesting layout
+        node_transforms.insert(1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);        // Root
+        node_transforms.insert(2, [-4.0, 0.5, 2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);        // Player
+        node_transforms.insert(3, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 1.0, 20.0]);       // Terrain
+        node_transforms.insert(4, [0.0, 0.5, 0.0, 0.0, 0.4, 0.0, 1.0, 1.0, 1.0]);         // Red Cube (rotated)
+        node_transforms.insert(5, [3.0, 0.7, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 1.4]);         // Blue Sphere
+        node_transforms.insert(6, [0.0, 5.0, -3.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3]);        // Light marker
+        node_transforms.insert(7, [-3.0, 0.8, -2.0, 0.0, 0.0, 0.0, 1.0, 1.6, 1.0]);       // Green Cylinder
+        node_transforms.insert(8, [5.0, 1.0, 3.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0]);         // Gold Sphere
+        node_transforms.insert(9, [-2.0, 0.4, -4.0, 0.0, 0.3, 0.0, 0.8, 0.8, 0.8]);       // White Cube
+
+        // Add lights
         node_lights.insert(6, LightData::default());
-        // Add a material to Cube (id=4) and Sphere (id=5)
-        node_materials.insert(4, MaterialData::default());
-        node_materials.insert(
-            5,
-            MaterialData {
-                base_color: [0.2, 0.6, 1.0, 1.0],
-                metallic: 0.8,
-                roughness: 0.1,
-                ..Default::default()
-            },
-        );
+
+        // Add varied materials
+        node_materials.insert(4, MaterialData {
+            base_color: [0.9, 0.2, 0.2, 1.0], metallic: 0.1, roughness: 0.6, ..Default::default()
+        });
+        node_materials.insert(5, MaterialData {
+            base_color: [0.2, 0.4, 0.9, 1.0], metallic: 0.9, roughness: 0.1, ..Default::default()
+        });
+        node_materials.insert(7, MaterialData {
+            base_color: [0.2, 0.8, 0.3, 1.0], metallic: 0.0, roughness: 0.7, ..Default::default()
+        });
+        node_materials.insert(8, MaterialData {
+            base_color: [1.0, 0.85, 0.0, 1.0], metallic: 1.0, roughness: 0.2, ..Default::default()
+        });
+        node_materials.insert(9, MaterialData::default());
         // Make Player (id=2) dynamic for physics testing
         node_physics.insert(2, ("Dynamic".into(), "Box".into()));
         Self {
