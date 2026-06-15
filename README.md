@@ -53,6 +53,7 @@ RustEngine 支持以下平台：
 - **macOS** - Metal 渲染后端
 - **Linux** - Wayland/X11 支持
 - **Android** - NDK 交叉编译（实验性）
+- **Web/WASM** - 浏览器运行 (实验性, 需 `--target wasm32-unknown-unknown`)
 
 ### 构建项目
 
@@ -218,7 +219,7 @@ fn my_system(app: &App) {
 
 ## 开发路线图
 
-当前项目有 **14 个 crate**，核心基础设施已就绪。按优先级划分为以下阶段：
+当前项目有 **17 个 crate**，核心基础设施已就绪。按优先级划分为以下阶段：
 
 ### 阶段 0 — 核心基础 ✅ 已完成
 
@@ -318,6 +319,10 @@ fn my_system(app: &App) {
 | **资源浏览器** | ✅ | 文件浏览、路径导航 |
 | **节点图编辑器** | ✅ | NodeGraph 数据结构、拓扑排序、10+ 内置节点、导出 |
 | **动画编辑器** | ✅ | 时间轴、关键帧编辑、贝塞尔曲线、预览、导入/导出 |
+| **Prefab 系统** | ✅ | 可复用场景模板、实例化、覆盖、嵌套 |
+| **可视化脚本** | ✅ | 蓝图组件、执行流节点、数据节点、ECS 集成 |
+| **资产 .meta 文件** | ✅ | GUID 系统、导入设置、序列化 |
+| **性能分析** | ✅ | tracing 插桩、热路径追踪 |
 
 ### 阶段 8 — 动画系统
 
@@ -337,6 +342,7 @@ fn my_system(app: &App) {
 | **基准测试** | ✅ | Criterion (ECS 11 项 + Physics 6 项) |
 | **文档** | ✅ | 7 篇教程 (docs/)、全 crate 文档注释 |
 | **示例游戏** | ✅ | game_flow_demo — 完整游戏流程（菜单→游戏→暂停→结束）+ ECS/物理/渲染/音频演示 |
+| **WASM/Web 支持** | ✅ | 浏览器运行 (实验性) — wgpu WebGPU/WebGL2、feature flags、cfg-gating |
 
 ## 跨平台开发
 
@@ -368,11 +374,16 @@ fn platform_specific() {
 rustup target add x86_64-unknown-linux-gnu
 rustup target add x86_64-apple-darwin
 rustup target add aarch64-linux-android
+rustup target add wasm32-unknown-unknown
 
 # 交叉编译
 just build-linux    # Linux
 just build-macos    # macOS
 just build-android  # Android
+
+# WASM/Web 构建
+cargo build -p engine-render --target wasm32-unknown-unknown
+cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
 ```
 
 ### CI/CD

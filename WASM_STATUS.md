@@ -1,35 +1,65 @@
-## WASM Build Status (Updated 2026-06-16)
+## WASM 构建状态 (更新于 2026-06-16)
 
-**Compiles for WASM:**
-- ✅ engine-math
-- ✅ engine-ecs
-- ✅ engine-render (`cargo build -p engine-render --target wasm32-unknown-unknown`)
-- ✅ engine-editor lib (`cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib`)
-- ❌ engine-editor bin (requires native event loop, WASM uses `start_wasm()` entry point)
+### 编译状态
 
-**What was fixed:**
-1. `unsafe impl Send/Sync` for wgpu wrapper types on WASM (Mesh, MaterialStore, GpuDevice, GpuQueue, Renderer)
-2. cfg-gated `par_iter` → sequential `for` loop on WASM
-3. cfg-gated `Renderer::new` (native-only), added `Renderer::new_async` (WASM)
-4. cfg-gated `plugin` module behind `not(wasm32)`
-5. cfg-gated `run_default()` in engine-core behind `not(wasm32)`
-6. Made `mlua`/`engine-script` optional via `scripting` feature
-7. Made `rfd` optional via `native-dialogs` feature
-8. cfg-gated file dialog functions
-9. cfg-gated script initialization/stepping code
-10. Added `getrandom` with `wasm_js` feature
+| Crate | 状态 | 命令 |
+|-------|------|------|
+| engine-math | ✅ | `cargo build -p engine-math --target wasm32-unknown-unknown` |
+| engine-ecs | ✅ | `cargo build -p engine-ecs --target wasm32-unknown-unknown` |
+| engine-render | ✅ | `cargo build -p engine-render --target wasm32-unknown-unknown` |
+| engine-editor (lib) | ✅ | `cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib` |
+| engine-editor (bin) | ❌ | 需要原生事件循环, WASM 使用 `start_wasm()` 入口点 |
 
-**How to build for WASM:**
+### 已完成的修复
+
+1. **Send/Sync 问题** — 在 WASM 上为 wgpu 包装类型添加 `unsafe impl Send/Sync` (Mesh, MaterialStore, GpuDevice, GpuQueue, Renderer)
+2. **并行迭代** — 将 `par_iter` 替换为顺序 `for` 循环 (WASM 单线程)
+3. **渲染器初始化** — 添加 `Renderer::new_async()` 用于异步初始化
+4. **插件模块** — 使用 `not(wasm32)` 条件编译
+5. **默认运行** — 在 engine-core 中使用 `not(wasm32)` 条件编译
+6. **脚本系统** — 通过 `scripting` feature flag 可选
+7. **文件对话框** — 通过 `native-dialogs` feature flag 可选
+8. **随机数生成** — 添加 `getrandom` 的 `wasm_js` feature
+
+### 构建命令
+
 ```bash
-# Full render crate
+# 安装 WASM 目标
+rustup target add wasm32-unknown-unknown
+
+# 构建渲染器
 cargo build -p engine-render --target wasm32-unknown-unknown
 
-# Editor library only (no binary)
+# 构建编辑器库 (不含二进制)
 cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
+
+# 使用 build-web.sh 脚本
+./build-web.sh
 ```
 
-**Next steps for full WASM runtime:**
-1. Create a `wasm_main` entry point using `wasm_bindgen_futures::spawn_local`
-2. Implement async renderer initialization in the editor
-3. Use `requestAnimationFrame` instead of blocking event loop
-4. Test with actual WASM runtime (wasm-pack or trunk)
+### Feature Flags
+
+engine-editor 的 feature flags:
+- `default = ["native", "scripting", "native-dialogs"]`
+- `native` — 原生平台支持
+- `web` — Web/WASM 平台支持
+- `scripting` — Lua 脚本支持 (mlua + engine-script)
+- `native-dialogs` — 原生文件对话框 (rfd)
+
+### 下一步
+
+1. 创建 `wasm_main` 入口点 (使用 `wasm_bindgen_futures::spawn_local`)
+2. 实现编辑器的异步渲染器初始化
+3. 使用 `requestAnimationFrame` 替代阻塞事件循环
+4. 使用实际 WASM 运行时测试 (wasm-pack 或 trunk)
+
+### 关键文件
+
+- `crates/engine-render/src/renderer.rs` — `Renderer::new_async()` 异步初始化
+- `crates/engine-render/src/resource/mesh.rs` — WASM 上的 `unsafe impl Send/Sync`
+- `crates/engine-render/src/resource/material.rs` — WASM 上的 `unsafe impl Send/Sync`
+- `crates/engine-editor/Cargo.toml` — Feature flags 定义
+- `crates/engine-editor/src/layout.rs` — 文件对话框条件编译
+- `crates/engine-editor/src/main.rs` — 脚本系统条件编译
+- `crates/engine-core/src/engine.rs` — `run_default()` 条件编译
+- `build-web.sh` — WASM 构建脚本
