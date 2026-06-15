@@ -191,10 +191,32 @@ fn main() -> anyhow::Result<()> {
                                                 editor_state.log_warn(&format!("音频初始化失败: {}", e));
                                             }
                                         }
-                                        // Initialize script systems
-                                        let bridge = std::sync::Arc::new(std::sync::RwLock::new(
-                                            engine_script::bridge::ComponentBridge::new(),
-                                        ));
+                                        // Initialize script systems with registered component types
+                                        let mut bridge_impl = engine_script::bridge::ComponentBridge::new();
+                                        // Register RuntimeTransform for Lua access
+                                        bridge_impl.register_get::<engine_editor::state::RuntimeTransform>(
+                                            "RuntimeTransform",
+                                            |_lua, t| {
+                                                let table = _lua.create_table()
+                                                    .map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                                                table.set("x", t.position[0]).map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                                                table.set("y", t.position[1]).map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                                                table.set("z", t.position[2]).map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                                                Ok(mlua::Value::Table(table))
+                                            },
+                                        );
+                                        bridge_impl.register_set::<engine_editor::state::RuntimeTransform>(
+                                            "RuntimeTransform",
+                                            |_lua, t, val| {
+                                                if let mlua::Value::Table(table) = val {
+                                                    if let Ok(x) = table.get::<f32>("x") { t.position[0] = x; }
+                                                    if let Ok(y) = table.get::<f32>("y") { t.position[1] = y; }
+                                                    if let Ok(z) = table.get::<f32>("z") { t.position[2] = z; }
+                                                }
+                                                Ok(())
+                                            },
+                                        );
+                                        let bridge = std::sync::Arc::new(std::sync::RwLock::new(bridge_impl));
                                         // Collect script info to avoid borrow conflicts
                                         let script_infos: Vec<(String, String, String)> = editor_state
                                             .scene_tree

@@ -19,6 +19,7 @@ engine-terrain = { path = "../engine-terrain" }
 engine-physics = { path = "../engine-physics" }
 engine-audio = { path = "../engine-audio" }
 engine-script = { path = "../engine-script" }
+mlua = { version = "0.11", features = ["lua54"] }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "=0.30.0"
 wgpu = "23"
