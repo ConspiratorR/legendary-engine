@@ -427,6 +427,29 @@ mod tests {
     }
 
     #[test]
+    fn test_shadow_uv_computation() {
+        // Verify that shadow UV maps correctly for a point on the ground
+        let light_dir = Vec3::new(0.3, -1.0, -0.5);
+        let aabb = AABB::new(Vec3::new(-10.0, -0.5, -10.0), Vec3::new(10.0, 5.0, 10.0));
+        let vp = ShadowPass::compute_light_matrices(light_dir, aabb);
+
+        // A point on the ground plane
+        let ground_point = Vec4::new(0.0, 0.0, 0.0, 1.0);
+        let light_pos = vp * ground_point;
+        let ndc_x = light_pos.x / light_pos.w;
+        let ndc_y = light_pos.y / light_pos.w;
+        let ndc_z = light_pos.z / light_pos.w;
+
+        // Shadow UV should be in [0,1] range for points inside the scene
+        let shadow_u = ndc_x * 0.5 + 0.5;
+        let shadow_v = 0.5 - ndc_y * 0.5;
+
+        assert!(shadow_u >= 0.0 && shadow_u <= 1.0, "Shadow U out of range: {}", shadow_u);
+        assert!(shadow_v >= 0.0 && shadow_v <= 1.0, "Shadow V out of range: {}", shadow_v);
+        assert!(ndc_z >= 0.0 && ndc_z <= 1.0, "Shadow depth out of range: {}", ndc_z);
+    }
+
+    #[test]
     fn test_cascade_split_computation() {
         let splits = ShadowPass::compute_cascade_splits(4, 0.1, 1000.0, 0.5);
         assert_eq!(splits.len(), 4);
