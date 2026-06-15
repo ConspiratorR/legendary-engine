@@ -1,4 +1,5 @@
-use engine_editor::commands::{CommandManager, CreateEntityCommand, TransformEntityCommand};
+use engine_editor::commands::{CommandManager, TransformEntityCommand};
+use engine_editor::state::EditorState;
 
 fn main() {
     println!("=== RustEngine 编辑器核心功能演示 ===\n");
@@ -13,16 +14,13 @@ fn main() {
 }
 
 fn demonstrate_scene_manager() {
-    println!("✅ 创建新场景: MainScene");
-    println!("✅ 添加了 3 个实体到场景:");
-    println!("   - Player (ID: 1)");
-    println!("   - Ground (ID: 2)");
-    println!("   - Sky (ID: 3)");
-    println!("✅ 场景已修改: true");
-    println!("✅ 保存场景后, is_modified: false");
+    let state = EditorState::new();
+    println!("✅ 创建新场景: 包含 {} 个节点", state.scene_tree.nodes.len());
+    println!("✅ 场景已修改: {}", state.scene_manager.is_modified());
 }
 
 fn demonstrate_undo_redo() {
+    let mut state = EditorState::new();
     let mut command_manager = CommandManager::new(100);
 
     println!(
@@ -31,24 +29,10 @@ fn demonstrate_undo_redo() {
         command_manager.can_redo()
     );
 
-    let cmd1 = Box::new(CreateEntityCommand::new(1, "Entity1".to_string(), None));
-    command_manager.execute(cmd1);
-    println!("执行命令: CreateEntity");
-
-    let cmd2 = Box::new(CreateEntityCommand::new(2, "Entity2".to_string(), None));
-    command_manager.execute(cmd2);
-    println!("执行命令: CreateEntity");
-
-    let cmd3 = Box::new(TransformEntityCommand::new(
-        1,
-        (0.0, 0.0, 0.0),
-        (10.0, 5.0, 0.0),
-        (0.0, 0.0, 0.0),
-        (0.0, 90.0, 0.0),
-        (1.0, 1.0, 1.0),
-        (2.0, 2.0, 2.0),
-    ));
-    command_manager.execute(cmd3);
+    let old_transform = [0.0; 9];
+    let new_transform = [10.0, 5.0, 0.0, 0.0, 90.0, 0.0, 2.0, 2.0, 2.0];
+    let cmd = Box::new(TransformEntityCommand::new(1, old_transform, new_transform));
+    command_manager.execute(cmd, &mut state);
     println!("执行命令: TransformEntity");
 
     println!(
@@ -58,7 +42,7 @@ fn demonstrate_undo_redo() {
     );
 
     println!("\n执行撤销:");
-    command_manager.undo();
+    command_manager.undo(&mut state);
     println!(
         "撤销后: can_undo={}, can_redo={}",
         command_manager.can_undo(),
@@ -66,7 +50,7 @@ fn demonstrate_undo_redo() {
     );
 
     println!("\n执行重做:");
-    command_manager.redo();
+    command_manager.redo(&mut state);
     println!(
         "重做后: can_undo={}, can_redo={}",
         command_manager.can_undo(),
@@ -74,7 +58,7 @@ fn demonstrate_undo_redo() {
     );
 
     println!("\n再执行一次撤销:");
-    command_manager.undo();
+    command_manager.undo(&mut state);
     if let Some(desc) = command_manager.undo_description() {
         println!("下一个可撤销的操作: {}", desc);
     }
