@@ -41,6 +41,7 @@ fn main() -> anyhow::Result<()> {
     let mut editor_state = EditorState::new();
     let mut runtime_world: Option<engine_ecs::world::World> = None;
     let mut _runtime_audio: Option<engine_audio::audio_manager::AudioManager> = None;
+    let mut runtime_scripts: Vec<engine_script::system::ScriptSystem> = Vec::new();
     let mut prev_play_state = engine_editor::state::PlayState::Editing;
     let mut window_modifiers = Modifiers { ctrl: false, shift: false, alt: false };
     let start_time = std::time::Instant::now();
@@ -111,6 +112,11 @@ fn main() -> anyhow::Result<()> {
                                     && let Some(ref mut world) = runtime_world
                                 {
                                     editor_state.step_runtime(world, dt as f32);
+
+                                    // Step script systems
+                                    for script in &runtime_scripts {
+                                        script.step(world, dt as f32);
+                                    }
                                 }
 
                                 // Check autosave
@@ -185,12 +191,48 @@ fn main() -> anyhow::Result<()> {
                                                 editor_state.log_warn(&format!("音频初始化失败: {}", e));
                                             }
                                         }
+                                        // Initialize script systems
+                                        let bridge = std::sync::Arc::new(std::sync::RwLock::new(
+                                            engine_script::bridge::ComponentBridge::new(),
+                                        ));
+                                        // Collect script info to avoid borrow conflicts
+                                        let script_infos: Vec<(String, String, String)> = editor_state
+                                            .scene_tree
+                                            .nodes
+                                            .iter()
+                                            .filter_map(|node| {
+                                                editor_state.node_scripts.get(&node.id).and_then(|sd| {
+                                                    if sd.enabled && !sd.script_path.is_empty() {
+                                                        Some((node.name.clone(), sd.script_path.clone(), node.name.clone()))
+                                                    } else {
+                                                        None
+                                                    }
+                                                })
+                                            })
+                                            .collect();
+
+                                        for (node_name, script_path, _) in script_infos {
+                                            match engine_script::system::ScriptSystem::from_file(
+                                                &node_name,
+                                                &script_path,
+                                                bridge.clone(),
+                                            ) {
+                                                Ok(sys) => {
+                                                    editor_state.log_info(&format!("脚本已加载: {} ({})", node_name, script_path));
+                                                    runtime_scripts.push(sys);
+                                                }
+                                                Err(e) => {
+                                                    editor_state.log_warn(&format!("脚本加载失败 {}: {}", script_path, e));
+                                                }
+                                            }
+                                        }
                                         editor_state.log_info("运行时世界已创建");
                                     }
                                     (_, PlayState::Editing) if prev_play_state != PlayState::Editing => {
-                                        // Leaving play mode: destroy runtime world and audio
+                                        // Leaving play mode: destroy runtime world, audio, and scripts
                                         runtime_world = None;
                                         _runtime_audio = None;
+                                        runtime_scripts.clear();
                                         editor_state.log_info("运行时世界已销毁");
                                     }
                                     _ => {}

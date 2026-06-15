@@ -171,7 +171,6 @@ fn section_header(painter: &egui::Painter, x: f32, y: f32, label: &str) -> f32 {
     y + 18.0
 }
 
-#[allow(invalid_reference_casting)]
 fn section_matches(section_name: &str, search: &str) -> bool {
     search.is_empty() || section_name.to_lowercase().contains(search)
 }
@@ -631,27 +630,54 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
         }
     }
 
-    // ── Add Component Button ──
+    // ── Add/Remove Component Buttons ──
     y += 12.0;
-    let btn_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, 30.0));
-    let btn_painter = gui.ui.painter_at(btn_rect);
-    let btn_id = egui::Id::new("add_component_btn").with(id);
-    let btn_resp = gui.ui.interact(btn_rect, btn_id, egui::Sense::click());
-    let btn_color = if btn_resp.hovered() {
+    let half_w = (w - 8.0) / 2.0;
+
+    // Add Component button
+    let add_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(half_w, 30.0));
+    let add_painter = gui.ui.painter_at(add_rect);
+    let add_id = egui::Id::new("add_component_btn").with(id);
+    let add_resp = gui.ui.interact(add_rect, add_id, egui::Sense::click());
+    let add_color = if add_resp.hovered() {
         Color32::from_rgb(0, 120, 180)
     } else {
         Color32::from_rgb(0, 90, 140)
     };
-    btn_painter.add(Shape::rect_filled(btn_rect, Rounding::same(4.0), btn_color));
-    btn_painter.text(
-        btn_rect.center(),
+    add_painter.add(Shape::rect_filled(add_rect, Rounding::same(4.0), add_color));
+    add_painter.text(
+        add_rect.center(),
         egui::Align2::CENTER_CENTER,
         "+ 添加组件",
-        FontId::proportional(12.0),
+        FontId::proportional(11.0),
         Color32::WHITE,
     );
-    if btn_resp.clicked() {
+    if add_resp.clicked() {
         state.show_add_component_menu = !state.show_add_component_menu;
+        state.show_remove_component_menu = false;
+    }
+
+    // Remove Component button
+    let rm_rect = Rect::from_min_size(Pos2::new(x + half_w + 8.0, y), Vec2::new(half_w, 30.0));
+    let rm_painter = gui.ui.painter_at(rm_rect);
+    let rm_id = egui::Id::new("rm_component_btn").with(id);
+    let rm_resp = gui.ui.interact(rm_rect, rm_id, egui::Sense::click());
+    let rm_color = if rm_resp.hovered() {
+        Color32::from_rgb(180, 40, 40)
+    } else {
+        Color32::from_rgb(140, 30, 30)
+    };
+    rm_painter.add(Shape::rect_filled(rm_rect, Rounding::same(4.0), rm_color));
+    rm_painter.text(
+        rm_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "- 移除组件",
+        FontId::proportional(11.0),
+        Color32::WHITE,
+    );
+    if rm_resp.clicked() {
+        state.show_remove_component_menu = !state.show_remove_component_menu;
+        state.show_add_component_menu = false;
     }
 
     // Add Component dropdown menu
@@ -666,19 +692,19 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
             ("物理", "physics"),
             ("标签", "tags"),
         ];
-        let menu_y = btn_rect.bottom() + 2.0;
+        let menu_y = add_rect.bottom() + 2.0;
         let item_h = 28.0;
         let menu_h = item_h * component_types.len() as f32;
         let menu_rect = Rect::from_min_size(
             Pos2::new(x, menu_y),
             Vec2::new(w, menu_h),
         );
-        btn_painter.add(Shape::rect_filled(
+        add_painter.add(Shape::rect_filled(
             menu_rect,
             Rounding::same(4.0),
             Color32::from_rgb(35, 35, 40),
         ));
-        btn_painter.rect_stroke(
+        add_painter.rect_stroke(
             menu_rect,
             Rounding::same(4.0),
             Stroke::new(1.0_f32, Color32::from_rgb(55, 55, 60)),
@@ -693,13 +719,13 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
             let item_id = egui::Id::new("comp_item").with(j as u64);
             let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
             if item_resp.hovered() {
-                btn_painter.add(Shape::rect_filled(
+                add_painter.add(Shape::rect_filled(
                     item_rect,
                     Rounding::ZERO,
                     Color32::from_rgb(0, 80, 60),
                 ));
             }
-            btn_painter.text(
+            add_painter.text(
                 Pos2::new(x + 12.0, item_rect.center().y),
                 egui::Align2::LEFT_CENTER,
                 *label,
@@ -709,6 +735,85 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
             if item_resp.clicked() {
                 add_component_to_node(state, id, comp_type);
                 state.show_add_component_menu = false;
+            }
+        }
+    }
+
+    // Remove Component dropdown menu
+    if state.show_remove_component_menu {
+        let existing_components: Vec<(&str, bool)> = vec![
+            ("材质 (PBR)", state.node_materials.contains_key(&id)),
+            ("渲染", state.node_render.contains_key(&id)),
+            ("光照", state.node_lights.contains_key(&id)),
+            ("物理", state.node_physics.contains_key(&id)),
+            ("精灵", state.node_sprites.contains_key(&id)),
+            ("粒子系统", state.node_particles.contains_key(&id)),
+            ("音频", state.node_audio.contains_key(&id)),
+            ("脚本", state.node_scripts.contains_key(&id)),
+            ("标签", state.node_tags.contains_key(&id)),
+        ];
+        let comp_types = ["material", "render", "light", "physics", "sprite", "particle", "audio", "script", "tags"];
+
+        let menu_y = y + 36.0;
+        let item_h = 28.0;
+        let menu_h = item_h * existing_components.len() as f32;
+        let menu_rect = Rect::from_min_size(
+            Pos2::new(x, menu_y),
+            Vec2::new(w, menu_h),
+        );
+        add_painter.add(Shape::rect_filled(
+            menu_rect,
+            Rounding::same(4.0),
+            Color32::from_rgb(50, 25, 25),
+        ));
+        add_painter.rect_stroke(
+            menu_rect,
+            Rounding::same(4.0),
+            Stroke::new(1.0_f32, Color32::from_rgb(80, 40, 40)),
+        );
+
+        for (j, ((label, exists), comp_type)) in existing_components.iter().zip(comp_types.iter()).enumerate() {
+            let item_y = menu_y + j as f32 * item_h;
+            let item_rect = Rect::from_min_size(
+                Pos2::new(x, item_y),
+                Vec2::new(w, item_h),
+            );
+            let item_id = egui::Id::new("rm_comp_item").with(j as u64);
+            let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
+            if *exists && item_resp.hovered() {
+                add_painter.add(Shape::rect_filled(
+                    item_rect,
+                    Rounding::ZERO,
+                    Color32::from_rgb(120, 30, 30),
+                ));
+            }
+            let text_color = if *exists {
+                Color32::from_gray(200)
+            } else {
+                Color32::from_gray(60)
+            };
+            add_painter.text(
+                Pos2::new(x + 12.0, item_rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                format!("{} {}", if *exists { "×" } else { " " }, label),
+                FontId::proportional(12.0),
+                text_color,
+            );
+            if *exists && item_resp.clicked() {
+                match *comp_type {
+                    "material" => { state.node_materials.remove(&id); }
+                    "render" => { state.node_render.remove(&id); }
+                    "light" => { state.node_lights.remove(&id); }
+                    "physics" => { state.node_physics.remove(&id); }
+                    "sprite" => { state.node_sprites.remove(&id); }
+                    "particle" => { state.node_particles.remove(&id); }
+                    "audio" => { state.node_audio.remove(&id); }
+                    "script" => { state.node_scripts.remove(&id); }
+                    "tags" => { state.node_tags.remove(&id); }
+                    _ => {}
+                }
+                state.log_info(&format!("已移除 {} 组件", label));
+                state.show_remove_component_menu = false;
             }
         }
     }

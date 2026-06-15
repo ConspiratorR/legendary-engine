@@ -586,6 +586,8 @@ pub struct EditorState {
     pub inspector_search: String,
     /// Whether the add component menu is open.
     pub show_add_component_menu: bool,
+    /// Whether the remove component menu is open.
+    pub show_remove_component_menu: bool,
 }
 
 /// A single log entry for the console panel.
@@ -711,6 +713,7 @@ impl EditorState {
             log_messages: Vec::new(),
             inspector_search: String::new(),
             show_add_component_menu: false,
+            show_remove_component_menu: false,
         }
     }
 
