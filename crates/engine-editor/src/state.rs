@@ -621,16 +621,22 @@ impl EditorState {
         let mut node_lights = HashMap::new();
         let mut node_materials = HashMap::new();
         for i in 1..=6 {
-            node_render.insert(i, ("Default".into(), "Cube".into(), true));
             node_physics.insert(i, ("Static".into(), "Box".into()));
         }
+        // Assign different mesh types per node
+        node_render.insert(1, ("Default".into(), "Cube".into(), true));     // Root
+        node_render.insert(2, ("Default".into(), "Cube".into(), true));     // Player
+        node_render.insert(3, ("Default".into(), "Plane".into(), true));    // Terrain
+        node_render.insert(4, ("Default".into(), "Cube".into(), true));     // Cube
+        node_render.insert(5, ("Default".into(), "Sphere".into(), true));   // Sphere
+        node_render.insert(6, ("Default".into(), "Sphere".into(), true));   // Light (small sphere)
         // Spread objects out so they're visible in the viewport
         node_transforms.insert(1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Root
-        node_transforms.insert(2, [-3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Player
-        node_transforms.insert(3, [0.0, -0.5, 0.0, 0.0, 0.0, 0.0, 10.0, 0.1, 10.0]); // Terrain (flat)
-        node_transforms.insert(4, [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Cube
-        node_transforms.insert(5, [3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Sphere
-        node_transforms.insert(6, [0.0, 5.0, -3.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Light
+        node_transforms.insert(2, [-3.0, 0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Player
+        node_transforms.insert(3, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 1.0, 10.0]); // Terrain (flat plane)
+        node_transforms.insert(4, [0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Cube
+        node_transforms.insert(5, [3.0, 0.5, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Sphere
+        node_transforms.insert(6, [0.0, 3.0, -3.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3]); // Light (small)
         // Add a directional light to the Light node (id=6)
         node_lights.insert(6, LightData::default());
         // Add a material to Cube (id=4) and Sphere (id=5)
@@ -1166,8 +1172,21 @@ impl EditorState {
         let mut material_store = MaterialStore::new(device);
         material_store.init_default_texture(queue);
 
-        // Upload a default cube mesh
+        // Upload all primitive meshes
         let cube_mesh_id = mesh_store.upload(device, &cube_vertices(), Some(&cube_indices()));
+        let (sphere_v, sphere_i) = sphere_mesh(16, 32);
+        let sphere_mesh_id = mesh_store.upload(device, &sphere_v, Some(&sphere_i));
+        let (plane_v, plane_i) = plane_mesh(10);
+        let plane_mesh_id = mesh_store.upload(device, &plane_v, Some(&plane_i));
+        let (cyl_v, cyl_i) = cylinder_mesh(24);
+        let cylinder_mesh_id = mesh_store.upload(device, &cyl_v, Some(&cyl_i));
+
+        let mesh_map: std::collections::HashMap<&str, u64> = [
+            ("Cube", cube_mesh_id),
+            ("Sphere", sphere_mesh_id),
+            ("Plane", plane_mesh_id),
+            ("Cylinder", cylinder_mesh_id),
+        ].into();
 
         // Create a default PBR material
         let default_mat = engine_render::resource::material::PbrMaterial {
@@ -1213,7 +1232,15 @@ impl EditorState {
                 default_mat_id
             };
 
-            let key = (cube_mesh_id, mat_id);
+            // Select mesh based on node's render data
+            let mesh_id = self
+                .node_render
+                .get(&node.id)
+                .and_then(|(_, mesh_name, _)| mesh_map.get(mesh_name.as_str()))
+                .copied()
+                .unwrap_or(cube_mesh_id);
+
+            let key = (mesh_id, mat_id);
             let batch_idx = if let Some(&idx) = batch_map.get(&key) {
                 idx
             } else {
@@ -1357,6 +1384,142 @@ fn cube_indices() -> [u32; 36] {
         16, 17, 18, 18, 19, 16, // right
         20, 21, 22, 22, 23, 20, // left
     ]
+}
+
+fn sphere_mesh(stacks: u32, slices: u32) -> (Vec<engine_render::resource::mesh::MeshVertex>, Vec<u32>) {
+    use engine_render::resource::mesh::MeshVertex;
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    for i in 0..=stacks {
+        let phi = std::f32::consts::PI * i as f32 / stacks as f32;
+        for j in 0..=slices {
+            let theta = std::f32::consts::TAU * j as f32 / slices as f32;
+            let x = phi.sin() * theta.cos();
+            let y = phi.cos();
+            let z = phi.sin() * theta.sin();
+            vertices.push(MeshVertex {
+                position: [x * 0.5, y * 0.5, z * 0.5],
+                normal: [x, y, z],
+                uv: [j as f32 / slices as f32, i as f32 / stacks as f32],
+            });
+        }
+    }
+    for i in 0..stacks {
+        for j in 0..slices {
+            let a = i * (slices + 1) + j;
+            let b = a + slices + 1;
+            indices.push(a);
+            indices.push(b);
+            indices.push(a + 1);
+            indices.push(a + 1);
+            indices.push(b);
+            indices.push(b + 1);
+        }
+    }
+    (vertices, indices)
+}
+
+fn plane_mesh(subdivisions: u32) -> (Vec<engine_render::resource::mesh::MeshVertex>, Vec<u32>) {
+    use engine_render::resource::mesh::MeshVertex;
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    let step = 1.0 / subdivisions as f32;
+    for i in 0..=subdivisions {
+        for j in 0..=subdivisions {
+            let x = -0.5 + j as f32 * step;
+            let z = -0.5 + i as f32 * step;
+            vertices.push(MeshVertex {
+                position: [x, 0.0, z],
+                normal: [0.0, 1.0, 0.0],
+                uv: [j as f32 / subdivisions as f32, i as f32 / subdivisions as f32],
+            });
+        }
+    }
+    for i in 0..subdivisions {
+        for j in 0..subdivisions {
+            let a = i * (subdivisions + 1) + j;
+            let b = a + subdivisions + 1;
+            indices.push(a);
+            indices.push(b);
+            indices.push(a + 1);
+            indices.push(a + 1);
+            indices.push(b);
+            indices.push(b + 1);
+        }
+    }
+    (vertices, indices)
+}
+
+fn cylinder_mesh(slices: u32) -> (Vec<engine_render::resource::mesh::MeshVertex>, Vec<u32>) {
+    use engine_render::resource::mesh::MeshVertex;
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    // Side vertices
+    for i in 0..=1 {
+        let y = -0.5 + i as f32;
+        for j in 0..=slices {
+            let theta = std::f32::consts::TAU * j as f32 / slices as f32;
+            let x = theta.cos() * 0.5;
+            let z = theta.sin() * 0.5;
+            vertices.push(MeshVertex {
+                position: [x, y, z],
+                normal: [theta.cos(), 0.0, theta.sin()],
+                uv: [j as f32 / slices as f32, i as f32],
+            });
+        }
+    }
+    // Side indices
+    for j in 0..slices {
+        let a = j;
+        let b = j + slices + 1;
+        indices.push(a);
+        indices.push(b);
+        indices.push(a + 1);
+        indices.push(a + 1);
+        indices.push(b);
+        indices.push(b + 1);
+    }
+    // Top cap
+    let top_center = vertices.len() as u32;
+    vertices.push(MeshVertex {
+        position: [0.0, 0.5, 0.0],
+        normal: [0.0, 1.0, 0.0],
+        uv: [0.5, 0.5],
+    });
+    for j in 0..slices {
+        let theta = std::f32::consts::TAU * j as f32 / slices as f32;
+        vertices.push(MeshVertex {
+            position: [theta.cos() * 0.5, 0.5, theta.sin() * 0.5],
+            normal: [0.0, 1.0, 0.0],
+            uv: [(theta.cos() + 1.0) * 0.5, (theta.sin() + 1.0) * 0.5],
+        });
+    }
+    for j in 0..slices {
+        indices.push(top_center);
+        indices.push(top_center + 1 + j);
+        indices.push(top_center + 1 + (j + 1) % slices);
+    }
+    // Bottom cap
+    let bot_center = vertices.len() as u32;
+    vertices.push(MeshVertex {
+        position: [0.0, -0.5, 0.0],
+        normal: [0.0, -1.0, 0.0],
+        uv: [0.5, 0.5],
+    });
+    for j in 0..slices {
+        let theta = std::f32::consts::TAU * j as f32 / slices as f32;
+        vertices.push(MeshVertex {
+            position: [theta.cos() * 0.5, -0.5, theta.sin() * 0.5],
+            normal: [0.0, -1.0, 0.0],
+            uv: [(theta.cos() + 1.0) * 0.5, (theta.sin() + 1.0) * 0.5],
+        });
+    }
+    for j in 0..slices {
+        indices.push(bot_center);
+        indices.push(bot_center + 1 + (j + 1) % slices);
+        indices.push(bot_center + 1 + j);
+    }
+    (vertices, indices)
 }
 
 #[cfg(test)]
