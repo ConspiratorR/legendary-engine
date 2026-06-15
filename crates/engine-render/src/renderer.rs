@@ -28,6 +28,12 @@ const DEFAULT_SPRITE_CAPACITY: usize = 10000;
 #[derive(Clone)]
 pub struct GpuDevice(pub Arc<Device>);
 
+// SAFETY: On WASM, everything runs on a single thread.
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for GpuDevice {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for GpuDevice {}
+
 impl Deref for GpuDevice {
     type Target = Device;
     fn deref(&self) -> &Device {
@@ -38,6 +44,12 @@ impl Deref for GpuDevice {
 /// Thread-safe wrapper around [`wgpu::Queue`].
 #[derive(Clone)]
 pub struct GpuQueue(pub Arc<Queue>);
+
+// SAFETY: On WASM, everything runs on a single thread.
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for GpuQueue {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for GpuQueue {}
 
 impl Deref for GpuQueue {
     type Target = Queue;
@@ -90,6 +102,13 @@ pub struct Renderer {
     shadow_lighting_bind_group: Option<wgpu::BindGroup>,
     viewport_post_process: Option<PostProcessChain>,
 }
+
+// SAFETY: On WASM, everything runs on a single thread.
+// wgpu types are safe to use in single-threaded WASM context.
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for Renderer {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for Renderer {}
 
 impl Renderer {
     /// Create a new renderer for the given window (native only — uses blocking calls).
@@ -444,23 +463,42 @@ impl Renderer {
             // Multiple cameras: use parallel command recording
             let batcher = CommandBatcher::new(&self.device, active_cameras.len());
 
-            // Record passes in parallel
+            // Record passes in parallel (native) or sequentially (WASM)
             // SAFETY: The Renderer contains RenderGraph with raw pointers that are not Sync.
             // However, record_camera_pass only accesses queue, sprite_renderer, camera_uniform,
             // camera_bind_group, and sprite_pipeline - all of which are Sync-safe. We use
             // AtomicPtr to safely share the renderer across threads.
             let renderer_ptr = std::sync::atomic::AtomicPtr::new(self as *mut Renderer);
 
-            active_cameras
-                .par_iter()
-                .enumerate()
-                .for_each(|(i, camera)| {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                active_cameras
+                    .par_iter()
+                    .enumerate()
+                    .for_each(|(i, camera)| {
+                        let mut encoder = batcher.get(i);
+                        let renderer =
+                            unsafe { &*renderer_ptr.load(std::sync::atomic::Ordering::Relaxed) };
+                        renderer.record_camera_pass(
+                            &mut encoder,
+                            camera,
+                            &sprite_draws,
+                            unsafe { &*hdr_view_ptr.load(std::sync::atomic::Ordering::Relaxed) },
+                            bridge,
+                            surface_width,
+                            surface_height,
+                            vb,
+                            ib,
+                            instb,
+                            indb,
+                        );
+                    });
+            }
+
+            #[cfg(target_arch = "wasm32")]
+            {
+                for (i, camera) in active_cameras.iter().enumerate() {
                     let mut encoder = batcher.get(i);
-                    // SAFETY: Each encoder is independent. The renderer's Sync-unsafe fields
-                    // (RenderGraph) are not accessed during parallel recording - only the
-                    // camera_uniform buffer is written, and each camera writes to the same
-                    // uniform which is safe because cameras are recorded sequentially on
-                    // the GPU.
                     let renderer =
                         unsafe { &*renderer_ptr.load(std::sync::atomic::Ordering::Relaxed) };
                     renderer.record_camera_pass(
@@ -476,7 +514,8 @@ impl Renderer {
                         instb,
                         indb,
                     );
-                });
+                }
+            }
 
             let mut encoder = self
                 .device

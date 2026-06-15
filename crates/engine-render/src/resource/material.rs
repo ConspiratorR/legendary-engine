@@ -101,6 +101,12 @@ pub struct MaterialStore {
     next_id: u64,
 }
 
+// SAFETY: On WASM, everything runs on a single thread.
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for MaterialStore {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for MaterialStore {}
+
 impl MaterialStore {
     pub fn new(device: &wgpu::Device) -> Self {
         // Match the deferred geometry shader's material bind group layout:

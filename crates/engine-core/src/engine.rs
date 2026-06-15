@@ -24,6 +24,7 @@ impl Engine {
 /// input system. The app's `run()` method is called each frame, followed by
 /// an automatic render phase that collects Camera and Sprite components from
 /// the ECS world and renders them to the window.
+#[cfg(not(target_arch = "wasm32"))]
 #[allow(deprecated)]
 pub fn run_default(mut app_builder: AppBuilder) -> Result<(), EngineError> {
     let event_loop =

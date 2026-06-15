@@ -1,6 +1,25 @@
 use bytemuck::{Pod, Zeroable};
 use std::collections::HashMap;
 
+/// Wrapper for wgpu types that are not Send/Sync on WASM.
+///
+/// On native, this is a no-op. On WASM, it provides unsafe Send+Sync impls
+/// to allow wgpu types to be stored in ECS resources.
+#[derive(Debug)]
+pub struct WgpuWrapper<T>(pub T);
+
+// SAFETY: On WASM, everything runs on a single thread.
+// wgpu types are safe to use across "threads" because there's only one thread.
+#[cfg(target_arch = "wasm32")]
+unsafe impl<T> Send for WgpuWrapper<T> {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl<T> Sync for WgpuWrapper<T> {}
+
+#[cfg(not(target_arch = "wasm32"))]
+unsafe impl<T: Send> Send for WgpuWrapper<T> {}
+#[cfg(not(target_arch = "wasm32"))]
+unsafe impl<T: Sync> Sync for WgpuWrapper<T> {}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct MeshVertex {
@@ -41,6 +60,13 @@ pub struct Mesh {
     pub num_vertices: u32,
     pub num_indices: u32,
 }
+
+// SAFETY: On WASM, everything runs on a single thread.
+// wgpu::Buffer is safe to use in single-threaded WASM context.
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for Mesh {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for Mesh {}
 
 impl Mesh {
     pub fn new(device: &wgpu::Device, vertices: &[MeshVertex], indices: Option<&[u32]>) -> Self {

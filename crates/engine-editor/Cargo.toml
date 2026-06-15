@@ -18,8 +18,8 @@ engine-window = { path = "../engine-window" }
 engine-terrain = { path = "../engine-terrain" }
 engine-physics = { path = "../engine-physics" }
 engine-audio = { path = "../engine-audio" }
-engine-script = { path = "../engine-script" }
-mlua = { version = "0.11", features = ["lua54"] }
+engine-script = { path = "../engine-script", optional = true }
+mlua = { version = "0.11", features = ["lua54"], optional = true }
 bytemuck = { version = "1", features = ["derive"] }
 egui = "=0.30.0"
 wgpu = "23"
@@ -32,15 +32,16 @@ env_logger = "0.11"
 winit = "0.30"
 notify = "6"
 notify-debouncer-mini = "0.4"
-rfd = "0.15"
+rfd = { version = "0.15", optional = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = { workspace = true }
-wasm-bindgen-futures = { workspace = true }
-web-sys = { workspace = true }
-console_error_panic_hook = "0.1"
+[features]
+default = ["native", "scripting", "native-dialogs"]
+native = []
+web = []
+scripting = ["engine-script", "mlua"]
+native-dialogs = ["rfd"]
 
 [[bin]]
 name = "engine-editor"

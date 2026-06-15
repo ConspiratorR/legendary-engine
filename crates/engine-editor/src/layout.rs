@@ -315,10 +315,16 @@ fn draw_dropdown_menu(
                         }
                         3 => {
                             // 另存为
+                            #[cfg(feature = "native-dialogs")]
                             save_scene_as(state);
+                            #[cfg(not(feature = "native-dialogs"))]
+                            {
+                                state.status_message = Some("文件对话框不可用 (WASM)".into());
+                            }
                         }
                         4 => {
                             // 退出
+                            #[cfg(not(target_arch = "wasm32"))]
                             std::process::exit(0);
                         }
                         _ => {}
@@ -364,7 +370,12 @@ fn draw_dropdown_menu(
                         }
                         2 => {
                             // 加载场景
+                            #[cfg(feature = "native-dialogs")]
                             load_scene(state);
+                            #[cfg(not(feature = "native-dialogs"))]
+                            {
+                                state.status_message = Some("文件对话框不可用 (WASM)".into());
+                            }
                         }
                         _ => {}
                     }
@@ -378,11 +389,21 @@ fn draw_dropdown_menu(
                         }
                         1 => {
                             // 加载模型
+                            #[cfg(feature = "native-dialogs")]
                             load_model(state);
+                            #[cfg(not(feature = "native-dialogs"))]
+                            {
+                                state.status_message = Some("文件对话框不可用 (WASM)".into());
+                            }
                         }
                         2 => {
                             // 加载预制件
+                            #[cfg(feature = "native-dialogs")]
                             load_prefab(state);
+                            #[cfg(not(feature = "native-dialogs"))]
+                            {
+                                state.status_message = Some("文件对话框不可用 (WASM)".into());
+                            }
                         }
                         3 => {
                             // 刷新资源
@@ -571,7 +592,12 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
                 }
                 2 => {
                     // Load scene
+                    #[cfg(feature = "native-dialogs")]
                     load_scene(state);
+                    #[cfg(not(feature = "native-dialogs"))]
+                    {
+                        state.status_message = Some("文件对话框不可用 (WASM)".into());
+                    }
                 }
                 _ => {}
             }
@@ -1009,6 +1035,7 @@ fn save_scene(state: &mut EditorState) {
     }
 }
 
+#[cfg(feature = "native-dialogs")]
 fn save_scene_as(state: &mut EditorState) {
     // Sync EditorState to scene before saving
     let scene = state.to_scene("Untitled");
@@ -1041,6 +1068,7 @@ fn save_scene_as(state: &mut EditorState) {
     }
 }
 
+#[cfg(feature = "native-dialogs")]
 fn load_scene(state: &mut EditorState) {
     // Open native file dialog
     let path = rfd::FileDialog::new()
@@ -1092,6 +1120,7 @@ fn load_scene(state: &mut EditorState) {
     }
 }
 
+#[cfg(feature = "native-dialogs")]
 fn load_model(state: &mut EditorState) {
     let path = rfd::FileDialog::new()
         .set_title("加载模型")
@@ -1111,6 +1140,7 @@ fn load_model(state: &mut EditorState) {
     }
 }
 
+#[cfg(feature = "native-dialogs")]
 fn load_prefab(state: &mut EditorState) {
     let path = rfd::FileDialog::new()
         .set_title("加载预制件")

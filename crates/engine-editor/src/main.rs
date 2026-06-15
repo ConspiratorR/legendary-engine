@@ -15,6 +15,7 @@ struct Modifiers {
     alt: bool,
 }
 
+/// Native entry point — uses pollster::block_on for async initialization.
 #[allow(deprecated, unused_assignments)]
 fn main() -> anyhow::Result<()> {
     // Initialize logging
@@ -43,6 +44,7 @@ fn main() -> anyhow::Result<()> {
     let mut editor_state = EditorState::new();
     let mut runtime_world: Option<engine_ecs::world::World> = None;
     let mut _runtime_audio: Option<engine_audio::audio_manager::AudioManager> = None;
+    #[cfg(feature = "scripting")]
     let mut runtime_scripts: Vec<engine_script::system::ScriptSystem> = Vec::new();
     let mut runtime_blueprints: Vec<engine_editor::node_graph::blueprint_component::BlueprintComponent> = Vec::new();
     let mut prev_play_state = engine_editor::state::PlayState::Editing;
@@ -116,9 +118,12 @@ fn main() -> anyhow::Result<()> {
                                 {
                                     editor_state.step_runtime(world, dt as f32);
 
-                                    // Step script systems
-                                    for script in &runtime_scripts {
-                                        script.step(world, dt as f32);
+                                    #[cfg(feature = "scripting")]
+                                    {
+                                        // Step script systems
+                                        for script in &runtime_scripts {
+                                            script.step(world, dt as f32);
+                                        }
                                     }
 
                                     // Tick blueprints
@@ -202,62 +207,63 @@ fn main() -> anyhow::Result<()> {
                                                 editor_state.log_warn(&format!("音频初始化失败: {}", e));
                                             }
                                         }
-                                        // Initialize script systems with registered component types
-                                        let mut bridge_impl = engine_script::bridge::ComponentBridge::new();
-                                        // Register RuntimeTransform for Lua access
-                                        bridge_impl.register_get::<engine_editor::state::RuntimeTransform>(
-                                            "RuntimeTransform",
-                                            |_lua, t| {
-                                                let table = _lua.create_table()
-                                                    .map_err(|e| mlua::Error::runtime(e.to_string()))?;
-                                                table.set("x", t.position[0]).map_err(|e| mlua::Error::runtime(e.to_string()))?;
-                                                table.set("y", t.position[1]).map_err(|e| mlua::Error::runtime(e.to_string()))?;
-                                                table.set("z", t.position[2]).map_err(|e| mlua::Error::runtime(e.to_string()))?;
-                                                Ok(mlua::Value::Table(table))
-                                            },
-                                        );
-                                        bridge_impl.register_set::<engine_editor::state::RuntimeTransform>(
-                                            "RuntimeTransform",
-                                            |_lua, t, val| {
-                                                if let mlua::Value::Table(table) = val {
-                                                    if let Ok(x) = table.get::<f32>("x") { t.position[0] = x; }
-                                                    if let Ok(y) = table.get::<f32>("y") { t.position[1] = y; }
-                                                    if let Ok(z) = table.get::<f32>("z") { t.position[2] = z; }
-                                                }
-                                                Ok(())
-                                            },
-                                        );
-                                        let bridge = std::sync::Arc::new(std::sync::RwLock::new(bridge_impl));
-                                        // Collect script info to avoid borrow conflicts
-                                        let script_infos: Vec<(String, String, String)> = editor_state
-                                            .scene_tree
-                                            .nodes
-                                            .iter()
-                                            .filter_map(|node| {
-                                                editor_state.node_scripts.get(&node.id).and_then(|sd| {
-                                                    if sd.enabled && !sd.script_path.is_empty() {
-                                                        Some((node.name.clone(), sd.script_path.clone(), node.name.clone()))
-                                                    } else {
-                                                        None
+                                        // Initialize script systems (only on native — mlua doesn't support WASM)
+                                        #[cfg(feature = "scripting")]
+                                        {
+                                            let mut bridge_impl = engine_script::bridge::ComponentBridge::new();
+                                            bridge_impl.register_get::<engine_editor::state::RuntimeTransform>(
+                                                "RuntimeTransform",
+                                                |_lua, t| {
+                                                    let table = _lua.create_table()
+                                                        .map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                                                    table.set("x", t.position[0]).map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                                                    table.set("y", t.position[1]).map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                                                    table.set("z", t.position[2]).map_err(|e| mlua::Error::runtime(e.to_string()))?;
+                                                    Ok(mlua::Value::Table(table))
+                                                },
+                                            );
+                                            bridge_impl.register_set::<engine_editor::state::RuntimeTransform>(
+                                                "RuntimeTransform",
+                                                |_lua, t, val| {
+                                                    if let mlua::Value::Table(table) = val {
+                                                        if let Ok(x) = table.get::<f32>("x") { t.position[0] = x; }
+                                                        if let Ok(y) = table.get::<f32>("y") { t.position[1] = y; }
+                                                        if let Ok(z) = table.get::<f32>("z") { t.position[2] = z; }
                                                     }
+                                                    Ok(())
+                                                },
+                                            );
+                                            let bridge = std::sync::Arc::new(std::sync::RwLock::new(bridge_impl));
+                                            let script_infos: Vec<(String, String, String)> = editor_state
+                                                .scene_tree
+                                                .nodes
+                                                .iter()
+                                                .filter_map(|node| {
+                                                    editor_state.node_scripts.get(&node.id).and_then(|sd| {
+                                                        if sd.enabled && !sd.script_path.is_empty() {
+                                                            Some((node.name.clone(), sd.script_path.clone(), node.name.clone()))
+                                                        } else {
+                                                            None
+                                                        }
+                                                    })
                                                 })
-                                            })
-                                            .collect();
+                                                .collect();
 
-                                        for (node_name, script_path, _) in script_infos {
-                                            match engine_script::system::ScriptSystem::from_file(
-                                                &node_name,
-                                                &script_path,
-                                                bridge.clone(),
-                                            ) {
-                                                Ok(sys) => {
-                                                    editor_state.log_info(&format!("脚本已加载: {} ({})", node_name, script_path));
-                                                    runtime_scripts.push(sys);
+                                            for (node_name, script_path, _) in script_infos {
+                                                match engine_script::system::ScriptSystem::from_file(
+                                                    &node_name,
+                                                    &script_path,
+                                                    bridge.clone(),
+                                                ) {
+                                                    Ok(sys) => {
+                                                        editor_state.log_info(&format!("脚本已加载: {} ({})", node_name, script_path));
+                                                        runtime_scripts.push(sys);
+                                                    }
+                                                    Err(e) => {
+                                                        editor_state.log_warn(&format!("脚本加载失败 {}: {}", script_path, e));
+                                                    }
                                                 }
-                                                Err(e) => {
-                                                    editor_state.log_warn(&format!("脚本加载失败 {}: {}", script_path, e));
-                                                }
-                                            }
+                                        }
                                         }
                                         // Initialize blueprints from node graph state
                                         let bp = engine_editor::node_graph::blueprint_component::BlueprintComponent::from_state(
@@ -283,7 +289,10 @@ fn main() -> anyhow::Result<()> {
                                         // Leaving play mode: destroy runtime world, audio, scripts, and blueprints
                                         runtime_world = None;
                                         _runtime_audio = None;
-                                        runtime_scripts.clear();
+                                        #[cfg(feature = "scripting")]
+                                        {
+                                            runtime_scripts.clear();
+                                        }
                                         runtime_blueprints.clear();
                                         editor_state.log_info("运行时世界已销毁");
                                     }
@@ -374,63 +383,6 @@ fn main() -> anyhow::Result<()> {
                 _ => {}
             }
         })
-    })?;
-
-    Ok(())
-}
-
-/// WASM entry point — uses spawn_local for async initialization.
-#[cfg(target_arch = "wasm32")]
-#[wasm_bindgen::prelude::wasm_bindgen(start)]
-pub fn wasm_main() {
-    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    wasm_bindgen_futures::spawn_local(async {
-        if let Err(e) = run_wasm().await {
-            log::error!("WASM init failed: {}", e);
-        }
-    });
-}
-
-#[cfg(target_arch = "wasm32")]
-async fn run_wasm() -> Result<(), Box<dyn std::error::Error>> {
-    use engine_window::{WindowConfig, create_window};
-    use winit::event_loop::EventLoop;
-
-    let event_loop = EventLoop::new()?;
-    let window = std::sync::Arc::new(create_window(
-        &WindowConfig {
-            title: "RustEngine Editor (Web)".to_string(),
-            width: 1280,
-            height: 720,
-            vsync: true,
-        },
-        &event_loop,
-    )?);
-
-    let renderer = Renderer::new_async(std::sync::Arc::clone(&window)).await?;
-    let scale_factor = window.scale_factor() as f32;
-    let egui_state = EguiState::new(&renderer.device, &renderer.config, scale_factor);
-
-    log::info!("RustEngine Editor initialized on WASM");
-
-    // WASM event loop runs via browser requestAnimationFrame
-    let mut editor_state = EditorState::new();
-    let mut last_time = std::time::Instant::now();
-
-    event_loop.run(move |event, elwt| {
-        elwt.set_control_flow(winit::event_loop::ControlFlow::Poll);
-        match event {
-            Event::WindowEvent { event: WindowEvent::RedrawRequested, .. } => {
-                let now = std::time::Instant::now();
-                let _dt = (now - last_time).as_secs_f32();
-                last_time = now;
-                // TODO: render frame
-            }
-            Event::AboutToWait => {
-                elwt.target().request_redraw();
-            }
-            _ => {}
-        }
     })?;
 
     Ok(())

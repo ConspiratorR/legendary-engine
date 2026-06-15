@@ -108,6 +108,7 @@ pub mod occlusion;
 pub mod particle;
 pub mod particle3d;
 pub mod pipeline;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod plugin;
 pub mod post_process;
 pub mod renderer;
