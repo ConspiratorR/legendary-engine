@@ -630,4 +630,149 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
                 .collect();
         }
     }
+
+    // ── Add Component Button ──
+    y += 12.0;
+    let btn_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, 30.0));
+    let btn_painter = gui.ui.painter_at(btn_rect);
+    let btn_id = egui::Id::new("add_component_btn").with(id);
+    let btn_resp = gui.ui.interact(btn_rect, btn_id, egui::Sense::click());
+    let btn_color = if btn_resp.hovered() {
+        Color32::from_rgb(0, 120, 180)
+    } else {
+        Color32::from_rgb(0, 90, 140)
+    };
+    btn_painter.add(Shape::rect_filled(btn_rect, Rounding::same(4.0), btn_color));
+    btn_painter.text(
+        btn_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "+ 添加组件",
+        FontId::proportional(12.0),
+        Color32::WHITE,
+    );
+    if btn_resp.clicked() {
+        state.show_add_component_menu = !state.show_add_component_menu;
+    }
+
+    // Add Component dropdown menu
+    if state.show_add_component_menu {
+        let component_types = [
+            ("材质 (PBR)", "material"),
+            ("光照", "light"),
+            ("精灵", "sprite"),
+            ("粒子系统", "particle"),
+            ("音频", "audio"),
+            ("脚本", "script"),
+            ("物理", "physics"),
+            ("标签", "tags"),
+        ];
+        let menu_y = btn_rect.bottom() + 2.0;
+        let item_h = 28.0;
+        let menu_h = item_h * component_types.len() as f32;
+        let menu_rect = Rect::from_min_size(
+            Pos2::new(x, menu_y),
+            Vec2::new(w, menu_h),
+        );
+        btn_painter.add(Shape::rect_filled(
+            menu_rect,
+            Rounding::same(4.0),
+            Color32::from_rgb(35, 35, 40),
+        ));
+        btn_painter.rect_stroke(
+            menu_rect,
+            Rounding::same(4.0),
+            Stroke::new(1.0_f32, Color32::from_rgb(55, 55, 60)),
+        );
+
+        for (j, (label, comp_type)) in component_types.iter().enumerate() {
+            let item_y = menu_y + j as f32 * item_h;
+            let item_rect = Rect::from_min_size(
+                Pos2::new(x, item_y),
+                Vec2::new(w, item_h),
+            );
+            let item_id = egui::Id::new("comp_item").with(j as u64);
+            let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
+            if item_resp.hovered() {
+                btn_painter.add(Shape::rect_filled(
+                    item_rect,
+                    Rounding::ZERO,
+                    Color32::from_rgb(0, 80, 60),
+                ));
+            }
+            btn_painter.text(
+                Pos2::new(x + 12.0, item_rect.center().y),
+                egui::Align2::LEFT_CENTER,
+                *label,
+                FontId::proportional(12.0),
+                Color32::from_gray(200),
+            );
+            if item_resp.clicked() {
+                add_component_to_node(state, id, comp_type);
+                state.show_add_component_menu = false;
+            }
+        }
+    }
+}
+
+/// Add a component of the given type to a node.
+fn add_component_to_node(state: &mut EditorState, node_id: u64, comp_type: &str) {
+    match comp_type {
+        "material" => {
+            state
+                .node_materials
+                .entry(node_id)
+                .or_default();
+            state.log_info(&format!("已添加材质组件到节点 {}", node_id));
+        }
+        "light" => {
+            state
+                .node_lights
+                .entry(node_id)
+                .or_default();
+            state.log_info(&format!("已添加光照组件到节点 {}", node_id));
+        }
+        "sprite" => {
+            state
+                .node_sprites
+                .entry(node_id)
+                .or_default();
+            state.log_info(&format!("已添加精灵组件到节点 {}", node_id));
+        }
+        "particle" => {
+            state
+                .node_particles
+                .entry(node_id)
+                .or_default();
+            state.log_info(&format!("已添加粒子组件到节点 {}", node_id));
+        }
+        "audio" => {
+            state
+                .node_audio
+                .entry(node_id)
+                .or_default();
+            state.log_info(&format!("已添加音频组件到节点 {}", node_id));
+        }
+        "script" => {
+            state
+                .node_scripts
+                .entry(node_id)
+                .or_default();
+            state.log_info(&format!("已添加脚本组件到节点 {}", node_id));
+        }
+        "physics" => {
+            state
+                .node_physics
+                .entry(node_id)
+                .or_insert_with(|| ("Static".into(), "Box".into()));
+            state.log_info(&format!("已添加物理组件到节点 {}", node_id));
+        }
+        "tags" => {
+            state
+                .node_tags
+                .entry(node_id)
+                .or_default();
+            state.log_info(&format!("已添加标签组件到节点 {}", node_id));
+        }
+        _ => {}
+    }
 }

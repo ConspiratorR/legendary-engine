@@ -584,6 +584,8 @@ pub struct EditorState {
     pub log_messages: Vec<LogEntry>,
     /// Inspector search filter text.
     pub inspector_search: String,
+    /// Whether the add component menu is open.
+    pub show_add_component_menu: bool,
 }
 
 /// A single log entry for the console panel.
@@ -708,6 +710,7 @@ impl EditorState {
             clipboard: Vec::new(),
             log_messages: Vec::new(),
             inspector_search: String::new(),
+            show_add_component_menu: false,
         }
     }
 
