@@ -48,10 +48,34 @@ engine-editor 的 feature flags:
 
 ### 下一步
 
-1. 创建 `wasm_main` 入口点 (使用 `wasm_bindgen_futures::spawn_local`)
-2. 实现编辑器的异步渲染器初始化
-3. 使用 `requestAnimationFrame` 替代阻塞事件循环
+1. ~~创建 `wasm_main` 入口点 (使用 `wasm_bindgen_futures::spawn_local`)~~ ✅ 已完成
+2. ~~实现编辑器的异步渲染器初始化~~ ✅ 已完成
+3. 使用 `requestAnimationFrame` 替代阻塞事件循环 (待优化)
 4. 使用实际 WASM 运行时测试 (wasm-pack 或 trunk)
+
+### 入口点
+
+WASM 入口点在 `engine-editor/src/lib.rs` 中:
+
+```rust
+#[cfg(target_arch = "wasm32")]
+pub async fn start_wasm() -> Result<(), Box<dyn std::error::Error>> {
+    // 初始化 panic hook
+    // 创建窗口
+    // 异步初始化渲染器
+    // 运行事件循环
+}
+```
+
+使用方式:
+```rust
+#[wasm_bindgen(start)]
+pub fn main() {
+    wasm_bindgen_futures::spawn_local(async {
+        engine_editor::start_wasm().await.unwrap();
+    });
+}
+```
 
 ### 关键文件
 
