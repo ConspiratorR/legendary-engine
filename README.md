@@ -97,6 +97,17 @@ cargo run --example particle_demo -p engine-core
 cargo run --example tetris -p engine-core
 ```
 
+### Web Demo (WASM)
+
+浏览器中运行的 wgpu 渲染演示。
+
+```bash
+cd examples/web-demo
+wasm-pack build --target web --release
+python -m http.server 8080
+# 浏览器访问 http://localhost:8080
+```
+
 **操作说明：**
 
 | 按键 | 功能 |

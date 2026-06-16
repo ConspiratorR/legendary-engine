@@ -9,6 +9,14 @@
 | engine-render | ✅ | `cargo build -p engine-render --target wasm32-unknown-unknown` |
 | engine-editor (lib) | ✅ | `cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib` |
 | engine-editor (bin) | ❌ | 需要原生事件循环, WASM 使用 `start_wasm()` 入口点 |
+| web-demo | ✅ | `wasm-pack build --target web --release` |
+
+### 实际运行测试
+
+- ✅ wasm-pack 构建成功
+- ✅ HTTP 服务器运行 (`python -m http.server 8080`)
+- ✅ 浏览器访问 `http://localhost:8080` 可见 wgpu 渲染窗口
+- ✅ 标题 "RustEngine Web", 深色背景正常显示
 
 ### 已完成的修复
 
@@ -20,6 +28,7 @@
 6. **脚本系统** — 通过 `scripting` feature flag 可选
 7. **文件对话框** — 通过 `native-dialogs` feature flag 可选
 8. **随机数生成** — 添加 `getrandom` 的 `wasm_js` feature
+9. **入口点** — `start_wasm()` 异步函数 + `wasm_bindgen_futures::spawn_local`
 
 ### 构建命令
 
@@ -33,8 +42,11 @@ cargo build -p engine-render --target wasm32-unknown-unknown
 # 构建编辑器库 (不含二进制)
 cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
 
-# 使用 build-web.sh 脚本
-./build-web.sh
+# 构建并运行 Web Demo
+cd examples/web-demo
+wasm-pack build --target web --release
+python -m http.server 8080
+# 浏览器访问 http://localhost:8080
 ```
 
 ### Feature Flags
@@ -46,39 +58,9 @@ engine-editor 的 feature flags:
 - `scripting` — Lua 脚本支持 (mlua + engine-script)
 - `native-dialogs` — 原生文件对话框 (rfd)
 
-### 下一步
-
-1. ~~创建 `wasm_main` 入口点 (使用 `wasm_bindgen_futures::spawn_local`)~~ ✅ 已完成
-2. ~~实现编辑器的异步渲染器初始化~~ ✅ 已完成
-3. 使用 `requestAnimationFrame` 替代阻塞事件循环 (待优化)
-4. 使用实际 WASM 运行时测试 (wasm-pack 或 trunk)
-
-### 入口点
-
-WASM 入口点在 `engine-editor/src/lib.rs` 中:
-
-```rust
-#[cfg(target_arch = "wasm32")]
-pub async fn start_wasm() -> Result<(), Box<dyn std::error::Error>> {
-    // 初始化 panic hook
-    // 创建窗口
-    // 异步初始化渲染器
-    // 运行事件循环
-}
-```
-
-使用方式:
-```rust
-#[wasm_bindgen(start)]
-pub fn main() {
-    wasm_bindgen_futures::spawn_local(async {
-        engine_editor::start_wasm().await.unwrap();
-    });
-}
-```
-
 ### 关键文件
 
+- `crates/engine-editor/src/lib.rs` — `start_wasm()` 异步入口点
 - `crates/engine-render/src/renderer.rs` — `Renderer::new_async()` 异步初始化
 - `crates/engine-render/src/resource/mesh.rs` — WASM 上的 `unsafe impl Send/Sync`
 - `crates/engine-render/src/resource/material.rs` — WASM 上的 `unsafe impl Send/Sync`
@@ -86,4 +68,5 @@ pub fn main() {
 - `crates/engine-editor/src/layout.rs` — 文件对话框条件编译
 - `crates/engine-editor/src/main.rs` — 脚本系统条件编译
 - `crates/engine-core/src/engine.rs` — `run_default()` 条件编译
+- `examples/web-demo/` — 完整 Web Demo (wasm-pack + index.html)
 - `build-web.sh` — WASM 构建脚本

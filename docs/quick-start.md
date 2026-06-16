@@ -78,6 +78,12 @@ cargo build -p engine-render --target wasm32-unknown-unknown
 
 # Build the editor library (no binary)
 cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
+
+# Build and run Web Demo
+cd examples/web-demo
+wasm-pack build --target web --release
+python -m http.server 8080
+# Browser: http://localhost:8080
 ```
 
 See [WASM_STATUS.md](../WASM_STATUS.md) for details on WASM support.

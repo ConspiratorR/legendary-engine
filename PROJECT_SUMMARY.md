@@ -122,6 +122,12 @@ rustup target add wasm32-unknown-unknown
 cargo build -p engine-render --target wasm32-unknown-unknown
 cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
 
+# Web Demo (wasm-pack)
+cd examples/web-demo
+wasm-pack build --target web --release
+python -m http.server 8080
+# 浏览器访问 http://localhost:8080
+
 # 测试
 cargo test -p engine-editor --test editor_tests
 
