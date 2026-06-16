@@ -406,6 +406,21 @@ cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-featur
 
 每个平台都会运行完整的构建和测试套件。
 
+## 文档
+
+- [快速开始](docs/quick-start.md) — 从零开始创建项目
+- [ECS 教程](docs/ecs-tutorial.md) — 学习实体组件系统
+- [渲染管线](docs/rendering-pipeline.md) — 设置渲染
+- [物理系统](docs/physics-system.md) — 添加物理模拟
+- [音频系统](docs/audio-system.md) — 添加音频
+- [编辑器指南](docs/editor-guide.md) — 使用编辑器
+- [架构概述](docs/architecture.md) — 引擎架构设计
+- [资产管线](docs/asset-pipeline.md) — 资产加载和管理
+- [插件系统](docs/plugin-system.md) — 扩展引擎功能
+- [迁移指南](docs/migration-guide.md) — 从 Unity/Godot/Bevy 迁移
+- [贡献指南](docs/contributing.md) — 如何贡献代码
+- [WASM 状态](WASM_STATUS.md) — Web/WASM 支持详情
+
 ## 贡献
 
 欢迎贡献代码！请确保提交前运行：
