@@ -20,8 +20,7 @@ cargo fmt                # format (run before committing)
 ```
 
 Known pre-existing test failures (not caused by current work):
-- `engine-asset` tests fail — missing `tempfile` dev-dep
-- `engine-core` examples with outdated `KeyCode` variants
+- None currently — all tests pass
 
 Expected order: `cargo clippy && cargo fmt --check && cargo test`.
 
