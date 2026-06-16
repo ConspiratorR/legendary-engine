@@ -418,6 +418,7 @@ cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-featur
 - [资产管线](docs/asset-pipeline.md) — 资产加载和管理
 - [插件系统](docs/plugin-system.md) — 扩展引擎功能
 - [迁移指南](docs/migration-guide.md) — 从 Unity/Godot/Bevy 迁移
+- [Android 设置](docs/android-setup.md) — Android 目标构建指南
 - [贡献指南](docs/contributing.md) — 如何贡献代码
 - [WASM 状态](WASM_STATUS.md) — Web/WASM 支持详情
 
