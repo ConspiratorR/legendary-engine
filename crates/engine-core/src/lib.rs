@@ -102,6 +102,7 @@ pub mod logger;
 pub mod math_utils;
 pub mod memory;
 pub mod plugin;
+pub mod plugin_loader;
 pub mod plugins;
 pub mod profiler;
 pub mod resource;

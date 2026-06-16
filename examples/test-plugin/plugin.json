@@ -1,0 +1,9 @@
+{
+    "name": "test-plugin",
+    "version": "0.1.0",
+    "description": "A simple test plugin for RustEngine",
+    "author": "RustEngine Team",
+    "entry_point": "create_plugin",
+    "engine_version": ">=0.1.0",
+    "dependencies": {}
+}
