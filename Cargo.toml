@@ -23,6 +23,7 @@ exclude = [
     "crates/engine-ecs/fuzz",
     "crates/engine-asset/fuzz",
     "crates/engine-physics/fuzz",
+    "examples/web-demo",
 ]
 
 [workspace.package]
