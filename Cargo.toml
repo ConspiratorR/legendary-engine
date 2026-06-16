@@ -25,6 +25,7 @@ exclude = [
     "crates/engine-physics/fuzz",
     "examples/web-demo",
     "examples/test-plugin",
+    "examples/test-mod",
 ]
 
 [workspace.package]

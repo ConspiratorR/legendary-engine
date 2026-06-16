@@ -115,6 +115,7 @@ pub mod callback;
 pub mod error;
 pub mod event_bridge;
 pub mod hot_reload;
+pub mod mod_system;
 pub mod system;
 pub mod type_registry;
 pub mod wasm;
