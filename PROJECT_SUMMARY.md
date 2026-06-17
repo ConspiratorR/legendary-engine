@@ -147,6 +147,12 @@ cargo clippy
 4. **VR/AR 支持** — OpenXR 集成
 5. **文档大修** — API 参考 + 迁移指南
 
+### 已完成
+- ✅ WASM/Web 目标支持
+- ✅ Web Demo 运行验证
+- ✅ 17 个 crate 全部编译通过
+- ✅ 50 个测试全部通过
+
 ## License
 
 MIT License
