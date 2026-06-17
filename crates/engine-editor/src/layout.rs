@@ -42,7 +42,6 @@ pub fn frame(
     if state.show_left_panel {
         egui::SidePanel::left("hierarchy")
             .resizable(true)
-            .default_width(260.0)
             .min_width(150.0)
             .max_width(500.0)
             .show(ctx, |ui| {
@@ -56,7 +55,6 @@ pub fn frame(
     if state.show_right_panel {
         egui::SidePanel::right("inspector")
             .resizable(true)
-            .default_width(300.0)
             .min_width(200.0)
             .max_width(600.0)
             .show(ctx, |ui| {
