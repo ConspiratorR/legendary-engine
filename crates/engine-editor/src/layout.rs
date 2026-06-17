@@ -214,10 +214,7 @@ fn draw_bottom_panel(state: &mut EditorState, ui: &mut egui::Ui) {
                 });
         }
         1 => {
-            let rect = ui.available_rect_before_wrap();
-            let skin = GuiSkin::default();
-            let mut gui = Gui::new(ui, &skin);
-            crate::resource_browser::draw(state, &mut gui, rect);
+            crate::resource_browser::draw(state, ui);
         }
         _ => {}
     }

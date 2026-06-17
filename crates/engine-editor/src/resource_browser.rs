@@ -2,9 +2,8 @@
 //! filtering, and selecting resources for use in the scene.
 
 use crate::state::EditorState;
-use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
+use egui::Color32;
 use engine_asset::types::ResourceType;
-use engine_ui::Gui;
 
 /// Resource browser panel state — displays project assets in a file-list view.
 #[derive(Debug, Clone)]
@@ -206,186 +205,67 @@ impl ResourceBrowser {
     }
 }
 
-pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
-    let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
-    let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
-
-    let painter = gui.ui.painter_at(rect);
-    painter.add(Shape::rect_filled(
-        rect,
-        Rounding::ZERO,
-        Color32::from_rgb(22, 22, 25),
-    ));
-    painter.add(Shape::line(
-        vec![
-            Pos2::new(rect.left(), rect.top()),
-            Pos2::new(rect.left(), rect.bottom()),
-        ],
-        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
-    ));
-
-    let header_h = 36.0 * h_scale;
-    let header_rect = Rect::from_min_size(rect.left_top(), Vec2::new(rect.width(), header_h));
-    painter.add(Shape::rect_filled(
-        header_rect,
-        Rounding::ZERO,
-        Color32::from_rgb(22, 22, 25),
-    ));
-    painter.text(
-        egui::pos2(rect.left() + 12.0 * w_scale, header_rect.center().y),
-        egui::Align2::LEFT_CENTER,
-        "项目",
-        FontId::proportional(12.0 * h_scale),
-        Color32::from_gray(90),
-    );
-
-    let btn_size = 24.0 * h_scale;
-    let refresh_rect = Rect::from_min_size(
-        Pos2::new(
-            rect.right() - btn_size - 8.0 * w_scale,
-            header_rect.top() + (header_h - btn_size) / 2.0,
-        ),
-        Vec2::new(btn_size, btn_size),
-    );
-    let refresh_id = egui::Id::new("refresh_resources");
-    let refresh_response = gui
-        .ui
-        .interact(refresh_rect, refresh_id, egui::Sense::click());
-    if refresh_response.hovered() {
-        painter.add(Shape::rect_filled(
-            refresh_rect,
-            Rounding::same(4.0 * h_scale),
-            Color32::from_rgb(30, 30, 34),
-        ));
-    }
-    painter.text(
-        refresh_rect.center(),
-        egui::Align2::CENTER_CENTER,
-        "🔄",
-        FontId::proportional(12.0 * h_scale),
-        Color32::from_gray(90),
-    );
-
-    let line_y = header_rect.bottom() - 1.0;
-    painter.add(Shape::line(
-        vec![
-            Pos2::new(rect.left(), line_y),
-            Pos2::new(rect.right(), line_y),
-        ],
-        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
-    ));
-
-    let path_bar_h = 28.0 * h_scale;
-    let path_bar_rect = Rect::from_min_size(
-        Pos2::new(rect.left(), line_y),
-        Vec2::new(rect.width(), path_bar_h),
-    );
-    painter.add(Shape::rect_filled(
-        path_bar_rect,
-        Rounding::ZERO,
-        Color32::from_rgb(26, 26, 29),
-    ));
-
-    let path_parts: Vec<_> = state.resource_browser.current_path.split('/').collect();
-    let mut path_x = 12.0 * w_scale;
-    for (i, part) in path_parts.iter().enumerate() {
-        let text_w = painter
-            .layout(
-                part.to_string(),
-                FontId::proportional(11.0 * h_scale),
-                Color32::from_rgb(0, 212, 170),
-                f32::INFINITY,
-            )
-            .rect
-            .width();
-
-        painter.text(
-            egui::pos2(rect.left() + path_x, path_bar_rect.center().y),
-            egui::Align2::LEFT_CENTER,
-            part,
-            FontId::proportional(11.0 * h_scale),
-            Color32::from_rgb(0, 212, 170),
-        );
-        path_x += text_w + 8.0 * w_scale;
-
-        if i < path_parts.len() - 1 {
-            painter.text(
-                egui::pos2(rect.left() + path_x, path_bar_rect.center().y),
-                egui::Align2::LEFT_CENTER,
-                "/",
-                FontId::proportional(11.0 * h_scale),
-                Color32::from_gray(60),
-            );
-            path_x += 8.0 * w_scale;
+pub fn draw(state: &mut EditorState, ui: &mut egui::Ui) {
+    // Path bar
+    ui.horizontal(|ui| {
+        ui.label("路径:");
+        let current_path = state.resource_browser.current_path.clone();
+        let path_parts: Vec<_> = current_path.split('/').collect();
+        for (i, part) in path_parts.iter().enumerate() {
+            if ui.link(*part).clicked() {
+                let new_path: String = path_parts[..=i].join("/");
+                state.resource_browser.current_path = new_path;
+                state.resource_browser.refresh();
+            }
+            if i < path_parts.len() - 1 {
+                ui.label("/");
+            }
         }
-    }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.button("刷新").clicked() {
+                state.resource_browser.refresh();
+            }
+        });
+    });
 
-    let content_top = path_bar_rect.bottom();
-    let content_rect = Rect::from_min_size(
-        Pos2::new(rect.left(), content_top),
-        Vec2::new(rect.width(), rect.bottom() - content_top),
-    );
+    ui.separator();
 
-    let file_h = 40.0 * h_scale;
-    let file_pad = 8.0 * w_scale;
-    let mut y = content_rect.top() + 4.0 * h_scale;
+    // File list
+    let mut navigate_to: Option<String> = None;
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for (i, entry) in state.resource_browser.entries.iter().enumerate() {
+                let selected = state.resource_browser.selected_entry == Some(i);
+                let icon = state.resource_browser.get_icon(&entry.file_type);
 
-    for (i, entry) in state.resource_browser.entries.iter().enumerate() {
-        let file_rect = Rect::from_min_size(
-            Pos2::new(content_rect.left() + file_pad, y),
-            Vec2::new(content_rect.width() - file_pad * 2.0, file_h),
-        );
+                let resp = ui.horizontal(|ui| {
+                    ui.label(icon);
+                    let name_btn = ui.selectable_label(selected, &entry.name);
+                    if !entry.is_directory {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(
+                                egui::RichText::new(state.resource_browser.format_size(entry.size))
+                                    .color(Color32::from_gray(120)),
+                            );
+                        });
+                    }
+                    name_btn
+                });
 
-        let id = egui::Id::new("res_file").with(i as u64);
-        let response = gui.ui.interact(file_rect, id, egui::Sense::click());
-
-        if state.resource_browser.selected_entry == Some(i) || response.hovered() {
-            painter.add(Shape::rect_filled(
-                file_rect,
-                Rounding::same(4.0 * h_scale),
-                if state.resource_browser.selected_entry == Some(i) {
-                    Color32::from_rgb(0, 110, 210)
-                } else {
-                    Color32::from_rgb(30, 30, 34)
-                },
-            ));
-        }
-
-        if response.clicked() {
-            state.resource_browser.selected_entry = Some(i);
-        }
-
-        let icon = state.resource_browser.get_icon(&entry.file_type);
-        painter.text(
-            egui::pos2(file_rect.left() + 12.0 * w_scale, file_rect.center().y),
-            egui::Align2::LEFT_CENTER,
-            icon,
-            FontId::proportional(16.0 * h_scale),
-            Color32::from_gray(200),
-        );
-
-        painter.text(
-            egui::pos2(file_rect.left() + 44.0 * w_scale, file_rect.center().y),
-            egui::Align2::LEFT_CENTER,
-            &entry.name,
-            FontId::proportional(11.0 * h_scale),
-            Color32::from_rgb(232, 232, 236),
-        );
-
-        if !entry.is_directory {
-            let size_str = state.resource_browser.format_size(entry.size);
-            painter.text(
-                egui::pos2(
-                    file_rect.right() - file_pad - 8.0 * w_scale,
-                    file_rect.center().y,
-                ),
-                egui::Align2::RIGHT_CENTER,
-                &size_str,
-                FontId::proportional(10.0 * h_scale),
-                Color32::from_gray(90),
-            );
-        }
-
-        y += file_h + 2.0 * h_scale;
+                if resp.inner.clicked() {
+                    state.resource_browser.selected_entry = Some(i);
+                }
+                if resp.inner.double_clicked() && entry.is_directory {
+                    navigate_to = Some(format!(
+                        "{}/{}",
+                        state.resource_browser.current_path, entry.name
+                    ));
+                }
+            }
+        });
+    if let Some(path) = navigate_to {
+        state.resource_browser.current_path = path;
+        state.resource_browser.refresh();
     }
 }
