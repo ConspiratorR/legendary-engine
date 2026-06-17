@@ -13,10 +13,6 @@ pub fn frame(
     vp_renderer: &mut crate::viewport_renderer::ViewportRenderer,
     egui_state: &mut engine_ui::EguiState,
 ) {
-    let screen = ctx.screen_rect();
-    let sw = screen.width();
-    let sh = screen.height();
-
     // Top menu bar
     egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
         draw_menu_bar(state, ui);
@@ -28,21 +24,12 @@ pub fn frame(
     });
 
     // Bottom panel (console/logs)
-    let min_bottom = (sh * 0.06).max(50.0);
-    let max_bottom = (sh * 0.50).min(600.0);
-    let mut bottom_panel = egui::TopBottomPanel::bottom("bottom_panel")
+    egui::TopBottomPanel::bottom("bottom_panel")
         .resizable(true)
-        .min_height(min_bottom)
-        .max_height(max_bottom);
-    if state.bottom_panel_height > 0.0 {
-        bottom_panel = bottom_panel.default_height(state.bottom_panel_height);
-    } else {
-        bottom_panel = bottom_panel.default_height(sh * 0.17);
-    }
-    let bottom_resp = bottom_panel.show(ctx, |ui| {
-        draw_bottom_panel(state, ui);
-    });
-    state.bottom_panel_height = bottom_resp.response.rect.height();
+        .default_height(180.0)
+        .show(ctx, |ui| {
+            draw_bottom_panel(state, ui);
+        });
 
     // Status bar
     egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
@@ -51,42 +38,26 @@ pub fn frame(
 
     // Left panel (hierarchy)
     if state.show_left_panel {
-        let min_left = (sw * 0.08).max(120.0);
-        let max_left = (sw * 0.35).min(600.0);
-        let mut panel = egui::SidePanel::left("hierarchy")
+        egui::SidePanel::left("hierarchy")
             .resizable(true)
-            .width_range(min_left..=max_left);
-        if state.left_panel_width > 0.0 {
-            panel = panel.default_width(state.left_panel_width);
-        } else {
-            panel = panel.default_width(sw * 0.15);
-        }
-        let resp = panel.show(ctx, |ui| {
-            let rect = ui.max_rect();
-            let mut gui = Gui::new(ui, skin);
-            crate::hierarchy::draw(state, &mut gui, rect);
-        });
-        state.left_panel_width = resp.response.rect.width();
+            .default_width(250.0)
+            .show(ctx, |ui| {
+                let rect = ui.max_rect();
+                let mut gui = Gui::new(ui, skin);
+                crate::hierarchy::draw(state, &mut gui, rect);
+            });
     }
 
     // Right panel (inspector)
     if state.show_right_panel {
-        let min_right = (sw * 0.10).max(150.0);
-        let max_right = (sw * 0.40).min(700.0);
-        let mut panel = egui::SidePanel::right("inspector")
+        egui::SidePanel::right("inspector")
             .resizable(true)
-            .width_range(min_right..=max_right);
-        if state.right_panel_width > 0.0 {
-            panel = panel.default_width(state.right_panel_width);
-        } else {
-            panel = panel.default_width(sw * 0.16);
-        }
-        let resp = panel.show(ctx, |ui| {
-            let rect = ui.max_rect();
-            let mut gui = Gui::new(ui, skin);
-            crate::inspector::draw(state, &mut gui, rect);
-        });
-        state.right_panel_width = resp.response.rect.width();
+            .default_width(300.0)
+            .show(ctx, |ui| {
+                let rect = ui.max_rect();
+                let mut gui = Gui::new(ui, skin);
+                crate::inspector::draw(state, &mut gui, rect);
+            });
     }
 
     // Central viewport
