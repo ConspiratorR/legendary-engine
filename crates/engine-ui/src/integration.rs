@@ -114,7 +114,25 @@ impl EguiState {
     #[allow(deprecated)]
     pub fn begin_frame(&mut self, time: f64) {
         let mut events = Vec::new();
-        let pos = egui::pos2(self.mouse_pos.0 as f32, self.mouse_pos.1 as f32);
+        let logical_w = self.width as f32 / self.scale_factor;
+        let logical_h = self.height as f32 / self.scale_factor;
+        let logical_x = self.mouse_pos.0 as f32 / self.scale_factor;
+        let logical_y = self.mouse_pos.1 as f32 / self.scale_factor;
+
+        let mut viewports = egui::ViewportIdMap::default();
+        viewports.insert(
+            egui::ViewportId::ROOT,
+            egui::ViewportInfo {
+                native_pixels_per_point: Some(self.scale_factor),
+                inner_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(logical_w, logical_h),
+                )),
+                ..Default::default()
+            },
+        );
+
+        let pos = egui::pos2(logical_x, logical_y);
 
         events.push(egui::Event::PointerMoved(pos));
 
@@ -160,7 +178,7 @@ impl EguiState {
         let raw_input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
-                egui::vec2(self.width as f32, self.height as f32),
+                egui::vec2(logical_w, logical_h),
             )),
             time: Some(time),
             events,

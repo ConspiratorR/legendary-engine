@@ -14,7 +14,7 @@
 //!   does not enforce it.
 
 use crate::error::WindowError;
-use winit::dpi::PhysicalSize;
+use winit::dpi::LogicalSize;
 use winit::window::Window;
 
 /// Configuration for creating a window.
@@ -106,9 +106,9 @@ pub fn create_window(
     event_loop: &winit::event_loop::EventLoop<()>,
 ) -> Result<Window, WindowError> {
     config.validate()?;
-    let attrs = Window::default_attributes()
-        .with_title(&config.title)
-        .with_inner_size(PhysicalSize::new(config.width, config.height));
+        let attrs = Window::default_attributes()
+            .with_title(&config.title)
+            .with_inner_size(LogicalSize::new(config.width, config.height));
     event_loop
         .create_window(attrs)
         .map_err(|e| WindowError::CreationFailed {

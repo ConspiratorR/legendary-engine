@@ -109,6 +109,12 @@ fn main() -> anyhow::Result<()> {
                                 e.resize(size.width, size.height, scale);
                             }
                         }
+                        WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                            if let Some(e) = &mut egui_state {
+                                let size = window.inner_size();
+                                e.resize(size.width, size.height, scale_factor as f32);
+                            }
+                        }
                         WindowEvent::RedrawRequested => {
                             if let (Some(r), Some(e)) = (&mut render, &mut egui_state) {
                                 let now = std::time::Instant::now();
