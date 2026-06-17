@@ -429,8 +429,14 @@ fn draw_single_viewport(
         vp_renderer.render_overlays(target_view, &overlay, renderer);
 
         // Register viewport texture with egui and display it
-        let target_view = vp_renderer.target_view(viewport_type).unwrap();
-        let tex_id = egui_state.register_native_texture(&renderer.device, target_view);
+        let tex_id = if let Some(id) = vp_renderer.egui_texture_id(viewport_type) {
+            id
+        } else {
+            let target_view = vp_renderer.target_view(viewport_type).unwrap();
+            let id = egui_state.register_native_texture(&renderer.device, target_view);
+            vp_renderer.set_egui_texture_id(viewport_type, id);
+            id
+        };
         let img_rect = Rect::from_min_size(
             Pos2::new(canvas_rect.left(), canvas_rect.top() + 32.0 * h_scale),
             Vec2::new(canvas_rect.width(), canvas_rect.height() - 32.0 * h_scale),

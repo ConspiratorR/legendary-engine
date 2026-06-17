@@ -2,7 +2,7 @@
 //! menu bar, toolbar, and dockable panel regions.
 
 use crate::state::{EditorState, PlayState, ToolType};
-use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
+use egui::{Color32, Rounding};
 use engine_ui::{Gui, GuiSkin};
 
 pub fn frame(
@@ -15,16 +15,12 @@ pub fn frame(
 ) {
     // Top menu bar
     egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-        let rect = ui.max_rect();
-        let mut gui = Gui::new(ui, skin);
-        draw_menu_bar(state, &mut gui, rect);
+        draw_menu_bar(state, ui);
     });
 
     // Toolbar below menu
     egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
-        let rect = ui.max_rect();
-        let mut gui = Gui::new(ui, skin);
-        draw_toolbar(state, &mut gui, rect);
+        draw_toolbar(state, ui);
     });
 
     // Bottom panel (console/logs)
@@ -79,131 +75,92 @@ pub fn frame(
     });
 }
 
-fn draw_menu_bar(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
-    let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
-    let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
-    let painter = gui.ui.painter_at(rect);
-    painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(30, 30, 36)));
+fn draw_menu_bar(state: &mut EditorState, ui: &mut egui::Ui) {
+    ui.horizontal(|ui| {
+        let menus = ["文件", "编辑", "场景", "视图", "资源", "帮助"];
+        for (i, menu) in menus.iter().enumerate() {
+            let btn = ui.button(*menu);
+            if btn.clicked() {
+                state.active_menu = if state.active_menu == Some(i) { None } else { Some(i) };
+            }
+            if state.active_menu == Some(i) {
+                let items = match i {
+                    0 => vec!["新建场景", "打开场景", "保存", "另存为", "退出"],
+                    1 => vec!["撤销", "重做", "剪切", "复制", "粘贴"],
+                    2 => vec!["创建空节点", "创建立方体", "创建球体", "创建光源"],
+                    3 => vec!["层级面板", "检视面板", "资源浏览器"],
+                    4 => vec!["导入资源", "加载模型", "加载预制件", "刷新资源"],
+                    5 => vec!["关于"],
+                    _ => vec![],
+                };
+                egui::Area::new(egui::Id::new("menu_dropdown"))
+                    .fixed_pos(btn.rect.left_bottom())
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::none()
+                            .fill(Color32::from_rgb(40, 40, 48))
+                            .rounding(Rounding::same(2.0))
+                            .inner_margin(4.0)
+                            .show(ui, |ui| {
+                                for (j, item) in items.iter().enumerate() {
+                                    if ui.button(*item).clicked() {
+                                        match (i, j) {
+                                            (0, 0) => state.scene_manager.create_scene("新场景".to_string()),
+                                            (0, 2) => { let _ = state.scene_manager.save_current_scene(); },
+                                            (3, 0) => state.show_left_panel = !state.show_left_panel,
+                                            (3, 1) => state.show_right_panel = !state.show_right_panel,
+                                            _ => {}
+                                        }
+                                        state.active_menu = None;
+                                    }
+                                }
+                            });
+                    });
+            }
+        }
+    });
+}
 
-    let menus = ["文件", "编辑", "场景", "视图", "资源", "帮助"];
-    let mut x = rect.left() + 8.0 * w_scale;
-    let font = FontId::proportional(13.0 * h_scale);
-
-    for (i, menu) in menus.iter().enumerate() {
-        let text_w = painter.ctx().fonts(|f| f.layout_no_wrap(menu.to_string(), font.clone(), Color32::WHITE)).size().x;
-        let item_rect = Rect::from_min_size(Pos2::new(x, rect.top()), Vec2::new(text_w + 16.0 * w_scale, rect.height()));
-
-        if gui.button(item_rect, menu) {
-            state.active_menu = Some(i);
+fn draw_toolbar(state: &mut EditorState, ui: &mut egui::Ui) {
+    ui.horizontal(|ui| {
+        // Play/Pause/Stop
+        let play_text = match state.play_state {
+            PlayState::Playing => "⏸ 暂停",
+            _ => "▶ 播放",
+        };
+        if ui.button(play_text).clicked() {
+            match state.play_state {
+                PlayState::Editing => { state.play(); }
+                PlayState::Playing => { state.pause(); }
+                PlayState::Paused => { state.play(); }
+            }
+        }
+        if ui.button("⏹ 停止").clicked() {
+            state.stop();
         }
 
-        if state.active_menu == Some(i) {
-            let items = match i {
-                0 => vec!["新建场景", "打开场景", "保存", "另存为", "退出"],
-                1 => vec!["撤销", "重做", "剪切", "复制", "粘贴"],
-                2 => vec!["创建空节点", "创建立方体", "创建球体", "创建光源"],
-                3 => vec!["层级面板", "检视面板", "资源浏览器"],
-                4 => vec!["导入资源", "加载模型", "加载预制件", "刷新资源"],
-                5 => vec!["关于"],
-                _ => vec![],
-            };
+        ui.separator();
 
-            let item_h = 24.0 * h_scale;
-            let dropdown_w = 140.0 * w_scale;
-            let dropdown_rect = Rect::from_min_size(
-                Pos2::new(item_rect.left(), item_rect.bottom()),
-                Vec2::new(dropdown_w, items.len() as f32 * item_h),
-            );
-
-            let dp = gui.ui.painter_at(dropdown_rect);
-            dp.add(Shape::rect_filled(dropdown_rect, Rounding::same(2.0), Color32::from_rgb(40, 40, 48)));
-
-            for (j, item) in items.iter().enumerate() {
-                let item_rect = Rect::from_min_size(
-                    Pos2::new(dropdown_rect.left(), dropdown_rect.top() + j as f32 * item_h),
-                    Vec2::new(dropdown_w, item_h),
-                );
-                if gui.button(item_rect, item) {
-                    // Handle menu actions
-                    match (i, j) {
-                        (0, 0) => state.scene_manager.create_scene("新场景".to_string()),
-                        (0, 2) => { let _ = state.scene_manager.save_current_scene(); },
-                        (3, 0) => state.show_left_panel = !state.show_left_panel,
-                        (3, 1) => state.show_right_panel = !state.show_right_panel,
-                        _ => {}
-                    }
-                    state.active_menu = None;
-                }
+        // Tool buttons
+        let tools = [("Q", "选择", ToolType::Select), ("W", "移动", ToolType::Translate), ("E", "旋转", ToolType::Rotate), ("R", "缩放", ToolType::Scale)];
+        for (key, label, tool) in &tools {
+            let text = format!("{}({})", label, key);
+            let btn = ui.selectable_label(state.active_tool == *tool, text);
+            if btn.clicked() {
+                state.active_tool = *tool;
             }
         }
 
-        x += text_w + 20.0 * w_scale;
-    }
-}
+        ui.separator();
 
-fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
-    let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
-    let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
-    let painter = gui.ui.painter_at(rect);
-    painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(35, 35, 42)));
-
-    let btn_w = 32.0 * w_scale;
-    let btn_h = 28.0 * h_scale;
-    let gap = 4.0 * w_scale;
-    let mut x = rect.left() + 8.0 * w_scale;
-    let y = rect.center().y - btn_h * 0.5;
-
-    // Play/Pause/Stop
-    let play_text = match state.play_state {
-        PlayState::Playing => "⏸",
-        _ => "▶",
-    };
-    let play_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(btn_w, btn_h));
-    if gui.button(play_rect, play_text) {
-        match state.play_state {
-            PlayState::Editing => { state.play(); }
-            PlayState::Playing => { state.pause(); }
-            PlayState::Paused => { state.play(); }
+        let grid_btn = ui.selectable_label(state.show_grid, "网格");
+        if grid_btn.clicked() {
+            state.show_grid = !state.show_grid;
         }
-    }
-    x += btn_w + gap;
-
-    let stop_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(btn_w, btn_h));
-    if gui.button(stop_rect, "⏹") {
-        state.stop();
-    }
-    x += btn_w + gap * 3.0;
-
-    // Tool buttons
-    let tools = [("Q", ToolType::Select), ("W", ToolType::Translate), ("E", ToolType::Rotate), ("R", ToolType::Scale)];
-    for (label, tool) in &tools {
-        let btn_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(btn_w, btn_h));
-        let is_active = state.active_tool == *tool;
-        if is_active {
-            painter.add(Shape::rect_filled(btn_rect, Rounding::same(2.0), Color32::from_rgb(60, 120, 200)));
+        let debug_btn = ui.selectable_label(state.show_debug_overlay, "调试");
+        if debug_btn.clicked() {
+            state.show_debug_overlay = !state.show_debug_overlay;
         }
-        if gui.button(btn_rect, label) {
-            state.active_tool = *tool;
-        }
-        x += btn_w + gap;
-    }
-
-    x += gap * 3.0;
-
-    // Grid toggle
-    let grid_text = if state.show_grid { "网格✓" } else { "网格" };
-    let grid_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(btn_w * 1.3, btn_h));
-    if gui.button(grid_rect, grid_text) {
-        state.show_grid = !state.show_grid;
-    }
-    x += btn_w * 1.3 + gap;
-
-    // Debug overlay toggle
-    let debug_text = if state.show_debug_overlay { "调试✓" } else { "调试" };
-    let debug_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(btn_w * 1.3, btn_h));
-    if gui.button(debug_rect, debug_text) {
-        state.show_debug_overlay = !state.show_debug_overlay;
-    }
+    });
 }
 
 fn draw_bottom_panel(state: &mut EditorState, ui: &mut egui::Ui) {
@@ -244,22 +201,17 @@ fn draw_bottom_panel(state: &mut EditorState, ui: &mut egui::Ui) {
 }
 
 fn draw_status_bar(state: &mut EditorState, ui: &mut egui::Ui) {
-    let rect = ui.max_rect();
-    let h_scale = ui.ctx().screen_rect().height() / 1080.0;
-    let w_scale = ui.ctx().screen_rect().width() / 1920.0;
-    let painter = ui.painter();
-    painter.add(Shape::rect_filled(rect, Rounding::ZERO, Color32::from_rgb(25, 25, 30)));
+    ui.horizontal(|ui| {
+        let status_text = state.status_message.as_deref().unwrap_or("就绪");
+        ui.label(status_text);
 
-    let font = FontId::proportional(11.0 * h_scale);
-    let y = rect.center().y;
-
-    let status_text = state.status_message.as_deref().unwrap_or("就绪");
-    painter.text(Pos2::new(rect.left() + 8.0 * w_scale, y), egui::Align2::LEFT_CENTER, status_text, font.clone(), Color32::from_rgb(160, 160, 160));
-
-    let play_text = match state.play_state {
-        PlayState::Editing => "编辑模式",
-        PlayState::Playing => "运行中",
-        PlayState::Paused => "已暂停",
-    };
-    painter.text(Pos2::new(rect.right() - 120.0 * w_scale, y), egui::Align2::LEFT_CENTER, play_text, font.clone(), Color32::from_rgb(100, 200, 100));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let play_text = match state.play_state {
+                PlayState::Editing => "编辑模式",
+                PlayState::Playing => "运行中",
+                PlayState::Paused => "已暂停",
+            };
+            ui.colored_label(Color32::from_rgb(100, 200, 100), play_text);
+        });
+    });
 }
