@@ -144,6 +144,19 @@ impl EguiState {
             }
         }
 
+        let mut viewports = egui::ViewportIdMap::default();
+        viewports.insert(
+            egui::ViewportId::ROOT,
+            egui::ViewportInfo {
+                native_pixels_per_point: Some(self.scale_factor),
+                inner_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(self.width as f32, self.height as f32),
+                )),
+                ..Default::default()
+            },
+        );
+
         let raw_input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -151,6 +164,7 @@ impl EguiState {
             )),
             time: Some(time),
             events,
+            viewports,
             ..Default::default()
         };
         self.ctx.begin_frame(raw_input);
@@ -159,7 +173,7 @@ impl EguiState {
     #[allow(deprecated)]
     pub fn end_frame(&mut self) -> (Vec<egui::ClippedPrimitive>, egui::TexturesDelta) {
         let full_output = self.ctx.end_frame();
-        let paint_jobs = self.ctx.tessellate(full_output.shapes, self.scale_factor);
+        let paint_jobs = self.ctx.tessellate(full_output.shapes, full_output.pixels_per_point);
         (paint_jobs, full_output.textures_delta)
     }
 
