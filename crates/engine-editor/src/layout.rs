@@ -222,9 +222,45 @@ fn draw_bottom_panel(state: &mut EditorState, ui: &mut egui::Ui) {
 
 fn draw_status_bar(state: &mut EditorState, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
+        // Left: status message
         let status_text = state.status_message.as_deref().unwrap_or("就绪");
         ui.label(status_text);
 
+        ui.separator();
+
+        // Entity count
+        let entity_count = state.scene_tree.nodes.len();
+        ui.label(format!("实体: {}", entity_count));
+
+        ui.separator();
+
+        // Selected info
+        if !state.selected_nodes.is_empty() {
+            let selected_name = state
+                .scene_tree
+                .nodes
+                .iter()
+                .find(|n| n.id == state.selected_nodes[0])
+                .map(|n| n.name.as_str())
+                .unwrap_or("未知");
+            ui.label(format!("选中: {}", selected_name));
+        } else {
+            ui.label("未选中");
+        }
+
+        ui.separator();
+
+        // Current tool
+        let tool_name = match state.active_tool {
+            ToolType::Select => "选择",
+            ToolType::Translate => "移动",
+            ToolType::Rotate => "旋转",
+            ToolType::Scale => "缩放",
+            ToolType::Terrain => "地形",
+        };
+        ui.label(format!("工具: {}", tool_name));
+
+        // Right: play state and FPS
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let play_text = match state.play_state {
                 PlayState::Editing => "编辑模式",
@@ -232,6 +268,9 @@ fn draw_status_bar(state: &mut EditorState, ui: &mut egui::Ui) {
                 PlayState::Paused => "已暂停",
             };
             ui.colored_label(Color32::from_rgb(100, 200, 100), play_text);
+
+            ui.separator();
+            ui.label(format!("FPS: {}", state.fps));
         });
     });
 }
