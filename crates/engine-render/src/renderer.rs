@@ -661,8 +661,11 @@ impl Renderer {
             ShadowPass::new(device, ShadowMapConfig::default(), shadow_bind_group_layout);
 
         // Deferred pass (geometry + lighting pipelines)
-        let deferred_pass =
-            DeferredPass::new(device, wgpu::TextureFormat::Rgba16Float, &shadow_pass.bind_group_layout);
+        let deferred_pass = DeferredPass::new(
+            device,
+            wgpu::TextureFormat::Rgba16Float,
+            &shadow_pass.bind_group_layout,
+        );
 
         // Camera uniform for deferred path (80 bytes)
         let deferred_camera_uniform = device.create_buffer(&wgpu::BufferDescriptor {
@@ -1249,11 +1252,7 @@ impl Renderer {
                         model_matrix: transform.to_cols_array_2d(),
                         normal_matrix: normal_matrix.to_cols_array_2d(),
                     };
-                    pass.set_push_constants(
-                        wgpu::ShaderStages::VERTEX,
-                        0,
-                        bytemuck::bytes_of(&pc),
-                    );
+                    pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, bytemuck::bytes_of(&pc));
                     pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                     if let Some(ref ib) = mesh.index_buffer {
                         pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
@@ -1267,8 +1266,7 @@ impl Renderer {
 
         // ── Deferred Lighting Pass → viewport HDR framebuffer ──
         {
-            let gbuffer_bg =
-                gbuffer.create_bind_group(device, &deferred.gbuffer_bind_group_layout);
+            let gbuffer_bg = gbuffer.create_bind_group(device, &deferred.gbuffer_bind_group_layout);
             let hdr_view = &viewport_pp.hdr_framebuffer.view;
 
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1308,7 +1306,13 @@ impl Renderer {
             depth_view: &gbuffer.textures.depth_view,
             camera_bind_group: cam_bg,
         };
-        viewport_pp.execute(&mut encoder, target_view, device, queue, Some(&gbuffer_inputs));
+        viewport_pp.execute(
+            &mut encoder,
+            target_view,
+            device,
+            queue,
+            Some(&gbuffer_inputs),
+        );
 
         queue.submit([encoder.finish()]);
     }

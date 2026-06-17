@@ -116,8 +116,8 @@ impl ModLoader {
             if !dir.exists() {
                 continue;
             }
-            for entry in std::fs::read_dir(dir)
-                .map_err(|e| ModLoadError::IoError(dir.clone(), e))?
+            for entry in
+                std::fs::read_dir(dir).map_err(|e| ModLoadError::IoError(dir.clone(), e))?
             {
                 let entry = entry.map_err(|e| ModLoadError::IoError(dir.clone(), e))?;
                 let path = entry.path();

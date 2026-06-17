@@ -1,7 +1,7 @@
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use engine_math::Mat4;
 use engine_render::graph::RenderGraph;
 use engine_render::sprite::{SpriteBatch, SpriteDraw};
-use engine_math::Mat4;
 
 fn bench_render_graph_creation(c: &mut Criterion) {
     c.bench_function("render_graph_creation", |b| {

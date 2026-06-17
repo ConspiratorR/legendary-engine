@@ -15,7 +15,10 @@ fn main() {
 
 fn demonstrate_scene_manager() {
     let state = EditorState::new();
-    println!("✅ 创建新场景: 包含 {} 个节点", state.scene_tree.nodes.len());
+    println!(
+        "✅ 创建新场景: 包含 {} 个节点",
+        state.scene_tree.nodes.len()
+    );
     println!("✅ 场景已修改: {}", state.scene_manager.is_modified());
 }
 

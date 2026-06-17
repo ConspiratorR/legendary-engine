@@ -130,14 +130,8 @@ impl Line3dBatch {
 
     /// Add a single line segment.
     pub fn line(&mut self, a: [f32; 3], b: [f32; 3], color: [f32; 4]) {
-        self.vertices.push(LineVertex {
-            position: a,
-            color,
-        });
-        self.vertices.push(LineVertex {
-            position: b,
-            color,
-        });
+        self.vertices.push(LineVertex { position: a, color });
+        self.vertices.push(LineVertex { position: b, color });
     }
 
     /// Add an axis-aligned box wireframe.

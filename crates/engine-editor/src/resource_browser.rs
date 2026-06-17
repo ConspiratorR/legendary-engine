@@ -52,21 +52,96 @@ impl ResourceBrowser {
     /// Returns hardcoded demo entries as fallback.
     fn demo_entries() -> Vec<ResourceEntry> {
         vec![
-            ResourceEntry { name: "Images".into(), file_type: ResourceType::Directory, size: 0, is_directory: true },
-            ResourceEntry { name: "Audio".into(), file_type: ResourceType::Directory, size: 0, is_directory: true },
-            ResourceEntry { name: "Models".into(), file_type: ResourceType::Directory, size: 0, is_directory: true },
-            ResourceEntry { name: "Scripts".into(), file_type: ResourceType::Directory, size: 0, is_directory: true },
-            ResourceEntry { name: "Materials".into(), file_type: ResourceType::Directory, size: 0, is_directory: true },
-            ResourceEntry { name: "player.png".into(), file_type: ResourceType::Texture, size: 245760, is_directory: false },
-            ResourceEntry { name: "background.png".into(), file_type: ResourceType::Texture, size: 1048576, is_directory: false },
-            ResourceEntry { name: "sound_bg.wav".into(), file_type: ResourceType::Audio, size: 5242880, is_directory: false },
-            ResourceEntry { name: "jump.wav".into(), file_type: ResourceType::Audio, size: 65536, is_directory: false },
-            ResourceEntry { name: "character.gltf".into(), file_type: ResourceType::Mesh, size: 2097152, is_directory: false },
-            ResourceEntry { name: "enemy.gltf".into(), file_type: ResourceType::Mesh, size: 1572864, is_directory: false },
-            ResourceEntry { name: "player.lua".into(), file_type: ResourceType::Script, size: 4096, is_directory: false },
-            ResourceEntry { name: "game_logic.lua".into(), file_type: ResourceType::Script, size: 8192, is_directory: false },
-            ResourceEntry { name: "default.mat".into(), file_type: ResourceType::Material, size: 512, is_directory: false },
-            ResourceEntry { name: "metal.mat".into(), file_type: ResourceType::Material, size: 768, is_directory: false },
+            ResourceEntry {
+                name: "Images".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "Audio".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "Models".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "Scripts".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "Materials".into(),
+                file_type: ResourceType::Directory,
+                size: 0,
+                is_directory: true,
+            },
+            ResourceEntry {
+                name: "player.png".into(),
+                file_type: ResourceType::Texture,
+                size: 245760,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "background.png".into(),
+                file_type: ResourceType::Texture,
+                size: 1048576,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "sound_bg.wav".into(),
+                file_type: ResourceType::Audio,
+                size: 5242880,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "jump.wav".into(),
+                file_type: ResourceType::Audio,
+                size: 65536,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "character.gltf".into(),
+                file_type: ResourceType::Mesh,
+                size: 2097152,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "enemy.gltf".into(),
+                file_type: ResourceType::Mesh,
+                size: 1572864,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "player.lua".into(),
+                file_type: ResourceType::Script,
+                size: 4096,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "game_logic.lua".into(),
+                file_type: ResourceType::Script,
+                size: 8192,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "default.mat".into(),
+                file_type: ResourceType::Material,
+                size: 512,
+                is_directory: false,
+            },
+            ResourceEntry {
+                name: "metal.mat".into(),
+                file_type: ResourceType::Material,
+                size: 768,
+                is_directory: false,
+            },
         ]
     }
 
@@ -111,7 +186,9 @@ impl ResourceBrowser {
                 });
             }
             self.entries.sort_by(|a, b| {
-                b.is_directory.cmp(&a.is_directory).then(a.name.cmp(&b.name))
+                b.is_directory
+                    .cmp(&a.is_directory)
+                    .then(a.name.cmp(&b.name))
             });
         }
     }

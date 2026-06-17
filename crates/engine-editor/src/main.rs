@@ -46,9 +46,15 @@ fn main() -> anyhow::Result<()> {
     let mut _runtime_audio: Option<engine_audio::audio_manager::AudioManager> = None;
     #[cfg(feature = "scripting")]
     let mut runtime_scripts: Vec<engine_script::system::ScriptSystem> = Vec::new();
-    let mut runtime_blueprints: Vec<engine_editor::node_graph::blueprint_component::BlueprintComponent> = Vec::new();
+    let mut runtime_blueprints: Vec<
+        engine_editor::node_graph::blueprint_component::BlueprintComponent,
+    > = Vec::new();
     let mut prev_play_state = engine_editor::state::PlayState::Editing;
-    let mut window_modifiers = Modifiers { ctrl: false, shift: false, alt: false };
+    let mut window_modifiers = Modifiers {
+        ctrl: false,
+        shift: false,
+        alt: false,
+    };
     let start_time = std::time::Instant::now();
 
     pollster::block_on(async {

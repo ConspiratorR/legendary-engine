@@ -593,7 +593,10 @@ pub struct EditorState {
     /// Sky/background color for the viewport (RGB 0.0-1.0).
     pub sky_color: [f32; 3],
     /// Loaded model meshes: name → (vertices, indices)
-    pub loaded_models: std::collections::HashMap<String, (Vec<engine_render::resource::mesh::MeshVertex>, Vec<u32>)>,
+    pub loaded_models: std::collections::HashMap<
+        String,
+        (Vec<engine_render::resource::mesh::MeshVertex>, Vec<u32>),
+    >,
     /// Loaded prefab definitions: name → PrefabDef
     pub prefabs: std::collections::HashMap<String, engine_scene::prefab::PrefabDef>,
     /// Node currently being dragged in hierarchy (for reparent).
@@ -654,43 +657,67 @@ impl EditorState {
             node_physics.insert(i, ("Static".into(), "Box".into()));
         }
         // Assign different mesh types per node
-        node_render.insert(1, ("Default".into(), "Cube".into(), true));         // Root
-        node_render.insert(2, ("Default".into(), "Cube".into(), true));         // Player
-        node_render.insert(3, ("Default".into(), "Plane".into(), true));        // Terrain
-        node_render.insert(4, ("Default".into(), "Cube".into(), true));         // Red Cube
-        node_render.insert(5, ("Default".into(), "Sphere".into(), true));       // Blue Sphere
-        node_render.insert(6, ("Default".into(), "Sphere".into(), true));       // Light marker
-        node_render.insert(7, ("Default".into(), "Cylinder".into(), true));     // Green Cylinder
-        node_render.insert(8, ("Default".into(), "Sphere".into(), true));       // Gold Sphere
-        node_render.insert(9, ("Default".into(), "Cube".into(), true));         // White Cube
+        node_render.insert(1, ("Default".into(), "Cube".into(), true)); // Root
+        node_render.insert(2, ("Default".into(), "Cube".into(), true)); // Player
+        node_render.insert(3, ("Default".into(), "Plane".into(), true)); // Terrain
+        node_render.insert(4, ("Default".into(), "Cube".into(), true)); // Red Cube
+        node_render.insert(5, ("Default".into(), "Sphere".into(), true)); // Blue Sphere
+        node_render.insert(6, ("Default".into(), "Sphere".into(), true)); // Light marker
+        node_render.insert(7, ("Default".into(), "Cylinder".into(), true)); // Green Cylinder
+        node_render.insert(8, ("Default".into(), "Sphere".into(), true)); // Gold Sphere
+        node_render.insert(9, ("Default".into(), "Cube".into(), true)); // White Cube
 
         // Position objects in an interesting layout
-        node_transforms.insert(1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);        // Root
-        node_transforms.insert(2, [-4.0, 0.5, 2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);        // Player
-        node_transforms.insert(3, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 1.0, 20.0]);       // Terrain
-        node_transforms.insert(4, [0.0, 0.5, 0.0, 0.0, 0.4, 0.0, 1.0, 1.0, 1.0]);         // Red Cube (rotated)
-        node_transforms.insert(5, [3.0, 0.7, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 1.4]);         // Blue Sphere
-        node_transforms.insert(6, [0.0, 5.0, -3.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3]);        // Light marker
-        node_transforms.insert(7, [-3.0, 0.8, -2.0, 0.0, 0.0, 0.0, 1.0, 1.6, 1.0]);       // Green Cylinder
-        node_transforms.insert(8, [5.0, 1.0, 3.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0]);         // Gold Sphere
-        node_transforms.insert(9, [-2.0, 0.4, -4.0, 0.0, 0.3, 0.0, 0.8, 0.8, 0.8]);       // White Cube
+        node_transforms.insert(1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Root
+        node_transforms.insert(2, [-4.0, 0.5, 2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Player
+        node_transforms.insert(3, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 1.0, 20.0]); // Terrain
+        node_transforms.insert(4, [0.0, 0.5, 0.0, 0.0, 0.4, 0.0, 1.0, 1.0, 1.0]); // Red Cube (rotated)
+        node_transforms.insert(5, [3.0, 0.7, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 1.4]); // Blue Sphere
+        node_transforms.insert(6, [0.0, 5.0, -3.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3]); // Light marker
+        node_transforms.insert(7, [-3.0, 0.8, -2.0, 0.0, 0.0, 0.0, 1.0, 1.6, 1.0]); // Green Cylinder
+        node_transforms.insert(8, [5.0, 1.0, 3.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0]); // Gold Sphere
+        node_transforms.insert(9, [-2.0, 0.4, -4.0, 0.0, 0.3, 0.0, 0.8, 0.8, 0.8]); // White Cube
 
         // Add lights
         node_lights.insert(6, LightData::default());
 
         // Add varied materials
-        node_materials.insert(4, MaterialData {
-            base_color: [0.9, 0.2, 0.2, 1.0], metallic: 0.1, roughness: 0.6, ..Default::default()
-        });
-        node_materials.insert(5, MaterialData {
-            base_color: [0.2, 0.4, 0.9, 1.0], metallic: 0.9, roughness: 0.1, ..Default::default()
-        });
-        node_materials.insert(7, MaterialData {
-            base_color: [0.2, 0.8, 0.3, 1.0], metallic: 0.0, roughness: 0.7, ..Default::default()
-        });
-        node_materials.insert(8, MaterialData {
-            base_color: [1.0, 0.85, 0.0, 1.0], metallic: 1.0, roughness: 0.2, ..Default::default()
-        });
+        node_materials.insert(
+            4,
+            MaterialData {
+                base_color: [0.9, 0.2, 0.2, 1.0],
+                metallic: 0.1,
+                roughness: 0.6,
+                ..Default::default()
+            },
+        );
+        node_materials.insert(
+            5,
+            MaterialData {
+                base_color: [0.2, 0.4, 0.9, 1.0],
+                metallic: 0.9,
+                roughness: 0.1,
+                ..Default::default()
+            },
+        );
+        node_materials.insert(
+            7,
+            MaterialData {
+                base_color: [0.2, 0.8, 0.3, 1.0],
+                metallic: 0.0,
+                roughness: 0.7,
+                ..Default::default()
+            },
+        );
+        node_materials.insert(
+            8,
+            MaterialData {
+                base_color: [1.0, 0.85, 0.0, 1.0],
+                metallic: 1.0,
+                roughness: 0.2,
+                ..Default::default()
+            },
+        );
         node_materials.insert(9, MaterialData::default());
         // Make Player (id=2) dynamic for physics testing
         node_physics.insert(2, ("Dynamic".into(), "Box".into()));
@@ -934,7 +961,11 @@ impl EditorState {
                 self.scene_manager.set_current_scene(scene);
                 match self.scene_manager.save_current_scene() {
                     Ok(()) => {
-                        let entity_count = self.scene_manager.current_scene().map(|s| s.entities.len()).unwrap_or(0);
+                        let entity_count = self
+                            .scene_manager
+                            .current_scene()
+                            .map(|s| s.entities.len())
+                            .unwrap_or(0);
                         self.log_info(&format!("场景已保存 ({} 个实体)", entity_count));
                         self.status_message = Some("场景已保存".into());
                     }
@@ -998,7 +1029,11 @@ impl EditorState {
                 self.active_viewport_tab = (self.active_viewport_tab + 1) % 3;
             }
             EditorAction::PrevFrame => {
-                self.active_viewport_tab = if self.active_viewport_tab == 0 { 2 } else { self.active_viewport_tab - 1 };
+                self.active_viewport_tab = if self.active_viewport_tab == 0 {
+                    2
+                } else {
+                    self.active_viewport_tab - 1
+                };
             }
             EditorAction::ViewportScene => {
                 self.active_viewport_tab = 0;
@@ -1105,7 +1140,11 @@ impl EditorState {
                         .collect();
                     let indices = mesh.indices.clone();
                     let name = if mesh.name.is_empty() {
-                        format!("{}_{}", path.file_stem().unwrap_or_default().to_string_lossy(), count)
+                        format!(
+                            "{}_{}",
+                            path.file_stem().unwrap_or_default().to_string_lossy(),
+                            count
+                        )
                     } else {
                         mesh.name.clone()
                     };
@@ -1129,7 +1168,7 @@ impl EditorState {
 
     /// Create a prefab from the selected nodes.
     pub fn create_prefab_from_selection(&mut self, name: &str) {
-        use engine_scene::prefab::{PrefabDef, PrefabNode, ComponentTemplate};
+        use engine_scene::prefab::{ComponentTemplate, PrefabDef, PrefabNode};
         use engine_scene::serialization::PropertyValue;
 
         if self.selected_nodes.is_empty() {
@@ -1228,7 +1267,10 @@ impl EditorState {
 
     /// Save a prefab to a file.
     pub fn save_prefab(&self, name: &str, path: &std::path::Path) -> anyhow::Result<()> {
-        let prefab = self.prefabs.get(name).ok_or_else(|| anyhow::anyhow!("预制件不存在: {}", name))?;
+        let prefab = self
+            .prefabs
+            .get(name)
+            .ok_or_else(|| anyhow::anyhow!("预制件不存在: {}", name))?;
         let json = serde_json::to_string_pretty(prefab)?;
         std::fs::write(path, json)?;
         Ok(())
@@ -1256,7 +1298,8 @@ impl EditorState {
         self.clipboard.clear();
         for &id in &self.selected_nodes {
             if let Some(t) = self.node_transforms.get(&id) {
-                self.clipboard.push((*t, self.node_materials.get(&id).cloned()));
+                self.clipboard
+                    .push((*t, self.node_materials.get(&id).cloned()));
             }
         }
         self.status_message = Some(format!("已复制 {} 个对象", self.clipboard.len()));
@@ -1392,7 +1435,8 @@ impl EditorState {
             ("Sphere".to_string(), sphere_mesh_id),
             ("Plane".to_string(), plane_mesh_id),
             ("Cylinder".to_string(), cylinder_mesh_id),
-        ].into();
+        ]
+        .into();
 
         // Upload loaded model meshes
         for (name, (verts, idxs)) in &self.loaded_models {
@@ -1415,7 +1459,8 @@ impl EditorState {
 
         // Build instance batches from scene tree nodes
         let mut batches: Vec<InstanceBatch> = Vec::new();
-        let mut batch_map: std::collections::HashMap<(u64, u64), usize> = std::collections::HashMap::new();
+        let mut batch_map: std::collections::HashMap<(u64, u64), usize> =
+            std::collections::HashMap::new();
 
         for node in &self.scene_tree.nodes {
             if node.parent.is_none() {
@@ -1537,7 +1582,11 @@ impl EditorState {
             }
             if let Some(t) = self.node_transforms.get(&node.id) {
                 let pos = Vec3::new(t[0], t[1], t[2]);
-                let half = Vec3::new(t[6].abs().max(0.5), t[7].abs().max(0.5), t[8].abs().max(0.5));
+                let half = Vec3::new(
+                    t[6].abs().max(0.5),
+                    t[7].abs().max(0.5),
+                    t[8].abs().max(0.5),
+                );
                 aabb_min = aabb_min.min(pos - half);
                 aabb_max = aabb_max.max(pos + half);
             }
@@ -1573,50 +1622,149 @@ fn cube_vertices() -> [engine_render::resource::mesh::MeshVertex; 24] {
     use engine_render::resource::mesh::MeshVertex;
     [
         // Front face
-        MeshVertex { position: [-0.5, -0.5,  0.5], normal: [ 0.0,  0.0,  1.0], uv: [0.0, 1.0] },
-        MeshVertex { position: [ 0.5, -0.5,  0.5], normal: [ 0.0,  0.0,  1.0], uv: [1.0, 1.0] },
-        MeshVertex { position: [ 0.5,  0.5,  0.5], normal: [ 0.0,  0.0,  1.0], uv: [1.0, 0.0] },
-        MeshVertex { position: [-0.5,  0.5,  0.5], normal: [ 0.0,  0.0,  1.0], uv: [0.0, 0.0] },
+        MeshVertex {
+            position: [-0.5, -0.5, 0.5],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 1.0],
+        },
+        MeshVertex {
+            position: [0.5, -0.5, 0.5],
+            normal: [0.0, 0.0, 1.0],
+            uv: [1.0, 1.0],
+        },
+        MeshVertex {
+            position: [0.5, 0.5, 0.5],
+            normal: [0.0, 0.0, 1.0],
+            uv: [1.0, 0.0],
+        },
+        MeshVertex {
+            position: [-0.5, 0.5, 0.5],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+        },
         // Back face
-        MeshVertex { position: [ 0.5, -0.5, -0.5], normal: [ 0.0,  0.0, -1.0], uv: [0.0, 1.0] },
-        MeshVertex { position: [-0.5, -0.5, -0.5], normal: [ 0.0,  0.0, -1.0], uv: [1.0, 1.0] },
-        MeshVertex { position: [-0.5,  0.5, -0.5], normal: [ 0.0,  0.0, -1.0], uv: [1.0, 0.0] },
-        MeshVertex { position: [ 0.5,  0.5, -0.5], normal: [ 0.0,  0.0, -1.0], uv: [0.0, 0.0] },
+        MeshVertex {
+            position: [0.5, -0.5, -0.5],
+            normal: [0.0, 0.0, -1.0],
+            uv: [0.0, 1.0],
+        },
+        MeshVertex {
+            position: [-0.5, -0.5, -0.5],
+            normal: [0.0, 0.0, -1.0],
+            uv: [1.0, 1.0],
+        },
+        MeshVertex {
+            position: [-0.5, 0.5, -0.5],
+            normal: [0.0, 0.0, -1.0],
+            uv: [1.0, 0.0],
+        },
+        MeshVertex {
+            position: [0.5, 0.5, -0.5],
+            normal: [0.0, 0.0, -1.0],
+            uv: [0.0, 0.0],
+        },
         // Top face
-        MeshVertex { position: [-0.5,  0.5,  0.5], normal: [ 0.0,  1.0,  0.0], uv: [0.0, 1.0] },
-        MeshVertex { position: [ 0.5,  0.5,  0.5], normal: [ 0.0,  1.0,  0.0], uv: [1.0, 1.0] },
-        MeshVertex { position: [ 0.5,  0.5, -0.5], normal: [ 0.0,  1.0,  0.0], uv: [1.0, 0.0] },
-        MeshVertex { position: [-0.5,  0.5, -0.5], normal: [ 0.0,  1.0,  0.0], uv: [0.0, 0.0] },
+        MeshVertex {
+            position: [-0.5, 0.5, 0.5],
+            normal: [0.0, 1.0, 0.0],
+            uv: [0.0, 1.0],
+        },
+        MeshVertex {
+            position: [0.5, 0.5, 0.5],
+            normal: [0.0, 1.0, 0.0],
+            uv: [1.0, 1.0],
+        },
+        MeshVertex {
+            position: [0.5, 0.5, -0.5],
+            normal: [0.0, 1.0, 0.0],
+            uv: [1.0, 0.0],
+        },
+        MeshVertex {
+            position: [-0.5, 0.5, -0.5],
+            normal: [0.0, 1.0, 0.0],
+            uv: [0.0, 0.0],
+        },
         // Bottom face
-        MeshVertex { position: [-0.5, -0.5, -0.5], normal: [ 0.0, -1.0,  0.0], uv: [0.0, 1.0] },
-        MeshVertex { position: [ 0.5, -0.5, -0.5], normal: [ 0.0, -1.0,  0.0], uv: [1.0, 1.0] },
-        MeshVertex { position: [ 0.5, -0.5,  0.5], normal: [ 0.0, -1.0,  0.0], uv: [1.0, 0.0] },
-        MeshVertex { position: [-0.5, -0.5,  0.5], normal: [ 0.0, -1.0,  0.0], uv: [0.0, 0.0] },
+        MeshVertex {
+            position: [-0.5, -0.5, -0.5],
+            normal: [0.0, -1.0, 0.0],
+            uv: [0.0, 1.0],
+        },
+        MeshVertex {
+            position: [0.5, -0.5, -0.5],
+            normal: [0.0, -1.0, 0.0],
+            uv: [1.0, 1.0],
+        },
+        MeshVertex {
+            position: [0.5, -0.5, 0.5],
+            normal: [0.0, -1.0, 0.0],
+            uv: [1.0, 0.0],
+        },
+        MeshVertex {
+            position: [-0.5, -0.5, 0.5],
+            normal: [0.0, -1.0, 0.0],
+            uv: [0.0, 0.0],
+        },
         // Right face
-        MeshVertex { position: [ 0.5, -0.5,  0.5], normal: [ 1.0,  0.0,  0.0], uv: [0.0, 1.0] },
-        MeshVertex { position: [ 0.5, -0.5, -0.5], normal: [ 1.0,  0.0,  0.0], uv: [1.0, 1.0] },
-        MeshVertex { position: [ 0.5,  0.5, -0.5], normal: [ 1.0,  0.0,  0.0], uv: [1.0, 0.0] },
-        MeshVertex { position: [ 0.5,  0.5,  0.5], normal: [ 1.0,  0.0,  0.0], uv: [0.0, 0.0] },
+        MeshVertex {
+            position: [0.5, -0.5, 0.5],
+            normal: [1.0, 0.0, 0.0],
+            uv: [0.0, 1.0],
+        },
+        MeshVertex {
+            position: [0.5, -0.5, -0.5],
+            normal: [1.0, 0.0, 0.0],
+            uv: [1.0, 1.0],
+        },
+        MeshVertex {
+            position: [0.5, 0.5, -0.5],
+            normal: [1.0, 0.0, 0.0],
+            uv: [1.0, 0.0],
+        },
+        MeshVertex {
+            position: [0.5, 0.5, 0.5],
+            normal: [1.0, 0.0, 0.0],
+            uv: [0.0, 0.0],
+        },
         // Left face
-        MeshVertex { position: [-0.5, -0.5, -0.5], normal: [-1.0,  0.0,  0.0], uv: [0.0, 1.0] },
-        MeshVertex { position: [-0.5, -0.5,  0.5], normal: [-1.0,  0.0,  0.0], uv: [1.0, 1.0] },
-        MeshVertex { position: [-0.5,  0.5,  0.5], normal: [-1.0,  0.0,  0.0], uv: [1.0, 0.0] },
-        MeshVertex { position: [-0.5,  0.5, -0.5], normal: [-1.0,  0.0,  0.0], uv: [0.0, 0.0] },
+        MeshVertex {
+            position: [-0.5, -0.5, -0.5],
+            normal: [-1.0, 0.0, 0.0],
+            uv: [0.0, 1.0],
+        },
+        MeshVertex {
+            position: [-0.5, -0.5, 0.5],
+            normal: [-1.0, 0.0, 0.0],
+            uv: [1.0, 1.0],
+        },
+        MeshVertex {
+            position: [-0.5, 0.5, 0.5],
+            normal: [-1.0, 0.0, 0.0],
+            uv: [1.0, 0.0],
+        },
+        MeshVertex {
+            position: [-0.5, 0.5, -0.5],
+            normal: [-1.0, 0.0, 0.0],
+            uv: [0.0, 0.0],
+        },
     ]
 }
 
 fn cube_indices() -> [u32; 36] {
     [
-         0,  1,  2,  2,  3,  0, // front
-         4,  5,  6,  6,  7,  4, // back
-         8,  9, 10, 10, 11,  8, // top
+        0, 1, 2, 2, 3, 0, // front
+        4, 5, 6, 6, 7, 4, // back
+        8, 9, 10, 10, 11, 8, // top
         12, 13, 14, 14, 15, 12, // bottom
         16, 17, 18, 18, 19, 16, // right
         20, 21, 22, 22, 23, 20, // left
     ]
 }
 
-fn sphere_mesh(stacks: u32, slices: u32) -> (Vec<engine_render::resource::mesh::MeshVertex>, Vec<u32>) {
+fn sphere_mesh(
+    stacks: u32,
+    slices: u32,
+) -> (Vec<engine_render::resource::mesh::MeshVertex>, Vec<u32>) {
     use engine_render::resource::mesh::MeshVertex;
     let mut vertices = Vec::new();
     let mut indices = Vec::new();
@@ -1661,7 +1809,10 @@ fn plane_mesh(subdivisions: u32) -> (Vec<engine_render::resource::mesh::MeshVert
             vertices.push(MeshVertex {
                 position: [x, 0.0, z],
                 normal: [0.0, 1.0, 0.0],
-                uv: [j as f32 / subdivisions as f32, i as f32 / subdivisions as f32],
+                uv: [
+                    j as f32 / subdivisions as f32,
+                    i as f32 / subdivisions as f32,
+                ],
             });
         }
     }

@@ -159,9 +159,15 @@ impl ShortcutManager {
             EditorAction::PrevFrame,
             KeyBinding::new(KeyCode::Comma).with_ctrl(),
         );
-        self.bind(EditorAction::ViewportScene, KeyBinding::new(KeyCode::Digit1));
+        self.bind(
+            EditorAction::ViewportScene,
+            KeyBinding::new(KeyCode::Digit1),
+        );
         self.bind(EditorAction::ViewportGame, KeyBinding::new(KeyCode::Digit2));
-        self.bind(EditorAction::ViewportPhysics, KeyBinding::new(KeyCode::Digit3));
+        self.bind(
+            EditorAction::ViewportPhysics,
+            KeyBinding::new(KeyCode::Digit3),
+        );
     }
 
     /// Binds an action to a key binding.

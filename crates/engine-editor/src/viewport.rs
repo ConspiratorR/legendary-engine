@@ -150,7 +150,16 @@ pub fn draw(
     use crate::viewport_renderer::ViewportLayout;
     match state.viewport_layout {
         ViewportLayout::Single(_) => {
-            draw_single_viewport(state, gui, canvas_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
+            draw_single_viewport(
+                state,
+                gui,
+                canvas_rect,
+                h_scale,
+                w_scale,
+                renderer,
+                vp_renderer,
+                egui_state,
+            );
         }
         ViewportLayout::Horizontal(_, _) => {
             let half_w = canvas_rect.width() / 2.0;
@@ -162,8 +171,26 @@ pub fn draw(
                 Pos2::new(canvas_rect.left() + half_w, canvas_rect.top()),
                 Vec2::new(half_w, canvas_rect.height()),
             );
-            draw_single_viewport(state, gui, left_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
-            draw_single_viewport(state, gui, right_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
+            draw_single_viewport(
+                state,
+                gui,
+                left_rect,
+                h_scale,
+                w_scale,
+                renderer,
+                vp_renderer,
+                egui_state,
+            );
+            draw_single_viewport(
+                state,
+                gui,
+                right_rect,
+                h_scale,
+                w_scale,
+                renderer,
+                vp_renderer,
+                egui_state,
+            );
         }
         ViewportLayout::Vertical(_, _) => {
             let half_h = canvas_rect.height() / 2.0;
@@ -175,8 +202,26 @@ pub fn draw(
                 Pos2::new(canvas_rect.left(), canvas_rect.top() + half_h),
                 Vec2::new(canvas_rect.width(), half_h),
             );
-            draw_single_viewport(state, gui, top_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
-            draw_single_viewport(state, gui, bottom_rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
+            draw_single_viewport(
+                state,
+                gui,
+                top_rect,
+                h_scale,
+                w_scale,
+                renderer,
+                vp_renderer,
+                egui_state,
+            );
+            draw_single_viewport(
+                state,
+                gui,
+                bottom_rect,
+                h_scale,
+                w_scale,
+                renderer,
+                vp_renderer,
+                egui_state,
+            );
         }
         ViewportLayout::Quad => {
             let half_w = canvas_rect.width() / 2.0;
@@ -197,7 +242,16 @@ pub fn draw(
                 ),
             ];
             for rect in &rects {
-                draw_single_viewport(state, gui, *rect, h_scale, w_scale, renderer, vp_renderer, egui_state);
+                draw_single_viewport(
+                    state,
+                    gui,
+                    *rect,
+                    h_scale,
+                    w_scale,
+                    renderer,
+                    vp_renderer,
+                    egui_state,
+                );
             }
         }
     }
@@ -233,7 +287,9 @@ fn draw_single_viewport(
     vp_renderer.ensure_target(viewport_type, vp_w, vp_h);
     if let Some(target_view) = vp_renderer.target_view(viewport_type) {
         // Select camera based on active viewport tab
-        let camera = if state.active_viewport_tab == 1 && state.play_state != crate::state::PlayState::Editing {
+        let camera = if state.active_viewport_tab == 1
+            && state.play_state != crate::state::PlayState::Editing
+        {
             &state.game_camera
         } else {
             &state.camera
@@ -264,12 +320,7 @@ fn draw_single_viewport(
 
         // Ground grid
         if state.show_grid {
-            overlay.grid_xz(
-                [0.0, 0.0, 0.0],
-                50.0,
-                25,
-                [0.25, 0.25, 0.35, 0.5],
-            );
+            overlay.grid_xz([0.0, 0.0, 0.0], 50.0, 25, [0.25, 0.25, 0.35, 0.5]);
             // Axis lines (thicker via brighter color)
             overlay.line(
                 [-25.0, 0.001, 0.0],
@@ -341,11 +392,7 @@ fn draw_single_viewport(
                     );
                     // Velocity vector for dynamic objects
                     if is_dynamic {
-                        overlay.line(
-                            pos,
-                            [pos[0], pos[1] - 2.0, pos[2]],
-                            [1.0, 0.3, 0.0, 1.0],
-                        );
+                        overlay.line(pos, [pos[0], pos[1] - 2.0, pos[2]], [1.0, 0.3, 0.0, 1.0]);
                     }
                     // Show collider type label position in Physics tab
                     if state.active_viewport_tab == 2
@@ -422,7 +469,12 @@ fn draw_single_viewport(
     let info_color = Color32::from_gray(160);
 
     // Object count
-    let obj_count = state.scene_tree.nodes.iter().filter(|n| n.parent.is_some()).count();
+    let obj_count = state
+        .scene_tree
+        .nodes
+        .iter()
+        .filter(|n| n.parent.is_some())
+        .count();
     painter.text(
         egui::pos2(info_x, canvas_rect.top() + 50.0 * h_scale),
         egui::Align2::RIGHT_CENTER,
@@ -573,12 +625,13 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
                 state.gizmo_drag_axis = Some(0);
                 state.gizmo_drag_start_screen = Some((pointer_pos.x, pointer_pos.y));
                 let first_id = state.selected_nodes[0];
-                state.gizmo_drag_start_pos =
-                    state.node_transforms.get(&first_id).map(|t| [t[0], t[1], t[2]]);
-            } else if let (Some((sx, sy)), Some(start_pos)) = (
-                state.gizmo_drag_start_screen,
-                state.gizmo_drag_start_pos,
-            ) {
+                state.gizmo_drag_start_pos = state
+                    .node_transforms
+                    .get(&first_id)
+                    .map(|t| [t[0], t[1], t[2]]);
+            } else if let (Some((sx, sy)), Some(start_pos)) =
+                (state.gizmo_drag_start_screen, state.gizmo_drag_start_pos)
+            {
                 let dx = pointer_pos.x - sx;
                 let dy = pointer_pos.y - sy;
                 let sensitivity = state.camera.distance * 0.003;

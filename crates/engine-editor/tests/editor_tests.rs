@@ -221,9 +221,7 @@ fn resource_browser_has_files() {
 fn resource_browser_default_path_is_assets() {
     let browser = ResourceBrowser::new();
     // Path may be "Assets" or "." depending on filesystem availability
-    assert!(
-        browser.current_path == "Assets" || browser.current_path == "."
-    );
+    assert!(browser.current_path == "Assets" || browser.current_path == ".");
 }
 
 #[test]
@@ -400,7 +398,8 @@ fn command_manager_execute_and_undo() {
     assert!(!mgr.can_undo());
     assert!(!mgr.can_redo());
 
-    let cmd = TransformEntityCommand::new(1, [0.0; 9], [1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+    let cmd =
+        TransformEntityCommand::new(1, [0.0; 9], [1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
     mgr.execute(Box::new(cmd), &mut state);
     assert!(mgr.can_undo());
     assert!(!mgr.can_redo());

@@ -56,9 +56,10 @@ impl DynamicPlugin {
         let lib = unsafe { libloading::Library::new(&lib_path) }
             .map_err(|e| PluginLoadError::LibraryLoadFailed(lib_path.clone(), e))?;
 
-        let entry_point: libloading::Symbol<unsafe extern "C" fn() -> *mut dyn Plugin> =
-            unsafe { lib.get(manifest.entry_point.as_bytes()) }
-                .map_err(|e| PluginLoadError::EntryPointNotFound(manifest.entry_point.clone(), e))?;
+        let entry_point: libloading::Symbol<unsafe extern "C" fn() -> *mut dyn Plugin> = unsafe {
+            lib.get(manifest.entry_point.as_bytes())
+        }
+        .map_err(|e| PluginLoadError::EntryPointNotFound(manifest.entry_point.clone(), e))?;
 
         let plugin_ptr = unsafe { entry_point() };
         let plugin = unsafe { Box::from_raw(plugin_ptr) };
@@ -155,7 +156,11 @@ impl PluginLoader {
 
     /// Install a plugin from a directory by copying it to the plugins directory
     /// and registering it in the registry.
-    pub fn install(&mut self, plugin_dir: &Path, plugins_dir: &Path) -> Result<(), PluginLoadError> {
+    pub fn install(
+        &mut self,
+        plugin_dir: &Path,
+        plugins_dir: &Path,
+    ) -> Result<(), PluginLoadError> {
         // Load manifest to get plugin name
         let manifest_path = plugin_dir.join("plugin.json");
         let manifest_str = std::fs::read_to_string(&manifest_path)
@@ -184,8 +189,7 @@ impl PluginLoader {
         if let Some(dir) = self.registry.get_dir(name)
             && dir.exists()
         {
-            std::fs::remove_dir_all(dir)
-                .map_err(|e| PluginLoadError::IoError(dir.clone(), e))?;
+            std::fs::remove_dir_all(dir).map_err(|e| PluginLoadError::IoError(dir.clone(), e))?;
         }
         self.registry.unregister(name);
         self.registry.save(&self.registry_path)?;
@@ -281,7 +285,8 @@ fn lib_suffix() -> &'static str {
 
 fn copy_dir(src: &Path, dst: &Path) -> Result<(), PluginLoadError> {
     std::fs::create_dir_all(dst).map_err(|e| PluginLoadError::IoError(dst.to_path_buf(), e))?;
-    for entry in std::fs::read_dir(src).map_err(|e| PluginLoadError::IoError(src.to_path_buf(), e))?
+    for entry in
+        std::fs::read_dir(src).map_err(|e| PluginLoadError::IoError(src.to_path_buf(), e))?
     {
         let entry = entry.map_err(|e| PluginLoadError::IoError(src.to_path_buf(), e))?;
         let path = entry.path();
@@ -289,8 +294,7 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<(), PluginLoadError> {
         if path.is_dir() {
             copy_dir(&path, &dest)?;
         } else {
-            std::fs::copy(&path, &dest)
-                .map_err(|e| PluginLoadError::IoError(dest.clone(), e))?;
+            std::fs::copy(&path, &dest).map_err(|e| PluginLoadError::IoError(dest.clone(), e))?;
         }
     }
     Ok(())

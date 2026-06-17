@@ -335,15 +335,9 @@ pub enum ImportSettings {
         compression: String,
     },
     /// Mesh import settings.
-    Mesh {
-        generate_lod: bool,
-        scale: f32,
-    },
+    Mesh { generate_lod: bool, scale: f32 },
     /// Audio import settings.
-    Audio {
-        sample_rate: u32,
-        streaming: bool,
-    },
+    Audio { sample_rate: u32, streaming: bool },
     /// Default settings.
     #[default]
     Default,
@@ -384,7 +378,8 @@ impl AssetMeta {
     /// Get the `.meta` file path for a given asset path.
     pub fn meta_path_for(asset_path: &Path) -> PathBuf {
         let mut meta_path = asset_path.to_path_buf();
-        let extension = meta_path.extension()
+        let extension = meta_path
+            .extension()
             .map(|e| format!("{}.meta", e.to_string_lossy()))
             .unwrap_or_else(|| "meta".to_string());
         meta_path.set_extension(extension);

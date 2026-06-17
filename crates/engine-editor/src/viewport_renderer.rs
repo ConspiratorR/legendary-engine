@@ -93,15 +93,14 @@ impl ViewportRenderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let line_camera_bind_group =
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("line3d_camera_bind_group"),
-                layout: &line_pipeline.camera_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: line_camera_buffer.as_entire_binding(),
-                }],
-            });
+        let line_camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("line3d_camera_bind_group"),
+            layout: &line_pipeline.camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: line_camera_buffer.as_entire_binding(),
+            }],
+        });
         Self {
             device,
             queue,
@@ -191,11 +190,7 @@ impl ViewportRenderer {
         let uniform = engine_render::line3d::LineCameraUniform {
             view_proj: view_proj.to_cols_array_2d(),
         };
-        queue.write_buffer(
-            &self.line_camera_buffer,
-            0,
-            bytemuck::bytes_of(&uniform),
-        );
+        queue.write_buffer(&self.line_camera_buffer, 0, bytemuck::bytes_of(&uniform));
     }
 
     /// Render 3D line overlays into the given viewport target.

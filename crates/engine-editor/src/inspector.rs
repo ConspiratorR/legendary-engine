@@ -37,7 +37,9 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     ));
     // Search input field
     let search_id = egui::Id::new("inspector_search");
-    let search_response = gui.ui.interact(search_rect, search_id, egui::Sense::click());
+    let search_response = gui
+        .ui
+        .interact(search_rect, search_id, egui::Sense::click());
     if search_response.clicked() {
         gui.ui.ctx().memory_mut(|m| m.request_focus(search_id));
     }
@@ -108,7 +110,14 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             .find(|n| n.id == id)
             .map(|n| n.name.clone())
             .unwrap_or_else(|| "—".into());
-        draw_transform_section(gui, content_rect, state, id, &name, &state.inspector_search.clone());
+        draw_transform_section(
+            gui,
+            content_rect,
+            state,
+            id,
+            &name,
+            &state.inspector_search.clone(),
+        );
     } else {
         let painter = gui.ui.painter_at(content_rect);
         painter.text(
@@ -176,7 +185,14 @@ fn section_matches(section_name: &str, search: &str) -> bool {
 }
 
 #[allow(invalid_reference_casting)]
-fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id: u64, name: &str, search: &str) {
+fn draw_transform_section(
+    gui: &mut Gui,
+    rect: Rect,
+    state: &mut EditorState,
+    id: u64,
+    name: &str,
+    search: &str,
+) {
     let painter = gui.ui.painter_at(rect);
     let row_h = 26.0;
     let x = rect.left();
@@ -195,8 +211,10 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     y += 24.0;
 
     // ── Transform ──
-    if section_matches("变换 位置 旋转 缩放 transform position rotation scale", &search_lower)
-        && let Some(t) = state.node_transforms.get_mut(&id)
+    if section_matches(
+        "变换 位置 旋转 缩放 transform position rotation scale",
+        &search_lower,
+    ) && let Some(t) = state.node_transforms.get_mut(&id)
     {
         // Snapshot transform before editing for undo
         let old_transform = *t;
@@ -242,7 +260,9 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
             let mut cm = std::mem::take(&mut state.command_manager);
             cm.execute(
                 Box::new(crate::commands::TransformEntityCommand::new(
-                    id, pending_old, new_transform,
+                    id,
+                    pending_old,
+                    new_transform,
                 )),
                 state,
             );
@@ -336,7 +356,10 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
                 Pos2::new(x + 80.0, mer.top()),
                 Vec2::new(w - 80.0, mer.height()),
             );
-            let mut selected_idx = mesh_types.iter().position(|&m| m == mesh.as_str()).unwrap_or(0);
+            let mut selected_idx = mesh_types
+                .iter()
+                .position(|&m| m == mesh.as_str())
+                .unwrap_or(0);
             let combo_id = egui::Id::new("mesh_combo").with(id);
             let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
             egui::ComboBox::from_id_salt(combo_id)
@@ -357,8 +380,10 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
     }
 
     // ── Light ──
-    if section_matches("光照 光 light 方向光 点光源 聚光灯 directional point spot", &search_lower)
-        && let Some(light) = state.node_lights.get_mut(&id)
+    if section_matches(
+        "光照 光 light 方向光 点光源 聚光灯 directional point spot",
+        &search_lower,
+    ) && let Some(light) = state.node_lights.get_mut(&id)
     {
         y = separator(&painter, x, y, w);
 
@@ -719,10 +744,7 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
         let menu_y = add_rect.bottom() + 2.0;
         let item_h = 28.0;
         let menu_h = item_h * component_types.len() as f32;
-        let menu_rect = Rect::from_min_size(
-            Pos2::new(x, menu_y),
-            Vec2::new(w, menu_h),
-        );
+        let menu_rect = Rect::from_min_size(Pos2::new(x, menu_y), Vec2::new(w, menu_h));
         add_painter.add(Shape::rect_filled(
             menu_rect,
             Rounding::same(4.0),
@@ -736,10 +758,7 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
 
         for (j, (label, comp_type)) in component_types.iter().enumerate() {
             let item_y = menu_y + j as f32 * item_h;
-            let item_rect = Rect::from_min_size(
-                Pos2::new(x, item_y),
-                Vec2::new(w, item_h),
-            );
+            let item_rect = Rect::from_min_size(Pos2::new(x, item_y), Vec2::new(w, item_h));
             let item_id = egui::Id::new("comp_item").with(j as u64);
             let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
             if item_resp.hovered() {
@@ -776,15 +795,15 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
             ("脚本", state.node_scripts.contains_key(&id)),
             ("标签", state.node_tags.contains_key(&id)),
         ];
-        let comp_types = ["material", "render", "light", "physics", "sprite", "particle", "audio", "script", "tags"];
+        let comp_types = [
+            "material", "render", "light", "physics", "sprite", "particle", "audio", "script",
+            "tags",
+        ];
 
         let menu_y = y + 36.0;
         let item_h = 28.0;
         let menu_h = item_h * existing_components.len() as f32;
-        let menu_rect = Rect::from_min_size(
-            Pos2::new(x, menu_y),
-            Vec2::new(w, menu_h),
-        );
+        let menu_rect = Rect::from_min_size(Pos2::new(x, menu_y), Vec2::new(w, menu_h));
         add_painter.add(Shape::rect_filled(
             menu_rect,
             Rounding::same(4.0),
@@ -796,12 +815,13 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
             Stroke::new(1.0_f32, Color32::from_rgb(80, 40, 40)),
         );
 
-        for (j, ((label, exists), comp_type)) in existing_components.iter().zip(comp_types.iter()).enumerate() {
+        for (j, ((label, exists), comp_type)) in existing_components
+            .iter()
+            .zip(comp_types.iter())
+            .enumerate()
+        {
             let item_y = menu_y + j as f32 * item_h;
-            let item_rect = Rect::from_min_size(
-                Pos2::new(x, item_y),
-                Vec2::new(w, item_h),
-            );
+            let item_rect = Rect::from_min_size(Pos2::new(x, item_y), Vec2::new(w, item_h));
             let item_id = egui::Id::new("rm_comp_item").with(j as u64);
             let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
             if *exists && item_resp.hovered() {
@@ -825,15 +845,33 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
             );
             if *exists && item_resp.clicked() {
                 match *comp_type {
-                    "material" => { state.node_materials.remove(&id); }
-                    "render" => { state.node_render.remove(&id); }
-                    "light" => { state.node_lights.remove(&id); }
-                    "physics" => { state.node_physics.remove(&id); }
-                    "sprite" => { state.node_sprites.remove(&id); }
-                    "particle" => { state.node_particles.remove(&id); }
-                    "audio" => { state.node_audio.remove(&id); }
-                    "script" => { state.node_scripts.remove(&id); }
-                    "tags" => { state.node_tags.remove(&id); }
+                    "material" => {
+                        state.node_materials.remove(&id);
+                    }
+                    "render" => {
+                        state.node_render.remove(&id);
+                    }
+                    "light" => {
+                        state.node_lights.remove(&id);
+                    }
+                    "physics" => {
+                        state.node_physics.remove(&id);
+                    }
+                    "sprite" => {
+                        state.node_sprites.remove(&id);
+                    }
+                    "particle" => {
+                        state.node_particles.remove(&id);
+                    }
+                    "audio" => {
+                        state.node_audio.remove(&id);
+                    }
+                    "script" => {
+                        state.node_scripts.remove(&id);
+                    }
+                    "tags" => {
+                        state.node_tags.remove(&id);
+                    }
                     _ => {}
                 }
                 state.log_info(&format!("已移除 {} 组件", label));
@@ -847,45 +885,27 @@ fn draw_transform_section(gui: &mut Gui, rect: Rect, state: &mut EditorState, id
 fn add_component_to_node(state: &mut EditorState, node_id: u64, comp_type: &str) {
     match comp_type {
         "material" => {
-            state
-                .node_materials
-                .entry(node_id)
-                .or_default();
+            state.node_materials.entry(node_id).or_default();
             state.log_info(&format!("已添加材质组件到节点 {}", node_id));
         }
         "light" => {
-            state
-                .node_lights
-                .entry(node_id)
-                .or_default();
+            state.node_lights.entry(node_id).or_default();
             state.log_info(&format!("已添加光照组件到节点 {}", node_id));
         }
         "sprite" => {
-            state
-                .node_sprites
-                .entry(node_id)
-                .or_default();
+            state.node_sprites.entry(node_id).or_default();
             state.log_info(&format!("已添加精灵组件到节点 {}", node_id));
         }
         "particle" => {
-            state
-                .node_particles
-                .entry(node_id)
-                .or_default();
+            state.node_particles.entry(node_id).or_default();
             state.log_info(&format!("已添加粒子组件到节点 {}", node_id));
         }
         "audio" => {
-            state
-                .node_audio
-                .entry(node_id)
-                .or_default();
+            state.node_audio.entry(node_id).or_default();
             state.log_info(&format!("已添加音频组件到节点 {}", node_id));
         }
         "script" => {
-            state
-                .node_scripts
-                .entry(node_id)
-                .or_default();
+            state.node_scripts.entry(node_id).or_default();
             state.log_info(&format!("已添加脚本组件到节点 {}", node_id));
         }
         "physics" => {
@@ -896,10 +916,7 @@ fn add_component_to_node(state: &mut EditorState, node_id: u64, comp_type: &str)
             state.log_info(&format!("已添加物理组件到节点 {}", node_id));
         }
         "tags" => {
-            state
-                .node_tags
-                .entry(node_id)
-                .or_default();
+            state.node_tags.entry(node_id).or_default();
             state.log_info(&format!("已添加标签组件到节点 {}", node_id));
         }
         _ => {}

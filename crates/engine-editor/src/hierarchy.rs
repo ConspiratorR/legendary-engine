@@ -97,7 +97,10 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                 state.selected_nodes.clear();
             } else if i == 2 && !state.selected_nodes.is_empty() {
                 // "📦" button: save selection as prefab
-                let name = state.scene_tree.nodes.iter()
+                let name = state
+                    .scene_tree
+                    .nodes
+                    .iter()
                     .find(|n| n.id == state.selected_nodes[0])
                     .map(|n| n.name.clone())
                     .unwrap_or_else(|| "Prefab".into());
@@ -120,10 +123,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         let item_h = 28.0 * h_scale;
         let menu_w = 130.0 * w_scale;
         let menu_h = item_h * CREATE_TYPES.len() as f32;
-        let menu_rect = Rect::from_min_size(
-            Pos2::new(menu_x, menu_y),
-            Vec2::new(menu_w, menu_h),
-        );
+        let menu_rect = Rect::from_min_size(Pos2::new(menu_x, menu_y), Vec2::new(menu_w, menu_h));
         painter.add(Shape::rect_filled(
             menu_rect,
             Rounding::same(4.0 * h_scale),
@@ -137,10 +137,8 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
 
         for (j, (label, icon)) in CREATE_TYPES.iter().enumerate() {
             let item_y = menu_y + j as f32 * item_h;
-            let item_rect = Rect::from_min_size(
-                Pos2::new(menu_x, item_y),
-                Vec2::new(menu_w, item_h),
-            );
+            let item_rect =
+                Rect::from_min_size(Pos2::new(menu_x, item_y), Vec2::new(menu_w, item_h));
             let item_id = egui::Id::new("create_item").with(j as u64);
             let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
             if item_resp.hovered() {
@@ -158,11 +156,11 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
                 Color32::from_gray(200),
             );
             if item_resp.clicked() {
-                let parent = state
-                    .selected_nodes
+                let parent = state.selected_nodes.first().copied().or(state
+                    .scene_tree
+                    .root_ids
                     .first()
-                    .copied()
-                    .or(state.scene_tree.root_ids.first().copied());
+                    .copied());
                 let new_id = state.scene_tree.add_node(label, parent);
                 // Record undo command
                 let mut cm = std::mem::take(&mut state.command_manager);
@@ -393,9 +391,7 @@ fn draw_node(
 
     let id_rect = Rect::from_min_size(Pos2::new(indent, *y), Vec2::new(right - indent, item_h));
     let id = egui::Id::new("tree").with(node_id);
-    let response = gui
-        .ui
-        .interact(id_rect, id, egui::Sense::click_and_drag());
+    let response = gui.ui.interact(id_rect, id, egui::Sense::click_and_drag());
 
     let painter = gui.ui.painter_at(id_rect);
     let is_selected = state.selected_nodes.contains(&node_id);
@@ -517,9 +513,7 @@ fn draw_node(
                     .and_then(|n| n.parent);
                 state.scene_tree.reparent(source_id, Some(node_id));
                 // Expand target to show the moved node
-                if let Some(n) =
-                    state.scene_tree.nodes.iter_mut().find(|n| n.id == node_id)
-                {
+                if let Some(n) = state.scene_tree.nodes.iter_mut().find(|n| n.id == node_id) {
                     n.expanded = true;
                 }
                 // Record command for undo (take command_manager out to avoid borrow conflict)

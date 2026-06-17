@@ -189,7 +189,8 @@ impl MaterialStore {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        let default_texture_view = default_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let default_texture_view =
+            default_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let default_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("material_default_sampler"),

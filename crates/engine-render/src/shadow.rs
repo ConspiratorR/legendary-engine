@@ -444,9 +444,21 @@ mod tests {
         let shadow_u = ndc_x * 0.5 + 0.5;
         let shadow_v = 0.5 - ndc_y * 0.5;
 
-        assert!(shadow_u >= 0.0 && shadow_u <= 1.0, "Shadow U out of range: {}", shadow_u);
-        assert!(shadow_v >= 0.0 && shadow_v <= 1.0, "Shadow V out of range: {}", shadow_v);
-        assert!(ndc_z >= 0.0 && ndc_z <= 1.0, "Shadow depth out of range: {}", ndc_z);
+        assert!(
+            shadow_u >= 0.0 && shadow_u <= 1.0,
+            "Shadow U out of range: {}",
+            shadow_u
+        );
+        assert!(
+            shadow_v >= 0.0 && shadow_v <= 1.0,
+            "Shadow V out of range: {}",
+            shadow_v
+        );
+        assert!(
+            ndc_z >= 0.0 && ndc_z <= 1.0,
+            "Shadow depth out of range: {}",
+            ndc_z
+        );
     }
 
     #[test]

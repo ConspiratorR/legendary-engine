@@ -82,7 +82,14 @@ pub fn frame(
                 if state.show_left_panel {
                     crate::hierarchy::draw(state, &mut gui, hierarchy_rect);
                 }
-                crate::viewport::draw(state, &mut gui, viewport_rect, renderer, vp_renderer, egui_state);
+                crate::viewport::draw(
+                    state,
+                    &mut gui,
+                    viewport_rect,
+                    renderer,
+                    vp_renderer,
+                    egui_state,
+                );
                 if state.show_right_panel {
                     crate::inspector::draw(state, &mut gui, inspector_rect);
                 }
@@ -224,7 +231,7 @@ fn draw_dropdown_menu(
         1 => vec!["撤销", "重做", "剪切", "复制", "粘贴"],           // 编辑
         2 => vec!["切换左侧面板", "切换右侧面板", "重置布局"],       // 视图
         3 => vec!["新建场景", "保存场景", "加载场景"],               // 场景
-        4 => vec!["导入资源", "加载模型", "加载预制件", "刷新资源"],                // 资源
+        4 => vec!["导入资源", "加载模型", "加载预制件", "刷新资源"], // 资源
         5 => vec!["构建项目", "运行项目"],                           // 构建
         6 => vec![
             "控制台",
@@ -333,11 +340,11 @@ fn draw_dropdown_menu(
                 1 => {
                     // 编辑菜单
                     match i {
-                        0 => state.undo(),    // 撤销
-                        1 => state.redo(),    // 重做
-                        2 => state.cut_selected(),   // 剪切
-                        3 => state.copy_selected(),  // 复制
-                        4 => state.paste(),          // 粘贴
+                        0 => state.undo(),          // 撤销
+                        1 => state.redo(),          // 重做
+                        2 => state.cut_selected(),  // 剪切
+                        3 => state.copy_selected(), // 复制
+                        4 => state.paste(),         // 粘贴
                         _ => {}
                     }
                 }
@@ -350,7 +357,8 @@ fn draw_dropdown_menu(
                             // 重置布局
                             state.show_left_panel = true;
                             state.show_right_panel = true;
-                            state.viewport_layout = crate::viewport_renderer::ViewportLayout::default();
+                            state.viewport_layout =
+                                crate::viewport_renderer::ViewportLayout::default();
                             state.status_message = Some("布局已重置".into());
                         }
                         _ => {}
@@ -449,7 +457,8 @@ fn draw_dropdown_menu(
                     match i {
                         0 => {
                             // 关于
-                            state.status_message = Some("RustEngine v0.1.0 — 基于 Rust 的高性能游戏引擎".into());
+                            state.status_message =
+                                Some("RustEngine v0.1.0 — 基于 Rust 的高性能游戏引擎".into());
                         }
                         1 => {
                             // 文档
@@ -607,14 +616,24 @@ fn draw_toolbar(state: &mut EditorState, gui: &mut Gui, rect: Rect, w_scale: f32
 
     // Play/Pause/Stop buttons
     let play_icons = ["▶", "⏸", "⏹"];
-    let play_states = [state.play_state == PlayState::Playing, state.play_state == PlayState::Paused, state.play_state != PlayState::Editing];
+    let play_states = [
+        state.play_state == PlayState::Playing,
+        state.play_state == PlayState::Paused,
+        state.play_state != PlayState::Editing,
+    ];
     for (i, icon) in play_icons.iter().enumerate() {
         let btn_rect = Rect::from_min_size(Pos2::new(x, cy), Vec2::new(btn_size, btn_size));
         if gui.tool_button(btn_rect, icon, play_states[i]) {
             match i {
-                0 => { state.play(); }
-                1 => { state.pause(); }
-                2 => { state.stop(); }
+                0 => {
+                    state.play();
+                }
+                1 => {
+                    state.pause();
+                }
+                2 => {
+                    state.stop();
+                }
                 _ => {}
             }
         }
@@ -813,7 +832,11 @@ fn draw_bottom_panel(
                     Color32::from_rgb(30, 30, 34),
                 ));
                 // Volume bar fill (random-looking for visual feedback)
-                let fill = if i == 0 { 0.75 } else { 0.5 + (i as f32 * 0.08) };
+                let fill = if i == 0 {
+                    0.75
+                } else {
+                    0.5 + (i as f32 * 0.08)
+                };
                 let fill_rect = Rect::from_min_size(
                     bar_rect.left_top(),
                     Vec2::new(bar_w * fill.min(1.0), bar_h),
@@ -922,7 +945,9 @@ fn draw_status_bar(state: &EditorState, gui: &mut Gui, rect: Rect, h_scale: f32,
     );
 
     // Scene file path and modification indicator
-    let scene_path = state.scene_manager.scene_path()
+    let scene_path = state
+        .scene_manager
+        .scene_path()
         .map(|p| p.display().to_string())
         .unwrap_or_else(|| "未保存".into());
     let is_modified = state.scene_manager.is_modified();
@@ -1024,8 +1049,16 @@ fn save_scene(state: &mut EditorState) {
 
     match state.scene_manager.save_scene(&path) {
         Ok(()) => {
-            let entity_count = state.scene_manager.current_scene().map(|s| s.entities.len()).unwrap_or(0);
-            state.log_info(&format!("场景已保存: {} ({} 个实体)", path.display(), entity_count));
+            let entity_count = state
+                .scene_manager
+                .current_scene()
+                .map(|s| s.entities.len())
+                .unwrap_or(0);
+            state.log_info(&format!(
+                "场景已保存: {} ({} 个实体)",
+                path.display(),
+                entity_count
+            ));
             state.status_message = Some(format!("已保存: {}", path.display()));
         }
         Err(e) => {
@@ -1050,18 +1083,16 @@ fn save_scene_as(state: &mut EditorState) {
         .save_file();
 
     match path {
-        Some(path) => {
-            match state.scene_manager.save_scene(&path) {
-                Ok(()) => {
-                    state.status_message = Some(format!("已保存: {}", path.display()));
-                    state.log_info(&format!("场景已保存到: {}", path.display()));
-                }
-                Err(e) => {
-                    state.status_message = Some(format!("保存失败: {}", e));
-                    state.log_error(&format!("保存失败: {}", e));
-                }
+        Some(path) => match state.scene_manager.save_scene(&path) {
+            Ok(()) => {
+                state.status_message = Some(format!("已保存: {}", path.display()));
+                state.log_info(&format!("场景已保存到: {}", path.display()));
             }
-        }
+            Err(e) => {
+                state.status_message = Some(format!("保存失败: {}", e));
+                state.log_error(&format!("保存失败: {}", e));
+            }
+        },
         None => {
             state.status_message = Some("已取消保存".into());
         }
