@@ -540,6 +540,9 @@ pub struct EditorState {
     pub fps: u32,
     pub show_left_panel: bool,
     pub show_right_panel: bool,
+    pub left_panel_width: f32,
+    pub right_panel_width: f32,
+    pub bottom_panel_height: f32,
     pub scene_tree: SceneTree,
     pub camera: EditorCamera,
     /// Camera used for the Game viewport tab (runtime perspective).
@@ -730,6 +733,9 @@ impl EditorState {
             fps: 60,
             show_left_panel: true,
             show_right_panel: true,
+            left_panel_width: 0.0,
+            right_panel_width: 0.0,
+            bottom_panel_height: 0.0,
             scene_tree: SceneTree::new(),
             camera: EditorCamera::new(),
             game_camera: EditorCamera {
