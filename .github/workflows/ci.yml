@@ -72,3 +72,41 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cargo run --example basic -p engine-core --timeout 10s || true
+
+  wasm:
+    name: WASM Build
+    needs: [fmt, clippy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build engine-render for WASM
+        run: cargo build -p engine-render --target wasm32-unknown-unknown
+
+      - name: Build engine-editor lib for WASM
+        run: cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
+
+  integration:
+    name: Integration Tests
+    needs: [build-and-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev
+
+      - name: Run integration tests
+        run: cargo test --test integration_tests
