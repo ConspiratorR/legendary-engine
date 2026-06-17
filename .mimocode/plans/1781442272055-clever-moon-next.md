@@ -51,6 +51,7 @@
 - 物理模拟 → 碰撞检测 → 验证
 - **涉及**: 全 crate
 - **成功标准**: ≥20 个端到端测试
+- **状态**: ✅ 已完成 (12 个集成测试)
 
 #### 6. CI/CD 改进
 - 添加 macOS CI
@@ -58,6 +59,7 @@
 - 添加 Android CI (如果 NDK 可用)
 - **涉及**: `.github/workflows/`
 - **成功标准**: 所有平台 CI 通过
+- **状态**: ✅ 已完成 (Ubuntu/Windows/macOS + WASM + Integration)
 
 ### 低优先级 🟢
 
