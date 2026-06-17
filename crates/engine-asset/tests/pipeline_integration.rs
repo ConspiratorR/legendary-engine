@@ -276,9 +276,9 @@ fn cache_dependency_triggers_reimport() {
     fs::write(&dep_path, "new texture data").unwrap();
     std::thread::sleep(Duration::from_millis(50));
 
-    // check_stale should flag at least the dependency
+    // check_stale should flag the dependent (mesh) since its dependency changed
     let stale = cache.check_stale();
-    assert!(stale.contains(&dep_path));
+    assert!(stale.contains(&mesh_path));
 }
 
 #[test]
