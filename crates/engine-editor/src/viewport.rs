@@ -764,4 +764,61 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
     if scroll.y != 0.0 {
         state.camera.zoom(scroll.y / 120.0);
     }
+
+    // Camera controls help overlay (press H to toggle)
+    if ctx.input(|i| i.key_pressed(egui::Key::H)) {
+        state.show_camera_help = !state.show_camera_help;
+    }
+    if state.show_camera_help {
+        let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
+        let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
+        let help_lines = [
+            "摄像机控制:",
+            "  右键拖拽 - 旋转视角",
+            "  中键拖拽 - 平移视角",
+            "  滚轮 - 缩放",
+            "  F - 聚焦选中物体",
+            "  H - 显示/隐藏此帮助",
+            "",
+            "工具快捷键:",
+            "  Q - 选择",
+            "  W - 移动",
+            "  E - 旋转",
+            "  R - 缩放",
+            "",
+            "操作:",
+            "  Ctrl+Z - 撤销",
+            "  Ctrl+Y - 重做",
+            "  Delete - 删除选中",
+            "  Ctrl+D - 复制选中",
+            "  Ctrl+S - 保存场景",
+        ];
+        let help_w = 200.0 * w_scale;
+        let help_h = help_lines.len() as f32 * 14.0 * h_scale + 16.0 * h_scale;
+        let help_rect = Rect::from_min_size(
+            Pos2::new(
+                canvas_rect.right() - help_w - 10.0 * w_scale,
+                canvas_rect.bottom() - help_h - 10.0 * h_scale,
+            ),
+            Vec2::new(help_w, help_h),
+        );
+        let painter = gui.ui.painter_at(help_rect);
+        painter.add(Shape::rect_filled(
+            help_rect,
+            Rounding::same(6.0 * h_scale),
+            Color32::from_rgba_premultiplied(22, 22, 25, 220),
+        ));
+        for (i, line) in help_lines.iter().enumerate() {
+            painter.text(
+                Pos2::new(
+                    help_rect.left() + 8.0 * w_scale,
+                    help_rect.top() + 8.0 * h_scale + i as f32 * 14.0 * h_scale,
+                ),
+                egui::Align2::LEFT_TOP,
+                *line,
+                FontId::proportional(10.0 * h_scale),
+                Color32::from_gray(180),
+            );
+        }
+    }
 }
