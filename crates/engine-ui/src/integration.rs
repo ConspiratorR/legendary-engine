@@ -162,19 +162,6 @@ impl EguiState {
             }
         }
 
-        let mut viewports = egui::ViewportIdMap::default();
-        viewports.insert(
-            egui::ViewportId::ROOT,
-            egui::ViewportInfo {
-                native_pixels_per_point: Some(self.scale_factor),
-                inner_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::vec2(self.width as f32, self.height as f32),
-                )),
-                ..Default::default()
-            },
-        );
-
         let raw_input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -234,10 +221,15 @@ impl EguiState {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &output_view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.1,
+                                g: 0.1,
+                                b: 0.12,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
