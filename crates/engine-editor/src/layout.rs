@@ -27,6 +27,8 @@ pub fn frame(
     egui::TopBottomPanel::bottom("bottom_panel")
         .resizable(true)
         .default_height(180.0)
+        .min_height(60.0)
+        .max_height(500.0)
         .show(ctx, |ui| {
             draw_bottom_panel(state, ui);
         });
@@ -41,6 +43,8 @@ pub fn frame(
         egui::SidePanel::left("hierarchy")
             .resizable(true)
             .default_width(260.0)
+            .min_width(150.0)
+            .max_width(500.0)
             .show(ctx, |ui| {
                 let rect = ui.max_rect();
                 let mut gui = Gui::new(ui, skin);
@@ -53,6 +57,8 @@ pub fn frame(
         egui::SidePanel::right("inspector")
             .resizable(true)
             .default_width(300.0)
+            .min_width(200.0)
+            .max_width(600.0)
             .show(ctx, |ui| {
                 let rect = ui.max_rect();
                 let mut gui = Gui::new(ui, skin);
