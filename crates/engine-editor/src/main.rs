@@ -18,9 +18,7 @@ struct Modifiers {
 /// Native entry point — uses pollster::block_on for async initialization.
 #[allow(deprecated, unused_assignments)]
 fn main() -> anyhow::Result<()> {
-    // Initialize logging
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    // Initialize tracing for performance profiling
+    // Initialize tracing for logging and performance profiling
     tracing_subscriber::fmt::init();
     info!("Starting RustEngine Editor");
 

@@ -193,7 +193,7 @@ fn main() {
     cam_comp.clear_color = Some(Color::new(0.04, 0.04, 0.08, 1.0));
     world.add_component(cam, cam_comp);
 
-    let total = COLS * ROWS + 16 + 3;
+    let total = COLS * ROWS + 16 + 48 + 3;
     let mut entities = Vec::with_capacity(total);
     for _ in 0..total {
         let e = world.spawn();
