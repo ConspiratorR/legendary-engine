@@ -28,3 +28,10 @@ getrandom = { workspace = true }
 default = ["native"]
 native = []
 web = []
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "render_benchmarks"
+harness = false
