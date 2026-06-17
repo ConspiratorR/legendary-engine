@@ -17,12 +17,24 @@ pub struct Gui<'a> {
     pub ui: &'a egui::Ui,
     /// The skin controlling visual appearance.
     pub skin: &'a GuiSkin,
+    /// Per-frame widget counter for stable unique IDs.
+    widget_counter: u64,
 }
 
 impl<'a> Gui<'a> {
     /// Create a new `Gui` from an egui UI and skin.
     pub fn new(ui: &'a egui::Ui, skin: &'a GuiSkin) -> Gui<'a> {
-        Gui { ui, skin }
+        Gui {
+            ui,
+            skin,
+            widget_counter: 0,
+        }
+    }
+
+    fn next_id(&mut self) -> egui::Id {
+        let id = egui::Id::new("gui_w").with(self.widget_counter);
+        self.widget_counter += 1;
+        id
     }
 
     /// Draw a colored rectangle with an optional border.
@@ -63,9 +75,7 @@ impl<'a> Gui<'a> {
 
     /// Draw a clickable button. Returns `true` when clicked.
     pub fn button(&mut self, rect: Rect, text: &str) -> bool {
-        let id = egui::Id::new("gui_btn")
-            .with(rect.min.x as u64)
-            .with(rect.min.y as u64);
+        let id = self.next_id();
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let block = if response.clicked() {
@@ -84,9 +94,7 @@ impl<'a> Gui<'a> {
 
     /// Draw a repeat button that returns `true` while the pointer is held down.
     pub fn repeat_button(&mut self, rect: Rect, text: &str) -> bool {
-        let id = egui::Id::new("gui_rpt")
-            .with(rect.min.x as u64)
-            .with(rect.min.y as u64);
+        let id = self.next_id();
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let is_down = response.is_pointer_button_down_on();
@@ -170,9 +178,7 @@ impl<'a> Gui<'a> {
 
     /// Draw a toggle (checkbox-style) widget. Clicking toggles the boolean value.
     pub fn toggle(&mut self, rect: Rect, value: &mut bool, label: &str) {
-        let id = egui::Id::new("gui_tog")
-            .with(rect.min.x as u64)
-            .with(rect.min.y as u64);
+        let id = self.next_id();
         let response = self.ui.interact(rect, id, egui::Sense::click());
         let block = &self.skin.toggle.normal;
 
@@ -218,9 +224,7 @@ impl<'a> Gui<'a> {
 
     /// Draw a draggable slider. Updates `value` when dragged.
     pub fn slider(&mut self, rect: Rect, value: &mut f32, min: f32, max: f32) {
-        let id = egui::Id::new("gui_sld")
-            .with(rect.min.x as u64)
-            .with(rect.min.y as u64);
+        let id = self.next_id();
         let response = self.ui.interact(rect, id, egui::Sense::click_and_drag());
 
         let painter = self.ui.painter_at(rect);
@@ -300,9 +304,7 @@ impl<'a> Gui<'a> {
                 egui::vec2(btn_w, rect.height()),
             );
 
-            let id = egui::Id::new("gui_tb")
-                .with(i as u64)
-                .with(rect.min.y as u64);
+            let id = self.next_id();
             let response = self.ui.interact(btn_rect, id, egui::Sense::click());
 
             let block = if *selected == i {
@@ -406,9 +408,7 @@ impl<'a> Gui<'a> {
 
     /// Draw a checkbox with a label. Clicking toggles the checked state.
     pub fn checkbox(&mut self, rect: Rect, label: &str, checked: &mut bool) {
-        let id = egui::Id::new("gui_chk")
-            .with(rect.min.x as u64)
-            .with(rect.min.y as u64);
+        let id = self.next_id();
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let box_size = rect.height() - 4.0;
@@ -562,9 +562,7 @@ impl<'a> Gui<'a> {
 
     /// Draw a tool button that can be active or inactive. Returns `true` when clicked.
     pub fn tool_button(&mut self, rect: Rect, label: &str, active: bool) -> bool {
-        let id = egui::Id::new("gui_tbtn")
-            .with(rect.min.x as u64)
-            .with(rect.min.y as u64);
+        let id = self.next_id();
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let painter = self.ui.painter_at(rect);
@@ -610,9 +608,7 @@ impl<'a> Gui<'a> {
 
     /// Draw a tab item. Returns `true` when clicked.
     pub fn tab(&mut self, rect: Rect, label: &str, active: bool) -> bool {
-        let id = egui::Id::new("gui_tab")
-            .with(rect.min.x as u64)
-            .with(rect.min.y as u64);
+        let id = self.next_id();
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let painter = self.ui.painter_at(rect);
@@ -661,9 +657,7 @@ impl<'a> Gui<'a> {
         selected: bool,
         depth: u32,
     ) -> bool {
-        let id = egui::Id::new("gui_tree")
-            .with(rect.min.x as u64)
-            .with(rect.min.y as u64);
+        let id = self.next_id();
         let response = self.ui.interact(rect, id, egui::Sense::click());
 
         let painter = self.ui.painter_at(rect);

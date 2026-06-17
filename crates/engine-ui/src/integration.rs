@@ -178,7 +178,9 @@ impl EguiState {
     #[allow(deprecated)]
     pub fn end_frame(&mut self) -> (Vec<egui::ClippedPrimitive>, egui::TexturesDelta) {
         let full_output = self.ctx.end_frame();
-        let paint_jobs = self.ctx.tessellate(full_output.shapes, full_output.pixels_per_point);
+        let paint_jobs = self
+            .ctx
+            .tessellate(full_output.shapes, full_output.pixels_per_point);
         (paint_jobs, full_output.textures_delta)
     }
 
@@ -221,15 +223,15 @@ impl EguiState {
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &output_view,
                     resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.1,
-                                g: 0.1,
-                                b: 0.12,
-                                a: 1.0,
-                            }),
-                            store: wgpu::StoreOp::Store,
-                        },
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.1,
+                            b: 0.12,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,

@@ -185,6 +185,18 @@ impl ViewportRenderer {
         self.targets.get(&viewport).map(|t| (t.width, t.height))
     }
 
+    /// Returns the cached egui texture ID for a viewport, if registered.
+    pub fn egui_texture_id(&self, viewport: ViewportType) -> Option<egui::TextureId> {
+        self.targets.get(&viewport).and_then(|t| t.egui_texture_id)
+    }
+
+    /// Cache an egui texture ID for a viewport target.
+    pub fn set_egui_texture_id(&mut self, viewport: ViewportType, id: egui::TextureId) {
+        if let Some(target) = self.targets.get_mut(&viewport) {
+            target.egui_texture_id = Some(id);
+        }
+    }
+
     /// Update the camera uniform for the 3D line overlay pipeline.
     pub fn update_line_camera(&self, queue: &wgpu::Queue, view_proj: &engine_math::Mat4) {
         let uniform = engine_render::line3d::LineCameraUniform {
