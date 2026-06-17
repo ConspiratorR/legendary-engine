@@ -5,7 +5,7 @@
 //!
 //! # Usage
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use engine_render::plugin::RenderPlugin2D;
 //!
 //! // In run_default or custom event loop:

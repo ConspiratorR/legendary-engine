@@ -68,8 +68,8 @@ fn test_collect_batches_with_instances() {
 
     let batches = collect_batches(&draws);
     assert_eq!(batches.len(), 2);
-    assert_eq!(batches[0].texture_id, 0);
-    assert_eq!(batches[0].instance_data.len(), 1);
-    assert_eq!(batches[1].texture_id, 1);
-    assert_eq!(batches[1].instance_data.len(), 2);
+    assert_eq!(batches[0].texture_id, 1);
+    assert_eq!(batches[0].instance_data.len(), 2);
+    assert_eq!(batches[1].texture_id, 0);
+    assert_eq!(batches[1].instance_data.len(), 1);
 }

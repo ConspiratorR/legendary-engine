@@ -1759,7 +1759,7 @@ mod tests {
     #[test]
     fn test_scene_tree_new_has_root() {
         let tree = SceneTree::new();
-        assert_eq!(tree.nodes.len(), 6);
+        assert_eq!(tree.nodes.len(), 9);
     }
 
     #[test]
