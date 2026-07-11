@@ -96,5 +96,16 @@ fn show_error_dialog(msg: &str) {
 }
 
 fn init_env_logger() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    #[cfg(target_os = "android")]
+    {
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_max_level(log::LevelFilter::Debug)
+                .with_tag("RustEngine"),
+        );
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    }
 }
