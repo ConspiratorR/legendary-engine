@@ -21,7 +21,7 @@ pub fn create_test_device_with_features(
     features: wgpu::Features,
     limits: wgpu::Limits,
 ) -> (wgpu::Device, wgpu::Queue) {
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
         ..Default::default()
     });

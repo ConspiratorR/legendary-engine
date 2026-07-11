@@ -581,32 +581,16 @@ impl DeferredPass {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_gpu::create_test_device_with_features;
 
-    /// Helper to create a wgpu device for testing.
-    fn create_test_device() -> wgpu::Device {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .unwrap();
-        let (device, _queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::PUSH_CONSTANTS,
-                required_limits: wgpu::Limits {
-                    max_push_constant_size: 128,
-                    ..wgpu::Limits::default()
-                },
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
+    fn deferred_test_device() -> wgpu::Device {
+        let (device, _queue) = create_test_device_with_features(
+            wgpu::Features::PUSH_CONSTANTS,
+            wgpu::Limits {
+                max_push_constant_size: 128,
+                ..wgpu::Limits::default()
             },
-            None,
-        ))
-        .unwrap();
+        );
         device
     }
 
@@ -632,8 +616,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_gbuffer_creation() {
-        let device = create_test_device();
+        let device = deferred_test_device();
         let width = 1280;
         let height = 720;
         let gbuffer = GBuffer::new(&device, width, height);
@@ -677,8 +662,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_gbuffer_resize() {
-        let device = create_test_device();
+        let device = deferred_test_device();
         let mut gbuffer = GBuffer::new(&device, 1280, 720);
 
         assert_eq!(gbuffer.width, 1280);
@@ -701,8 +687,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_gbuffer_bind_group_layout() {
-        let device = create_test_device();
+        let device = deferred_test_device();
         let layout = GBuffer::bind_group_layout(&device);
 
         // Verify layout works by creating a bind group
@@ -711,8 +698,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_deferred_pass_creation() {
-        let device = create_test_device();
+        let device = deferred_test_device();
         let format = wgpu::TextureFormat::Bgra8UnormSrgb;
 
         let shadow_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
