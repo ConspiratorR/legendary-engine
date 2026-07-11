@@ -16,9 +16,7 @@ struct PluginDemoPlugin;
 
 impl Plugin for PluginDemoPlugin {
     fn build(&self, _app: &mut AppBuilder) {
-        println!("Plugin system plugin initialized.");
-        println!("To use the plugin system, create a cdylib crate with a plugin.");
-        println!("See examples/test-plugin/ for an example plugin.");
+        println!("Static plugin initialized.");
     }
 }
 
@@ -29,16 +27,28 @@ fn main() {
         .init();
 
     println!("=== Plugin System Demo ===");
-    println!("This demo demonstrates the plugin system concept.");
-    println!();
-    println!("The plugin system allows loading dynamic plugins at runtime.");
-    println!("Plugins are shared libraries (.dll/.so/.dylib) with a manifest.");
     println!();
 
     // Create app
     let mut app = AppBuilder::new();
     app.add_plugin(CorePlugins);
     app.add_plugin(PluginDemoPlugin);
+
+    // Load dynamic plugins from a directory (if it exists)
+    let plugins_dir = std::path::Path::new("plugins");
+    if plugins_dir.exists() {
+        println!("Loading dynamic plugins from {:?}...", plugins_dir);
+        match app.load_dynamic_plugins(plugins_dir) {
+            Ok(_) => println!("Dynamic plugins loaded successfully."),
+            Err(e) => println!("No dynamic plugins loaded: {e}"),
+        }
+    } else {
+        println!("No 'plugins' directory found. Skipping dynamic plugin loading.");
+        println!("To load dynamic plugins, create a 'plugins' directory with plugin subdirectories.");
+        println!("Each plugin directory should contain:");
+        println!("  - plugin.json (manifest)");
+        println!("  - <name>plugin.dll (Windows) or lib<name>plugin.so (Linux)");
+    }
 
     // Build and run one frame
     let mut app = app.build();
