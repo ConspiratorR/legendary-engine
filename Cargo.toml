@@ -46,6 +46,7 @@ android-activity = "0.6"
 ndk = "0.9"
 ndk-context = "0.1"
 ndk-sys = "0.6"
+android_logger = "0.14"
 
 [workspace.metadata.cargo-all-features]
 skip_feature_sets = [
