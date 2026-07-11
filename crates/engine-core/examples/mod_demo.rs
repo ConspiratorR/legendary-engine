@@ -1,6 +1,6 @@
 //! Mod System Demo
 //!
-//! Demonstrates how to use the mod system to load and run WASM mods.
+//! Demonstrates how to load and run WASM mods.
 //!
 //! Usage:
 //! ```
@@ -8,41 +8,39 @@
 //! ```
 
 use engine_core::app::AppBuilder;
-use engine_core::plugin::Plugin;
 use engine_core::plugins::CorePlugins;
-
-/// Plugin that demonstrates the mod system concept.
-struct ModDemoPlugin;
-
-impl Plugin for ModDemoPlugin {
-    fn build(&self, _app: &mut AppBuilder) {
-        println!("Mod system plugin initialized.");
-        println!("To use the mod system, add engine-script as a dependency.");
-        println!("See examples/test-mod/ for an example mod.");
-    }
-}
+use engine_script::prelude::{ModPlugin, mod_update_system};
 
 fn main() {
-    // Initialize logging
     env_logger::Builder::new()
         .filter_level(log::LevelFilter::Info)
         .init();
 
     println!("=== Mod System Demo ===");
-    println!("This demo demonstrates the mod system concept.");
-    println!();
-    println!("The mod system allows loading WASM mods at runtime.");
-    println!("Mods can register new components, systems, and assets.");
     println!();
 
-    // Create app
     let mut app = AppBuilder::new();
     app.add_plugin(CorePlugins);
-    app.add_plugin(ModDemoPlugin);
 
-    // Build and run one frame
+    // Load WASM mods from the mods directory
+    let mods_dir = std::path::Path::new("mods");
+    if mods_dir.exists() {
+        println!("Loading WASM mods from {:?}...", mods_dir);
+        app.add_plugin(ModPlugin::new(mods_dir));
+        app.add_system(mod_update_system);
+    } else {
+        println!("No 'mods' directory found. Skipping mod loading.");
+        println!("To load WASM mods, create a 'mods' directory with mod subdirectories.");
+        println!("Each mod directory should contain:");
+        println!("  - mod.json (manifest)");
+        println!("  - <entry_point>.wasm (compiled WASM module)");
+    }
+
+    // Build and run a few frames
     let mut app = app.build();
-    app.run();
+    for _ in 0..3 {
+        app.run();
+    }
 
     println!();
     println!("Demo complete!");

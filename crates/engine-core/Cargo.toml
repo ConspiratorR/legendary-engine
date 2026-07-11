@@ -31,6 +31,7 @@ android_logger = { workspace = true }
 [dev-dependencies]
 engine-framework = { path = "../engine-framework" }
 engine-physics = { path = "../engine-physics" }
+engine-script = { path = "../engine-script" }
 tempfile = "3"
 
 [[example]]
