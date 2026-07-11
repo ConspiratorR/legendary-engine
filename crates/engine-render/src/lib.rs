@@ -123,3 +123,6 @@ pub mod texture_bridge;
 pub mod texture_store;
 pub mod tilemap;
 pub mod view;
+
+#[cfg(test)]
+pub mod test_gpu;
