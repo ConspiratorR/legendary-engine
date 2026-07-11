@@ -33,5 +33,6 @@ pub mod error;
 pub mod input_manager;
 pub mod keyboard;
 pub mod mouse;
+pub mod touch;
 
 pub use error::InputError;

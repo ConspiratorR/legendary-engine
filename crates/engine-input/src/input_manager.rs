@@ -1,16 +1,18 @@
 use crate::keyboard::{KeyCode, KeyState};
 use crate::mouse::MouseState;
+use crate::touch::{TouchPoint, TouchState};
 use std::collections::HashMap;
 
 /// Central input state tracker.
 ///
-/// Maintains the current state of every key and the mouse. Call
-/// [`press`](Self::press) / [`release`](Self::release) from your event
+/// Maintains the current state of every key, the mouse, and touch input.
+/// Call [`press`](Self::press) / [`release`](Self::release) from your event
 /// loop, and [`update_frame`](Self::update_frame) once per tick to
 /// advance the just-pressed/just-released transitions.
 pub struct InputManager {
     keys: HashMap<KeyCode, KeyState>,
     mouse: MouseState,
+    touch: TouchState,
 }
 
 impl Default for InputManager {
@@ -25,6 +27,7 @@ impl InputManager {
         Self {
             keys: HashMap::new(),
             mouse: MouseState::default(),
+            touch: TouchState::default(),
         }
     }
 
@@ -88,6 +91,21 @@ impl InputManager {
     /// Get an exclusive reference to the mouse state.
     pub fn mouse_mut(&mut self) -> &mut MouseState {
         &mut self.mouse
+    }
+
+    /// Get a shared reference to the touch state.
+    pub fn touch(&self) -> &TouchState {
+        &self.touch
+    }
+
+    /// Get an exclusive reference to the touch state.
+    pub fn touch_mut(&mut self) -> &mut TouchState {
+        &mut self.touch
+    }
+
+    /// Add a touch point to the current frame's touch state.
+    pub fn add_touch(&mut self, point: TouchPoint) {
+        self.touch.points.push(point);
     }
 }
 
