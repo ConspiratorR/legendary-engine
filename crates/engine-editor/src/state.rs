@@ -618,8 +618,8 @@ pub struct EditorState {
     pub gizmo_drag_axis: Option<u8>,
     /// Screen position where gizmo drag started.
     pub gizmo_drag_start_screen: Option<(f32, f32)>,
-    /// Object position when gizmo drag started.
-    pub gizmo_drag_start_pos: Option<[f32; 3]>,
+    /// Full transform [px,py,pz,rx,ry,rz,sx,sy,sz] when gizmo drag started.
+    pub gizmo_drag_start_pos: Option<[f32; 9]>,
     /// Whether the object creation menu is open.
     pub show_create_menu: bool,
 }
@@ -1609,6 +1609,30 @@ impl EditorState {
             scene_aabb_min: aabb_min,
             scene_aabb_max: aabb_max,
         }
+    }
+
+    /// Reset editor state to a blank new scene.
+    pub fn new_scene(&mut self) {
+        self.scene_tree = SceneTree::new();
+        self.selected_nodes.clear();
+        self.node_transforms.clear();
+        self.node_render.clear();
+        self.node_physics.clear();
+        self.node_lights.clear();
+        self.node_materials.clear();
+        self.node_sprites.clear();
+        self.node_particles.clear();
+        self.node_audio.clear();
+        self.node_scripts.clear();
+        self.node_tags.clear();
+        self.loaded_models.clear();
+        self.prefabs.clear();
+        self.command_manager = CommandManager::default();
+        self.clipboard.clear();
+        self.scene_manager.create_scene("Untitled".into());
+        self.scene_manager.print_scene();
+        self.log_info("创建了新场景");
+        self.status_message = Some("新场景已创建".into());
     }
 }
 

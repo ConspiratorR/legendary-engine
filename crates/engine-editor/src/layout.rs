@@ -1,9 +1,36 @@
 //! Top-level editor layout — composes all panels into the main window with
 //! menu bar, toolbar, and dockable panel regions.
 
-use crate::state::{EditorState, PlayState, ToolType};
+use crate::state::{EditorState, LightData, MaterialData, PlayState, ToolType};
 use egui::{Color32, Rounding};
 use engine_ui::{Gui, GuiSkin};
+use std::path::PathBuf;
+
+#[cfg(feature = "native-dialogs")]
+fn pick_file_to_open() -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .add_filter("Scene", &["scene.json"])
+        .add_filter("All", &["*"])
+        .pick_file()
+}
+
+#[cfg(feature = "native-dialogs")]
+fn pick_file_to_save(default_name: &str) -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .add_filter("Scene", &["scene.json"])
+        .set_file_name(default_name)
+        .save_file()
+}
+
+#[cfg(not(feature = "native-dialogs"))]
+fn pick_file_to_open() -> Option<PathBuf> {
+    None
+}
+
+#[cfg(not(feature = "native-dialogs"))]
+fn pick_file_to_save(_: &str) -> Option<PathBuf> {
+    None
+}
 
 pub fn frame(
     state: &mut EditorState,
@@ -106,17 +133,151 @@ fn draw_menu_bar(state: &mut EditorState, ui: &mut egui::Ui) {
                                 for (j, item) in items.iter().enumerate() {
                                     if ui.button(*item).clicked() {
                                         match (i, j) {
-                                            (0, 0) => state
-                                                .scene_manager
-                                                .create_scene("新场景".to_string()),
+                                            (0, 0) => state.new_scene(),
+                                            (0, 1) => {
+                                                if let Some(path) = pick_file_to_open()
+                                                    && state.scene_manager.load_scene(&path).is_ok()
+                                                {
+                                                    let scene = state
+                                                        .scene_manager
+                                                        .current_scene()
+                                                        .cloned();
+                                                    if let Some(ref scene) = scene {
+                                                        state.load_from_scene(scene);
+                                                    }
+                                                }
+                                            }
                                             (0, 2) => {
-                                                let _ = state.scene_manager.save_current_scene();
+                                                if state.scene_manager.scene_path().is_some() {
+                                                    let scene = state.to_scene("Scene");
+                                                    state.scene_manager.set_current_scene(scene);
+                                                    let _ =
+                                                        state.scene_manager.save_current_scene();
+                                                } else if let Some(path) =
+                                                    pick_file_to_save("scene.scene.json")
+                                                {
+                                                    let scene = state.to_scene("Scene");
+                                                    state.scene_manager.set_current_scene(scene);
+                                                    let _ = state.scene_manager.save_scene(&path);
+                                                }
+                                            }
+                                            (0, 3) => {
+                                                if let Some(path) =
+                                                    pick_file_to_save("scene.scene.json")
+                                                {
+                                                    let scene = state.to_scene("Scene");
+                                                    state.scene_manager.set_current_scene(scene);
+                                                    let _ = state.scene_manager.save_scene(&path);
+                                                }
+                                            }
+                                            (0, 4) => {
+                                                state.status_message =
+                                                    Some("使用窗口关闭按钮退出".into())
+                                            }
+                                            (1, 0) => state.undo(),
+                                            (1, 1) => state.redo(),
+                                            (1, 2) => state.cut_selected(),
+                                            (1, 3) => state.copy_selected(),
+                                            (1, 4) => state.paste(),
+                                            (2, 0) => {
+                                                let parent = state.selected_nodes.first().copied();
+                                                let id =
+                                                    state.scene_tree.add_node("新节点", parent);
+                                                state.selected_nodes = vec![id];
+                                            }
+                                            (2, 1) => {
+                                                let parent = state.selected_nodes.first().copied();
+                                                let id =
+                                                    state.scene_tree.add_node("立方体", parent);
+                                                state.node_transforms.insert(
+                                                    id,
+                                                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                                                );
+                                                state.node_render.insert(
+                                                    id,
+                                                    ("Default".into(), "Cube".into(), true),
+                                                );
+                                                state
+                                                    .node_materials
+                                                    .insert(id, MaterialData::default());
+                                                state.selected_nodes = vec![id];
+                                            }
+                                            (2, 2) => {
+                                                let parent = state.selected_nodes.first().copied();
+                                                let id = state.scene_tree.add_node("球体", parent);
+                                                state.node_transforms.insert(
+                                                    id,
+                                                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                                                );
+                                                state.node_render.insert(
+                                                    id,
+                                                    ("Default".into(), "Sphere".into(), true),
+                                                );
+                                                state
+                                                    .node_materials
+                                                    .insert(id, MaterialData::default());
+                                                state.selected_nodes = vec![id];
+                                            }
+                                            (2, 3) => {
+                                                let parent = state.selected_nodes.first().copied();
+                                                let id = state.scene_tree.add_node("光源", parent);
+                                                state.node_lights.insert(id, LightData::default());
+                                                state.selected_nodes = vec![id];
                                             }
                                             (3, 0) => {
                                                 state.show_left_panel = !state.show_left_panel
                                             }
                                             (3, 1) => {
                                                 state.show_right_panel = !state.show_right_panel
+                                            }
+                                            (3, 2) => state.active_bottom_tab = 1,
+                                            (4, 0) => {
+                                                if cfg!(feature = "native-dialogs") {
+                                                    #[cfg(feature = "native-dialogs")]
+                                                    if let Some(path) =
+                                                        rfd::FileDialog::new().pick_file()
+                                                    {
+                                                        let assets_dir =
+                                                            std::path::Path::new("assets");
+                                                        std::fs::create_dir_all(assets_dir).ok();
+                                                        if let Some(name) = path.file_name() {
+                                                            let dest = assets_dir.join(name);
+                                                            std::fs::copy(&path, &dest).ok();
+                                                            state.log_info(&format!(
+                                                                "已导入: {}",
+                                                                path.display()
+                                                            ));
+                                                            state.resource_browser.refresh();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            (4, 1) => {
+                                                if cfg!(feature = "native-dialogs") {
+                                                    #[cfg(feature = "native-dialogs")]
+                                                    if let Some(path) = rfd::FileDialog::new()
+                                                        .add_filter("Model", &["gltf", "glb"])
+                                                        .pick_file()
+                                                    {
+                                                        state.load_model(&path);
+                                                    }
+                                                }
+                                            }
+                                            (4, 2) => {
+                                                if cfg!(feature = "native-dialogs") {
+                                                    #[cfg(feature = "native-dialogs")]
+                                                    if let Some(path) = rfd::FileDialog::new()
+                                                        .add_filter("Prefab", &["prefab.json"])
+                                                        .pick_file()
+                                                    {
+                                                        let _ = state.load_prefab(&path);
+                                                    }
+                                                }
+                                            }
+                                            (4, 3) => state.resource_browser.refresh(),
+                                            (5, 0) => {
+                                                state.status_message =
+                                                    Some("RustEngine Editor v0.3".into())
                                             }
                                             _ => {}
                                         }

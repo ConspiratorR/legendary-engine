@@ -174,6 +174,32 @@ fn main() -> anyhow::Result<()> {
                                     e,
                                 );
 
+                                // Process hot reload (every frame)
+                                if let Some(hr) = &hot_reload_opt {
+                                    let mut hr_guard = hr.lock().unwrap();
+                                    hr_guard.process_pending(|path, ext| {
+                                        editor_state.log_info(&format!("检测到变化: {}", path.display()));
+                                        match ext {
+                                            "png" | "jpg" | "jpeg" | "bmp" | "tga" => {
+                                                editor_state.log_info(&format!("纹理需要重载: {}", path.display()));
+                                            }
+                                            "gltf" | "glb" => {
+                                                editor_state.load_model(path);
+                                                editor_state.log_info(&format!("模型已重载: {}", path.display()));
+                                            }
+                                            "lua" => {
+                                                editor_state.log_info(&format!("脚本已变更: {}", path.display()));
+                                            }
+                                            _ => {
+                                                editor_state.log_info(&format!("文件已变更: {}", path.display()));
+                                            }
+                                        }
+                                    });
+                                    if let Some(msg) = hr_guard.latest_reload_log() {
+                                        editor_state.status_message = Some(msg);
+                                    }
+                                }
+
                                 // Manage runtime world on play state transitions
                                 use engine_editor::state::PlayState;
                                 match (prev_play_state, editor_state.play_state) {

@@ -14,7 +14,7 @@ use egui::{Color32, Painter, Pos2, Rect, Rounding, Shape, Stroke};
 /// skinned versions of common widgets (label, button, slider, etc.).
 pub struct Gui<'a> {
     /// The underlying egui UI context.
-    pub ui: &'a egui::Ui,
+    pub ui: &'a mut egui::Ui,
     /// The skin controlling visual appearance.
     pub skin: &'a GuiSkin,
     /// Per-frame widget counter for stable unique IDs.
@@ -23,7 +23,7 @@ pub struct Gui<'a> {
 
 impl<'a> Gui<'a> {
     /// Create a new `Gui` from an egui UI and skin.
-    pub fn new(ui: &'a egui::Ui, skin: &'a GuiSkin) -> Gui<'a> {
+    pub fn new(ui: &'a mut egui::Ui, skin: &'a GuiSkin) -> Gui<'a> {
         Gui {
             ui,
             skin,
@@ -699,7 +699,7 @@ impl<'a> Gui<'a> {
         response.clicked()
     }
 
-    /// Draw a vec3 input with colored axis labels (X=red, Y=green, Z=blue).
+    /// Draw an editable vec3 input with click-to-edit numeric fields.
     pub fn vec3_input(&mut self, rect: Rect, label: &str, x: &mut f32, y: &mut f32, z: &mut f32) {
         let painter = self.ui.painter_at(rect);
 
@@ -713,13 +713,18 @@ impl<'a> Gui<'a> {
         );
 
         let input_w = (rect.width() - 80.0) / 3.0;
-        let inputs = [
-            ("X", x, Color32::from_rgb(255, 107, 107)),
-            ("Y", y, Color32::from_rgb(46, 213, 115)),
-            ("Z", z, Color32::from_rgb(77, 171, 247)),
+        let axis_labels = ["X", "Y", "Z"];
+        let axis_colors = [
+            Color32::from_rgb(255, 107, 107),
+            Color32::from_rgb(46, 213, 115),
+            Color32::from_rgb(77, 171, 247),
         ];
+        let vals = [x, y, z];
 
-        for (j, (axis_label, val, axis_color)) in inputs.iter().enumerate() {
+        for j in 0..3 {
+            let val: &mut f32 = vals[j];
+            let axis_label = axis_labels[j];
+            let axis_color = axis_colors[j];
             let field_x = rect.left() + 80.0 + j as f32 * input_w;
             let field_rect = Rect::from_min_size(
                 egui::pos2(field_x, rect.top()),
@@ -730,30 +735,101 @@ impl<'a> Gui<'a> {
             painter.text(
                 egui::pos2(field_rect.left() + 4.0, field_rect.center().y),
                 egui::Align2::LEFT_CENTER,
-                *axis_label,
+                axis_label,
                 egui::FontId::proportional(10.0),
-                *axis_color,
+                axis_color,
             );
 
-            // Value background
+            // Clickable value area
             let val_rect = Rect::from_min_size(
                 egui::pos2(field_rect.left() + 14.0, field_rect.top()),
                 egui::vec2(field_rect.width() - 14.0, field_rect.height()),
             );
+            let widget_id = egui::Id::new("vec3_field").with(label).with(j);
+            let response = self.ui.interact(val_rect, widget_id, egui::Sense::click());
+
             painter.add(Shape::rect_filled(
                 val_rect,
                 Rounding::same(4.0),
-                Color32::from_rgb(30, 30, 34),
+                if response.has_focus() {
+                    Color32::from_rgb(50, 50, 60)
+                } else {
+                    Color32::from_rgb(30, 30, 34)
+                },
             ));
 
-            // Value text
-            painter.text(
-                val_rect.center(),
-                egui::Align2::CENTER_CENTER,
-                format!("{:.1}", **val),
-                egui::FontId::proportional(11.0),
-                Color32::from_rgb(232, 232, 236),
-            );
+            if response.clicked() {
+                self.ui.ctx().memory_mut(|mem| mem.request_focus(widget_id));
+                // Initialize edit buffer with current formatted value
+                let buf = format!("{:.1}", *val);
+                self.ui.ctx().memory_mut(|mem| {
+                    mem.data
+                        .insert_temp(widget_id, buf);
+                });
+            }
+
+            if response.has_focus() {
+                let mut buf: String = self
+                    .ui
+                    .ctx()
+                    .memory(|mem| mem.data.get_temp(widget_id).unwrap_or_default());
+                let mut modified = false;
+
+                let events: Vec<egui::Event> =
+                    self.ui.ctx().input(|i| i.events.clone());
+                for event in &events {
+                    match event {
+                        egui::Event::Text(c)
+                            if c.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+') =>
+                        {
+                            buf.push_str(c);
+                            modified = true;
+                        }
+                        egui::Event::Key { key: egui::Key::Backspace, .. } => {
+                            buf.pop();
+                            modified = true;
+                        }
+                        egui::Event::Key {
+                            key: egui::Key::Enter | egui::Key::Escape,
+                            ..
+                        } => {
+                            if let Ok(v) = buf.trim().parse::<f32>() {
+                                *val = v;
+                            }
+                            self.ui.ctx().memory_mut(|mem| {
+                                mem.surrender_focus(widget_id);
+                                mem.data.remove::<String>(widget_id);
+                            });
+                        }
+                        _ => {}
+                    }
+                }
+
+                if modified {
+                    self.ui.ctx().memory_mut(|mem| {
+                        mem.data.insert_temp(widget_id, buf.clone());
+                    });
+                    self.ui.ctx().request_repaint();
+                }
+
+                // Show editing text
+                painter.text(
+                    val_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    &buf,
+                    egui::FontId::proportional(11.0),
+                    Color32::from_rgb(255, 255, 255),
+                );
+            } else {
+                // Show formatted value
+                painter.text(
+                    val_rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    format!("{:.1}", *val),
+                    egui::FontId::proportional(11.0),
+                    Color32::from_rgb(232, 232, 236),
+                );
+            }
         }
     }
 

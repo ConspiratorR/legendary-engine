@@ -94,6 +94,33 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
         search_color,
     );
 
+    // Clear search button
+    if !state.inspector_search.is_empty() {
+        let clear_rect = Rect::from_min_size(
+            Pos2::new(search_rect.right() - 32.0 * w_scale, search_rect.top()),
+            Vec2::new(28.0 * w_scale, search_rect.height()),
+        );
+        let clear_id = egui::Id::new("inspector_clear_search");
+        let clear_response = gui.ui.interact(clear_rect, clear_id, egui::Sense::click());
+        if clear_response.hovered() {
+            painter.add(Shape::rect_filled(
+                clear_rect,
+                Rounding::same(4.0 * h_scale),
+                Color32::from_rgb(40, 40, 44),
+            ));
+        }
+        painter.text(
+            clear_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "✕",
+            FontId::proportional(12.0 * h_scale),
+            Color32::from_gray(90),
+        );
+        if clear_response.clicked() {
+            state.inspector_search.clear();
+        }
+    }
+
     let content_top = rect.top() + (8.0 * h_scale + search_h + 8.0 * h_scale);
     let content_rect = Rect::from_min_size(
         Pos2::new(rect.left() + 12.0 * w_scale, content_top),
@@ -110,7 +137,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             .find(|n| n.id == id)
             .map(|n| n.name.clone())
             .unwrap_or_else(|| "—".into());
-        draw_transform_section(
+        let y = draw_transform_section(
             gui,
             content_rect,
             state,
@@ -118,6 +145,7 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
             &name,
             &state.inspector_search.clone(),
         );
+        draw_buttons(gui, state, id, content_rect.left(), y, content_rect.width());
     } else {
         let painter = gui.ui.painter_at(content_rect);
         painter.text(
@@ -184,7 +212,6 @@ fn section_matches(section_name: &str, search: &str) -> bool {
     search.is_empty() || section_name.to_lowercase().contains(search)
 }
 
-#[allow(invalid_reference_casting)]
 fn draw_transform_section(
     gui: &mut Gui,
     rect: Rect,
@@ -192,7 +219,7 @@ fn draw_transform_section(
     id: u64,
     name: &str,
     search: &str,
-) {
+) -> f32 {
     let painter = gui.ui.painter_at(rect);
     let row_h = 26.0;
     let x = rect.left();
@@ -361,11 +388,10 @@ fn draw_transform_section(
                 .position(|&m| m == mesh.as_str())
                 .unwrap_or(0);
             let combo_id = egui::Id::new("mesh_combo").with(id);
-            let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
             egui::ComboBox::from_id_salt(combo_id)
                 .width(combo_rect.width())
                 .selected_text(mesh_types[selected_idx])
-                .show_ui(ui_mut, |ui| {
+                .show_ui(gui.ui, |ui| {
                     for (i, mt) in mesh_types.iter().enumerate() {
                         ui.selectable_value(&mut selected_idx, i, *mt);
                     }
@@ -482,13 +508,13 @@ fn draw_transform_section(
             Vec2::new(w - 80.0, tr.height()),
         );
         // SAFETY: inspector has exclusive access to the UI
-        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
         let mut tex_edit = sprite.texture.clone();
-        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-            egui::TextEdit::singleline(&mut tex_edit)
-                .desired_width(input_rect.width() - 8.0)
-                .show(ui);
-        });
+        gui.ui
+            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+                egui::TextEdit::singleline(&mut tex_edit)
+                    .desired_width(input_rect.width() - 8.0)
+                    .show(ui);
+            });
         sprite.texture = tex_edit;
         y += row_h + 6.0;
 
@@ -536,13 +562,13 @@ fn draw_transform_section(
             Pos2::new(x + 80.0, er.top()),
             Vec2::new(w - 80.0, er.height()),
         );
-        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
         let mut emitter_edit = particle.emitter_type.clone();
-        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-            egui::TextEdit::singleline(&mut emitter_edit)
-                .desired_width(input_rect.width() - 8.0)
-                .show(ui);
-        });
+        gui.ui
+            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+                egui::TextEdit::singleline(&mut emitter_edit)
+                    .desired_width(input_rect.width() - 8.0)
+                    .show(ui);
+            });
         particle.emitter_type = emitter_edit;
         y += row_h + 6.0;
 
@@ -586,13 +612,13 @@ fn draw_transform_section(
             Pos2::new(x + 80.0, sr.top()),
             Vec2::new(w - 80.0, sr.height()),
         );
-        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
         let mut source_edit = audio.source.clone();
-        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-            egui::TextEdit::singleline(&mut source_edit)
-                .desired_width(input_rect.width() - 8.0)
-                .show(ui);
-        });
+        gui.ui
+            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+                egui::TextEdit::singleline(&mut source_edit)
+                    .desired_width(input_rect.width() - 8.0)
+                    .show(ui);
+            });
         audio.source = source_edit;
         y += row_h + 6.0;
 
@@ -628,13 +654,13 @@ fn draw_transform_section(
             Pos2::new(x + 80.0, sr.top()),
             Vec2::new(w - 80.0, sr.height()),
         );
-        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
         let mut path_edit = script.script_path.clone();
-        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-            egui::TextEdit::singleline(&mut path_edit)
-                .desired_width(input_rect.width() - 8.0)
-                .show(ui);
-        });
+        gui.ui
+            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+                egui::TextEdit::singleline(&mut path_edit)
+                    .desired_width(input_rect.width() - 8.0)
+                    .show(ui);
+            });
         script.script_path = path_edit;
         y += row_h + 6.0;
 
@@ -662,14 +688,14 @@ fn draw_transform_section(
             Pos2::new(x + 80.0, tr.top()),
             Vec2::new(w - 80.0, tr.height()),
         );
-        let ui_mut = unsafe { &mut *(gui.ui as *const egui::Ui as *mut egui::Ui) };
         let tag_str = tags.join(", ");
         let mut tag_edit = tag_str.clone();
-        ui_mut.allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-            egui::TextEdit::singleline(&mut tag_edit)
-                .desired_width(input_rect.width() - 8.0)
-                .show(ui);
-        });
+        gui.ui
+            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
+                egui::TextEdit::singleline(&mut tag_edit)
+                    .desired_width(input_rect.width() - 8.0)
+                    .show(ui);
+            });
         if tag_edit != tag_str {
             *tags = tag_edit
                 .split(',')
@@ -679,7 +705,17 @@ fn draw_transform_section(
         }
     }
 
-    // ── Add/Remove Component Buttons ──
+    y
+}
+
+fn draw_buttons(
+    gui: &mut Gui,
+    state: &mut EditorState,
+    id: u64,
+    x: f32,
+    mut y: f32,
+    w: f32,
+) {
     y += 12.0;
     let half_w = (w - 8.0) / 2.0;
 

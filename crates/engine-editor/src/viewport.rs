@@ -3,7 +3,21 @@
 
 use crate::state::EditorState;
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
+use engine_math::{Mat4, Vec3};
 use engine_ui::Gui;
+
+fn ortho_projection(aspect: f32) -> Mat4 {
+    let size = 10.0;
+    Mat4::orthographic_rh(-size * aspect, size * aspect, -size, size, -1000.0, 1000.0)
+}
+
+fn view_matrix_for(target: [f32; 3], up: [f32; 3], position: [f32; 3]) -> Mat4 {
+    Mat4::look_at_rh(
+        Vec3::from_array(position),
+        Vec3::from_array(target),
+        Vec3::from_array(up),
+    )
+}
 
 fn draw_viewport_header(
     state: &mut EditorState,
@@ -148,12 +162,14 @@ pub fn draw(
     );
 
     use crate::viewport_renderer::ViewportLayout;
+    use crate::viewport_renderer::ViewportType;
     match state.viewport_layout {
-        ViewportLayout::Single(_) => {
+        ViewportLayout::Single(vt) => {
             draw_single_viewport(
                 state,
                 gui,
                 canvas_rect,
+                vt,
                 h_scale,
                 w_scale,
                 renderer,
@@ -161,7 +177,7 @@ pub fn draw(
                 egui_state,
             );
         }
-        ViewportLayout::Horizontal(_, _) => {
+        ViewportLayout::Horizontal(a, b) => {
             let half_w = canvas_rect.width() / 2.0;
             let left_rect = Rect::from_min_size(
                 canvas_rect.left_top(),
@@ -175,6 +191,7 @@ pub fn draw(
                 state,
                 gui,
                 left_rect,
+                a,
                 h_scale,
                 w_scale,
                 renderer,
@@ -185,6 +202,7 @@ pub fn draw(
                 state,
                 gui,
                 right_rect,
+                b,
                 h_scale,
                 w_scale,
                 renderer,
@@ -192,7 +210,7 @@ pub fn draw(
                 egui_state,
             );
         }
-        ViewportLayout::Vertical(_, _) => {
+        ViewportLayout::Vertical(a, b) => {
             let half_h = canvas_rect.height() / 2.0;
             let top_rect = Rect::from_min_size(
                 canvas_rect.left_top(),
@@ -206,6 +224,7 @@ pub fn draw(
                 state,
                 gui,
                 top_rect,
+                a,
                 h_scale,
                 w_scale,
                 renderer,
@@ -216,6 +235,7 @@ pub fn draw(
                 state,
                 gui,
                 bottom_rect,
+                b,
                 h_scale,
                 w_scale,
                 renderer,
@@ -241,11 +261,18 @@ pub fn draw(
                     Vec2::new(half_w, half_h),
                 ),
             ];
-            for rect in &rects {
+            let types = [
+                ViewportType::Perspective,
+                ViewportType::Top,
+                ViewportType::Front,
+                ViewportType::Right,
+            ];
+            for (i, rect) in rects.iter().enumerate() {
                 draw_single_viewport(
                     state,
                     gui,
                     *rect,
+                    types[i],
                     h_scale,
                     w_scale,
                     renderer,
@@ -262,6 +289,7 @@ fn draw_single_viewport(
     state: &mut EditorState,
     gui: &mut Gui,
     canvas_rect: Rect,
+    viewport_type: crate::viewport_renderer::ViewportType,
     h_scale: f32,
     w_scale: f32,
     renderer: &mut engine_render::renderer::Renderer,
@@ -275,15 +303,6 @@ fn draw_single_viewport(
     let vp_h = canvas_rect.height().max(1.0) as u32;
     let aspect = vp_w as f32 / vp_h.max(1) as f32;
 
-    let viewport_type = match state.viewport_layout {
-        crate::viewport_renderer::ViewportLayout::Single(vt) => vt,
-        crate::viewport_renderer::ViewportLayout::Horizontal(a, _) => a,
-        crate::viewport_renderer::ViewportLayout::Vertical(a, _) => a,
-        crate::viewport_renderer::ViewportLayout::Quad => {
-            crate::viewport_renderer::ViewportType::Perspective
-        }
-    };
-
     vp_renderer.ensure_target(viewport_type, vp_w, vp_h);
     if let Some(target_view) = vp_renderer.target_view(viewport_type) {
         // Select camera based on active viewport tab
@@ -294,18 +313,44 @@ fn draw_single_viewport(
         } else {
             &state.camera
         };
-        let scene_data = state.build_scene(&renderer.device, &renderer.queue, aspect, camera);
+
+        // Compute VP matrix based on viewport type
+        let camera_vp = match viewport_type {
+            crate::viewport_renderer::ViewportType::Perspective => {
+                camera.projection_matrix(aspect) * camera.view_matrix()
+            }
+            crate::viewport_renderer::ViewportType::Top => {
+                let proj = ortho_projection(aspect);
+                let view = view_matrix_for([0.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 10.0, 0.001]);
+                proj * view
+            }
+            crate::viewport_renderer::ViewportType::Front => {
+                let proj = ortho_projection(aspect);
+                let view = view_matrix_for([0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 10.0]);
+                proj * view
+            }
+            crate::viewport_renderer::ViewportType::Right => {
+                let proj = ortho_projection(aspect);
+                let view = view_matrix_for([0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [10.0, 0.0, 0.001]);
+                proj * view
+            }
+        };
+
+        // Override camera_vp in build_scene using a temporary camera clone
+        let mut editor_scene_data =
+            state.build_scene(&renderer.device, &renderer.queue, aspect, camera);
+        editor_scene_data.camera_vp = camera_vp;
         let scene = engine_render::renderer::Scene3d {
-            mesh_store: &scene_data.mesh_store,
-            material_store: &scene_data.material_store,
-            lighting_uniform: &scene_data.lighting,
-            camera_vp: &scene_data.camera_vp,
-            camera_pos: &scene_data.camera_pos,
-            light_direction: &scene_data.light_direction,
-            batches: &scene_data.batches,
-            scene_aabb_min: scene_data.scene_aabb_min,
-            scene_aabb_max: scene_data.scene_aabb_max,
-            shadow_config: scene_data.shadow_config,
+            mesh_store: &editor_scene_data.mesh_store,
+            material_store: &editor_scene_data.material_store,
+            lighting_uniform: &editor_scene_data.lighting,
+            camera_vp: &editor_scene_data.camera_vp,
+            camera_pos: &editor_scene_data.camera_pos,
+            light_direction: &editor_scene_data.light_direction,
+            batches: &editor_scene_data.batches,
+            scene_aabb_min: editor_scene_data.scene_aabb_min,
+            scene_aabb_max: editor_scene_data.scene_aabb_max,
+            shadow_config: editor_scene_data.shadow_config,
         };
         let clear_color = Some(wgpu::Color {
             r: state.sky_color[0] as f64,
@@ -424,7 +469,7 @@ fn draw_single_viewport(
         }
 
         // Update line camera and render overlays
-        vp_renderer.update_line_camera(&renderer.queue, &scene_data.camera_vp);
+        vp_renderer.update_line_camera(&renderer.queue, &editor_scene_data.camera_vp);
         let target_view = vp_renderer.target_view(viewport_type).unwrap();
         vp_renderer.render_overlays(target_view, &overlay, renderer);
 
@@ -552,9 +597,21 @@ fn draw_transform_overlay(
         .unwrap_or([0.0; 9]);
 
     let transform_axes = [
-        ("X", sel_trans[0] as i32, Color32::from_rgb(255, 107, 107)),
-        ("Y", sel_trans[1] as i32, Color32::from_rgb(46, 213, 115)),
-        ("Z", sel_trans[2] as i32, Color32::from_rgb(77, 171, 247)),
+        (
+            "X",
+            format!("{:.1}", sel_trans[0]),
+            Color32::from_rgb(255, 107, 107),
+        ),
+        (
+            "Y",
+            format!("{:.1}", sel_trans[1]),
+            Color32::from_rgb(46, 213, 115),
+        ),
+        (
+            "Z",
+            format!("{:.1}", sel_trans[2]),
+            Color32::from_rgb(77, 171, 247),
+        ),
     ];
     for (i, (label, val, color)) in transform_axes.iter().enumerate() {
         painter.text(
@@ -631,10 +688,7 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
                 state.gizmo_drag_axis = Some(0);
                 state.gizmo_drag_start_screen = Some((pointer_pos.x, pointer_pos.y));
                 let first_id = state.selected_nodes[0];
-                state.gizmo_drag_start_pos = state
-                    .node_transforms
-                    .get(&first_id)
-                    .map(|t| [t[0], t[1], t[2]]);
+                state.gizmo_drag_start_pos = state.node_transforms.get(&first_id).copied();
             } else if let (Some((sx, sy)), Some(start_pos)) =
                 (state.gizmo_drag_start_screen, state.gizmo_drag_start_pos)
             {
@@ -660,19 +714,20 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
                         if let Some(&first_id) = state.selected_nodes.first()
                             && let Some(t) = state.node_transforms.get_mut(&first_id)
                         {
-                            t[4] += dx * rot_sensitivity; // Y rotation
-                            t[3] += dy * rot_sensitivity; // X rotation
+                            t[3] = start_pos[3] + dy * rot_sensitivity; // X rotation
+                            t[4] = start_pos[4] + dx * rot_sensitivity; // Y rotation
                         }
                     }
                     crate::state::ToolType::Scale => {
-                        // Uniform scale based on vertical drag
+                        // Uniform scale based on vertical drag (non-accumulative)
                         let scale_sensitivity = 0.005;
                         let scale_factor = 1.0 + dy * scale_sensitivity;
                         if let Some(&first_id) = state.selected_nodes.first()
                             && let Some(t) = state.node_transforms.get_mut(&first_id)
                         {
-                            t[6] = (start_pos[0] * scale_factor).max(0.01); // scale X
-                            t[7] = (start_pos[1] * scale_factor).max(0.01); // scale Y
+                            t[6] = (start_pos[6] * scale_factor).max(0.01);
+                            t[7] = (start_pos[7] * scale_factor).max(0.01);
+                            t[8] = (start_pos[8] * scale_factor).max(0.01);
                         }
                     }
                     _ => {}

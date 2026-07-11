@@ -102,6 +102,11 @@ impl ReloadManager {
     }
 
     /// Polls for changes and logs any reload events.
+    /// Returns the most recent reload log entry, if any.
+    pub fn latest_reload_log(&self) -> Option<String> {
+        self.reload_log.last().cloned()
+    }
+
     pub fn update(&mut self) {
         self.file_watcher.poll();
         let requests = self.file_watcher.take_pending();
@@ -123,6 +128,29 @@ impl ReloadManager {
 
         if !requests.is_empty() {
             warn!("Queued {} resource reload(s)", requests.len());
+        }
+    }
+
+    /// Process all pending reload requests via a user-provided callback.
+    pub fn process_pending<F>(&mut self, mut reload_fn: F)
+    where
+        F: FnMut(&Path, &str),
+    {
+        self.file_watcher.poll();
+        let requests = self.file_watcher.take_pending();
+        for req in &requests {
+            let ext = req
+                .path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            reload_fn(&req.path, &ext);
+        }
+        if !requests.is_empty() {
+            self.reload_log
+                .push(format!("已重载 {} 个资源", requests.len()));
+            warn!("已重载 {} 个资源", requests.len());
         }
     }
 }
