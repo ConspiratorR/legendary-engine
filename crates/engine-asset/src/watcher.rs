@@ -162,6 +162,9 @@ impl Default for FileWatcher {
 ///
 /// Returns the FileWatcher and a handle to the background thread.
 /// Drop the handle to stop the watcher thread.
+///
+/// Not available on Android (notify doesn't support it).
+#[cfg(not(target_os = "android"))]
 pub fn create_notify_watcher(
     config: WatchConfig,
     dirs: &[PathBuf],
@@ -204,6 +207,7 @@ pub fn create_notify_watcher(
 }
 
 /// Convert a notify event into our FileEvent types.
+#[cfg(not(target_os = "android"))]
 fn convert_notify_event(event: &notify::Event) -> Vec<FileEvent> {
     use notify::EventKind;
 
