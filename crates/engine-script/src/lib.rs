@@ -115,6 +115,7 @@ pub mod callback;
 pub mod error;
 pub mod event_bridge;
 pub mod hot_reload;
+pub mod mod_plugin;
 pub mod mod_system;
 pub mod system;
 pub mod type_registry;
@@ -127,6 +128,7 @@ pub mod prelude {
     pub use crate::error::{BridgeError, BridgeResult, ScriptError};
     pub use crate::event_bridge::{EventData, ScriptEventBus};
     pub use crate::hot_reload::HotReloader;
+    pub use crate::mod_plugin::{ModPlugin, mod_update_system};
     pub use crate::system::ScriptSystem;
     pub use crate::type_registry::TypeRegistry;
     pub use crate::wasm::{WasmComponentBridge, WasmRuntime, WasmSandbox, WasmSystem};
