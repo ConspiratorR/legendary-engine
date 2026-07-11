@@ -12,7 +12,7 @@ use std::sync::{Arc, RwLock};
 ///
 /// ```rust,no_run
 /// use engine_core::app::AppBuilder;
-/// use engine_script::ModPlugin;
+/// use engine_script::prelude::ModPlugin;
 ///
 /// let mut app = AppBuilder::new();
 /// app.add_plugin(ModPlugin::new("mods"));
