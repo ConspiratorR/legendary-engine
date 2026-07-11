@@ -214,6 +214,7 @@ pub fn compute_ibl_ambient(roughness: f32, metallic: f32, normal: Vec3, view_dir
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_gpu::create_test_device;
 
     #[test]
     fn test_ibl_config_defaults() {
@@ -237,27 +238,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_ibl_bind_group_layout_creation() {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .unwrap();
-        let (device, _queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        ))
-        .unwrap();
+        let (device, _queue) = create_test_device();
 
         let layout = create_ibl_bind_group_layout(&device);
         // Verify the layout was created (non-zero handle) by creating a bind group

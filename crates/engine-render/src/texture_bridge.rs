@@ -258,31 +258,8 @@ impl TextureBridge {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_gpu::create_test_device;
     use std::path::PathBuf;
-
-    fn test_device() -> (wgpu::Device, wgpu::Queue) {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .unwrap();
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        ))
-        .unwrap();
-        (device, queue)
-    }
 
     fn test_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -309,8 +286,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_resolve_unknown_returns_fallback() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let bridge = TextureBridge::new(&device, &queue, layout);
         let tex = Texture {
@@ -326,8 +304,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_auto_sync_uploads_in_memory_data() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let mut bridge = TextureBridge::new(&device, &queue, layout);
         let mut registry = engine_asset::registry::Registry::new();
@@ -350,8 +329,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_auto_sync_skips_empty_data_falls_back_to_disk() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let mut bridge = TextureBridge::new(&device, &queue, layout);
         let mut registry = engine_asset::registry::Registry::new();
@@ -373,8 +353,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_request_sets_pending_state() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let mut bridge = TextureBridge::new(&device, &queue, layout);
         let tex = Texture {
@@ -394,8 +375,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_request_idempotent() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let mut bridge = TextureBridge::new(&device, &queue, layout);
         let tex = Texture {

@@ -1026,32 +1026,10 @@ impl PostProcessChain {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn create_test_device() -> (wgpu::Device, wgpu::Queue) {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .unwrap();
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        ))
-        .unwrap();
-        (device, queue)
-    }
+    use crate::test_gpu::create_test_device;
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_hdr_framebuffer_creation() {
         let (device, _) = create_test_device();
         let fb = HdrFramebuffer::new(&device, 1280, 720);
@@ -1064,6 +1042,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_hdr_framebuffer_resize() {
         let (device, _) = create_test_device();
         let mut fb = HdrFramebuffer::new(&device, 1280, 720);
@@ -1103,6 +1082,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_tonemapping_pass_creation() {
         let (device, queue) = create_test_device();
         let pass = TonemappingPass::new(&device, &queue, wgpu::TextureFormat::Bgra8UnormSrgb);
@@ -1111,6 +1091,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_post_process_chain_creation() {
         let (device, queue) = create_test_device();
         let chain = PostProcessChain::new_minimal(
@@ -1129,6 +1110,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_post_process_chain_minimal() {
         let (device, queue) = create_test_device();
         let chain = PostProcessChain::new_minimal(
@@ -1149,6 +1131,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_post_process_chain_resize() {
         let (device, queue) = create_test_device();
         let mut chain = PostProcessChain::new_minimal(
@@ -1174,6 +1157,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_composite_pass_creation() {
         let (device, queue) = create_test_device();
         let pass = CompositePass::new(&device, &queue, wgpu::TextureFormat::Rgba16Float);

@@ -502,6 +502,7 @@ pub fn update_particles(world: &mut World, bridge: &crate::texture_bridge::Textu
 mod tests {
     use super::*;
     use crate::animation::AnimationTime;
+    use crate::test_gpu::create_test_device;
     use crate::texture_bridge::TextureBridge;
 
     fn test_texture() -> Handle<Texture> {
@@ -634,6 +635,7 @@ mod tests {
     // -- Integration test --
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_update_particles_integration() {
         let mut world = World::new();
 
@@ -652,26 +654,7 @@ mod tests {
         world.insert_resource(AnimationTime { dt: 0.5 });
 
         // Need a TextureBridge for resolve().
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .unwrap();
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        ))
-        .unwrap();
+        let (device, queue) = create_test_device();
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("test_layout"),
             entries: &[
@@ -718,6 +701,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_inactive_emitter_produces_no_draws() {
         let mut world = World::new();
 
@@ -738,26 +722,7 @@ mod tests {
         world.insert_resource(AnimationTime { dt: 1.0 });
 
         // Create a minimal bridge (no GPU needed for inactive emitters).
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .unwrap();
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        ))
-        .unwrap();
+        let (device, queue) = create_test_device();
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("test_layout"),
             entries: &[
@@ -788,6 +753,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_burst_emitter() {
         let mut world = World::new();
 
@@ -806,26 +772,7 @@ mod tests {
         world.insert_resource(ParticleDrawBuffer::new());
         world.insert_resource(AnimationTime { dt: 0.016 });
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .unwrap();
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        ))
-        .unwrap();
+        let (device, queue) = create_test_device();
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("test_layout"),
             entries: &[
@@ -868,6 +815,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_particles_die_after_lifetime() {
         let mut world = World::new();
 
@@ -885,26 +833,7 @@ mod tests {
         world.insert_resource(ParticleSystem::new());
         world.insert_resource(ParticleDrawBuffer::new());
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .unwrap();
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        ))
-        .unwrap();
+        let (device, queue) = create_test_device();
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("test_layout"),
             entries: &[

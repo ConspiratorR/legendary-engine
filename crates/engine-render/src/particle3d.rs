@@ -288,9 +288,7 @@ impl Particle3DSystem {
         for e in &mut self.emitters {
             e.spawn_accumulator = 0.0;
             e.elapsed = 0.0;
-            for fired in &mut e.bursts_fired {
-                *fired = false;
-            }
+            e.bursts_fired.fill(false);
         }
     }
 

@@ -311,29 +311,7 @@ impl TextureStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn test_device() -> (wgpu::Device, wgpu::Queue) {
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .unwrap();
-        pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                label: None,
-                memory_hints: wgpu::MemoryHints::Performance,
-            },
-            None,
-        ))
-        .unwrap()
-    }
+    use crate::test_gpu::create_test_device;
 
     fn test_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -360,8 +338,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_fallback_exists() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let store = TextureStore::new(&device, &queue, layout);
         assert!(store.contains(0));
@@ -369,8 +348,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_invalid_id_returns_fallback() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let store = TextureStore::new(&device, &queue, layout);
         let bg = store.get_bind_group(999);
@@ -379,8 +359,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_load_from_bytes() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let mut store = TextureStore::new(&device, &queue, layout);
         let pixels = vec![255u8, 0, 0, 255]; // 1x1 red
@@ -393,8 +374,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_unload() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let mut store = TextureStore::new(&device, &queue, layout);
         let pixels = vec![255u8, 0, 0, 255];
@@ -406,8 +388,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_cannot_unload_fallback() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let mut store = TextureStore::new(&device, &queue, layout);
         store.unload(0);
@@ -415,8 +398,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires GPU — run with: cargo test -p engine-render -- --ignored
     fn test_load_from_image_data() {
-        let (device, queue) = test_device();
+        let (device, queue) = create_test_device();
         let layout = test_layout(&device);
         let mut store = TextureStore::new(&device, &queue, layout);
         let image_data = engine_asset::format::image::ImageData {
