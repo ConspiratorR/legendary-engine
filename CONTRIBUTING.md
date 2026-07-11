@@ -10,26 +10,32 @@
 ### 推荐 IDE
 - VS Code + rust-analyzer
 - CLion + Rust 插件
-- Zed 编辑器（正如你正在使用的！）
+- Zed 编辑器
 
 ## 项目结构
 
 ```
 RustEngine/
-├── crates/                    # 所有引擎模块
+├── crates/                    # 所有引擎模块 (17个)
 │   ├── engine-core/          # 核心系统和入口点
 │   ├── engine-ecs/           # 实体组件系统
-│   ├── engine-render/        # 渲染系统
+│   ├── engine-render/        # 渲染系统 (wgpu)
 │   ├── engine-input/         # 输入处理
 │   ├── engine-scene/         # 场景管理
 │   ├── engine-asset/         # 资源加载
 │   ├── engine-audio/         # 音频系统
-│   ├── engine-ui/            # UI 系统
-│   ├── engine-window/        # 窗口管理
-│   ├── engine-math/          # 数学库
-│   ├── engine-framework/      # 框架层
-│   └── engine-editor/        # 编辑器
+│   ├── engine-ui/            # UI 系统 (egui)
+│   ├── engine-window/        # 窗口管理 (winit)
+│   ├── engine-math/          # 数学库 (glam)
+│   ├── engine-framework/     # 游戏状态栈
+│   ├── engine-editor/        # 编辑器
+│   ├── engine-physics/       # 物理引擎
+│   ├── engine-network/       # 网络系统
+│   ├── engine-jobs/          # 任务系统
+│   ├── engine-script/        # 脚本系统 (Lua/WASM)
+│   └── engine-terrain/       # 地形系统
 ├── examples/                 # 示例代码
+├── docs/                     # 文档
 └── .github/workflows/        # CI/CD 配置
 ```
 
@@ -37,8 +43,8 @@ RustEngine/
 
 ### 1. 克隆仓库
 ```bash
-git clone https://github.com/ConspiratorR/legendary-engine.git
-cd legendary-engine
+git clone https://github.com/ConspiratorR/RustEngine.git
+cd RustEngine
 ```
 
 ### 2. 创建功能分支
@@ -64,7 +70,7 @@ cargo fmt
 ### 4. 测试
 ```bash
 # 运行所有测试
-cargo test --all
+cargo test
 
 # 运行特定模块测试
 cargo test -p engine-core
@@ -164,6 +170,7 @@ mod tests {
 //! use my_crate::feature;
 //! assert_eq!(feature(), expected);
 //! ```
+```
 
 ### 为函数编写文档
 ```rust
@@ -192,7 +199,7 @@ pub fn my_function(input: i32) -> i32 {
 ### 版本号格式
 遵循语义化版本 (SemVer)：
 - MAJOR.MINOR.PATCH
-- 例如: 1.0.0
+- 例如: 0.1.0
 
 ### 发布流程
 1. 更新版本号
@@ -203,9 +210,10 @@ pub fn my_function(input: i32) -> i32 {
 ## 获取帮助
 
 - 查看 [README.md](../README.md) 了解项目概述
+- 查看 [docs/](../docs/) 目录中的文档
 - 查看 examples/ 目录中的示例代码
 - 提交 Issue 报告问题
 
 ## 许可证
 
-本项目使用 MIT 许可证 - 详见 [LICENSE](../LICENSE) 文件
+本项目使用 Apache License 2.0 - 详见 [LICENSE](../LICENSE) 文件
