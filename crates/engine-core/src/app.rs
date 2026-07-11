@@ -398,4 +398,12 @@ mod tests {
         app.add_system(|_world: &mut World| {});
         assert!(app.build().parallel_schedule.is_some());
     }
+
+    #[test]
+    fn test_load_dynamic_plugins_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut builder = AppBuilder::new();
+        let result = builder.load_dynamic_plugins(dir.path());
+        assert!(result.is_ok());
+    }
 }
