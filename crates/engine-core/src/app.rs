@@ -66,6 +66,27 @@ impl AppBuilder {
         self
     }
 
+    /// Load all dynamic plugins from a directory.
+    ///
+    /// Each plugin directory must contain a `plugin.json` manifest and
+    /// a shared library (`.dll`, `.so`, or `.dylib`).
+    ///
+    /// # Safety
+    /// This function loads shared libraries and calls their entry points.
+    /// Plugins must be compiled for the correct target platform.
+    pub fn load_dynamic_plugins(
+        &mut self,
+        plugins_dir: &std::path::Path,
+    ) -> Result<&mut Self, Box<dyn std::error::Error>> {
+        use crate::plugin_loader::PluginLoader;
+
+        let mut loader = PluginLoader::new(plugins_dir.join("registry.json"))
+            .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
+        unsafe { loader.load_all() }.map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
+        loader.register_all(self);
+        Ok(self)
+    }
+
     /// Add a system to the update schedule (parallel if enabled, sequential otherwise).
     pub fn add_system(
         &mut self,
