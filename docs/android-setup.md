@@ -86,18 +86,17 @@ cargo build --target aarch64-linux-android --release
 
 ### Touch Input
 
-RustEngine supports touch input on Android:
+RustEngine supports touch input on Android via `engine_input::touch`:
 
 ```rust
-use engine_input::touch::{TouchEvent, TouchPhase};
+use engine_input::touch::{TouchPoint, TouchPhase};
 
-fn touch_system(world: &mut World) {
-    let query = Query::<TouchEvent>::new();
-    for event in query.iter(world) {
-        match event.phase {
-            TouchPhase::Started => println!("Touch started at {:?}", event.position),
-            TouchPhase::Moved => println!("Touch moved to {:?}", event.position),
-            TouchPhase::Ended => println!("Touch ended at {:?}", event.position),
+fn handle_touch(input: &InputManager) {
+    for touch in input.touch().points.iter() {
+        match touch.phase {
+            TouchPhase::Started => println!("Touch started at ({}, {})", touch.x, touch.y),
+            TouchPhase::Moved => println!("Touch moved to ({}, {})", touch.x, touch.y),
+            TouchPhase::Ended => println!("Touch ended"),
             TouchPhase::Cancelled => println!("Touch cancelled"),
         }
     }
@@ -106,25 +105,13 @@ fn touch_system(world: &mut World) {
 
 ### Asset Loading
 
-On Android, assets are loaded from the APK's assets directory:
-
-```rust
-use engine_asset::android::AndroidAssetStore;
-
-let store = AndroidAssetStore::new()?;
-let texture = store.load_texture("textures/player.png")?;
-```
+On Android, assets are loaded from the APK's assets directory using `ndk::asset::AssetManager`.
+The file watcher is automatically disabled on Android since hot-reload is not supported.
 
 ### Audio
 
-Android uses AAudio or OpenSL ES for audio:
-
-```rust
-use engine_audio::android::AndroidAudioManager;
-
-let audio = AndroidAudioManager::new()?;
-audio.play("sounds/jump.wav", AudioChannel::Sfx)?;
-```
+Android uses AAudio or OpenSL ES for audio via rodio's oboe backend.
+Audio playback works the same as on desktop.
 
 ## Troubleshooting
 
