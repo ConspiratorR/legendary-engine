@@ -109,9 +109,11 @@ pub mod profiler;
 pub mod resource;
 pub mod time;
 pub mod transform;
+pub mod world;
 
 // Re-export for convenience
 pub use gameobject::{Component, GameObject, GameObjectHandle};
+pub use world::World;
 
 #[cfg(target_os = "android")]
 pub mod android;

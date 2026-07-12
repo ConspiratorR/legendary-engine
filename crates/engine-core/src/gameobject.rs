@@ -9,8 +9,8 @@ pub struct GameObjectHandle {
 }
 
 impl GameObjectHandle {
-    /// Create a new handle (internal use only).
-    pub(crate) fn new(index: u32, generation: u32) -> Self {
+    /// Create a new handle.
+    pub fn new(index: u32, generation: u32) -> Self {
         Self { index, generation }
     }
 
@@ -67,8 +67,8 @@ pub struct GameObject {
     layer: u32,
     active: bool,
     components: Vec<Box<dyn Component>>,
-    parent: Option<GameObjectHandle>,
-    children: Vec<GameObjectHandle>,
+    pub(crate) parent: Option<GameObjectHandle>,
+    pub(crate) children: Vec<GameObjectHandle>,
 }
 
 impl GameObject {
