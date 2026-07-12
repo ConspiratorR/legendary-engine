@@ -31,7 +31,7 @@ impl Plugin for TimePlugin {
         // Add a pre-update hook to update time each frame
         app.add_pre_update_hook(Box::new(|app| {
             if let Some(time) = app.world_mut().get_resource_mut::<Time>() {
-                time.update();
+                time.update_with_internal_clock();
             }
         }));
     }

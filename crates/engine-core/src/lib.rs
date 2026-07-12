@@ -121,6 +121,7 @@ pub use gameobject::{Component, GameObject, GameObjectHandle};
 pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
 pub use player_loop::{Phase, PlayerLoop};
 pub use system::System;
+pub use time::Time;
 pub use transform::{Space, Transform};
 pub use world::World;
 
