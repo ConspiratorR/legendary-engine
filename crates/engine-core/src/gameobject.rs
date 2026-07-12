@@ -141,8 +141,7 @@ impl GameObject {
     }
 
     /// Add a component (like Unity's AddComponent<T>()).
-    pub fn add_component<T: Component + 'static>(&mut self, mut component: T) {
-        component.on_added(GameObjectHandle::new(0, 0)); // Handle set by World
+    pub fn add_component<T: Component + 'static>(&mut self, component: T) {
         self.components.push(Box::new(component));
     }
 
@@ -170,17 +169,10 @@ impl GameObject {
         &self.components
     }
 
-    /// Get all components mutably.
-    pub fn components_mut(&mut self) -> &mut Vec<Box<dyn Component>> {
-        &mut self.components
-    }
-
     /// Remove a component by type.
     pub fn remove_component<T: Component + 'static>(&mut self) -> Option<Box<dyn Component>> {
         if let Some(pos) = self.components.iter().position(|c| c.as_any().is::<T>()) {
-            let mut component = self.components.remove(pos);
-            component.on_destroy(GameObjectHandle::new(0, 0));
-            Some(component)
+            Some(self.components.remove(pos))
         } else {
             None
         }
