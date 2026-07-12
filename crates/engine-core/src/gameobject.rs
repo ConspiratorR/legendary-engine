@@ -4,8 +4,8 @@ use std::fmt;
 /// Lightweight handle to a GameObject (index + generation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GameObjectHandle {
-    pub(crate) index: u32,
-    pub(crate) generation: u32,
+    index: u32,
+    generation: u32,
 }
 
 impl GameObjectHandle {
