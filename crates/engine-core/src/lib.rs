@@ -99,6 +99,7 @@ pub mod debug;
 pub mod engine;
 pub mod event;
 pub mod gameobject;
+pub mod hierarchy;
 pub mod logger;
 pub mod math_utils;
 pub mod memory;
@@ -113,6 +114,7 @@ pub mod world;
 
 // Re-export for convenience
 pub use gameobject::{Component, GameObject, GameObjectHandle};
+pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
 pub use transform::{Space, Transform};
 pub use world::World;
 
