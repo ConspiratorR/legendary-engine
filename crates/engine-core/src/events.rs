@@ -182,9 +182,12 @@ impl Event for EntityDespawned {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::Context;
     use crate::event::{EventBus, EventBusExt};
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use crate::time::Time;
+    use crate::world::World;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     fn test_builtin_events() {
@@ -192,43 +195,56 @@ mod tests {
         let count_clone = count.clone();
 
         let mut bus = EventBus::new();
-        bus.on_event::<CollisionEnter>(move |_| {
+        bus.on_event::<CollisionEnter>(move |_, _| {
             count_clone.fetch_add(1, Ordering::SeqCst);
         });
 
         let count_clone2 = count.clone();
-        bus.on_event::<TriggerEnter>(move |_| {
+        bus.on_event::<TriggerEnter>(move |_, _| {
             count_clone2.fetch_add(10, Ordering::SeqCst);
         });
 
         let count_clone3 = count.clone();
-        bus.on_event::<MouseDown>(move |_| {
+        bus.on_event::<MouseDown>(move |_, _| {
             count_clone3.fetch_add(100, Ordering::SeqCst);
         });
 
         let handle = crate::gameobject::GameObjectHandle::new(0, 0);
 
-        bus.send(CollisionEnter {
-            entity: handle,
-            collision: Collision {
-                other: handle,
-                normal: engine_math::Vec3::Y,
-                point: engine_math::Vec3::ZERO,
-                relative_velocity: engine_math::Vec3::ZERO,
+        let mut world = World::new();
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
+
+        bus.send(
+            CollisionEnter {
+                entity: handle,
+                collision: Collision {
+                    other: handle,
+                    normal: engine_math::Vec3::Y,
+                    point: engine_math::Vec3::ZERO,
+                    relative_velocity: engine_math::Vec3::ZERO,
+                },
             },
-        });
+            &mut ctx,
+        );
         assert_eq!(count.load(Ordering::SeqCst), 1);
 
-        bus.send(TriggerEnter {
-            entity: handle,
-            trigger: TriggerData { other: handle },
-        });
+        bus.send(
+            TriggerEnter {
+                entity: handle,
+                trigger: TriggerData { other: handle },
+            },
+            &mut ctx,
+        );
         assert_eq!(count.load(Ordering::SeqCst), 11);
 
-        bus.send(MouseDown {
-            entity: handle,
-            button: MouseButton::Left,
-        });
+        bus.send(
+            MouseDown {
+                entity: handle,
+                button: MouseButton::Left,
+            },
+            &mut ctx,
+        );
         assert_eq!(count.load(Ordering::SeqCst), 111);
     }
 
@@ -238,34 +254,44 @@ mod tests {
         let count_clone = count.clone();
 
         let mut bus = EventBus::new();
-        bus.on_event::<HealthChanged>(move |e| {
+        bus.on_event::<HealthChanged>(move |e, _| {
             if e.new_health <= 0.0 {
                 count_clone.fetch_add(1, Ordering::SeqCst);
             }
         });
 
         let count_clone2 = count.clone();
-        bus.on_event::<EntityDied>(move |_| {
+        bus.on_event::<EntityDied>(move |_, _| {
             count_clone2.fetch_add(10, Ordering::SeqCst);
         });
 
         let handle = crate::gameobject::GameObjectHandle::new(0, 0);
 
-        bus.send(HealthChanged {
-            entity: handle,
-            old_health: 100.0,
-            new_health: 50.0,
-        });
+        let mut world = World::new();
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
+
+        bus.send(
+            HealthChanged {
+                entity: handle,
+                old_health: 100.0,
+                new_health: 50.0,
+            },
+            &mut ctx,
+        );
         assert_eq!(count.load(Ordering::SeqCst), 0);
 
-        bus.send(HealthChanged {
-            entity: handle,
-            old_health: 50.0,
-            new_health: 0.0,
-        });
+        bus.send(
+            HealthChanged {
+                entity: handle,
+                old_health: 50.0,
+                new_health: 0.0,
+            },
+            &mut ctx,
+        );
         assert_eq!(count.load(Ordering::SeqCst), 1);
 
-        bus.send(EntityDied { entity: handle });
+        bus.send(EntityDied { entity: handle }, &mut ctx);
         assert_eq!(count.load(Ordering::SeqCst), 11);
     }
 }

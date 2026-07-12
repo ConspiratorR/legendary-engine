@@ -1,6 +1,8 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
+use crate::context::Context;
+
 /// Type-safe event bus (like Unity's SendMessage, but type-safe).
 pub struct EventBus {
     handlers: HashMap<TypeId, Vec<Box<dyn EventHandler>>>,
@@ -8,7 +10,7 @@ pub struct EventBus {
 
 /// Trait for event handlers.
 pub trait EventHandler: Send + Sync {
-    fn handle(&mut self, event: &dyn Any);
+    fn handle(&mut self, event: &dyn Any, context: &mut Context<'_>);
 }
 
 /// Event marker trait.
@@ -31,10 +33,10 @@ impl EventBus {
     }
 
     /// Send an event to all handlers (like Unity's SendMessage).
-    pub fn send<E: Event + 'static>(&mut self, event: E) {
+    pub fn send<E: Event + 'static>(&mut self, event: E, context: &mut Context<'_>) {
         if let Some(handlers) = self.handlers.get_mut(&TypeId::of::<E>()) {
             for handler in handlers.iter_mut() {
-                handler.handle(&event);
+                handler.handle(&event, context);
             }
         }
     }
@@ -71,25 +73,31 @@ struct ClosureHandler<F> {
 
 impl<F> EventHandler for ClosureHandler<F>
 where
-    F: Fn(&dyn Any) + Send + Sync,
+    F: Fn(&dyn Any, &mut Context<'_>) + Send + Sync,
 {
-    fn handle(&mut self, event: &dyn Any) {
-        (self.handler)(event);
+    fn handle(&mut self, event: &dyn Any, context: &mut Context<'_>) {
+        (self.handler)(event, context);
     }
 }
 
 /// Extension trait for EventBus to add closure-based handlers.
 pub trait EventBusExt {
     /// Register a closure handler for an event type.
-    fn on_event<E: Event + 'static>(&mut self, handler: impl Fn(&E) + Send + Sync + 'static);
+    fn on_event<E: Event + 'static>(
+        &mut self,
+        handler: impl Fn(&E, &mut Context<'_>) + Send + Sync + 'static,
+    );
 }
 
 impl EventBusExt for EventBus {
-    fn on_event<E: Event + 'static>(&mut self, handler: impl Fn(&E) + Send + Sync + 'static) {
+    fn on_event<E: Event + 'static>(
+        &mut self,
+        handler: impl Fn(&E, &mut Context<'_>) + Send + Sync + 'static,
+    ) {
         let wrapper = ClosureHandler {
-            handler: move |event: &dyn Any| {
+            handler: move |event: &dyn Any, context: &mut Context<'_>| {
                 if let Some(typed) = event.downcast_ref::<E>() {
-                    handler(typed);
+                    handler(typed, context);
                 }
             },
         };
@@ -103,6 +111,9 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use crate::time::Time;
+    use crate::world::World;
+
     #[derive(Clone)]
     struct TestEvent {
         value: i32,
@@ -115,7 +126,7 @@ mod tests {
     }
 
     impl EventHandler for TestHandler {
-        fn handle(&mut self, event: &dyn Any) {
+        fn handle(&mut self, event: &dyn Any, _context: &mut Context<'_>) {
             if let Some(e) = event.downcast_ref::<TestEvent>() {
                 self.counter.fetch_add(e.value as usize, Ordering::SeqCst);
             }
@@ -130,10 +141,14 @@ mod tests {
             counter: counter.clone(),
         });
 
-        bus.send(TestEvent { value: 5 });
+        let mut world = World::new();
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
+
+        bus.send(TestEvent { value: 5 }, &mut ctx);
         assert_eq!(counter.load(Ordering::SeqCst), 5);
 
-        bus.send(TestEvent { value: 3 });
+        bus.send(TestEvent { value: 3 }, &mut ctx);
         assert_eq!(counter.load(Ordering::SeqCst), 8);
     }
 
@@ -143,11 +158,15 @@ mod tests {
         let mut bus = EventBus::new();
 
         let c = counter.clone();
-        bus.on_event::<TestEvent>(move |e| {
+        bus.on_event::<TestEvent>(move |e, _ctx| {
             c.fetch_add(e.value as usize, Ordering::SeqCst);
         });
 
-        bus.send(TestEvent { value: 10 });
+        let mut world = World::new();
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
+
+        bus.send(TestEvent { value: 10 }, &mut ctx);
         assert_eq!(counter.load(Ordering::SeqCst), 10);
     }
 
@@ -162,7 +181,11 @@ mod tests {
             counter: counter.clone(),
         });
 
-        bus.send(TestEvent { value: 1 });
+        let mut world = World::new();
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
+
+        bus.send(TestEvent { value: 1 }, &mut ctx);
         assert_eq!(counter.load(Ordering::SeqCst), 2);
     }
 

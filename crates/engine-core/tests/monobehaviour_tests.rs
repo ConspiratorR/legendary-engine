@@ -117,10 +117,14 @@ fn test_event_bus_with_monobehaviour() {
     DAMAGE_RECEIVED.store(0, Ordering::SeqCst);
 
     let mut events = EventBus::new();
-    events.on_event::<PlayerDamaged>(|e| {
+    events.on_event::<PlayerDamaged>(|e, _| {
         DAMAGE_RECEIVED.fetch_add(e.damage as usize, Ordering::SeqCst);
     });
 
-    events.send(PlayerDamaged { damage: 10.0 });
+    let mut world = World::new();
+    let mut ctx_events = EventBus::new();
+    let mut ctx = Context::new(&mut world, Time::default(), 0, &mut ctx_events);
+
+    events.send(PlayerDamaged { damage: 10.0 }, &mut ctx);
     assert_eq!(DAMAGE_RECEIVED.load(Ordering::SeqCst), 10);
 }
