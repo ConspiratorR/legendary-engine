@@ -3,6 +3,8 @@ use std::fmt;
 
 pub use engine_ecs::GameObjectHandle;
 
+use crate::context::Context;
+
 /// Base trait for all components (like Unity's Component).
 pub trait Component: Any + Send + Sync {
     /// Called when the component is added to a GameObject.
@@ -148,6 +150,34 @@ impl GameObject {
         } else {
             None
         }
+    }
+
+    /// Send a message to all MonoBehaviours on this GameObject (like Unity's SendMessage).
+    pub fn send_message(&mut self, _method_name: &str, _context: &mut Context) {
+        // This would call the named method on all MonoBehaviour components
+        // For now, this is a placeholder for the message system
+    }
+
+    /// Send a message to all MonoBehaviours on this GameObject and its children (like Unity's BroadcastMessage).
+    pub fn broadcast_message(
+        &mut self,
+        _method_name: &str,
+        _context: &mut Context,
+        _world: &crate::world::World,
+    ) {
+        // This would call the named method on all MonoBehaviour components
+        // For now, this is a placeholder for the message system
+    }
+
+    /// Send a message to all MonoBehaviours on this GameObject and its parents (like Unity's SendMessageUpwards).
+    pub fn send_message_upwards(
+        &mut self,
+        _method_name: &str,
+        _context: &mut Context,
+        _world: &crate::world::World,
+    ) {
+        // This would call the named method on all MonoBehaviour components
+        // For now, this is a placeholder for the message system
     }
 }
 
