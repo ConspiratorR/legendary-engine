@@ -95,6 +95,7 @@ pub use error::EngineError;
 pub mod app;
 pub mod color;
 pub mod config;
+pub mod context;
 pub mod debug;
 pub mod engine;
 pub mod event;
@@ -103,18 +104,23 @@ pub mod hierarchy;
 pub mod logger;
 pub mod math_utils;
 pub mod memory;
+pub mod player_loop;
 pub mod plugin;
 pub mod plugin_loader;
 pub mod plugins;
 pub mod profiler;
 pub mod resource;
+pub mod system;
 pub mod time;
 pub mod transform;
 pub mod world;
 
 // Re-export for convenience
+pub use context::Context;
 pub use gameobject::{Component, GameObject, GameObjectHandle};
 pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
+pub use player_loop::{Phase, PlayerLoop};
+pub use system::System;
 pub use transform::{Space, Transform};
 pub use world::World;
 
