@@ -99,6 +99,7 @@ pub mod context;
 pub mod debug;
 pub mod engine;
 pub mod event;
+pub mod events;
 pub mod gameobject;
 pub mod hierarchy;
 pub mod logger;
@@ -120,6 +121,7 @@ pub mod world;
 // Re-export for convenience
 pub use context::Context;
 pub use event::{Event, EventBus, EventBusExt, EventHandler};
+pub use events::*;
 pub use gameobject::{Component, GameObject, GameObjectHandle};
 pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
 pub use monobehaviour::{MonoBehaviour, MonoBehaviourHolder};
