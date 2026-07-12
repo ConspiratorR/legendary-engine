@@ -28,8 +28,12 @@ pub fn main() {
     app_builder.add_post_update_hook(Box::new(|app: &mut App| {
         if let Some(time) = app.world.get_resource::<Time>() {
             let frame = time.frame_count();
-            let fps = time.fps();
             let elapsed = time.elapsed_seconds();
+            let fps = if time.deltaTime() > 0.0 {
+                1.0 / time.deltaTime()
+            } else {
+                0.0
+            };
 
             // Print every second
             if frame % 60 == 0 {

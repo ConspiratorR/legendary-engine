@@ -19,7 +19,7 @@ use engine_ecs::world::World;
 use engine_framework::{FrameworkPlugin, GameFlowPlugin, GameSession, GameStateAction};
 use engine_input::input_manager::InputManager;
 use engine_input::keyboard::KeyCode;
-use engine_math::Vec3;
+use engine_math::{Quat, Vec3};
 use engine_render::camera::Camera;
 use engine_render::light::DirectionalLight;
 use engine_render::resource::material::PbrMaterial;
@@ -260,7 +260,11 @@ impl Plugin for GameplayPlugin {
         let ground = world.spawn();
         world.add_component(
             ground,
-            Transform::from_xyz(0.0, -1.5, 0.0).with_scale(Vec3::new(20.0, 1.0, 20.0)),
+            Transform::from_position_rotation_scale(
+                Vec3::new(0.0, -1.5, 0.0),
+                Quat::IDENTITY,
+                Vec3::new(20.0, 1.0, 20.0),
+            ),
         );
         world.add_component(ground, RigidBody::new_static());
         world.add_component(ground, Collider::cuboid(10.0, 0.5, 10.0));
@@ -292,8 +296,11 @@ impl Plugin for GameplayPlugin {
             let cube = world.spawn();
             world.add_component(
                 cube,
-                Transform::from_xyz(angle.cos() * 8.0, 0.0, angle.sin() * 8.0)
-                    .with_scale(Vec3::new(1.0, 2.0, 1.0)),
+                Transform::from_position_rotation_scale(
+                    Vec3::new(angle.cos() * 8.0, 0.0, angle.sin() * 8.0),
+                    Quat::IDENTITY,
+                    Vec3::new(1.0, 2.0, 1.0),
+                ),
             );
             world.add_component(cube, RigidBody::new_static());
             world.add_component(cube, Collider::cuboid(0.5, 1.0, 0.5));

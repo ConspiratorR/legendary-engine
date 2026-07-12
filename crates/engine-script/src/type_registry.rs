@@ -119,7 +119,13 @@ pub fn lua_to_color(t: &LuaTable) -> LuaResult<Color> {
 pub fn transform_to_lua(lua: &Lua, tr: Transform) -> LuaResult<LuaTable> {
     let t = lua.create_table()?;
     t.set("position", vec3_to_lua(lua, tr.position())?)?;
-    t.set("rotation", vec3_to_lua(lua, Vec3::new(tr.rotation().x, tr.rotation().y, tr.rotation().z))?)?;
+    t.set(
+        "rotation",
+        vec3_to_lua(
+            lua,
+            Vec3::new(tr.rotation().x, tr.rotation().y, tr.rotation().z),
+        )?,
+    )?;
     t.set("scale", vec3_to_lua(lua, tr.lossy_scale())?)?;
     Ok(t)
 }

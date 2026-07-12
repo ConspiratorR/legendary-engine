@@ -16,7 +16,7 @@ use engine_input::input_manager::InputManager;
 // KeyCode: enum of all keyboard keys (engine_input re-exports winit keys).
 use engine_input::keyboard::KeyCode;
 // Vec2: 2D vector type used throughout physics and transforms.
-use engine_math::Vec2;
+use engine_math::{Vec2, Vec3};
 // Physics2DPlugin: registers PhysicsWorld2D resource + physics step system.
 use engine_physics::Physics2DPlugin;
 // Collider2D: axis-aligned collider (AABB or trigger). RigidBody2D: dynamic/static body.

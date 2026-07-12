@@ -25,7 +25,7 @@ use engine_framework::{FrameworkPlugin, GameStateAction};
 // InputManager is a resource polled by systems to read keyboard/mouse state.
 use engine_input::input_manager::InputManager;
 use engine_input::keyboard::KeyCode;
-use engine_math::Vec3;
+use engine_math::{Quat, Vec3};
 // RigidBody + Collider are the physics components; PhysicsWorld is the runtime resource.
 use engine_physics::body::RigidBody;
 use engine_physics::collider::Collider;
@@ -311,8 +311,11 @@ fn spawn_dungeon(world: &mut World, dungeon: &Dungeon) {
                 let e = world.spawn();
                 world.add_component(
                     e,
-                    Transform::from_xyz(px, -0.5, pz)
-                        .with_scale(Vec3::new(TILE_SIZE, 0.5, TILE_SIZE)),
+                    Transform::from_position_rotation_scale(
+                        Vec3::new(px, -0.5, pz),
+                        Quat::IDENTITY,
+                        Vec3::new(TILE_SIZE, 0.5, TILE_SIZE),
+                    ),
                 );
                 world.add_component(e, PbrMaterial::new([0.25, 0.25, 0.3, 1.0], 0.0, 0.9));
                 // MeshRenderer bridges the ECS entity to the GPU render pipeline.
@@ -336,8 +339,11 @@ fn spawn_dungeon(world: &mut World, dungeon: &Dungeon) {
                 let e = world.spawn();
                 world.add_component(
                     e,
-                    Transform::from_xyz(px, 1.5, pz)
-                        .with_scale(Vec3::new(TILE_SIZE, 3.0, TILE_SIZE)),
+                    Transform::from_position_rotation_scale(
+                        Vec3::new(px, 1.5, pz),
+                        Quat::IDENTITY,
+                        Vec3::new(TILE_SIZE, 3.0, TILE_SIZE),
+                    ),
                 );
                 world.add_component(e, PbrMaterial::new([0.45, 0.38, 0.32, 1.0], 0.0, 0.85));
                 // cast_shadow=true: walls occlude light, contributing to the shadow map.
@@ -465,7 +471,11 @@ fn spawn_collectibles(world: &mut World, dungeon: &Dungeon) {
         let e = world.spawn();
         world.add_component(
             e,
-            Transform::from_xyz(px, 0.5, pz).with_scale(Vec3::new(0.5, 0.5, 0.5)),
+            Transform::from_position_rotation_scale(
+                Vec3::new(px, 0.5, pz),
+                Quat::IDENTITY,
+                Vec3::new(0.5, 0.5, 0.5),
+            ),
         );
         world.add_component(e, PbrMaterial::new([1.0, 0.84, 0.0, 1.0], 0.8, 0.2));
         world.add_component(
@@ -495,7 +505,11 @@ fn spawn_collectibles(world: &mut World, dungeon: &Dungeon) {
         let e = world.spawn();
         world.add_component(
             e,
-            Transform::from_xyz(px, 0.5, pz).with_scale(Vec3::new(0.3, 0.6, 0.1)),
+            Transform::from_position_rotation_scale(
+                Vec3::new(px, 0.5, pz),
+                Quat::IDENTITY,
+                Vec3::new(0.3, 0.6, 0.1),
+            ),
         );
         world.add_component(e, PbrMaterial::new([0.8, 0.8, 0.1, 1.0], 0.9, 0.1));
         world.add_component(
@@ -525,7 +539,11 @@ fn spawn_collectibles(world: &mut World, dungeon: &Dungeon) {
         let e = world.spawn();
         world.add_component(
             e,
-            Transform::from_xyz(px, 1.5, pz).with_scale(Vec3::new(1.0, 3.0, 0.3)),
+            Transform::from_position_rotation_scale(
+                Vec3::new(px, 1.5, pz),
+                Quat::IDENTITY,
+                Vec3::new(1.0, 3.0, 0.3),
+            ),
         );
         world.add_component(e, PbrMaterial::new([0.4, 0.25, 0.1, 1.0], 0.0, 0.7));
         world.add_component(
@@ -561,7 +579,11 @@ fn spawn_enemies(world: &mut World, dungeon: &Dungeon) {
         let e = world.spawn();
         world.add_component(
             e,
-            Transform::from_xyz(px, 0.75, pz).with_scale(Vec3::new(0.6, 1.5, 0.6)),
+            Transform::from_position_rotation_scale(
+                Vec3::new(px, 0.75, pz),
+                Quat::IDENTITY,
+                Vec3::new(0.6, 1.5, 0.6),
+            ),
         );
         world.add_component(e, PbrMaterial::new([0.8, 0.1, 0.1, 1.0], 0.0, 0.6));
         world.add_component(
@@ -668,7 +690,12 @@ fn player_control_system(world: &mut World) {
             .map(|p| p.pitch)
             .unwrap_or(0.0);
         if let Some(transform) = world.get_by_index_mut::<Transform>(eid) {
-            transform.rotation = Vec3::new(pitch, yaw, 0.0);
+            transform.set_rotation(Quat::from_euler(
+                engine_math::EulerRot::YXZ,
+                yaw,
+                pitch,
+                0.0,
+            ));
         }
     }
 }
@@ -709,7 +736,7 @@ fn enemy_ai_system(world: &mut World) {
 
         let current_pos = world
             .get_by_index::<Transform>(eid)
-            .map(|t| Vec3::new(t.position.x, t.position.y, t.position.z))
+            .map(|t| t.position())
             .unwrap_or(Vec3::ZERO);
 
         let dist_to_player = (current_pos - player_pos).length();

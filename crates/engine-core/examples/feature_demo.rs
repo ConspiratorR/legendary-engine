@@ -41,7 +41,7 @@ pub fn main() {
         }
 
         if let Some(time) = app.world.get_resource_mut::<Time>() {
-            time.update();
+            time.update(0.016);
         }
     }));
 

@@ -5,7 +5,7 @@
 //! application lifecycle and integrates with winit's event loop.
 
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, WindowEvent, StartCause};
+use winit::event::{ElementState, StartCause, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowAttributes, WindowId};
 
@@ -124,8 +124,7 @@ pub fn run_android(mut app_builder: AppBuilder) -> Result<(), EngineError> {
     crate::debug::init_logger();
     log::info!("RustEngine Android starting");
 
-    let event_loop =
-        EventLoop::new().map_err(|e| EngineError::InitFailed(e.to_string()))?;
+    let event_loop = EventLoop::new().map_err(|e| EngineError::InitFailed(e.to_string()))?;
 
     let mut state = AndroidApp {
         window: None,

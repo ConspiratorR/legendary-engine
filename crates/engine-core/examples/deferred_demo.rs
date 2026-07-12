@@ -56,7 +56,11 @@ fn main() {
     let ground = world.spawn();
     world.add_component(
         ground,
-        Transform::from_xyz(0.0, -1.0, 0.0).with_scale(Vec3::new(20.0, 0.2, 20.0)),
+        Transform::from_position_rotation_scale(
+            Vec3::new(0.0, -1.0, 0.0),
+            engine_math::Quat::IDENTITY,
+            Vec3::new(20.0, 0.2, 20.0),
+        ),
     );
     world.add_component(ground, PbrMaterial::new([0.3, 0.6, 0.3, 1.0], 0.0, 0.8));
     world.add_component(
@@ -105,7 +109,11 @@ fn main() {
         let entity = world.spawn();
         world.add_component(
             entity,
-            Transform::from_xyz(pos.x, pos.y, pos.z).with_scale(scale),
+            Transform::from_position_rotation_scale(
+                Vec3::new(pos.x, pos.y, pos.z),
+                engine_math::Quat::IDENTITY,
+                scale,
+            ),
         );
         world.add_component(entity, PbrMaterial::new(color, metallic, roughness));
         world.add_component(
@@ -145,11 +153,16 @@ fn main() {
         if frame % 30 == 0
             && let Some(time) = app.world.get_resource::<Time>()
         {
+            let fps = if time.deltaTime() > 0.0 {
+                1.0 / time.deltaTime()
+            } else {
+                0.0
+            };
             println!(
                 "[Frame {}] Elapsed: {:.2}s | FPS: {:.1}",
                 frame,
                 time.elapsed_seconds(),
-                time.fps()
+                fps
             );
         }
     }

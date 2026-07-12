@@ -763,8 +763,7 @@ impl<'a> Gui<'a> {
                 // Initialize edit buffer with current formatted value
                 let buf = format!("{:.1}", *val);
                 self.ui.ctx().memory_mut(|mem| {
-                    mem.data
-                        .insert_temp(widget_id, buf);
+                    mem.data.insert_temp(widget_id, buf);
                 });
             }
 
@@ -775,17 +774,21 @@ impl<'a> Gui<'a> {
                     .memory(|mem| mem.data.get_temp(widget_id).unwrap_or_default());
                 let mut modified = false;
 
-                let events: Vec<egui::Event> =
-                    self.ui.ctx().input(|i| i.events.clone());
+                let events: Vec<egui::Event> = self.ui.ctx().input(|i| i.events.clone());
                 for event in &events {
                     match event {
                         egui::Event::Text(c)
-                            if c.chars().all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+') =>
+                            if c.chars().all(|c| {
+                                c.is_ascii_digit() || c == '.' || c == '-' || c == '+'
+                            }) =>
                         {
                             buf.push_str(c);
                             modified = true;
                         }
-                        egui::Event::Key { key: egui::Key::Backspace, .. } => {
+                        egui::Event::Key {
+                            key: egui::Key::Backspace,
+                            ..
+                        } => {
                             buf.pop();
                             modified = true;
                         }

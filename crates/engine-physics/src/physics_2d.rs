@@ -367,7 +367,11 @@ impl PhysicsWorld2D {
             world.get_by_index_mut::<engine_core::transform::Transform>(push_eid)
         {
             let pos = transform.position();
-            transform.set_position(Vec3::new(pos.x + push_normal.x * pen, pos.y + push_normal.y * pen, pos.z));
+            transform.set_position(Vec3::new(
+                pos.x + push_normal.x * pen,
+                pos.y + push_normal.y * pen,
+                pos.z,
+            ));
         }
 
         // Velocity correction: cancel velocity into the collision surface

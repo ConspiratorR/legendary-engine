@@ -635,7 +635,9 @@ fn draw_context_menu(
         egui::Id::new("ctx_menu_bg"),
         egui::Sense::click(),
     );
-    if bg_response.clicked() && !menu_rect.contains(bg_response.interact_pointer_pos().unwrap_or_default()) {
+    if bg_response.clicked()
+        && !menu_rect.contains(bg_response.interact_pointer_pos().unwrap_or_default())
+    {
         state.context_menu = None;
         return;
     }
@@ -874,10 +876,9 @@ fn draw_context_menu(
                     state
                         .node_transforms
                         .insert(new_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
-                    state.node_render.insert(
-                        new_id,
-                        ("Default".into(), "Cube".into(), true),
-                    );
+                    state
+                        .node_render
+                        .insert(new_id, ("Default".into(), "Cube".into(), true));
                     state
                         .node_materials
                         .insert(new_id, crate::state::MaterialData::default());
@@ -888,10 +889,9 @@ fn draw_context_menu(
                     state
                         .node_transforms
                         .insert(new_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
-                    state.node_render.insert(
-                        new_id,
-                        ("Default".into(), "Sphere".into(), true),
-                    );
+                    state
+                        .node_render
+                        .insert(new_id, ("Default".into(), "Sphere".into(), true));
                     state
                         .node_materials
                         .insert(new_id, crate::state::MaterialData::default());

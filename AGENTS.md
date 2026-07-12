@@ -4,7 +4,7 @@ Rust game engine (MIT license, author: ConspiratorR).
 
 ## Current state
 
-14 crates with real implementation (~9k+ lines non-test). Core infrastructure (ECS, app, input, scene, asset) complete. Rendering pipeline (wgpu render graph, sprite pipeline, camera) in progress. Physics/network partially implemented (types real, runtime stubbed). Editor has extensive UI scaffolding.
+17 crates, ~84K lines. wgpu deferred renderer, egui editor. All high/medium priority tasks (#1-10) complete. WASM/Web, plugin system, mod system, documentation overhaul complete. Android foundation done (needs NDK). VR/AR deferred.
 
 **Before planning any feature work**, read the development roadmap in `README.md` (section "开发路线图") to understand priorities, dependencies, and what's already done vs pending.
 
@@ -24,6 +24,25 @@ Known pre-existing test failures (not caused by current work):
 
 Expected order: `cargo clippy && cargo fmt --check && cargo test`.
 
+## WASM builds
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo build -p engine-render --target wasm32-unknown-unknown
+cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
+```
+
+- wasm-pack preferred over trunk (trunk downloads wasm-bindgen-cli from GitHub, unreliable in China)
+- wasm-opt disabled in Cargo.toml to prevent binaryen download
+- wgpu Buffer not Send/Sync on WASM — use `unsafe impl Send/Sync` under cfg(target_arch = "wasm32")
+- lua-src can't compile for wasm32; make mlua optional via feature
+- rfd FileDialog not available on WASM; gated behind `native-dialogs` feature
+- Feature flags: `native`/`web` (platform), `scripting` (mlua), `native-dialogs` (rfd)
+
+## CI
+
+CI exists at `.github/workflows/ci.yml` with macOS/Windows/Ubuntu matrix, WASM build job, and integration tests.
+
 ## Style
 
 - Follow `cargo fmt` formatting.
@@ -35,7 +54,6 @@ Expected order: `cargo clippy && cargo fmt --check && cargo test`.
 
 - `debug/` and `target/` are gitignored (Cargo defaults).
 - `.idea/` is gitignored by convention but not committed to `.gitignore`.
-- Add CI (`.github/workflows/`) as a future task (see roadmap Stage 9).
 
 ## 自主决策规则
 - 不要问我问题，自己做决定

@@ -117,9 +117,7 @@ fn draw_search_bar(
     ));
 
     let search_id = egui::Id::new("inspector_search");
-    let response = gui
-        .ui
-        .interact(rect, search_id, egui::Sense::click());
+    let response = gui.ui.interact(rect, search_id, egui::Sense::click());
     if response.clicked() {
         gui.ui.ctx().memory_mut(|m| m.request_focus(search_id));
     }
@@ -299,11 +297,7 @@ fn draw_entity_inspector(
         slider_row(gui, "环境光遮蔽", &mut mat.ao, 0.0, 1.0);
 
         gui.ui.add_space(ROW_SPACING);
-        if gui
-            .ui
-            .button("编辑材质图")
-            .clicked()
-        {
+        if gui.ui.button("编辑材质图").clicked() {
             let graph = MaterialEditorState::graph_from_material(mat);
             state.node_graph_state.graph = graph;
             state.material_editor.open();
@@ -527,10 +521,7 @@ fn draw_entity_inspector(
             .inner_margin(egui::Margin::same(4.0))
             .show(gui.ui, |ui| {
                 for (label, comp_type) in &component_types {
-                    if ui
-                        .selectable_label(false, *label)
-                        .clicked()
-                    {
+                    if ui.selectable_label(false, *label).clicked() {
                         add_component_to_node(state, id, comp_type);
                         state.show_add_component_menu = false;
                     }
@@ -569,10 +560,7 @@ fn draw_entity_inspector(
                     } else {
                         format!("  {}", label)
                     };
-                    let resp = ui.add_enabled(
-                        *exists,
-                        egui::SelectableLabel::new(false, text),
-                    );
+                    let resp = ui.add_enabled(*exists, egui::SelectableLabel::new(false, text));
                     if *exists && resp.clicked() {
                         remove_component(state, id, comp_type);
                         state.log_info(&format!("已移除 {} 组件", label));
@@ -630,11 +618,7 @@ fn vec3_row(gui: &mut Gui, label: &str, x: &mut f32, y: &mut f32, z: &mut f32) {
         ] {
             let mut buf = format!("{:.1}", *val);
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new(axis_label)
-                        .color(acolor)
-                        .size(10.0),
-                );
+                ui.label(egui::RichText::new(axis_label).color(acolor).size(10.0));
                 let resp = ui.add(
                     egui::TextEdit::singleline(&mut buf)
                         .desired_width(48.0)
@@ -693,10 +677,7 @@ fn text_input_row(gui: &mut Gui, label: &str, value: &mut String) {
                 .color(Color32::from_gray(152))
                 .size(12.0),
         );
-        ui.add(
-            egui::TextEdit::singleline(value)
-                .desired_width(ui.available_width()),
-        );
+        ui.add(egui::TextEdit::singleline(value).desired_width(ui.available_width()));
     });
     gui.ui.add_space(ROW_SPACING);
 }

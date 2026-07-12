@@ -93,7 +93,7 @@ pub fn main() {
     app_builder.add_pre_update_hook(Box::new(|app| {
         // Update time
         if let Some(time) = app.world.get_resource_mut::<Time>() {
-            time.update();
+            time.update(0.016);
         }
 
         // Spawn particles
@@ -136,11 +136,16 @@ pub fn main() {
                     .map(|s| s.particles.len())
                     .unwrap_or(0);
 
+                let fps = if time.deltaTime() > 0.0 {
+                    1.0 / time.deltaTime()
+                } else {
+                    0.0
+                };
                 println!(
                     "[Frame {}] Particles: {} | FPS: {:.1}",
                     time.frame_count(),
                     particle_count,
-                    time.fps()
+                    fps
                 );
             }
         }

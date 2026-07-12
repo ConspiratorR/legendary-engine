@@ -140,8 +140,8 @@ mod tests {
     use super::*;
     use crate::time::Time;
     use crate::world::World;
-    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     #[test]
     fn test_player_loop_phases() {

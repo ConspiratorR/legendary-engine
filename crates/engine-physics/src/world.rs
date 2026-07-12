@@ -224,7 +224,8 @@ impl PhysicsWorld {
                     let speed_sq = vel.length_squared();
 
                     if has_ccd && speed_sq > threshold * threshold {
-                        let safe_pos = self.ccd_sweep(world, idx, transform.position(), desired_pos);
+                        let safe_pos =
+                            self.ccd_sweep(world, idx, transform.position(), desired_pos);
                         updates.push((idx, safe_pos));
                     } else {
                         updates.push((idx, desired_pos));
@@ -283,9 +284,13 @@ impl PhysicsWorld {
             let other_radius = other_collider.shape.get_bounding_sphere();
 
             let result = match &other_collider.shape {
-                ColliderShape::Sphere { .. } => {
-                    sweep_sphere_sphere(start, end, radius, other_transform.position(), other_radius)
-                }
+                ColliderShape::Sphere { .. } => sweep_sphere_sphere(
+                    start,
+                    end,
+                    radius,
+                    other_transform.position(),
+                    other_radius,
+                ),
                 ColliderShape::Box { half_extents } => {
                     let other_pos = other_transform.position();
                     let aabb_min = other_pos - *half_extents;
@@ -294,7 +299,13 @@ impl PhysicsWorld {
                 }
                 _ => {
                     // Capsule/Cylinder: approximate as sphere sweep
-                    sweep_sphere_sphere(start, end, radius, other_transform.position(), other_radius)
+                    sweep_sphere_sphere(
+                        start,
+                        end,
+                        radius,
+                        other_transform.position(),
+                        other_radius,
+                    )
                 }
             };
 

@@ -44,7 +44,9 @@ fn main() {
         }
     } else {
         println!("No 'plugins' directory found. Skipping dynamic plugin loading.");
-        println!("To load dynamic plugins, create a 'plugins' directory with plugin subdirectories.");
+        println!(
+            "To load dynamic plugins, create a 'plugins' directory with plugin subdirectories."
+        );
         println!("Each plugin directory should contain:");
         println!("  - plugin.json (manifest)");
         println!("  - <name>plugin.dll (Windows) or lib<name>plugin.so (Linux)");
