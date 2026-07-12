@@ -17,7 +17,12 @@ pub struct Context<'a> {
 impl<'a> Context<'a> {
     /// Create a new context.
     pub fn new(world: &'a mut World, time: Time, frame: u64, events: &'a mut EventBus) -> Self {
-        Self { world, time, frame, events }
+        Self {
+            world,
+            time,
+            frame,
+            events,
+        }
     }
 }
 
