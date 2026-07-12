@@ -26,6 +26,9 @@ pub struct AppBuilder {
     pre_update_hooks: Vec<Hook>,
     post_update_hooks: Vec<Hook>,
     post_render_hooks: Vec<Hook>,
+    player_loop: crate::player_loop::PlayerLoop,
+    time: crate::time::Time,
+    plugins: Vec<Box<dyn Plugin>>,
 }
 
 impl Default for AppBuilder {
@@ -47,6 +50,9 @@ impl AppBuilder {
             pre_update_hooks: Vec::new(),
             post_update_hooks: Vec::new(),
             post_render_hooks: Vec::new(),
+            player_loop: crate::player_loop::PlayerLoop::new(),
+            time: crate::time::Time::new(),
+            plugins: Vec::new(),
         }
     }
 
@@ -63,6 +69,15 @@ impl AppBuilder {
     /// Register a plugin.
     pub fn add_plugin(&mut self, plugin: impl Plugin) -> &mut Self {
         plugin.build(self);
+        self
+    }
+
+    /// Register a plugin for deferred execution.
+    ///
+    /// Unlike [`add_plugin`](Self::add_plugin), which calls `build()` immediately,
+    /// this method stores the plugin and runs it during [`build`](Self::build).
+    pub fn add_plugin_stored(&mut self, plugin: impl Plugin + 'static) -> &mut Self {
+        self.plugins.push(Box::new(plugin));
         self
     }
 
@@ -144,8 +159,65 @@ impl AppBuilder {
         self
     }
 
+    /// Add a system to a specific phase (Unity-like PlayerLoop system).
+    pub fn add_system_to_phase(
+        &mut self,
+        phase: crate::player_loop::Phase,
+        system: impl crate::system::System + 'static,
+    ) -> &mut Self {
+        self.player_loop.add_system(phase, system);
+        self
+    }
+
+    /// Add a startup system (runs once before first frame).
+    pub fn add_startup_system(
+        &mut self,
+        system: impl crate::system::System + 'static,
+    ) -> &mut Self {
+        self.player_loop.add_startup_system(system);
+        self
+    }
+
+    /// Add a system to the FixedUpdate phase.
+    pub fn add_fixed_update_system(
+        &mut self,
+        system: impl crate::system::System + 'static,
+    ) -> &mut Self {
+        self.player_loop
+            .add_system(crate::player_loop::Phase::FixedUpdate, system);
+        self
+    }
+
+    /// Add a system to the LateUpdate phase.
+    pub fn add_late_update_system(
+        &mut self,
+        system: impl crate::system::System + 'static,
+    ) -> &mut Self {
+        self.player_loop
+            .add_system(crate::player_loop::Phase::LateUpdate, system);
+        self
+    }
+
+    /// Get mutable access to the player loop.
+    pub fn player_loop_mut(&mut self) -> &mut crate::player_loop::PlayerLoop {
+        &mut self.player_loop
+    }
+
+    /// Get shared access to the time.
+    pub fn time(&self) -> &crate::time::Time {
+        &self.time
+    }
+
     /// Finalize the builder and produce an [`App`].
-    pub fn build(self) -> App {
+    ///
+    /// Runs any stored plugins (via [`add_plugin_stored`](Self::add_plugin_stored))
+    /// before producing the final App.
+    pub fn build(mut self) -> App {
+        // Run stored plugins
+        let plugins: Vec<Box<dyn Plugin>> = std::mem::take(&mut self.plugins);
+        for plugin in plugins {
+            plugin.build(&mut self);
+        }
         App::from(self)
     }
 }
@@ -173,6 +245,10 @@ pub struct App {
     pub post_update_hooks: Vec<Hook>,
     /// Hooks executed after the render phase.
     pub post_render_hooks: Vec<Hook>,
+    player_loop: crate::player_loop::PlayerLoop,
+    time: crate::time::Time,
+    running: bool,
+    frame: u64,
 }
 
 impl Default for App {
@@ -196,6 +272,10 @@ impl App {
             pre_update_hooks: Vec::new(),
             post_update_hooks: Vec::new(),
             post_render_hooks: Vec::new(),
+            player_loop: crate::player_loop::PlayerLoop::new(),
+            time: crate::time::Time::new(),
+            running: false,
+            frame: 0,
         }
     }
 
@@ -346,6 +426,65 @@ impl App {
         let renderer = self.renderer.as_mut().unwrap();
         let _ = renderer.render_frame(&camera_refs, &sprites, bridge, registry);
     }
+
+    /// Run one frame with delta time (Unity-like Update).
+    ///
+    /// Updates the time and increments the frame counter.
+    /// Note: PlayerLoop integration requires the local World type;
+    /// use the existing [`run`](Self::run) method for engine_ecs systems.
+    pub fn update(&mut self, delta: f32) {
+        self.time.update(delta);
+        self.frame += 1;
+    }
+
+    /// Run fixed update step (Unity-like FixedUpdate).
+    ///
+    /// Updates the fixed time step.
+    /// Note: PlayerLoop integration requires the local World type;
+    /// use the existing [`run`](Self::run) method for engine_ecs systems.
+    pub fn fixed_update(&mut self) {
+        self.time.update_fixed();
+    }
+
+    /// Check if the app is running.
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    /// Set the running state.
+    pub fn set_running(&mut self, running: bool) {
+        self.running = running;
+    }
+
+    /// Get the current frame number.
+    pub fn frame(&self) -> u64 {
+        self.frame
+    }
+
+    /// Quit the application (Unity-like Application.Quit).
+    pub fn quit(&mut self) {
+        self.running = false;
+    }
+
+    /// Get a reference to the time.
+    pub fn time_ref(&self) -> &crate::time::Time {
+        &self.time
+    }
+
+    /// Get a mutable reference to the time.
+    pub fn time_mut(&mut self) -> &mut crate::time::Time {
+        &mut self.time
+    }
+
+    /// Get a reference to the player loop.
+    pub fn player_loop(&self) -> &crate::player_loop::PlayerLoop {
+        &self.player_loop
+    }
+
+    /// Get a mutable reference to the player loop.
+    pub fn player_loop_mut(&mut self) -> &mut crate::player_loop::PlayerLoop {
+        &mut self.player_loop
+    }
 }
 
 impl From<AppBuilder> for App {
@@ -360,6 +499,10 @@ impl From<AppBuilder> for App {
             pre_update_hooks: b.pre_update_hooks,
             post_update_hooks: b.post_update_hooks,
             post_render_hooks: b.post_render_hooks,
+            player_loop: b.player_loop,
+            time: b.time,
+            running: false,
+            frame: 0,
         }
     }
 }
@@ -405,5 +548,94 @@ mod tests {
         let mut builder = AppBuilder::new();
         let result = builder.load_dynamic_plugins(dir.path());
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_app_builder_phase_systems() {
+        let builder = AppBuilder::new();
+        let app = builder.build();
+        assert_eq!(app.player_loop().system_count(), 0);
+    }
+
+    #[test]
+    fn test_app_builder_phase_systems_with_mutable() {
+        use crate::player_loop::Phase;
+
+        let mut builder = AppBuilder::new();
+        builder.add_system_to_phase(Phase::Update, |_: &mut crate::context::Context| {});
+        builder.add_late_update_system(|_: &mut crate::context::Context| {});
+
+        let app = builder.build();
+        assert_eq!(app.player_loop().system_count(), 2);
+    }
+
+    #[test]
+    fn test_app_builder_startup_system() {
+        let mut builder = AppBuilder::new();
+        builder.add_startup_system(|_: &mut crate::context::Context| {});
+        builder.add_system_to_phase(
+            crate::player_loop::Phase::Update,
+            |_: &mut crate::context::Context| {},
+        );
+
+        let app = builder.build();
+        assert_eq!(app.player_loop().system_count(), 1);
+        assert_eq!(app.player_loop().startup_system_count(), 1);
+    }
+
+    #[test]
+    fn test_app_fixed_update() {
+        let mut builder = AppBuilder::new();
+        builder.add_fixed_update_system(|_: &mut crate::context::Context| {});
+
+        let mut app = builder.build();
+        // fixed_update updates time
+        let before = app.time_ref().time();
+        app.fixed_update();
+        assert!(app.time_ref().in_fixed_time_step());
+        // Time should not advance in fixed_update (only sets the flag)
+        assert_eq!(app.time_ref().time(), before);
+    }
+
+    #[test]
+    fn test_app_quit_and_running() {
+        let builder = AppBuilder::new();
+        let mut app = builder.build();
+
+        assert!(!app.is_running());
+        app.set_running(true);
+        assert!(app.is_running());
+
+        app.quit();
+        assert!(!app.is_running());
+    }
+
+    #[test]
+    fn test_app_frame_count() {
+        let builder = AppBuilder::new();
+        let mut app = builder.build();
+
+        assert_eq!(app.frame(), 0);
+        app.update(0.016);
+        assert_eq!(app.frame(), 1);
+        app.update(0.016);
+        assert_eq!(app.frame(), 2);
+    }
+
+    #[test]
+    fn test_plugin_name() {
+        struct MyPlugin;
+        impl crate::plugin::Plugin for MyPlugin {
+            fn build(&self, _app: &mut AppBuilder) {}
+        }
+        assert!(MyPlugin.name().contains("MyPlugin"));
+    }
+
+    #[test]
+    fn test_closure_plugin() {
+        let mut builder = AppBuilder::new();
+        builder.add_plugin(|_app: &mut AppBuilder| {});
+        // Should compile and not panic
+        let _app = builder.build();
     }
 }
