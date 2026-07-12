@@ -15,14 +15,16 @@ use engine_scene::transform::{GlobalTransform, Transform};
 #[test]
 fn test_scene_node_from_gameobject_handle() {
     let handle = GameObjectHandle::new(42, 0);
-    let node = SceneNode::new(handle);
+    let entity = Entity::new(42, 0);
+    let node = SceneNode::new(handle, entity);
     assert_eq!(node.gameobject(), handle);
 }
 
 #[test]
 fn test_scene_node_copy_and_eq() {
     let handle = GameObjectHandle::new(1, 0);
-    let a = SceneNode::new(handle);
+    let entity = Entity::new(1, 0);
+    let a = SceneNode::new(handle, entity);
     let b = a;
     assert_eq!(a, b);
 }

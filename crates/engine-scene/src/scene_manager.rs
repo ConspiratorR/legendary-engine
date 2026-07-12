@@ -43,7 +43,7 @@ impl SceneManager {
         entity_to_handle.insert(root_entity.index(), root_handle);
         handle_to_entity.insert(0, root_entity);
 
-        let root = SceneNode::new(root_handle);
+        let root = SceneNode::new(root_handle, root_entity);
         let names = vec!["root".to_string()];
         Self {
             world,
@@ -89,7 +89,7 @@ impl SceneManager {
         self.entity_to_handle.insert(entity.index(), handle);
         self.handle_to_entity.insert(handle_index, entity);
 
-        let node = SceneNode::new(handle);
+        let node = SceneNode::new(handle, entity);
         let idx = entity.index() as usize;
         if idx >= self.names.len() {
             self.names.resize_with(idx + 1, String::new);
@@ -133,7 +133,7 @@ impl SceneManager {
         self.world.get::<Parent>(entity).and_then(|p| {
             self.entity_to_handle
                 .get(&p.0.index())
-                .map(|&h| SceneNode::new(h))
+                .map(|&h| SceneNode::new(h, self.resolve_entity_handle(h)))
         })
     }
 

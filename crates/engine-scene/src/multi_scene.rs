@@ -104,7 +104,7 @@ impl MultiSceneManager {
         entity_to_handle.insert(root_entity.index(), root_handle);
         handle_to_entity.insert(0, root_entity);
 
-        let root = SceneNode::new(root_handle);
+        let root = SceneNode::new(root_handle, root_entity);
         Self {
             world,
             scenes: HashMap::new(),
