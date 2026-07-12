@@ -3,6 +3,11 @@ use crate::world::World;
 
 /// System that synchronizes world transforms from local transforms.
 /// Runs in the PreUpdate phase (before gameplay systems).
+///
+/// NOTE: This function allocates a Vec for root handles and a Vec for each
+/// node's children on every call. For large hierarchies this may be worth
+/// optimizing with a pre-allocated iterative approach, but for now the
+/// recursive approach is simpler and sufficient.
 pub fn sync_transforms(world: &mut World) {
     let roots: Vec<GameObjectHandle> = world.root_gameobjects(true);
 
@@ -61,6 +66,9 @@ pub fn get_ancestors(world: &World, handle: GameObjectHandle) -> Vec<GameObjectH
 }
 
 /// Get the root ancestor of a GameObject.
+/// If the handle itself is invalid (no parent lookup succeeds), the handle is
+/// returned as-is.
+#[inline]
 pub fn get_root(world: &World, handle: GameObjectHandle) -> GameObjectHandle {
     let mut current = handle;
     while let Some(parent) = world.get_parent(current) {
@@ -70,6 +78,7 @@ pub fn get_root(world: &World, handle: GameObjectHandle) -> GameObjectHandle {
 }
 
 /// Check if a GameObject is an ancestor of another.
+#[inline]
 pub fn is_ancestor(
     world: &World,
     ancestor: GameObjectHandle,
@@ -86,6 +95,7 @@ pub fn is_ancestor(
 }
 
 /// Get the depth of a GameObject in the hierarchy (root = 0).
+#[inline]
 pub fn get_depth(world: &World, handle: GameObjectHandle) -> usize {
     let mut depth = 0;
     let mut current = world.get_parent(handle);
@@ -120,6 +130,37 @@ mod tests {
             .get_component::<Transform>()
             .unwrap();
         assert_eq!(transform.position(), Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn test_sync_child_transform_composes_with_parent() {
+        let mut world = World::new();
+
+        let mut root_go = GameObject::new("Root");
+        root_go.add_component(Transform::from_xyz(5.0, 0.0, 0.0));
+        let root = world.spawn(root_go);
+
+        let mut child_go = GameObject::new("Child");
+        child_go.add_component(Transform::from_xyz(1.0, 0.0, 0.0));
+        let child = world.spawn(child_go);
+
+        world.set_parent(child, Some(root));
+
+        sync_transforms(&mut world);
+
+        let root_t = world
+            .get_gameobject(root)
+            .unwrap()
+            .get_component::<Transform>()
+            .unwrap();
+        assert_eq!(root_t.position(), Vec3::new(5.0, 0.0, 0.0));
+
+        let child_t = world
+            .get_gameobject(child)
+            .unwrap()
+            .get_component::<Transform>()
+            .unwrap();
+        assert_eq!(child_t.position(), Vec3::new(6.0, 0.0, 0.0));
     }
 
     #[test]
