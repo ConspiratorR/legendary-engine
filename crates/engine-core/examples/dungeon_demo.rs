@@ -683,11 +683,9 @@ fn enemy_ai_system(world: &mut World) {
     // Get player position for distance checks
     let player_pos = {
         let players = world.component_entities::<PlayerState>();
-        players.first().and_then(|&eid| {
-            world
-                .get_by_index::<Transform>(eid)
-                .map(|t| Vec3::new(t.position.x, t.position.y, t.position.z))
-        })
+        players
+            .first()
+            .and_then(|&eid| world.get_by_index::<Transform>(eid).map(|t| t.position()))
     };
     let player_pos = match player_pos {
         Some(p) => p,
@@ -935,15 +933,10 @@ fn status_report_system(world: &mut World) {
             world.get_by_index::<PlayerState>(eid),
             world.get_by_index::<Transform>(eid),
         ) {
+            let pos = transform.position();
             println!(
                 "[Status] t={:.1}s | Pos: ({:.1}, {:.1}, {:.1}) | Lives: {} | Score: {} | Key: {}",
-                elapsed,
-                transform.position.x,
-                transform.position.y,
-                transform.position.z,
-                player.lives,
-                player.score,
-                player.has_key,
+                elapsed, pos.x, pos.y, pos.z, player.lives, player.score, player.has_key,
             );
         }
     }

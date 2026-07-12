@@ -301,7 +301,7 @@ fn enemy_ai_system(world: &mut World) {
         // Check if enemy has moved beyond patrol range from its spawn point.
         let mut new_dir = patrol_dir;
         if let Some(transform) = world.get_by_index::<Transform>(eid) {
-            let dx = transform.position.x - spawn_x;
+            let dx = transform.position().x - spawn_x;
             if dx > patrol_range {
                 new_dir = -1.0;
             } else if dx < -patrol_range {
@@ -405,14 +405,13 @@ fn death_zone_system(world: &mut World) {
         // Check if player has fallen below the death threshold.
         let fell = world
             .get_by_index::<Transform>(eid)
-            .map(|t| t.position.y < -200.0)
+            .map(|t| t.position().y < -200.0)
             .unwrap_or(false);
 
         if fell {
             // Respawn: reset position, velocity, and deduct a life.
             if let Some(t) = world.get_by_index_mut::<Transform>(eid) {
-                t.position.x = 100.0;
-                t.position.y = 200.0;
+                t.set_position(Vec3::new(100.0, 200.0, t.position().z));
             }
             if let Some(body) = world.get_by_index_mut::<RigidBody2D>(eid) {
                 body.velocity = Vec2::ZERO;
@@ -450,7 +449,8 @@ fn render_ascii(world: &World) {
         if let Some(transform) = world.get_by_index::<Transform>(eid)
             && let Some(collider) = world.get_by_index::<Collider2D>(eid)
         {
-            let aabb = collider.world_aabb(Vec2::new(transform.position.x, transform.position.y));
+            let pos = transform.position();
+            let aabb = collider.world_aabb(Vec2::new(pos.x, pos.y));
             // Convert world coordinates to terminal cell coordinates.
             let x1 = ((aabb.min.x / tile_size) as i32).max(0) as usize;
             let x2 = ((aabb.max.x / tile_size) as i32).min(width as i32 - 1) as usize;
@@ -474,12 +474,9 @@ fn render_ascii(world: &World) {
             continue;
         }
         if let Some(transform) = world.get_by_index::<Transform>(eid) {
-            let x = ((transform.position.x / tile_size) as i32)
-                .max(0)
-                .min(width as i32 - 1) as usize;
-            let y = ((transform.position.y / tile_size) as i32)
-                .max(0)
-                .min(height as i32 - 1) as usize;
+            let pos = transform.position();
+            let x = ((pos.x / tile_size) as i32).max(0).min(width as i32 - 1) as usize;
+            let y = ((pos.y / tile_size) as i32).max(0).min(height as i32 - 1) as usize;
             buffer[y][x] = '$';
         }
     }
@@ -488,12 +485,9 @@ fn render_ascii(world: &World) {
     let enemies: Vec<u32> = world.component_entities::<EnemyAI>();
     for &eid in &enemies {
         if let Some(transform) = world.get_by_index::<Transform>(eid) {
-            let x = ((transform.position.x / tile_size) as i32)
-                .max(0)
-                .min(width as i32 - 1) as usize;
-            let y = ((transform.position.y / tile_size) as i32)
-                .max(0)
-                .min(height as i32 - 1) as usize;
+            let pos = transform.position();
+            let x = ((pos.x / tile_size) as i32).max(0).min(width as i32 - 1) as usize;
+            let y = ((pos.y / tile_size) as i32).max(0).min(height as i32 - 1) as usize;
             buffer[y][x] = 'E';
         }
     }
@@ -502,12 +496,9 @@ fn render_ascii(world: &World) {
     let goals: Vec<u32> = world.component_entities::<GoalMarker>();
     for &eid in &goals {
         if let Some(transform) = world.get_by_index::<Transform>(eid) {
-            let x = ((transform.position.x / tile_size) as i32)
-                .max(0)
-                .min(width as i32 - 1) as usize;
-            let y = ((transform.position.y / tile_size) as i32)
-                .max(0)
-                .min(height as i32 - 1) as usize;
+            let pos = transform.position();
+            let x = ((pos.x / tile_size) as i32).max(0).min(width as i32 - 1) as usize;
+            let y = ((pos.y / tile_size) as i32).max(0).min(height as i32 - 1) as usize;
             buffer[y][x] = 'F';
         }
     }
@@ -516,12 +507,9 @@ fn render_ascii(world: &World) {
     let players: Vec<u32> = world.component_entities::<PlayerState>();
     for &eid in &players {
         if let Some(transform) = world.get_by_index::<Transform>(eid) {
-            let x = ((transform.position.x / tile_size) as i32)
-                .max(0)
-                .min(width as i32 - 1) as usize;
-            let y = ((transform.position.y / tile_size) as i32)
-                .max(0)
-                .min(height as i32 - 1) as usize;
+            let pos = transform.position();
+            let x = ((pos.x / tile_size) as i32).max(0).min(width as i32 - 1) as usize;
+            let y = ((pos.y / tile_size) as i32).max(0).min(height as i32 - 1) as usize;
             buffer[y][x] = '@';
         }
     }

@@ -3,7 +3,7 @@
 //! Provides AABB collision, simple gravity, ground detection, and trigger support.
 //! Designed for tile-based 2D games — no rotation, no circle collision, no constraints.
 
-use engine_math::Vec2;
+use engine_math::{Vec2, Vec3};
 
 /// Axis-aligned bounding box in 2D.
 #[derive(Debug, Clone, Copy)]
@@ -257,8 +257,8 @@ impl PhysicsWorld2D {
             if let Some(transform) =
                 world.get_by_index_mut::<engine_core::transform::Transform>(eid)
             {
-                transform.position.x += vel.x * dt;
-                transform.position.y += vel.y * dt;
+                let pos = transform.position();
+                transform.set_position(Vec3::new(pos.x + vel.x * dt, pos.y + vel.y * dt, pos.z));
             }
         }
 
@@ -289,8 +289,9 @@ impl PhysicsWorld2D {
                 .map(|b| b.body_type)
                 .unwrap_or(BodyType2D::Static);
             if let Some(transform) = world.get_by_index::<engine_core::transform::Transform>(eid) {
-                let pos = Vec2::new(transform.position.x, transform.position.y);
-                colliders.push((eid, pos, collider.clone(), body_type));
+                let pos = transform.position();
+                let pos2 = Vec2::new(pos.x, pos.y);
+                colliders.push((eid, pos2, collider.clone(), body_type));
             }
         }
 
@@ -365,8 +366,8 @@ impl PhysicsWorld2D {
         if let Some(transform) =
             world.get_by_index_mut::<engine_core::transform::Transform>(push_eid)
         {
-            transform.position.x += push_normal.x * pen;
-            transform.position.y += push_normal.y * pen;
+            let pos = transform.position();
+            transform.set_position(Vec3::new(pos.x + push_normal.x * pen, pos.y + push_normal.y * pen, pos.z));
         }
 
         // Velocity correction: cancel velocity into the collision surface

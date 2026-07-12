@@ -7,7 +7,7 @@ use crate::contact::{ContactManifold, ContactPoint, ContactSolver};
 use crate::joint::JointSolver;
 use engine_core::transform::Transform;
 use engine_ecs::world::World;
-use engine_math::{EulerRot, Quat, Vec3};
+use engine_math::Vec3;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicPtr;
@@ -215,7 +215,7 @@ impl PhysicsWorld {
                 }
                 let vel = body.linear_velocity;
                 if let Some(transform) = world.get_by_index::<Transform>(idx) {
-                    let desired_pos = transform.position + vel * dt;
+                    let desired_pos = transform.position() + vel * dt;
 
                     // CCD: sweep if body has CcdBody and speed exceeds threshold
                     let ccd = world.get_by_index::<CcdBody>(idx);
@@ -224,7 +224,7 @@ impl PhysicsWorld {
                     let speed_sq = vel.length_squared();
 
                     if has_ccd && speed_sq > threshold * threshold {
-                        let safe_pos = self.ccd_sweep(world, idx, transform.position, desired_pos);
+                        let safe_pos = self.ccd_sweep(world, idx, transform.position(), desired_pos);
                         updates.push((idx, safe_pos));
                     } else {
                         updates.push((idx, desired_pos));
@@ -236,7 +236,7 @@ impl PhysicsWorld {
         // Phase 2: apply position updates
         for (idx, new_pos) in updates {
             if let Some(transform) = world.get_by_index_mut::<Transform>(idx) {
-                transform.position = new_pos;
+                transform.set_position(new_pos);
             }
         }
     }
@@ -284,16 +284,17 @@ impl PhysicsWorld {
 
             let result = match &other_collider.shape {
                 ColliderShape::Sphere { .. } => {
-                    sweep_sphere_sphere(start, end, radius, other_transform.position, other_radius)
+                    sweep_sphere_sphere(start, end, radius, other_transform.position(), other_radius)
                 }
                 ColliderShape::Box { half_extents } => {
-                    let aabb_min = other_transform.position - *half_extents;
-                    let aabb_max = other_transform.position + *half_extents;
+                    let other_pos = other_transform.position();
+                    let aabb_min = other_pos - *half_extents;
+                    let aabb_max = other_pos + *half_extents;
                     sweep_sphere_aabb(start, end, radius, aabb_min, aabb_max)
                 }
                 _ => {
                     // Capsule/Cylinder: approximate as sphere sweep
-                    sweep_sphere_sphere(start, end, radius, other_transform.position, other_radius)
+                    sweep_sphere_sphere(start, end, radius, other_transform.position(), other_radius)
                 }
             };
 
@@ -402,7 +403,7 @@ impl PhysicsWorld {
                 };
                 self.broadphase.insert(BroadphaseEntry {
                     entity_index: idx,
-                    center: transform.position,
+                    center: transform.position(),
                     half_extents,
                     collision_layers: collider.collision_layers,
                     collision_mask: collider.collision_mask,
@@ -436,26 +437,16 @@ impl PhysicsWorld {
                     return None;
                 }
 
-                let rot_a = Quat::from_euler(
-                    EulerRot::XYZ,
-                    transform_a.rotation.x,
-                    transform_a.rotation.y,
-                    transform_a.rotation.z,
-                );
-                let rot_b = Quat::from_euler(
-                    EulerRot::XYZ,
-                    transform_b.rotation.x,
-                    transform_b.rotation.y,
-                    transform_b.rotation.z,
-                );
+                let rot_a = transform_a.rotation();
+                let rot_b = transform_b.rotation();
 
                 // Sensor pairs: overlap test only
                 if collider_a.is_sensor || collider_b.is_sensor {
                     let overlap = check_collision(
-                        transform_a.position,
+                        transform_a.position(),
                         rot_a,
                         collider_a,
-                        transform_b.position,
+                        transform_b.position(),
                         rot_b,
                         collider_b,
                     );
@@ -466,10 +457,10 @@ impl PhysicsWorld {
                 }
 
                 let mut info = check_collision(
-                    transform_a.position,
+                    transform_a.position(),
                     rot_a,
                     collider_a,
-                    transform_b.position,
+                    transform_b.position(),
                     rot_b,
                     collider_b,
                 )?;
@@ -729,12 +720,14 @@ impl PhysicsWorld {
                     if is_dynamic_a
                         && let Some(transform) = world_ref.get_by_index_mut::<Transform>(idx_a)
                     {
-                        transform.position -= correction * inv_mass_a;
+                        let pos = transform.position();
+                        transform.set_position(pos - correction * inv_mass_a);
                     }
                     if is_dynamic_b
                         && let Some(transform) = world_ref.get_by_index_mut::<Transform>(idx_b)
                     {
-                        transform.position += correction * inv_mass_b;
+                        let pos = transform.position();
+                        transform.set_position(pos + correction * inv_mass_b);
                     }
                 }
             }

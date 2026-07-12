@@ -113,6 +113,7 @@ pub mod world;
 
 // Re-export for convenience
 pub use gameobject::{Component, GameObject, GameObjectHandle};
+pub use transform::{Space, Transform};
 pub use world::World;
 
 #[cfg(target_os = "android")]

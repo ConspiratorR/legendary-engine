@@ -20,7 +20,7 @@
 
 use engine_core::color::Color;
 use engine_core::transform::Transform;
-use engine_math::{Quat, Vec2, Vec3, Vec4};
+use engine_math::{EulerRot, Quat, Vec2, Vec3, Vec4};
 use mlua::prelude::*;
 use std::collections::HashMap;
 
@@ -118,9 +118,9 @@ pub fn lua_to_color(t: &LuaTable) -> LuaResult<Color> {
 /// Create a Lua table representing a `Transform`.
 pub fn transform_to_lua(lua: &Lua, tr: Transform) -> LuaResult<LuaTable> {
     let t = lua.create_table()?;
-    t.set("position", vec3_to_lua(lua, tr.position)?)?;
-    t.set("rotation", vec3_to_lua(lua, tr.rotation)?)?;
-    t.set("scale", vec3_to_lua(lua, tr.scale)?)?;
+    t.set("position", vec3_to_lua(lua, tr.position())?)?;
+    t.set("rotation", vec3_to_lua(lua, Vec3::new(tr.rotation().x, tr.rotation().y, tr.rotation().z))?)?;
+    t.set("scale", vec3_to_lua(lua, tr.lossy_scale())?)?;
     Ok(t)
 }
 
@@ -129,11 +129,13 @@ pub fn lua_to_transform(t: &LuaTable) -> LuaResult<Transform> {
     let pos: LuaTable = t.get("position")?;
     let rot: LuaTable = t.get("rotation")?;
     let scl: LuaTable = t.get("scale")?;
-    Ok(Transform {
-        position: lua_to_vec3(&pos)?,
-        rotation: lua_to_vec3(&rot)?,
-        scale: lua_to_vec3(&scl)?,
-    })
+    let euler = lua_to_vec3(&rot)?;
+    let rotation = Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z);
+    Ok(Transform::from_position_rotation_scale(
+        lua_to_vec3(&pos)?,
+        rotation,
+        lua_to_vec3(&scl)?,
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -244,40 +246,44 @@ pub fn bytes_to_color(buf: &[u8]) -> Color {
     )
 }
 
-/// Serialize a `Transform` to 36 bytes (9×f32 LE: position + rotation + scale).
+/// Serialize a `Transform` to 36 bytes (9×f32 LE: position + rotation(euler) + scale).
 pub fn transform_to_bytes(t: &Transform) -> [u8; 36] {
     let mut buf = [0u8; 36];
-    write_f32_le(&mut buf, 0, t.position.x);
-    write_f32_le(&mut buf, 4, t.position.y);
-    write_f32_le(&mut buf, 8, t.position.z);
-    write_f32_le(&mut buf, 12, t.rotation.x);
-    write_f32_le(&mut buf, 16, t.rotation.y);
-    write_f32_le(&mut buf, 20, t.rotation.z);
-    write_f32_le(&mut buf, 24, t.scale.x);
-    write_f32_le(&mut buf, 28, t.scale.y);
-    write_f32_le(&mut buf, 32, t.scale.z);
+    let pos = t.position();
+    let rot = t.rotation();
+    let (euler_x, euler_y, euler_z) = rot.to_euler(EulerRot::XYZ);
+    let scl = t.lossy_scale();
+    write_f32_le(&mut buf, 0, pos.x);
+    write_f32_le(&mut buf, 4, pos.y);
+    write_f32_le(&mut buf, 8, pos.z);
+    write_f32_le(&mut buf, 12, euler_x);
+    write_f32_le(&mut buf, 16, euler_y);
+    write_f32_le(&mut buf, 20, euler_z);
+    write_f32_le(&mut buf, 24, scl.x);
+    write_f32_le(&mut buf, 28, scl.y);
+    write_f32_le(&mut buf, 32, scl.z);
     buf
 }
 
 /// Deserialize a `Transform` from 36 bytes.
 pub fn bytes_to_transform(buf: &[u8]) -> Transform {
-    Transform {
-        position: Vec3::new(
-            read_f32_le(buf, 0),
-            read_f32_le(buf, 4),
-            read_f32_le(buf, 8),
-        ),
-        rotation: Vec3::new(
-            read_f32_le(buf, 12),
-            read_f32_le(buf, 16),
-            read_f32_le(buf, 20),
-        ),
-        scale: Vec3::new(
-            read_f32_le(buf, 24),
-            read_f32_le(buf, 28),
-            read_f32_le(buf, 32),
-        ),
-    }
+    let pos = Vec3::new(
+        read_f32_le(buf, 0),
+        read_f32_le(buf, 4),
+        read_f32_le(buf, 8),
+    );
+    let euler = Vec3::new(
+        read_f32_le(buf, 12),
+        read_f32_le(buf, 16),
+        read_f32_le(buf, 20),
+    );
+    let rotation = Quat::from_euler(EulerRot::XYZ, euler.x, euler.y, euler.z);
+    let scl = Vec3::new(
+        read_f32_le(buf, 24),
+        read_f32_le(buf, 28),
+        read_f32_le(buf, 32),
+    );
+    Transform::from_position_rotation_scale(pos, rotation, scl)
 }
 
 // ---------------------------------------------------------------------------
