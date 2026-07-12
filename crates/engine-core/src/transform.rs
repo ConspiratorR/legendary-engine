@@ -155,7 +155,12 @@ impl Transform {
     }
 
     /// Transform a point from world to local space (like Unity's Transform.InverseTransformPoint).
+    ///
+    /// Returns the point unchanged if any world_scale component is zero (division by zero guard).
     pub fn inverse_transform_point(&self, point: Vec3) -> Vec3 {
+        if self.world_scale.x == 0.0 || self.world_scale.y == 0.0 || self.world_scale.z == 0.0 {
+            return point;
+        }
         let relative = point - self.world_position;
         let inv_rotation = self.world_rotation.inverse();
         let inv_scale = Vec3::new(
@@ -178,9 +183,9 @@ impl Transform {
 
     /// Look at a target position (like Unity's Transform.LookAt).
     pub fn look_at(&mut self, target: Vec3) {
-        let direction = (target - self.world_position).normalize();
-        if direction.length_squared() > 0.0001 {
-            self.world_rotation = Quat::from_rotation_arc(Vec3::Z, direction);
+        let raw = target - self.world_position;
+        if raw.length_squared() > 0.0001 {
+            self.world_rotation = Quat::from_rotation_arc(Vec3::Z, raw.normalize());
         }
     }
 
@@ -214,6 +219,9 @@ impl Transform {
     }
 
     /// Get the world-to-local matrix.
+    ///
+    /// # Warning
+    /// Returns a garbage matrix if the transform has zero scale (singular matrix).
     pub fn world_to_local_matrix(&self) -> Mat4 {
         self.local_to_world_matrix().inverse()
     }
@@ -275,6 +283,15 @@ mod tests {
     }
 
     #[test]
+    fn test_transform_look_at_zero_distance() {
+        let mut t = Transform::from_xyz(1.0, 2.0, 3.0);
+        t.update_world_transform_root();
+        let original = t.rotation();
+        t.look_at(Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(t.rotation(), original);
+    }
+
+    #[test]
     fn test_transform_translate() {
         let mut t = Transform::default();
         t.translate(Vec3::new(1.0, 0.0, 0.0), Space::World);
@@ -288,5 +305,44 @@ mod tests {
         t.update_world_transform(Vec3::new(5.0, 0.0, 0.0), Quat::IDENTITY, Vec3::ONE);
 
         assert_eq!(t.world_position, Vec3::new(6.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_inverse_transform_point_zero_scale() {
+        let mut t = Transform::default();
+        t.set_local_scale(Vec3::new(1.0, 0.0, 1.0));
+        t.update_world_transform_root();
+
+        let point = Vec3::new(5.0, 10.0, 15.0);
+        let result = t.inverse_transform_point(point);
+        assert_eq!(result, point);
+    }
+
+    #[test]
+    fn test_inverse_transform_point_normal() {
+        let mut t = Transform::default();
+        t.set_local_scale(Vec3::new(2.0, 2.0, 2.0));
+        t.update_world_transform_root();
+
+        let world_point = Vec3::new(4.0, 6.0, 8.0);
+        let local_point = t.inverse_transform_point(world_point);
+        let roundtrip = t.transform_point(local_point);
+        assert!((roundtrip.x - world_point.x).abs() < 0.001);
+        assert!((roundtrip.y - world_point.y).abs() < 0.001);
+        assert!((roundtrip.z - world_point.z).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_world_to_local_matrix_inverse() {
+        let t = Transform::default();
+        let l2w = t.local_to_world_matrix();
+        let w2l = t.world_to_local_matrix();
+        let product = l2w * w2l;
+        for i in 0..4 {
+            for j in 0..4 {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                assert!((product.col(j)[i] - expected).abs() < 0.001);
+            }
+        }
     }
 }
