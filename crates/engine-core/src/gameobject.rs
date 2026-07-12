@@ -159,23 +159,23 @@ impl GameObject {
     }
 
     /// Send a message to all MonoBehaviours on this GameObject and its children (like Unity's BroadcastMessage).
-    pub fn broadcast_message(
-        &mut self,
-        _method_name: &str,
-        _context: &mut Context,
-        _world: &crate::world::World,
-    ) {
+    ///
+    /// NOTE: This takes `&mut self` and `&mut Context` (which contains `&mut World`).
+    /// If `self` is inside the `World`, this creates aliasing mutable borrows at call sites.
+    /// This is a known limitation of the placeholder design — the final implementation
+    /// will need interior mutability or a different API shape to resolve this.
+    pub fn broadcast_message(&mut self, _method_name: &str, _context: &mut Context) {
         // This would call the named method on all MonoBehaviour components
         // For now, this is a placeholder for the message system
     }
 
     /// Send a message to all MonoBehaviours on this GameObject and its parents (like Unity's SendMessageUpwards).
-    pub fn send_message_upwards(
-        &mut self,
-        _method_name: &str,
-        _context: &mut Context,
-        _world: &crate::world::World,
-    ) {
+    ///
+    /// NOTE: This takes `&mut self` and `&mut Context` (which contains `&mut World`).
+    /// If `self` is inside the `World`, this creates aliasing mutable borrows at call sites.
+    /// This is a known limitation of the placeholder design — the final implementation
+    /// will need interior mutability or a different API shape to resolve this.
+    pub fn send_message_upwards(&mut self, _method_name: &str, _context: &mut Context) {
         // This would call the named method on all MonoBehaviour components
         // For now, this is a placeholder for the message system
     }
@@ -262,5 +262,44 @@ mod tests {
         let removed = go.remove_component::<TestComponent>();
         assert!(removed.is_some());
         assert!(!go.has_component::<TestComponent>());
+    }
+
+    #[test]
+    fn test_send_message() {
+        use crate::event::EventBus;
+        use crate::time::Time;
+
+        let mut go = GameObject::new("TestObject");
+        let mut world = crate::world::World::new();
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
+
+        go.send_message("OnDamage", &mut ctx);
+    }
+
+    #[test]
+    fn test_broadcast_message() {
+        use crate::event::EventBus;
+        use crate::time::Time;
+
+        let mut go = GameObject::new("TestObject");
+        let mut world = crate::world::World::new();
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
+
+        go.broadcast_message("OnDamage", &mut ctx);
+    }
+
+    #[test]
+    fn test_send_message_upwards() {
+        use crate::event::EventBus;
+        use crate::time::Time;
+
+        let mut go = GameObject::new("TestObject");
+        let mut world = crate::world::World::new();
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
+
+        go.send_message_upwards("OnDamage", &mut ctx);
     }
 }
