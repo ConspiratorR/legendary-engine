@@ -70,7 +70,7 @@ fn scene_manager_add_node_spawns_ecs_entity() {
     let mut sm = SceneManager::new();
     let node: SceneNode = sm.add_node("Player").into();
 
-    let entity = node.entity();
+    let entity = sm.resolve_entity(node);
     let world = sm.world_mut();
 
     assert!(world.get::<Transform>(entity).is_some());
@@ -86,11 +86,14 @@ fn scene_manager_set_parent_wires_ecs_hierarchy() {
 
     sm.set_parent(child, parent);
 
-    let p = sm.world_mut().get::<Parent>(child.entity()).unwrap();
-    assert_eq!(p.0, parent.entity());
+    let parent_entity = sm.resolve_entity(parent);
+    let child_entity = sm.resolve_entity(child);
 
-    let children = sm.world_mut().get::<Children>(parent.entity()).unwrap();
-    assert!(children.0.contains(&child.entity()));
+    let p = sm.world_mut().get::<Parent>(child_entity).unwrap();
+    assert_eq!(p.0, parent_entity);
+
+    let children = sm.world_mut().get::<Children>(parent_entity).unwrap();
+    assert!(children.0.contains(&child_entity));
 }
 
 // ---------------------------------------------------------------------------
@@ -103,10 +106,8 @@ fn sync_transforms_root_identity() {
     sm.sync_transforms();
 
     let root = sm.root();
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(root.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(root);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     assert_eq!(gt.0, Mat4::IDENTITY);
 }
 
@@ -120,10 +121,8 @@ fn sync_transforms_single_child_translation() {
 
     sm.sync_transforms();
 
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let expected = Transform::from_xyz(0.0, 5.0, 0.0).to_matrix();
     assert_matrices_eq(gt.0, expected);
 }
@@ -142,10 +141,8 @@ fn sync_transforms_parent_translation_propagates() {
 
     sm.sync_transforms();
 
-    let child_gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let child_gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let expected = Transform::from_xyz(10.0, 3.0, 0.0).to_matrix();
     assert_matrices_eq(child_gt.0, expected);
 }
@@ -169,13 +166,16 @@ fn sync_transforms_three_level_hierarchy() {
 
     sm.sync_transforms();
 
-    let a_gt = sm.world_mut().get::<GlobalTransform>(a.entity()).unwrap();
+    let a_entity = sm.resolve_entity(a);
+    let a_gt = sm.world_mut().get::<GlobalTransform>(a_entity).unwrap();
     assert_matrices_eq(a_gt.0, Transform::from_xyz(1.0, 0.0, 0.0).to_matrix());
 
-    let b_gt = sm.world_mut().get::<GlobalTransform>(b.entity()).unwrap();
+    let b_entity = sm.resolve_entity(b);
+    let b_gt = sm.world_mut().get::<GlobalTransform>(b_entity).unwrap();
     assert_matrices_eq(b_gt.0, Transform::from_xyz(3.0, 0.0, 0.0).to_matrix());
 
-    let c_gt = sm.world_mut().get::<GlobalTransform>(c.entity()).unwrap();
+    let c_entity = sm.resolve_entity(c);
+    let c_gt = sm.world_mut().get::<GlobalTransform>(c_entity).unwrap();
     assert_matrices_eq(c_gt.0, Transform::from_xyz(6.0, 0.0, 0.0).to_matrix());
 }
 
@@ -198,10 +198,8 @@ fn sync_transforms_scale_propagation() {
 
     sm.sync_transforms();
 
-    let child_gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let child_gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let expected = Transform {
         translation: Vec3::new(2.0, 0.0, 0.0),
         rotation: engine_math::Quat::IDENTITY,
@@ -231,20 +229,16 @@ fn sync_transforms_reparent_updates_global() {
 
     sm.sync_transforms();
 
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     assert_matrices_eq(gt.0, Transform::from_xyz(11.0, 0.0, 0.0).to_matrix());
 
     // Reparent to B
     sm.set_parent(child, parent_b);
     sm.sync_transforms();
 
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     assert_matrices_eq(gt.0, Transform::from_xyz(21.0, 0.0, 0.0).to_matrix());
 }
 
@@ -286,10 +280,8 @@ fn sync_transforms_rotation_propagation() {
 
     sm.sync_transforms();
 
-    let child_gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let child_gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let pos = child_gt.0.transform_point3(Vec3::ZERO);
     // After 90° Y rotation, (10,0,0) → (0,0,-10)
     assert!(pos.x.abs() < 1e-4, "x should be ~0, got {}", pos.x);

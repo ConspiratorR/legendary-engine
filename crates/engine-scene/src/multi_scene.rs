@@ -28,6 +28,7 @@
 use std::collections::HashMap;
 
 use engine_ecs::entity::Entity;
+use engine_ecs::gameobject::GameObjectHandle;
 use engine_ecs::world::World;
 
 use crate::hierarchy::{Children, Parent};
@@ -80,6 +81,12 @@ pub struct MultiSceneManager {
     scenes: HashMap<String, LoadedScene>,
     /// Global root node under which all scene roots are parented.
     root: SceneNode,
+    /// Mapping from Entity index to GameObjectHandle.
+    entity_to_handle: HashMap<u32, GameObjectHandle>,
+    /// Mapping from GameObjectHandle index to Entity.
+    handle_to_entity: HashMap<u32, Entity>,
+    /// Counter for generating unique GameObjectHandle indices.
+    next_handle_index: u32,
 }
 
 impl MultiSceneManager {
@@ -90,17 +97,45 @@ impl MultiSceneManager {
         world.add_component(root_entity, Children::new());
         world.add_component(root_entity, Transform::default());
         world.add_component(root_entity, GlobalTransform::default());
-        let root = SceneNode::new(root_entity);
+
+        let mut entity_to_handle = HashMap::new();
+        let mut handle_to_entity = HashMap::new();
+        let root_handle = GameObjectHandle::new(0, 0);
+        entity_to_handle.insert(root_entity.index(), root_handle);
+        handle_to_entity.insert(0, root_entity);
+
+        let root = SceneNode::new(root_handle);
         Self {
             world,
             scenes: HashMap::new(),
             root,
+            entity_to_handle,
+            handle_to_entity,
+            next_handle_index: 1,
         }
     }
 
     /// Return the global root node.
     pub fn root(&self) -> SceneNode {
         self.root
+    }
+
+    /// Resolve a [`GameObjectHandle`] to its underlying ECS [`Entity`].
+    fn resolve_entity_from_handle(&self, handle: GameObjectHandle) -> Entity {
+        *self
+            .handle_to_entity
+            .get(&handle.index())
+            .expect("SceneNode handle has no mapped Entity")
+    }
+
+    /// Create a [`GameObjectHandle`] for a newly spawned [`Entity`].
+    fn create_handle_for_entity(&mut self, entity: Entity) -> GameObjectHandle {
+        let handle_index = self.next_handle_index;
+        self.next_handle_index += 1;
+        let handle = GameObjectHandle::new(handle_index, 0);
+        self.entity_to_handle.insert(entity.index(), handle);
+        self.handle_to_entity.insert(handle_index, entity);
+        handle
     }
 
     /// Add a scene to the multi-scene world.
@@ -124,12 +159,13 @@ impl MultiSceneManager {
             .add_component(scene_root_entity, Transform::default());
         self.world
             .add_component(scene_root_entity, GlobalTransform::default());
-        let _scene_root = SceneNode::new(scene_root_entity);
+        let _scene_root_handle = self.create_handle_for_entity(scene_root_entity);
 
         // Attach scene root to global root
+        let root_entity = self.resolve_entity_from_handle(self.root.gameobject());
         self.world
-            .add_component(scene_root_entity, Parent(self.root.entity()));
-        if let Some(children) = self.world.get_mut::<Children>(self.root.entity()) {
+            .add_component(scene_root_entity, Parent(root_entity));
+        if let Some(children) = self.world.get_mut::<Children>(root_entity) {
             children.0.push(scene_root_entity);
         }
 
@@ -277,7 +313,7 @@ impl MultiSceneManager {
 
     /// Recompute all [`GlobalTransform`]s across all loaded scenes.
     pub fn sync_transforms(&mut self) {
-        let root_entity = self.root.entity();
+        let root_entity = self.resolve_entity_from_handle(self.root.gameobject());
         let mut stack = vec![(root_entity, engine_math::Mat4::IDENTITY)];
         while let Some((entity, parent_global)) = stack.pop() {
             let local_matrix = self

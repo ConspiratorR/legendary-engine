@@ -5,8 +5,8 @@
 //!
 //! ## Scene Graph Model
 //!
-//! The scene is a **tree of [`SceneNode`](node::SceneNode)s**, each backed by
-//! an ECS [`Entity`](engine_ecs::entity::Entity). Parent-child relationships
+//! The scene is a **tree of [`SceneNode`](node::Node)s**, each backed by
+//! a [`GameObjectHandle`](engine_ecs::gameobject::GameObjectHandle). Parent-child relationships
 //! are stored as ECS components:
 //!
 //! - [`Parent`](hierarchy::Parent) — links a child to its parent.
@@ -70,7 +70,7 @@
 //! | [`animation_state`] | Animation state machine with blend transitions. |
 //! | [`diff`] | Scene diffing for incremental serialization. |
 //! | [`hierarchy`] | `Parent` and `Children` ECS components. |
-//! | [`node`] | Lightweight `SceneNode` handle wrapping an `Entity`. |
+//! | [`node`] | Lightweight `SceneNode` handle wrapping a `GameObjectHandle`. |
 //! | [`transform`] | `Transform` (local) and `GlobalTransform` (world-space). |
 //! | [`error`] | Shared error types. |
 

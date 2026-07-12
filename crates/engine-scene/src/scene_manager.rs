@@ -2,8 +2,11 @@ use crate::hierarchy::{Children, Parent};
 use crate::node::SceneNode;
 use crate::scene_layer::SceneLayer;
 use crate::transform::{GlobalTransform, Transform};
+use engine_ecs::entity::Entity;
+use engine_ecs::gameobject::GameObjectHandle;
 use engine_ecs::world::World;
 use engine_math::Mat4;
+use std::collections::HashMap;
 
 /// Manages a scene graph of [`SceneNode`]s with hierarchical transforms.
 ///
@@ -17,6 +20,12 @@ pub struct SceneManager {
     names: Vec<String>,
     layers: SceneLayer,
     namespace: Option<String>,
+    /// Mapping from Entity index to GameObjectHandle.
+    entity_to_handle: HashMap<u32, GameObjectHandle>,
+    /// Mapping from GameObjectHandle index to Entity.
+    handle_to_entity: HashMap<u32, Entity>,
+    /// Counter for generating unique GameObjectHandle indices.
+    next_handle_index: u32,
 }
 
 impl SceneManager {
@@ -27,7 +36,14 @@ impl SceneManager {
         world.add_component(root_entity, Children::new());
         world.add_component(root_entity, Transform::default());
         world.add_component(root_entity, GlobalTransform::default());
-        let root = SceneNode::new(root_entity);
+
+        let mut entity_to_handle = HashMap::new();
+        let mut handle_to_entity = HashMap::new();
+        let root_handle = GameObjectHandle::new(0, 0);
+        entity_to_handle.insert(root_entity.index(), root_handle);
+        handle_to_entity.insert(0, root_entity);
+
+        let root = SceneNode::new(root_handle);
         let names = vec!["root".to_string()];
         Self {
             world,
@@ -35,12 +51,29 @@ impl SceneManager {
             names,
             layers: SceneLayer::DEFAULT,
             namespace: None,
+            entity_to_handle,
+            handle_to_entity,
+            next_handle_index: 1,
         }
     }
 
     /// Return the root node of the scene.
     pub fn root(&self) -> SceneNode {
         self.root
+    }
+
+    /// Resolve a [`SceneNode`] to its underlying ECS [`Entity`].
+    ///
+    /// This is useful for direct ECS world access when needed.
+    pub fn resolve_entity(&self, node: SceneNode) -> Entity {
+        self.resolve_entity_handle(node.gameobject())
+    }
+
+    fn resolve_entity_handle(&self, handle: GameObjectHandle) -> Entity {
+        *self
+            .handle_to_entity
+            .get(&handle.index())
+            .expect("SceneNode handle has no mapped Entity")
     }
 
     /// Begin building a new child node with the given `name`.
@@ -50,7 +83,13 @@ impl SceneManager {
     /// then call [`SceneNodeBuilder::build`] or convert with `Into`.
     pub fn add_node(&mut self, name: &str) -> SceneNodeBuilder<'_> {
         let entity = self.world.spawn();
-        let node = SceneNode::new(entity);
+        let handle_index = self.next_handle_index;
+        self.next_handle_index += 1;
+        let handle = GameObjectHandle::new(handle_index, 0);
+        self.entity_to_handle.insert(entity.index(), handle);
+        self.handle_to_entity.insert(handle_index, entity);
+
+        let node = SceneNode::new(handle);
         let idx = entity.index() as usize;
         if idx >= self.names.len() {
             self.names.resize_with(idx + 1, String::new);
@@ -67,33 +106,41 @@ impl SceneManager {
     }
 
     fn set_parent_internal(&mut self, child: SceneNode, parent: SceneNode) {
+        let child_entity = self.resolve_entity_handle(child.gameobject());
+        let parent_entity = self.resolve_entity_handle(parent.gameobject());
         self.world
-            .add_component(child.entity(), Parent(parent.entity()));
-        if let Some(children) = self.world.get_mut::<Children>(parent.entity()) {
-            children.0.push(child.entity());
+            .add_component(child_entity, Parent(parent_entity));
+        if let Some(children) = self.world.get_mut::<Children>(parent_entity) {
+            children.0.push(child_entity);
         }
     }
 
     /// Reparent `child` under `parent`, removing it from its previous parent.
     pub fn set_parent(&mut self, child: SceneNode, parent: SceneNode) {
-        if let Some(old_parent) = self.parent(child)
-            && let Some(children) = self.world.get_mut::<Children>(old_parent.entity())
-        {
-            children.0.retain(|e| *e != child.entity());
+        if let Some(old_parent) = self.parent(child) {
+            let old_parent_entity = self.resolve_entity_handle(old_parent.gameobject());
+            let child_entity = self.resolve_entity_handle(child.gameobject());
+            if let Some(children) = self.world.get_mut::<Children>(old_parent_entity) {
+                children.0.retain(|e| *e != child_entity);
+            }
         }
         self.set_parent_internal(child, parent);
     }
 
     /// Return the parent of a node, or `None` for the root.
     pub fn parent(&self, node: SceneNode) -> Option<SceneNode> {
-        self.world
-            .get::<Parent>(node.entity())
-            .map(|p| SceneNode::new(p.0))
+        let entity = self.resolve_entity_handle(node.gameobject());
+        self.world.get::<Parent>(entity).and_then(|p| {
+            self.entity_to_handle
+                .get(&p.0.index())
+                .map(|&h| SceneNode::new(h))
+        })
     }
 
     /// Return the name of a node.
     pub fn name(&self, node: SceneNode) -> &str {
-        let idx = node.entity().index() as usize;
+        let entity = self.resolve_entity_handle(node.gameobject());
+        let idx = entity.index() as usize;
         if idx < self.names.len() {
             &self.names[idx]
         } else {
@@ -107,8 +154,9 @@ impl SceneManager {
     /// Panics if the entity does not have a `Transform` component (should never
     /// happen for nodes created via [`add_node`](Self::add_node)).
     pub fn transform(&self, node: SceneNode) -> &Transform {
+        let entity = self.resolve_entity_handle(node.gameobject());
         self.world
-            .get::<Transform>(node.entity())
+            .get::<Transform>(entity)
             .expect("SceneNode entity must have Transform component")
     }
 
@@ -118,8 +166,9 @@ impl SceneManager {
     /// Panics if the entity does not have a `Transform` component (should never
     /// happen for nodes created via [`add_node`](Self::add_node)).
     pub fn transform_mut(&mut self, node: SceneNode) -> &mut Transform {
+        let entity = self.resolve_entity_handle(node.gameobject());
         self.world
-            .get_mut::<Transform>(node.entity())
+            .get_mut::<Transform>(entity)
             .expect("SceneNode entity must have Transform component")
     }
 
@@ -150,7 +199,7 @@ impl SceneManager {
 
     /// Recompute all [`GlobalTransform`]s from the local transform hierarchy.
     pub fn sync_transforms(&mut self) {
-        let root_entity = self.root.entity();
+        let root_entity = self.resolve_entity_handle(self.root.gameobject());
         let mut stack = vec![(root_entity, Mat4::IDENTITY)];
         while let Some((entity, parent_global)) = stack.pop() {
             let local_matrix = match self.world.get::<Transform>(entity) {

@@ -72,6 +72,7 @@ pub mod access;
 pub mod component;
 pub mod entity;
 pub mod error;
+pub mod gameobject;
 pub mod par_iter;
 pub mod query;
 pub mod schedule;
@@ -79,3 +80,4 @@ pub mod system;
 pub mod world;
 
 pub use error::EcsError;
+pub use gameobject::GameObjectHandle;

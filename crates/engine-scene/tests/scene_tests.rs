@@ -1,4 +1,5 @@
 use engine_ecs::entity::Entity;
+use engine_ecs::gameobject::GameObjectHandle;
 use engine_math::Vec3;
 use engine_scene::hierarchy::{Children, Parent};
 use engine_scene::node::SceneNode;
@@ -12,16 +13,16 @@ use engine_scene::transform::{GlobalTransform, Transform};
 // ── Scene Node Creation ─────────────────────────────────────────────
 
 #[test]
-fn test_scene_node_from_entity() {
-    let entity = Entity::new(42, 0);
-    let node = SceneNode::new(entity);
-    assert_eq!(node.entity(), entity);
+fn test_scene_node_from_gameobject_handle() {
+    let handle = GameObjectHandle::new(42, 0);
+    let node = SceneNode::new(handle);
+    assert_eq!(node.gameobject(), handle);
 }
 
 #[test]
 fn test_scene_node_copy_and_eq() {
-    let entity = Entity::new(1, 0);
-    let a = SceneNode::new(entity);
+    let handle = GameObjectHandle::new(1, 0);
+    let a = SceneNode::new(handle);
     let b = a;
     assert_eq!(a, b);
 }
@@ -95,10 +96,14 @@ fn test_children_component() {
     sm.set_parent(child1, parent);
     sm.set_parent(child2, parent);
 
-    let children = sm.world_mut().get::<Children>(parent.entity()).unwrap();
+    let parent_entity = sm.resolve_entity(parent);
+    let child1_entity = sm.resolve_entity(child1);
+    let child2_entity = sm.resolve_entity(child2);
+
+    let children = sm.world_mut().get::<Children>(parent_entity).unwrap();
     assert_eq!(children.0.len(), 2);
-    assert!(children.0.contains(&child1.entity()));
-    assert!(children.0.contains(&child2.entity()));
+    assert!(children.0.contains(&child1_entity));
+    assert!(children.0.contains(&child2_entity));
 }
 
 #[test]
@@ -109,8 +114,11 @@ fn test_parent_component() {
 
     sm.set_parent(child, parent);
 
-    let parent_comp = sm.world_mut().get::<Parent>(child.entity()).unwrap();
-    assert_eq!(parent_comp.0, parent.entity());
+    let child_entity = sm.resolve_entity(child);
+    let parent_entity = sm.resolve_entity(parent);
+
+    let parent_comp = sm.world_mut().get::<Parent>(child_entity).unwrap();
+    assert_eq!(parent_comp.0, parent_entity);
 }
 
 // ── Global Transform Hierarchy ──────────────────────────────────────
@@ -121,10 +129,8 @@ fn test_sync_transforms_identity() {
     sm.sync_transforms();
 
     let root = sm.root();
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(root.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(root);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     // Root with default transform should have identity global transform.
     assert_eq!(gt.0, engine_math::Mat4::IDENTITY);
 }
@@ -139,10 +145,8 @@ fn test_sync_transforms_parent_translation() {
 
     sm.sync_transforms();
 
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
     assert!((translation.x - 10.0).abs() < 1e-5);
     assert!((translation.y).abs() < 1e-5);
@@ -165,10 +169,8 @@ fn test_sync_transforms_nested_hierarchy() {
     sm.sync_transforms();
 
     // Child's global position should be parent (5) + child (3) = 8
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
     assert!((translation.x - 8.0).abs() < 1e-5);
 }
@@ -194,7 +196,8 @@ fn test_sync_transforms_three_levels() {
     sm.sync_transforms();
 
     // C global = 1 + 2 + 3 = 6
-    let gt = sm.world_mut().get::<GlobalTransform>(c.entity()).unwrap();
+    let c_entity = sm.resolve_entity(c);
+    let gt = sm.world_mut().get::<GlobalTransform>(c_entity).unwrap();
     let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
     assert!((translation.x - 6.0).abs() < 1e-5);
 }
@@ -213,10 +216,8 @@ fn test_sync_transforms_after_modification() {
     sm.transform_mut(node).translation = engine_math::Vec3::new(42.0, 0.0, 0.0);
     sm.sync_transforms();
 
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(node.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(node);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
     assert!((translation.x - 42.0).abs() < 1e-5);
 }
@@ -231,20 +232,23 @@ fn test_remove_child_from_parent() {
 
     sm.set_parent(child, parent);
 
+    let parent_entity = sm.resolve_entity(parent);
+    let child_entity = sm.resolve_entity(child);
+
     // Verify child is in parent's children
     {
-        let children = sm.world_mut().get::<Children>(parent.entity()).unwrap();
-        assert!(children.0.contains(&child.entity()));
+        let children = sm.world_mut().get::<Children>(parent_entity).unwrap();
+        assert!(children.0.contains(&child_entity));
     }
 
     // Remove child from parent's children list
-    if let Some(children) = sm.world_mut().get_mut::<Children>(parent.entity()) {
-        children.0.retain(|e| *e != child.entity());
+    if let Some(children) = sm.world_mut().get_mut::<Children>(parent_entity) {
+        children.0.retain(|e| *e != child_entity);
     }
 
     // Verify child is no longer in parent's children
-    let children = sm.world_mut().get::<Children>(parent.entity()).unwrap();
-    assert!(!children.0.contains(&child.entity()));
+    let children = sm.world_mut().get::<Children>(parent_entity).unwrap();
+    assert!(!children.0.contains(&child_entity));
 }
 
 #[test]
@@ -259,10 +263,13 @@ fn test_cascade_remove_hierarchy() {
     sm.set_parent(child2, parent);
     sm.set_parent(grandchild, child1);
 
+    let parent_entity = sm.resolve_entity(parent);
+    let _child1_entity = sm.resolve_entity(child1);
+
     // Collect direct children first
     let direct_children: Vec<Entity> = sm
         .world_mut()
-        .get::<Children>(parent.entity())
+        .get::<Children>(parent_entity)
         .map(|c| c.0.clone())
         .unwrap_or_default();
 
@@ -281,10 +288,10 @@ fn test_cascade_remove_hierarchy() {
     }
 
     // Parent should have empty children
-    if let Some(children) = sm.world_mut().get_mut::<Children>(parent.entity()) {
+    if let Some(children) = sm.world_mut().get_mut::<Children>(parent_entity) {
         children.0.clear();
     }
-    let children = sm.world_mut().get::<Children>(parent.entity()).unwrap();
+    let children = sm.world_mut().get::<Children>(parent_entity).unwrap();
     assert!(children.0.is_empty());
 }
 
@@ -468,10 +475,8 @@ fn test_sync_transforms_rotation_propagation() {
     sm.set_parent(child, parent);
     sm.sync_transforms();
 
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
     // After 90° Y rotation, (10,0,0) → (0,0,-10)
     assert!(
@@ -514,10 +519,8 @@ fn test_sync_transforms_nested_scale() {
     sm.set_parent(child, parent);
     sm.sync_transforms();
 
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
     // grandparent scale 2 * parent scale 3 = 6x, child at (1,0,0) → (6,0,0)
     assert!(
@@ -541,10 +544,8 @@ fn test_orphaned_node_has_identity_global_transform() {
     sm.sync_transforms();
 
     // Node is under root (default), so global = local
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(node.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(node);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let translation = gt.0.transform_point3(engine_math::Vec3::ZERO);
     assert!((translation.x - 7.0).abs() < 1e-5);
     assert!((translation.y - 8.0).abs() < 1e-5);
@@ -560,8 +561,10 @@ fn test_reparent_removes_from_old_parent_children() {
 
     sm.set_parent(child, parent_a);
     {
-        let children = sm.world_mut().get::<Children>(parent_a.entity()).unwrap();
-        assert!(children.0.contains(&child.entity()));
+        let parent_a_entity = sm.resolve_entity(parent_a);
+        let child_entity = sm.resolve_entity(child);
+        let children = sm.world_mut().get::<Children>(parent_a_entity).unwrap();
+        assert!(children.0.contains(&child_entity));
     }
 
     // Reparent to B
@@ -569,17 +572,21 @@ fn test_reparent_removes_from_old_parent_children() {
 
     // Child should be removed from A's children
     {
-        let children = sm.world_mut().get::<Children>(parent_a.entity()).unwrap();
+        let parent_a_entity = sm.resolve_entity(parent_a);
+        let child_entity = sm.resolve_entity(child);
+        let children = sm.world_mut().get::<Children>(parent_a_entity).unwrap();
         assert!(
-            !children.0.contains(&child.entity()),
+            !children.0.contains(&child_entity),
             "child should be removed from old parent's children"
         );
     }
     // Child should be in B's children
     {
-        let children = sm.world_mut().get::<Children>(parent_b.entity()).unwrap();
+        let parent_b_entity = sm.resolve_entity(parent_b);
+        let child_entity = sm.resolve_entity(child);
+        let children = sm.world_mut().get::<Children>(parent_b_entity).unwrap();
         assert!(
-            children.0.contains(&child.entity()),
+            children.0.contains(&child_entity),
             "child should be in new parent's children"
         );
     }
@@ -597,11 +604,16 @@ fn test_multiple_children_order_preserved() {
     sm.set_parent(c2, parent);
     sm.set_parent(c3, parent);
 
-    let children = sm.world_mut().get::<Children>(parent.entity()).unwrap();
+    let parent_entity = sm.resolve_entity(parent);
+    let c1_entity = sm.resolve_entity(c1);
+    let c2_entity = sm.resolve_entity(c2);
+    let c3_entity = sm.resolve_entity(c3);
+
+    let children = sm.world_mut().get::<Children>(parent_entity).unwrap();
     assert_eq!(children.0.len(), 3);
-    assert_eq!(children.0[0], c1.entity());
-    assert_eq!(children.0[1], c2.entity());
-    assert_eq!(children.0[2], c3.entity());
+    assert_eq!(children.0[0], c1_entity);
+    assert_eq!(children.0[1], c2_entity);
+    assert_eq!(children.0[2], c3_entity);
 }
 
 #[test]
@@ -644,20 +656,16 @@ fn test_sync_transforms_after_reparent() {
     // Under A: global = 10 + 5 = 15
     sm.set_parent(child, a);
     sm.sync_transforms();
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let pos = gt.0.transform_point3(engine_math::Vec3::ZERO);
     assert!((pos.x - 15.0).abs() < 1e-5);
 
     // Under B: global = 20 + 5 = 25
     sm.set_parent(child, b);
     sm.sync_transforms();
-    let gt = sm
-        .world_mut()
-        .get::<GlobalTransform>(child.entity())
-        .unwrap();
+    let entity = sm.resolve_entity(child);
+    let gt = sm.world_mut().get::<GlobalTransform>(entity).unwrap();
     let pos = gt.0.transform_point3(engine_math::Vec3::ZERO);
     assert!((pos.x - 25.0).abs() < 1e-5);
 }
