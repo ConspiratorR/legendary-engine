@@ -228,7 +228,7 @@ fn test_time_creation() {
     let time = Time::new();
     assert_eq!(time.frame_count(), 0);
     assert_eq!(time.elapsed_seconds(), 0.0);
-    assert!(time.delta_seconds() > 0.0); // default is ~0.016
+    assert_eq!(time.delta_seconds(), 0.0); // no update yet
 }
 
 #[test]
@@ -240,7 +240,7 @@ fn test_time_default() {
 #[test]
 fn test_time_update() {
     let mut time = Time::new();
-    time.update();
+    time.update(0.016);
     assert_eq!(time.frame_count(), 1);
     assert!(time.elapsed_seconds() >= 0.0);
     assert!(time.delta_seconds() >= 0.0);
@@ -250,34 +250,10 @@ fn test_time_update() {
 fn test_time_multiple_updates() {
     let mut time = Time::new();
     for _ in 0..10 {
-        time.update();
+        time.update(0.016);
     }
     assert_eq!(time.frame_count(), 10);
     assert!(time.elapsed_seconds() > 0.0);
-}
-
-#[test]
-fn test_time_fps() {
-    let mut time = Time::new();
-    time.update();
-    let fps = time.fps();
-    assert!(fps >= 0.0);
-}
-
-#[test]
-fn test_time_delta_duration() {
-    let mut time = Time::new();
-    time.update();
-    let delta = time.delta();
-    assert!(delta.as_secs_f32() >= 0.0);
-}
-
-#[test]
-fn test_time_elapsed_duration() {
-    let mut time = Time::new();
-    time.update();
-    let elapsed = time.elapsed();
-    assert!(elapsed.as_secs_f32() >= 0.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -353,7 +329,7 @@ fn test_config_get_f32() {
     config.set("pi".to_string(), "3.14".to_string());
     config.set("bad".to_string(), "abc".to_string());
 
-    assert!((config.get_f32("pi").unwrap() - 3.14).abs() < 0.001);
+    assert!((config.get_f32("pi").unwrap() - std::f32::consts::PI).abs() < 0.001);
     assert_eq!(config.get_f32("bad"), None);
     assert_eq!(config.get_f32("missing"), None);
 }
@@ -528,19 +504,17 @@ fn test_time_delta_seconds_positive_after_update() {
     let mut time = Time::new();
     // Small sleep to ensure measurable delta
     std::thread::sleep(std::time::Duration::from_millis(1));
-    time.update();
+    time.update(0.016);
     assert!(time.delta_seconds() > 0.0);
-    assert!(time.delta().as_secs_f32() > 0.0);
 }
 
 #[test]
 fn test_time_fps_positive_after_update() {
     let mut time = Time::new();
     std::thread::sleep(std::time::Duration::from_millis(1));
-    time.update();
-    let fps = time.fps();
-    assert!(fps > 0.0);
-    assert!(fps < 1_000_000.0); // sanity upper bound
+    time.update(0.016);
+    assert!(time.delta_seconds() > 0.0);
+    assert!(time.delta_seconds() < 1_000_000.0); // sanity upper bound
 }
 
 #[test]
@@ -549,7 +523,7 @@ fn test_time_elapsed_grows_monotonically() {
     let mut prev_elapsed = time.elapsed_seconds();
     for _ in 0..5 {
         std::thread::sleep(std::time::Duration::from_millis(1));
-        time.update();
+        time.update(0.016);
         let current = time.elapsed_seconds();
         assert!(current >= prev_elapsed);
         prev_elapsed = current;

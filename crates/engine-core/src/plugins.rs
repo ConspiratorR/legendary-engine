@@ -29,9 +29,13 @@ impl Plugin for TimePlugin {
         app.insert_resource(Time::new());
 
         // Add a pre-update hook to update time each frame
-        app.add_pre_update_hook(Box::new(|app| {
+        let mut last_frame_time = std::time::Instant::now();
+        app.add_pre_update_hook(Box::new(move |app| {
             if let Some(time) = app.world_mut().get_resource_mut::<Time>() {
-                time.update_with_internal_clock();
+                let now = std::time::Instant::now();
+                let delta = (now - last_frame_time).as_secs_f32();
+                last_frame_time = now;
+                time.update(delta);
             }
         }));
     }

@@ -15,8 +15,8 @@ pub struct Time {
     in_fixed_update: bool,
     /// Maximum allowed delta time (maximumDeltaTime).
     max_delta_time: f32,
-    /// Last frame time for internal delta calculation.
-    last_frame_time: std::time::Instant,
+    /// Time at the last FixedUpdate step (for fixedUnscaledTime).
+    last_fixed_time: f32,
 }
 
 impl Default for Time {
@@ -29,11 +29,12 @@ impl Default for Time {
             frame_count: 0,
             in_fixed_update: false,
             max_delta_time: 0.33333334, // ~3 FPS minimum
-            last_frame_time: std::time::Instant::now(),
+            last_fixed_time: 0.0,
         }
     }
 }
 
+#[allow(non_snake_case)]
 impl Time {
     /// Create a new Time with default values.
     pub fn new() -> Self {
@@ -65,9 +66,9 @@ impl Time {
         self.elapsed_time
     }
 
-    /// Get time since last fixed update (like Unity: Time.fixedUnscaledTime).
+    /// Get time at the last FixedUpdate step (like Unity: Time.fixedUnscaledTime).
     pub fn fixedUnscaledTime(&self) -> f32 {
-        self.elapsed_time
+        self.last_fixed_time
     }
 
     /// Get frame count (like Unity: Time.frameCount).
@@ -109,8 +110,6 @@ impl Time {
         }
     }
 
-    // Internal methods for updating time
-
     /// Update time for a new frame (called by engine).
     pub fn update(&mut self, delta: f32) {
         self.delta_time = delta.min(self.max_delta_time);
@@ -122,6 +121,7 @@ impl Time {
     /// Update time for a fixed update step (called by engine).
     pub fn update_fixed(&mut self) {
         self.in_fixed_update = true;
+        self.last_fixed_time = self.elapsed_time;
     }
 
     /// Reset time (for new level, etc.).
@@ -130,16 +130,7 @@ impl Time {
         self.elapsed_time = 0.0;
         self.frame_count = 0;
         self.in_fixed_update = false;
-        self.last_frame_time = std::time::Instant::now();
-    }
-
-    /// Update time using internal clock (convenience method for plugins).
-    /// Computes delta from last frame time and calls update().
-    pub fn update_with_internal_clock(&mut self) {
-        let now = std::time::Instant::now();
-        let delta = (now - self.last_frame_time).as_secs_f32();
-        self.last_frame_time = now;
-        self.update(delta);
+        self.last_fixed_time = 0.0;
     }
 
     // Backward-compatible snake_case methods for existing code
@@ -187,30 +178,6 @@ impl Time {
     /// Get delta time for the current step (snake_case alias for stepDeltaTime).
     pub fn step_delta_time(&self) -> f32 {
         self.stepDeltaTime()
-    }
-    
-    /// Get delta time in seconds (alias for delta_seconds).
-    pub fn delta(&self) -> f32 {
-        self.delta_seconds()
-    }
-    
-    /// Get elapsed time in seconds (alias for elapsed_seconds).
-    pub fn elapsed(&self) -> f32 {
-        self.elapsed_seconds()
-    }
-    
-    /// Get current frames per second.
-    pub fn fps(&self) -> f32 {
-        if self.delta_time > 0.0 {
-            1.0 / self.delta_time
-        } else {
-            0.0
-        }
-    }
-    
-    /// Update time using internal clock (no arguments, for backward compatibility).
-    pub fn update_no_args(&mut self) {
-        self.update_with_internal_clock();
     }
 }
 
