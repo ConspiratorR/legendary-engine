@@ -98,6 +98,7 @@ pub mod config;
 pub mod debug;
 pub mod engine;
 pub mod event;
+pub mod gameobject;
 pub mod logger;
 pub mod math_utils;
 pub mod memory;
@@ -108,6 +109,9 @@ pub mod profiler;
 pub mod resource;
 pub mod time;
 pub mod transform;
+
+// Re-export for convenience
+pub use gameobject::{Component, GameObject, GameObjectHandle};
 
 #[cfg(target_os = "android")]
 pub mod android;
