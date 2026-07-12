@@ -622,6 +622,21 @@ pub struct EditorState {
     pub gizmo_drag_start_pos: Option<[f32; 9]>,
     /// Whether the object creation menu is open.
     pub show_create_menu: bool,
+    /// Hierarchy context menu state.
+    pub context_menu: Option<ContextMenuState>,
+}
+
+/// State for the hierarchy context menu.
+#[derive(Debug, Clone)]
+pub struct ContextMenuState {
+    /// Screen position of the menu.
+    pub position: egui::Pos2,
+    /// Node ID this menu was opened on.
+    pub node_id: u64,
+    /// Whether we're in rename mode.
+    pub renaming: bool,
+    /// Text buffer for renaming.
+    pub rename_buffer: String,
 }
 
 /// A single log entry for the console panel.
@@ -782,6 +797,7 @@ impl EditorState {
             gizmo_drag_start_screen: None,
             gizmo_drag_start_pos: None,
             show_create_menu: false,
+            context_menu: None,
             drag_source: None,
             drag_hover_target: None,
             command_manager: CommandManager::default(),
@@ -1079,7 +1095,7 @@ impl EditorState {
     }
 
     /// Duplicate selected nodes.
-    fn duplicate_selected(&mut self) {
+    pub fn duplicate_selected(&mut self) {
         let selected = self.selected_nodes.clone();
         self.selected_nodes.clear();
         for &node_id in &selected {
@@ -1095,7 +1111,7 @@ impl EditorState {
     }
 
     /// Delete selected nodes.
-    fn delete_selected(&mut self) {
+    pub fn delete_selected(&mut self) {
         let selected = self.selected_nodes.clone();
         if selected.is_empty() {
             return;
@@ -1112,7 +1128,7 @@ impl EditorState {
     }
 
     /// Focus camera on the first selected object.
-    fn focus_on_selection(&mut self) {
+    pub fn focus_on_selection(&mut self) {
         if let Some(&first_id) = self.selected_nodes.first()
             && let Some(t) = self.node_transforms.get(&first_id)
         {

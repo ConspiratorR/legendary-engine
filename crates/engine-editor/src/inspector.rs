@@ -3,161 +3,74 @@
 
 use crate::material_editor::MaterialEditorState;
 use crate::state::{EditorState, LightType};
-use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
+use egui::{Color32, FontId, Rounding, Stroke};
 use engine_ui::Gui;
 
-pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
+const SECTION_SPACING: f32 = 8.0;
+const ROW_SPACING: f32 = 4.0;
+
+pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: egui::Rect) {
     let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
     let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
 
+    // Background
     let painter = gui.ui.painter_at(rect);
-    painter.add(Shape::rect_filled(
+    painter.add(egui::Shape::rect_filled(
         rect,
         Rounding::ZERO,
         Color32::from_rgb(22, 22, 25),
     ));
-    painter.add(Shape::line(
+    painter.add(egui::Shape::line(
         vec![
-            Pos2::new(rect.left(), rect.top()),
-            Pos2::new(rect.left(), rect.bottom()),
+            egui::Pos2::new(rect.left(), rect.top()),
+            egui::Pos2::new(rect.left(), rect.bottom()),
         ],
         Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
     ));
 
-    let search_h = 36.0 * h_scale;
-    let pad8 = 8.0 * w_scale;
-    let search_rect = Rect::from_min_size(
-        Pos2::new(rect.left() + pad8, rect.top() + 8.0 * h_scale),
-        Vec2::new(rect.width() - pad8 * 2.0, search_h),
+    // Search bar
+    let search_h = 28.0 * h_scale;
+    let pad = 8.0 * w_scale;
+    let search_rect = egui::Rect::from_min_size(
+        egui::Pos2::new(rect.left() + pad, rect.top() + 6.0 * h_scale),
+        egui::Vec2::new(rect.width() - pad * 2.0, search_h),
     );
-    painter.add(Shape::rect_filled(
-        search_rect,
-        Rounding::same(6.0 * h_scale),
-        Color32::from_rgb(30, 30, 34),
-    ));
-    // Search input field
-    let search_id = egui::Id::new("inspector_search");
-    let search_response = gui
-        .ui
-        .interact(search_rect, search_id, egui::Sense::click());
-    if search_response.clicked() {
-        gui.ui.ctx().memory_mut(|m| m.request_focus(search_id));
-    }
-    let has_focus = gui.ui.ctx().memory(|m| m.has_focus(search_id));
-    if has_focus {
-        // Handle text input for search
-        gui.ui.ctx().input(|i| {
-            for event in &i.events {
-                if let egui::Event::Text(text) = event {
-                    state.inspector_search.push_str(text);
-                }
-                if let egui::Event::Key {
-                    key: egui::Key::Backspace,
-                    pressed: true,
-                    ..
-                } = event
-                {
-                    state.inspector_search.pop();
-                }
-                if let egui::Event::Key {
-                    key: egui::Key::Escape,
-                    pressed: true,
-                    ..
-                } = event
-                {
-                    state.inspector_search.clear();
-                    gui.ui.ctx().memory_mut(|m| m.surrender_focus(search_id));
-                }
-            }
-        });
-    }
-    let search_display = if state.inspector_search.is_empty() && !has_focus {
-        "🔍 搜索属性...".to_string()
-    } else {
-        format!("🔍 {}", state.inspector_search)
-    };
-    let search_color = if has_focus {
-        Color32::from_rgb(220, 220, 224)
-    } else if state.inspector_search.is_empty() {
-        Color32::from_gray(90)
-    } else {
-        Color32::from_rgb(0, 212, 170)
-    };
-    painter.text(
-        egui::pos2(
-            rect.left() + 20.0 * w_scale,
-            rect.top() + (8.0 * h_scale + search_h / 2.0),
-        ),
-        egui::Align2::LEFT_CENTER,
-        search_display,
-        egui::FontId::proportional(12.0 * h_scale),
-        search_color,
-    );
+    draw_search_bar(gui, state, search_rect, h_scale, w_scale);
 
-    // Clear search button
-    if !state.inspector_search.is_empty() {
-        let clear_rect = Rect::from_min_size(
-            Pos2::new(search_rect.right() - 32.0 * w_scale, search_rect.top()),
-            Vec2::new(28.0 * w_scale, search_rect.height()),
-        );
-        let clear_id = egui::Id::new("inspector_clear_search");
-        let clear_response = gui.ui.interact(clear_rect, clear_id, egui::Sense::click());
-        if clear_response.hovered() {
-            painter.add(Shape::rect_filled(
-                clear_rect,
-                Rounding::same(4.0 * h_scale),
-                Color32::from_rgb(40, 40, 44),
-            ));
-        }
-        painter.text(
-            clear_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            "✕",
-            FontId::proportional(12.0 * h_scale),
-            Color32::from_gray(90),
-        );
-        if clear_response.clicked() {
-            state.inspector_search.clear();
-        }
-    }
-
-    let content_top = rect.top() + (8.0 * h_scale + search_h + 8.0 * h_scale);
-    let content_rect = Rect::from_min_size(
-        Pos2::new(rect.left() + 12.0 * w_scale, content_top),
-        Vec2::new(rect.width() - 24.0 * w_scale, rect.bottom() - content_top),
+    // Content area with scroll
+    let content_top = search_rect.bottom() + 6.0 * h_scale;
+    let content_rect = egui::Rect::from_min_size(
+        egui::Pos2::new(rect.left(), content_top),
+        egui::Vec2::new(rect.width(), rect.bottom() - content_top),
     );
 
     let selected_id = state.selected_nodes.first().copied();
 
-    if let Some(id) = selected_id {
-        let name = state
-            .scene_tree
-            .nodes
-            .iter()
-            .find(|n| n.id == id)
-            .map(|n| n.name.clone())
-            .unwrap_or_else(|| "—".into());
-        let y = draw_transform_section(
-            gui,
-            content_rect,
-            state,
-            id,
-            &name,
-            &state.inspector_search.clone(),
-        );
-        draw_buttons(gui, state, id, content_rect.left(), y, content_rect.width());
-    } else {
-        let painter = gui.ui.painter_at(content_rect);
-        painter.text(
-            content_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            "未选中对象",
-            egui::FontId::proportional(12.0),
-            Color32::from_gray(90),
-        );
-    }
+    let mut content_ui = gui.ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(content_rect)
+            .layout(egui::Layout::top_down(egui::Align::LEFT)),
+    );
 
-    // Terrain panel (shown when Terrain tool is active)
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(&mut content_ui, |ui| {
+            let mut gui = Gui::new(ui, gui.skin);
+            if let Some(id) = selected_id {
+                draw_entity_inspector(&mut gui, state, id, h_scale, w_scale);
+            } else {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(40.0);
+                    ui.label(
+                        egui::RichText::new("未选中对象")
+                            .color(Color32::from_gray(90))
+                            .size(12.0),
+                    );
+                });
+            }
+        });
+
+    // Terrain panel overlay
     if state.active_tool == crate::state::ToolType::Terrain {
         egui::Area::new(egui::Id::new("terrain_panel"))
             .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-10.0, 50.0))
@@ -189,53 +102,133 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     }
 }
 
-fn separator(painter: &egui::Painter, x: f32, y: f32, w: f32) -> f32 {
-    painter.add(Shape::line(
-        vec![Pos2::new(x, y), Pos2::new(x + w, y)],
-        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
+fn draw_search_bar(
+    gui: &mut Gui,
+    state: &mut EditorState,
+    rect: egui::Rect,
+    _h_scale: f32,
+    w_scale: f32,
+) {
+    let painter = gui.ui.painter_at(rect);
+    painter.add(egui::Shape::rect_filled(
+        rect,
+        Rounding::same(6.0),
+        Color32::from_rgb(30, 30, 34),
     ));
-    y + 8.0
-}
 
-fn section_header(painter: &egui::Painter, x: f32, y: f32, label: &str) -> f32 {
+    let search_id = egui::Id::new("inspector_search");
+    let response = gui
+        .ui
+        .interact(rect, search_id, egui::Sense::click());
+    if response.clicked() {
+        gui.ui.ctx().memory_mut(|m| m.request_focus(search_id));
+    }
+    let has_focus = gui.ui.ctx().memory(|m| m.has_focus(search_id));
+
+    if has_focus {
+        gui.ui.ctx().input(|i| {
+            for event in &i.events {
+                if let egui::Event::Text(text) = event {
+                    state.inspector_search.push_str(text);
+                }
+                if let egui::Event::Key {
+                    key: egui::Key::Backspace,
+                    pressed: true,
+                    ..
+                } = event
+                {
+                    state.inspector_search.pop();
+                }
+                if let egui::Event::Key {
+                    key: egui::Key::Escape,
+                    pressed: true,
+                    ..
+                } = event
+                {
+                    state.inspector_search.clear();
+                    gui.ui.ctx().memory_mut(|m| m.surrender_focus(search_id));
+                }
+            }
+        });
+    }
+
+    let display_text = if state.inspector_search.is_empty() && !has_focus {
+        "搜索属性...".to_string()
+    } else {
+        state.inspector_search.clone()
+    };
+    let text_color = if has_focus {
+        Color32::from_rgb(220, 220, 224)
+    } else if state.inspector_search.is_empty() {
+        Color32::from_gray(90)
+    } else {
+        Color32::from_rgb(0, 212, 170)
+    };
+
     painter.text(
-        egui::pos2(x, y),
+        egui::pos2(rect.left() + 12.0 * w_scale, rect.center().y),
         egui::Align2::LEFT_CENTER,
-        label,
-        egui::FontId::proportional(11.0),
-        Color32::from_gray(90),
+        display_text,
+        egui::FontId::proportional(12.0),
+        text_color,
     );
-    y + 18.0
+
+    // Clear button
+    if !state.inspector_search.is_empty() {
+        let clear_rect = egui::Rect::from_min_size(
+            egui::Pos2::new(rect.right() - 28.0 * w_scale, rect.top()),
+            egui::Vec2::new(24.0 * w_scale, rect.height()),
+        );
+        let clear_id = egui::Id::new("inspector_clear_search");
+        let clear_resp = gui.ui.interact(clear_rect, clear_id, egui::Sense::click());
+        if clear_resp.hovered() {
+            painter.add(egui::Shape::rect_filled(
+                clear_rect,
+                Rounding::same(4.0),
+                Color32::from_rgb(40, 40, 44),
+            ));
+        }
+        painter.text(
+            clear_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "✕",
+            FontId::proportional(12.0),
+            Color32::from_gray(90),
+        );
+        if clear_resp.clicked() {
+            state.inspector_search.clear();
+        }
+    }
 }
 
 fn section_matches(section_name: &str, search: &str) -> bool {
     search.is_empty() || section_name.to_lowercase().contains(search)
 }
 
-fn draw_transform_section(
+fn draw_entity_inspector(
     gui: &mut Gui,
-    rect: Rect,
     state: &mut EditorState,
     id: u64,
-    name: &str,
-    search: &str,
-) -> f32 {
-    let painter = gui.ui.painter_at(rect);
-    let row_h = 26.0;
-    let x = rect.left();
-    let w = rect.width();
-    let mut y = rect.top();
-    let search_lower = search.to_lowercase();
+    _h_scale: f32,
+    _w_scale: f32,
+) {
+    let search_lower = state.inspector_search.to_lowercase();
 
-    // Node name
-    painter.text(
-        egui::pos2(x, y),
-        egui::Align2::LEFT_CENTER,
-        format!("{} [{}]", name, id),
-        FontId::proportional(13.0),
-        Color32::from_rgb(220, 220, 224),
+    // Node name header
+    let name = state
+        .scene_tree
+        .nodes
+        .iter()
+        .find(|n| n.id == id)
+        .map(|n| n.name.clone())
+        .unwrap_or_else(|| "—".into());
+    gui.ui.add_space(4.0);
+    gui.ui.label(
+        egui::RichText::new(format!("{} [{}]", name, id))
+            .color(Color32::from_rgb(220, 220, 224))
+            .size(13.0),
     );
-    y += 24.0;
+    gui.ui.add_space(4.0);
 
     // ── Transform ──
     if section_matches(
@@ -243,47 +236,38 @@ fn draw_transform_section(
         &search_lower,
     ) && let Some(t) = state.node_transforms.get_mut(&id)
     {
-        // Snapshot transform before editing for undo
         let old_transform = *t;
 
-        y = separator(&painter, x, y, w);
-        y = section_header(&painter, x, y, "变换");
+        section_separator(gui);
+        section_header(gui, "变换");
 
-        let pr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
         let (mut px, mut py, mut pz) = (t[0], t[1], t[2]);
-        gui.vec3_input(pr, "位置", &mut px, &mut py, &mut pz);
+        vec3_row(gui, "位置", &mut px, &mut py, &mut pz);
         t[0] = px;
         t[1] = py;
         t[2] = pz;
-        y += row_h + 6.0;
 
-        let rr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
         let (mut rx, mut ry, mut rz) = (t[3], t[4], t[5]);
-        gui.vec3_input(rr, "旋转", &mut rx, &mut ry, &mut rz);
+        vec3_row(gui, "旋转", &mut rx, &mut ry, &mut rz);
         t[3] = rx;
         t[4] = ry;
         t[5] = rz;
-        y += row_h + 6.0;
 
-        let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
         let (mut sx, mut sy, mut sz) = (t[6], t[7], t[8]);
-        gui.vec3_input(sr, "缩放", &mut sx, &mut sy, &mut sz);
+        vec3_row(gui, "缩放", &mut sx, &mut sy, &mut sz);
         t[6] = sx;
         t[7] = sy;
         t[8] = sz;
-        y += 16.0;
 
-        // Detect transform changes for undo
+        // Undo tracking
         let new_transform = *t;
         if new_transform != old_transform {
             if state.pending_transform_edit.is_none() {
-                // Editing just started — capture original state
                 state.pending_transform_edit = Some((id, old_transform));
             }
         } else if let Some((pending_id, pending_old)) = state.pending_transform_edit.take()
             && pending_id == id
         {
-            // Values returned to original or editing stopped — record command
             let mut cm = std::mem::take(&mut state.command_manager);
             cm.execute(
                 Box::new(crate::commands::TransformEntityCommand::new(
@@ -301,107 +285,58 @@ fn draw_transform_section(
     if section_matches("材质 pbr material 基础颜色 金属度 粗糙度", &search_lower)
         && let Some(mat) = state.node_materials.get_mut(&id)
     {
-        y = separator(&painter, x, y, w);
-        y = section_header(&painter, x, y, "材质 (PBR)");
+        section_separator(gui);
+        section_header(gui, "材质 (PBR)");
 
-        // Base color
-        let cr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
         let (mut r, mut g, mut b) = (mat.base_color[0], mat.base_color[1], mat.base_color[2]);
-        gui.vec3_input(cr, "基础颜色", &mut r, &mut g, &mut b);
+        vec3_row(gui, "基础颜色", &mut r, &mut g, &mut b);
         mat.base_color[0] = r;
         mat.base_color[1] = g;
         mat.base_color[2] = b;
-        y += row_h + 6.0;
 
-        // Metallic slider
-        let mr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(mr, "金属度", &mut mat.metallic, 0.0, 1.0);
-        y += row_h + 6.0;
+        slider_row(gui, "金属度", &mut mat.metallic, 0.0, 1.0);
+        slider_row(gui, "粗糙度", &mut mat.roughness, 0.0, 1.0);
+        slider_row(gui, "环境光遮蔽", &mut mat.ao, 0.0, 1.0);
 
-        // Roughness slider
-        let rr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(rr, "粗糙度", &mut mat.roughness, 0.0, 1.0);
-        y += row_h + 6.0;
-
-        // AO slider
-        let ar = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(ar, "环境光遮蔽", &mut mat.ao, 0.0, 1.0);
-        y += row_h + 6.0;
-
-        // Edit Material Graph button
-        let btn_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, 28.0));
-        let btn_painter = gui.ui.painter_at(btn_rect);
-        let btn_id = egui::Id::new("edit_mat_graph_btn").with(id);
-        let btn_resp = gui.ui.interact(btn_rect, btn_id, egui::Sense::click());
-        btn_painter.add(Shape::rect_filled(
-            btn_rect,
-            Rounding::same(4.0),
-            if btn_resp.hovered() {
-                Color32::from_rgb(0, 120, 180)
-            } else {
-                Color32::from_rgb(0, 90, 140)
-            },
-        ));
-        btn_painter.text(
-            btn_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            "编辑材质图",
-            egui::FontId::proportional(11.0),
-            Color32::WHITE,
-        );
-        if btn_resp.clicked() {
-            // Build a graph from the current material data and open the editor
+        gui.ui.add_space(ROW_SPACING);
+        if gui
+            .ui
+            .button("编辑材质图")
+            .clicked()
+        {
             let graph = MaterialEditorState::graph_from_material(mat);
             state.node_graph_state.graph = graph;
             state.material_editor.open();
             state.material_editor.material_name = format!("材质 #{}", id);
         }
-        y += 36.0;
     }
 
     // ── Render ──
     if section_matches("渲染 render 材质 网格 阴影 shadow mesh", &search_lower) {
-        y = separator(&painter, x, y, w);
-        y = section_header(&painter, x, y, "渲染");
-
         if let Some((mat, mesh, shadow)) = state.node_render.get_mut(&id) {
-            let mr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-            gui.input_labeled(mr, "材质", mat);
-            y += row_h + 6.0;
+            section_separator(gui);
+            section_header(gui, "渲染");
 
-            // Mesh type dropdown
-            let mesh_types = ["Cube", "Sphere", "Plane", "Cylinder"];
-            let mer = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-            painter.text(
-                egui::pos2(x, mer.center().y),
-                egui::Align2::LEFT_CENTER,
-                "网格",
-                FontId::proportional(12.0),
-                Color32::from_gray(152),
-            );
-            let combo_rect = Rect::from_min_size(
-                Pos2::new(x + 80.0, mer.top()),
-                Vec2::new(w - 80.0, mer.height()),
-            );
-            let mut selected_idx = mesh_types
-                .iter()
-                .position(|&m| m == mesh.as_str())
-                .unwrap_or(0);
-            let combo_id = egui::Id::new("mesh_combo").with(id);
-            egui::ComboBox::from_id_salt(combo_id)
-                .width(combo_rect.width())
-                .selected_text(mesh_types[selected_idx])
-                .show_ui(gui.ui, |ui| {
-                    for (i, mt) in mesh_types.iter().enumerate() {
-                        ui.selectable_value(&mut selected_idx, i, *mt);
-                    }
-                });
-            *mesh = mesh_types[selected_idx].to_string();
-            y += row_h + 6.0;
+            read_only_row(gui, "材质", mat);
 
-            let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-            gui.checkbox(sr, "投射阴影", shadow);
-            y += 16.0;
+            // Mesh combo
+            gui.ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("网格")
+                        .color(Color32::from_gray(152))
+                        .size(12.0),
+                );
+                egui::ComboBox::from_id_salt(egui::Id::new("mesh_combo").with(id))
+                    .selected_text(mesh.as_str())
+                    .show_ui(ui, |ui| {
+                        for mt in ["Cube", "Sphere", "Plane", "Cylinder"] {
+                            ui.selectable_value(mesh, mt.to_string(), mt);
+                        }
+                    });
+            });
+            gui.ui.add_space(ROW_SPACING);
+
+            checkbox_row(gui, "投射阴影", shadow);
         }
     }
 
@@ -411,79 +346,52 @@ fn draw_transform_section(
         &search_lower,
     ) && let Some(light) = state.node_lights.get_mut(&id)
     {
-        y = separator(&painter, x, y, w);
+        section_separator(gui);
 
         let type_label = match light.light_type {
             LightType::Directional => "光照 (方向光)",
             LightType::Point => "光照 (点光源)",
             LightType::Spot => "光照 (聚光灯)",
         };
-        y = section_header(&painter, x, y, type_label);
+        section_header(gui, type_label);
 
-        // Enabled
-        let er = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.checkbox(er, "启用", &mut light.enabled);
-        y += row_h + 6.0;
+        checkbox_row(gui, "启用", &mut light.enabled);
 
-        // Color
-        let clr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
         let (mut lr, mut lg, mut lb) = (light.color[0], light.color[1], light.color[2]);
-        gui.vec3_input(clr, "颜色", &mut lr, &mut lg, &mut lb);
+        vec3_row(gui, "颜色", &mut lr, &mut lg, &mut lb);
         light.color[0] = lr;
         light.color[1] = lg;
         light.color[2] = lb;
-        y += row_h + 6.0;
 
-        // Intensity
-        let ir = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(ir, "强度", &mut light.intensity, 0.0, 10.0);
-        y += row_h + 6.0;
+        slider_row(gui, "强度", &mut light.intensity, 0.0, 10.0);
 
-        // Range (for point/spot)
         if light.light_type != LightType::Directional {
-            let rr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-            gui.slider_f32(rr, "范围", &mut light.range, 0.0, 100.0);
-            y += row_h + 6.0;
+            slider_row(gui, "范围", &mut light.range, 0.0, 100.0);
         }
 
-        // Direction (for directional/spot)
         if light.light_type != LightType::Point {
-            let dr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
             let (mut dx, mut dy, mut dz) =
                 (light.direction[0], light.direction[1], light.direction[2]);
-            gui.vec3_input(dr, "方向", &mut dx, &mut dy, &mut dz);
+            vec3_row(gui, "方向", &mut dx, &mut dy, &mut dz);
             light.direction[0] = dx;
             light.direction[1] = dy;
             light.direction[2] = dz;
-            y += row_h + 6.0;
         }
 
-        // Spot cone angles
         if light.light_type == LightType::Spot {
-            let ir2 = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-            gui.slider_f32(ir2, "内角 (°)", &mut light.inner_angle, 0.0, 90.0);
-            y += row_h + 6.0;
-
-            let or = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-            gui.slider_f32(or, "外角 (°)", &mut light.outer_angle, 0.0, 90.0);
-            y += row_h + 6.0;
+            slider_row(gui, "内角 (°)", &mut light.inner_angle, 0.0, 90.0);
+            slider_row(gui, "外角 (°)", &mut light.outer_angle, 0.0, 90.0);
         }
-
-        y += 8.0;
     }
 
     // ── Physics ──
     if section_matches("物理 physics 刚体 碰撞 rigidbody collider", &search_lower) {
-        y = separator(&painter, x, y, w);
-        y = section_header(&painter, x, y, "物理");
-
         if let Some((body, col)) = state.node_physics.get_mut(&id) {
-            let br = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-            gui.input_labeled(br, "刚体", body);
-            y += row_h + 6.0;
+            section_separator(gui);
+            section_header(gui, "物理");
 
-            let cr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-            gui.input_labeled(cr, "碰撞", col);
+            read_only_row(gui, "刚体", body);
+            read_only_row(gui, "碰撞", col);
         }
     }
 
@@ -491,211 +399,72 @@ fn draw_transform_section(
     if section_matches("精灵 sprite 纹理 翻转", &search_lower)
         && let Some(sprite) = state.node_sprites.get_mut(&id)
     {
-        y = separator(&painter, x, y, w);
-        y = section_header(&painter, x, y, "精灵");
+        section_separator(gui);
+        section_header(gui, "精灵");
 
-        // 纹理路径（可编辑文本）
-        let tr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        painter.text(
-            egui::pos2(x, tr.center().y),
-            egui::Align2::LEFT_CENTER,
-            "纹理",
-            FontId::proportional(12.0),
-            Color32::from_gray(152),
-        );
-        let input_rect = Rect::from_min_size(
-            Pos2::new(x + 80.0, tr.top()),
-            Vec2::new(w - 80.0, tr.height()),
-        );
-        // SAFETY: inspector has exclusive access to the UI
-        let mut tex_edit = sprite.texture.clone();
-        gui.ui
-            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-                egui::TextEdit::singleline(&mut tex_edit)
-                    .desired_width(input_rect.width() - 8.0)
-                    .show(ui);
-            });
-        sprite.texture = tex_edit;
-        y += row_h + 6.0;
+        text_input_row(gui, "纹理", &mut sprite.texture);
+        slider_row(gui, "宽度", &mut sprite.size[0], 0.0, 100.0);
+        slider_row(gui, "高度", &mut sprite.size[1], 0.0, 100.0);
 
-        let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(sr, "宽度", &mut sprite.size[0], 0.0, 100.0);
-        y += row_h + 6.0;
-
-        let sr2 = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(sr2, "高度", &mut sprite.size[1], 0.0, 100.0);
-        y += row_h + 6.0;
-
-        let cr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
         let (mut r, mut g, mut b) = (sprite.color[0], sprite.color[1], sprite.color[2]);
-        gui.vec3_input(cr, "颜色", &mut r, &mut g, &mut b);
+        vec3_row(gui, "颜色", &mut r, &mut g, &mut b);
         sprite.color[0] = r;
         sprite.color[1] = g;
         sprite.color[2] = b;
-        y += row_h + 6.0;
 
-        let fr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.checkbox(fr, "水平翻转", &mut sprite.flip_x);
-        y += row_h + 6.0;
-
-        let flr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.checkbox(flr, "垂直翻转", &mut sprite.flip_y);
-        y += row_h + 6.0;
+        checkbox_row(gui, "水平翻转", &mut sprite.flip_x);
+        checkbox_row(gui, "垂直翻转", &mut sprite.flip_y);
     }
 
     // ── Particle ──
     if section_matches("粒子 particle 发射器 粒子系统", &search_lower)
         && let Some(particle) = state.node_particles.get_mut(&id)
     {
-        y = separator(&painter, x, y, w);
-        y = section_header(&painter, x, y, "粒子系统");
+        section_separator(gui);
+        section_header(gui, "粒子系统");
 
-        let er = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        painter.text(
-            egui::pos2(x, er.center().y),
-            egui::Align2::LEFT_CENTER,
-            "发射器",
-            FontId::proportional(12.0),
-            Color32::from_gray(152),
-        );
-        let input_rect = Rect::from_min_size(
-            Pos2::new(x + 80.0, er.top()),
-            Vec2::new(w - 80.0, er.height()),
-        );
-        let mut emitter_edit = particle.emitter_type.clone();
-        gui.ui
-            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-                egui::TextEdit::singleline(&mut emitter_edit)
-                    .desired_width(input_rect.width() - 8.0)
-                    .show(ui);
-            });
-        particle.emitter_type = emitter_edit;
-        y += row_h + 6.0;
-
-        let rr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(rr, "发射速率", &mut particle.rate, 0.0, 100.0);
-        y += row_h + 6.0;
-
-        let lr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(lr, "生命周期", &mut particle.lifetime, 0.1, 10.0);
-        y += row_h + 6.0;
-
-        let spr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(spr, "速度", &mut particle.speed, 0.0, 50.0);
-        y += row_h + 6.0;
-
-        let szr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(szr, "起始大小", &mut particle.size_start, 0.0, 10.0);
-        y += row_h + 6.0;
-
-        let ser = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(ser, "结束大小", &mut particle.size_end, 0.0, 10.0);
-        y += row_h + 6.0;
+        text_input_row(gui, "发射器", &mut particle.emitter_type);
+        slider_row(gui, "发射速率", &mut particle.rate, 0.0, 100.0);
+        slider_row(gui, "生命周期", &mut particle.lifetime, 0.1, 10.0);
+        slider_row(gui, "速度", &mut particle.speed, 0.0, 50.0);
+        slider_row(gui, "起始大小", &mut particle.size_start, 0.0, 10.0);
+        slider_row(gui, "结束大小", &mut particle.size_end, 0.0, 10.0);
     }
 
     // ── Audio ──
     if section_matches("音频 audio 声音 音量", &search_lower)
         && let Some(audio) = state.node_audio.get_mut(&id)
     {
-        y = separator(&painter, x, y, w);
-        y = section_header(&painter, x, y, "音频");
+        section_separator(gui);
+        section_header(gui, "音频");
 
-        let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        painter.text(
-            egui::pos2(x, sr.center().y),
-            egui::Align2::LEFT_CENTER,
-            "音频源",
-            FontId::proportional(12.0),
-            Color32::from_gray(152),
-        );
-        let input_rect = Rect::from_min_size(
-            Pos2::new(x + 80.0, sr.top()),
-            Vec2::new(w - 80.0, sr.height()),
-        );
-        let mut source_edit = audio.source.clone();
-        gui.ui
-            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-                egui::TextEdit::singleline(&mut source_edit)
-                    .desired_width(input_rect.width() - 8.0)
-                    .show(ui);
-            });
-        audio.source = source_edit;
-        y += row_h + 6.0;
-
-        let vr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.slider_f32(vr, "音量", &mut audio.volume, 0.0, 1.0);
-        y += row_h + 6.0;
-
-        let lr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.checkbox(lr, "循环", &mut audio.looping);
-        y += row_h + 6.0;
-
-        let spr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.checkbox(spr, "空间音频", &mut audio.spatial);
-        y += row_h + 6.0;
+        text_input_row(gui, "音频源", &mut audio.source);
+        slider_row(gui, "音量", &mut audio.volume, 0.0, 1.0);
+        checkbox_row(gui, "循环", &mut audio.looping);
+        checkbox_row(gui, "空间音频", &mut audio.spatial);
     }
 
     // ── Script ──
     if section_matches("脚本 script lua wasm", &search_lower)
         && let Some(script) = state.node_scripts.get_mut(&id)
     {
-        y = separator(&painter, x, y, w);
-        y = section_header(&painter, x, y, "脚本");
+        section_separator(gui);
+        section_header(gui, "脚本");
 
-        let sr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        painter.text(
-            egui::pos2(x, sr.center().y),
-            egui::Align2::LEFT_CENTER,
-            "脚本路径",
-            FontId::proportional(12.0),
-            Color32::from_gray(152),
-        );
-        let input_rect = Rect::from_min_size(
-            Pos2::new(x + 80.0, sr.top()),
-            Vec2::new(w - 80.0, sr.height()),
-        );
-        let mut path_edit = script.script_path.clone();
-        gui.ui
-            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-                egui::TextEdit::singleline(&mut path_edit)
-                    .desired_width(input_rect.width() - 8.0)
-                    .show(ui);
-            });
-        script.script_path = path_edit;
-        y += row_h + 6.0;
-
-        let er = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        gui.checkbox(er, "启用", &mut script.enabled);
-        y += row_h + 6.0;
+        text_input_row(gui, "脚本路径", &mut script.script_path);
+        checkbox_row(gui, "启用", &mut script.enabled);
     }
 
     // ── Tags ──
     if section_matches("标签 tags tag", &search_lower)
         && let Some(tags) = state.node_tags.get_mut(&id)
     {
-        y = separator(&painter, x, y, w);
-        y = section_header(&painter, x, y, "标签");
+        section_separator(gui);
+        section_header(gui, "标签");
 
-        let tr = Rect::from_min_size(Pos2::new(x, y), Vec2::new(w, row_h));
-        painter.text(
-            egui::pos2(x, tr.center().y),
-            egui::Align2::LEFT_CENTER,
-            "标签",
-            FontId::proportional(12.0),
-            Color32::from_gray(152),
-        );
-        let input_rect = Rect::from_min_size(
-            Pos2::new(x + 80.0, tr.top()),
-            Vec2::new(w - 80.0, tr.height()),
-        );
         let tag_str = tags.join(", ");
         let mut tag_edit = tag_str.clone();
-        gui.ui
-            .allocate_new_ui(egui::UiBuilder::new().max_rect(input_rect), |ui| {
-                egui::TextEdit::singleline(&mut tag_edit)
-                    .desired_width(input_rect.width() - 8.0)
-                    .show(ui);
-            });
+        text_input_row(gui, "标签", &mut tag_edit);
         if tag_edit != tag_str {
             *tags = tag_edit
                 .split(',')
@@ -705,67 +474,42 @@ fn draw_transform_section(
         }
     }
 
-    y
-}
+    // ── Action buttons ──
+    gui.ui.add_space(SECTION_SPACING);
+    section_separator(gui);
+    gui.ui.add_space(SECTION_SPACING);
 
-fn draw_buttons(
-    gui: &mut Gui,
-    state: &mut EditorState,
-    id: u64,
-    x: f32,
-    mut y: f32,
-    w: f32,
-) {
-    y += 12.0;
-    let half_w = (w - 8.0) / 2.0;
+    gui.ui.horizontal(|ui| {
+        let half_w = (ui.available_width() - 4.0) / 2.0;
 
-    // Add Component button
-    let add_rect = Rect::from_min_size(Pos2::new(x, y), Vec2::new(half_w, 30.0));
-    let add_painter = gui.ui.painter_at(add_rect);
-    let add_id = egui::Id::new("add_component_btn").with(id);
-    let add_resp = gui.ui.interact(add_rect, add_id, egui::Sense::click());
-    let add_color = if add_resp.hovered() {
-        Color32::from_rgb(0, 120, 180)
-    } else {
-        Color32::from_rgb(0, 90, 140)
-    };
-    add_painter.add(Shape::rect_filled(add_rect, Rounding::same(4.0), add_color));
-    add_painter.text(
-        add_rect.center(),
-        egui::Align2::CENTER_CENTER,
-        "+ 添加组件",
-        FontId::proportional(11.0),
-        Color32::WHITE,
-    );
-    if add_resp.clicked() {
-        state.show_add_component_menu = !state.show_add_component_menu;
-        state.show_remove_component_menu = false;
-    }
+        let add_btn = ui.allocate_ui_with_layout(
+            egui::Vec2::new(half_w, 28.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_min_width(half_w);
+                ui.selectable_label(false, "+ 添加组件")
+            },
+        );
+        if add_btn.inner.clicked() {
+            state.show_add_component_menu = !state.show_add_component_menu;
+            state.show_remove_component_menu = false;
+        }
 
-    // Remove Component button
-    let rm_rect = Rect::from_min_size(Pos2::new(x + half_w + 8.0, y), Vec2::new(half_w, 30.0));
-    let rm_painter = gui.ui.painter_at(rm_rect);
-    let rm_id = egui::Id::new("rm_component_btn").with(id);
-    let rm_resp = gui.ui.interact(rm_rect, rm_id, egui::Sense::click());
-    let rm_color = if rm_resp.hovered() {
-        Color32::from_rgb(180, 40, 40)
-    } else {
-        Color32::from_rgb(140, 30, 30)
-    };
-    rm_painter.add(Shape::rect_filled(rm_rect, Rounding::same(4.0), rm_color));
-    rm_painter.text(
-        rm_rect.center(),
-        egui::Align2::CENTER_CENTER,
-        "- 移除组件",
-        FontId::proportional(11.0),
-        Color32::WHITE,
-    );
-    if rm_resp.clicked() {
-        state.show_remove_component_menu = !state.show_remove_component_menu;
-        state.show_add_component_menu = false;
-    }
+        let rm_btn = ui.allocate_ui_with_layout(
+            egui::Vec2::new(half_w, 28.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_min_width(half_w);
+                ui.selectable_label(false, "- 移除组件")
+            },
+        );
+        if rm_btn.inner.clicked() {
+            state.show_remove_component_menu = !state.show_remove_component_menu;
+            state.show_add_component_menu = false;
+        }
+    });
 
-    // Add Component dropdown menu
+    // Add Component dropdown
     if state.show_add_component_menu {
         let component_types = [
             ("材质 (PBR)", "material"),
@@ -777,48 +521,24 @@ fn draw_buttons(
             ("物理", "physics"),
             ("标签", "tags"),
         ];
-        let menu_y = add_rect.bottom() + 2.0;
-        let item_h = 28.0;
-        let menu_h = item_h * component_types.len() as f32;
-        let menu_rect = Rect::from_min_size(Pos2::new(x, menu_y), Vec2::new(w, menu_h));
-        add_painter.add(Shape::rect_filled(
-            menu_rect,
-            Rounding::same(4.0),
-            Color32::from_rgb(35, 35, 40),
-        ));
-        add_painter.rect_stroke(
-            menu_rect,
-            Rounding::same(4.0),
-            Stroke::new(1.0_f32, Color32::from_rgb(55, 55, 60)),
-        );
-
-        for (j, (label, comp_type)) in component_types.iter().enumerate() {
-            let item_y = menu_y + j as f32 * item_h;
-            let item_rect = Rect::from_min_size(Pos2::new(x, item_y), Vec2::new(w, item_h));
-            let item_id = egui::Id::new("comp_item").with(j as u64);
-            let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
-            if item_resp.hovered() {
-                add_painter.add(Shape::rect_filled(
-                    item_rect,
-                    Rounding::ZERO,
-                    Color32::from_rgb(0, 80, 60),
-                ));
-            }
-            add_painter.text(
-                Pos2::new(x + 12.0, item_rect.center().y),
-                egui::Align2::LEFT_CENTER,
-                *label,
-                FontId::proportional(12.0),
-                Color32::from_gray(200),
-            );
-            if item_resp.clicked() {
-                add_component_to_node(state, id, comp_type);
-                state.show_add_component_menu = false;
-            }
-        }
+        egui::Frame::default()
+            .fill(Color32::from_rgb(35, 35, 40))
+            .rounding(Rounding::same(4.0))
+            .inner_margin(egui::Margin::same(4.0))
+            .show(gui.ui, |ui| {
+                for (label, comp_type) in &component_types {
+                    if ui
+                        .selectable_label(false, *label)
+                        .clicked()
+                    {
+                        add_component_to_node(state, id, comp_type);
+                        state.show_add_component_menu = false;
+                    }
+                }
+            });
     }
 
-    // Remove Component dropdown menu
+    // Remove Component dropdown
     if state.show_remove_component_menu {
         let existing_components: Vec<(&str, bool)> = vec![
             ("材质 (PBR)", state.node_materials.contains_key(&id)),
@@ -836,88 +556,184 @@ fn draw_buttons(
             "tags",
         ];
 
-        let menu_y = y + 36.0;
-        let item_h = 28.0;
-        let menu_h = item_h * existing_components.len() as f32;
-        let menu_rect = Rect::from_min_size(Pos2::new(x, menu_y), Vec2::new(w, menu_h));
-        add_painter.add(Shape::rect_filled(
-            menu_rect,
-            Rounding::same(4.0),
-            Color32::from_rgb(50, 25, 25),
-        ));
-        add_painter.rect_stroke(
-            menu_rect,
-            Rounding::same(4.0),
-            Stroke::new(1.0_f32, Color32::from_rgb(80, 40, 40)),
-        );
-
-        for (j, ((label, exists), comp_type)) in existing_components
-            .iter()
-            .zip(comp_types.iter())
-            .enumerate()
-        {
-            let item_y = menu_y + j as f32 * item_h;
-            let item_rect = Rect::from_min_size(Pos2::new(x, item_y), Vec2::new(w, item_h));
-            let item_id = egui::Id::new("rm_comp_item").with(j as u64);
-            let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
-            if *exists && item_resp.hovered() {
-                add_painter.add(Shape::rect_filled(
-                    item_rect,
-                    Rounding::ZERO,
-                    Color32::from_rgb(120, 30, 30),
-                ));
-            }
-            let text_color = if *exists {
-                Color32::from_gray(200)
-            } else {
-                Color32::from_gray(60)
-            };
-            add_painter.text(
-                Pos2::new(x + 12.0, item_rect.center().y),
-                egui::Align2::LEFT_CENTER,
-                format!("{} {}", if *exists { "×" } else { " " }, label),
-                FontId::proportional(12.0),
-                text_color,
-            );
-            if *exists && item_resp.clicked() {
-                match *comp_type {
-                    "material" => {
-                        state.node_materials.remove(&id);
+        egui::Frame::default()
+            .fill(Color32::from_rgb(50, 25, 25))
+            .rounding(Rounding::same(4.0))
+            .inner_margin(egui::Margin::same(4.0))
+            .show(gui.ui, |ui| {
+                for ((label, exists), comp_type) in
+                    existing_components.iter().zip(comp_types.iter())
+                {
+                    let text = if *exists {
+                        format!("× {}", label)
+                    } else {
+                        format!("  {}", label)
+                    };
+                    let resp = ui.add_enabled(
+                        *exists,
+                        egui::SelectableLabel::new(false, text),
+                    );
+                    if *exists && resp.clicked() {
+                        remove_component(state, id, comp_type);
+                        state.log_info(&format!("已移除 {} 组件", label));
+                        state.show_remove_component_menu = false;
                     }
-                    "render" => {
-                        state.node_render.remove(&id);
-                    }
-                    "light" => {
-                        state.node_lights.remove(&id);
-                    }
-                    "physics" => {
-                        state.node_physics.remove(&id);
-                    }
-                    "sprite" => {
-                        state.node_sprites.remove(&id);
-                    }
-                    "particle" => {
-                        state.node_particles.remove(&id);
-                    }
-                    "audio" => {
-                        state.node_audio.remove(&id);
-                    }
-                    "script" => {
-                        state.node_scripts.remove(&id);
-                    }
-                    "tags" => {
-                        state.node_tags.remove(&id);
-                    }
-                    _ => {}
                 }
-                state.log_info(&format!("已移除 {} 组件", label));
-                state.show_remove_component_menu = false;
-            }
-        }
+            });
     }
 }
 
-/// Add a component of the given type to a node.
+// ── Widget helpers ──
+
+fn section_separator(gui: &mut Gui) {
+    gui.ui.add_space(SECTION_SPACING);
+    let rect = gui.ui.available_rect_before_wrap();
+    let painter = gui.ui.painter_at(rect);
+    let y = rect.top();
+    painter.add(egui::Shape::line(
+        vec![
+            egui::Pos2::new(rect.left(), y),
+            egui::Pos2::new(rect.right(), y),
+        ],
+        Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
+    ));
+    gui.ui.add_space(SECTION_SPACING);
+}
+
+fn section_header(gui: &mut Gui, label: &str) {
+    gui.ui.label(
+        egui::RichText::new(label)
+            .color(Color32::from_gray(90))
+            .size(11.0),
+    );
+    gui.ui.add_space(ROW_SPACING);
+}
+
+fn vec3_row(gui: &mut Gui, label: &str, x: &mut f32, y: &mut f32, z: &mut f32) {
+    let axis_colors = [
+        Color32::from_rgb(255, 107, 107),
+        Color32::from_rgb(46, 213, 115),
+        Color32::from_rgb(77, 171, 247),
+    ];
+
+    gui.ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(label)
+                .color(Color32::from_gray(152))
+                .size(12.0),
+        );
+
+        for (val, (axis_label, acolor)) in [
+            (x, ("X", axis_colors[0])),
+            (y, ("Y", axis_colors[1])),
+            (z, ("Z", axis_colors[2])),
+        ] {
+            let mut buf = format!("{:.1}", *val);
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(axis_label)
+                        .color(acolor)
+                        .size(10.0),
+                );
+                let resp = ui.add(
+                    egui::TextEdit::singleline(&mut buf)
+                        .desired_width(48.0)
+                        .margin(egui::Margin::symmetric(4.0, 2.0)),
+                );
+                if resp.lost_focus() {
+                    if let Ok(v) = buf.trim().parse::<f32>() {
+                        *val = v;
+                    }
+                }
+            });
+        }
+    });
+    gui.ui.add_space(ROW_SPACING);
+}
+
+fn slider_row(gui: &mut Gui, label: &str, value: &mut f32, min: f32, max: f32) {
+    gui.ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(label)
+                .color(Color32::from_gray(152))
+                .size(12.0),
+        );
+        ui.add(egui::Slider::new(value, min..=max).show_value(true));
+    });
+    gui.ui.add_space(ROW_SPACING);
+}
+
+fn checkbox_row(gui: &mut Gui, label: &str, checked: &mut bool) {
+    gui.ui.horizontal(|ui| {
+        ui.checkbox(checked, label);
+    });
+    gui.ui.add_space(ROW_SPACING);
+}
+
+fn read_only_row(gui: &mut Gui, label: &str, value: &str) {
+    gui.ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(label)
+                .color(Color32::from_gray(152))
+                .size(12.0),
+        );
+        ui.add(
+            egui::TextEdit::singleline(&mut value.to_string())
+                .desired_width(ui.available_width())
+                .interactive(false),
+        );
+    });
+    gui.ui.add_space(ROW_SPACING);
+}
+
+fn text_input_row(gui: &mut Gui, label: &str, value: &mut String) {
+    gui.ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(label)
+                .color(Color32::from_gray(152))
+                .size(12.0),
+        );
+        ui.add(
+            egui::TextEdit::singleline(value)
+                .desired_width(ui.available_width()),
+        );
+    });
+    gui.ui.add_space(ROW_SPACING);
+}
+
+fn remove_component(state: &mut EditorState, id: u64, comp_type: &str) {
+    match comp_type {
+        "material" => {
+            state.node_materials.remove(&id);
+        }
+        "render" => {
+            state.node_render.remove(&id);
+        }
+        "light" => {
+            state.node_lights.remove(&id);
+        }
+        "physics" => {
+            state.node_physics.remove(&id);
+        }
+        "sprite" => {
+            state.node_sprites.remove(&id);
+        }
+        "particle" => {
+            state.node_particles.remove(&id);
+        }
+        "audio" => {
+            state.node_audio.remove(&id);
+        }
+        "script" => {
+            state.node_scripts.remove(&id);
+        }
+        "tags" => {
+            state.node_tags.remove(&id);
+        }
+        _ => {}
+    }
+}
+
 fn add_component_to_node(state: &mut EditorState, node_id: u64, comp_type: &str) {
     match comp_type {
         "material" => {

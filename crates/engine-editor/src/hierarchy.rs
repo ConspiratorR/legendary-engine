@@ -1,7 +1,7 @@
 //! Scene hierarchy panel — displays the entity tree with drag-and-drop
 //! selection and right-click context actions.
 
-use crate::state::EditorState;
+use crate::state::{ContextMenuState, EditorState};
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_ui::Gui;
 
@@ -353,6 +353,11 @@ pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: Rect) {
     if state.drag_source.is_some() {
         state.drag_hover_target = None;
     }
+
+    // Draw context menu if open
+    if state.context_menu.is_some() {
+        draw_context_menu(state, gui, rect, h_scale, w_scale);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -487,6 +492,19 @@ fn draw_node(
         state.selected_nodes.push(node_id);
     }
 
+    // Right-click context menu
+    if response.secondary_clicked() {
+        state.selected_nodes.clear();
+        state.selected_nodes.push(node_id);
+        let mouse_pos = gui.ui.input(|i| i.pointer.interact_pos());
+        state.context_menu = Some(ContextMenuState {
+            position: mouse_pos.unwrap_or(egui::pos2(id_rect.center().x, id_rect.center().y)),
+            node_id,
+            renaming: false,
+            rename_buffer: String::new(),
+        });
+    }
+
     // Drag initiation
     if response.drag_started() {
         state.drag_source = Some(node_id);
@@ -553,6 +571,344 @@ fn draw_node(
     }
 
     *y
+}
+
+/// Draw the context menu for the hierarchy panel.
+fn draw_context_menu(
+    state: &mut EditorState,
+    gui: &mut Gui,
+    _rect: Rect,
+    h_scale: f32,
+    w_scale: f32,
+) {
+    let Some(menu) = &state.context_menu else {
+        return;
+    };
+
+    let node_id = menu.node_id;
+    let menu_pos = menu.position;
+
+    // Menu items
+    let items: Vec<(&str, bool)> = if menu.renaming {
+        vec![] // No items while renaming
+    } else {
+        vec![
+            ("重命名", true),
+            ("复制", true),
+            ("粘贴", !state.clipboard.is_empty()),
+            ("剪切", true),
+            ("删除", true),
+            ("复制节点", true),
+            ("聚焦对象", true),
+            ("─", true), // separator
+            ("创建子节点", true),
+            ("创建立方体", true),
+            ("创建球体", true),
+            ("创建光源", true),
+        ]
+    };
+
+    let item_h = 28.0 * h_scale;
+    let menu_w = 160.0 * w_scale;
+    let menu_h = if menu.renaming {
+        40.0 * h_scale
+    } else {
+        item_h * items.len() as f32
+    };
+
+    // Clamp menu position to screen
+    let screen = gui.ui.ctx().screen_rect();
+    let mut menu_x = menu_pos.x;
+    let mut menu_y = menu_pos.y;
+    if menu_x + menu_w > screen.right() {
+        menu_x = screen.right() - menu_w - 4.0;
+    }
+    if menu_y + menu_h > screen.bottom() {
+        menu_y = screen.bottom() - menu_h - 4.0;
+    }
+
+    let menu_rect = Rect::from_min_size(Pos2::new(menu_x, menu_y), Vec2::new(menu_w, menu_h));
+
+    // Click outside to close
+    let bg_response = gui.ui.interact(
+        gui.ui.ctx().screen_rect(),
+        egui::Id::new("ctx_menu_bg"),
+        egui::Sense::click(),
+    );
+    if bg_response.clicked() && !menu_rect.contains(bg_response.interact_pointer_pos().unwrap_or_default()) {
+        state.context_menu = None;
+        return;
+    }
+
+    // Draw menu background
+    let painter = gui.ui.painter_at(menu_rect);
+    painter.add(Shape::rect_filled(
+        menu_rect,
+        Rounding::same(4.0 * h_scale),
+        Color32::from_rgb(35, 35, 40),
+    ));
+    painter.rect_stroke(
+        menu_rect,
+        Rounding::same(4.0 * h_scale),
+        Stroke::new(1.0_f32, Color32::from_rgb(55, 55, 60)),
+    );
+
+    if menu.renaming {
+        // Draw rename input
+        let input_rect = Rect::from_min_size(
+            Pos2::new(menu_x + 8.0 * w_scale, menu_y + 6.0 * h_scale),
+            Vec2::new(menu_w - 16.0 * w_scale, 28.0 * h_scale),
+        );
+        painter.add(Shape::rect_filled(
+            input_rect,
+            Rounding::same(4.0),
+            Color32::from_rgb(30, 30, 34),
+        ));
+        painter.rect_stroke(
+            input_rect,
+            Rounding::same(4.0),
+            Stroke::new(1.0_f32, Color32::from_rgb(0, 212, 170)),
+        );
+
+        let rename_id = egui::Id::new("ctx_rename");
+        let response = gui.ui.interact(input_rect, rename_id, egui::Sense::click());
+
+        // Initialize buffer if empty
+        if state
+            .context_menu
+            .as_ref()
+            .map_or(false, |m| m.rename_buffer.is_empty())
+        {
+            let name = state
+                .scene_tree
+                .nodes
+                .iter()
+                .find(|n| n.id == node_id)
+                .map(|n| n.name.clone())
+                .unwrap_or_default();
+            if let Some(menu) = &mut state.context_menu {
+                menu.rename_buffer = name;
+            }
+        }
+
+        if response.clicked() {
+            gui.ui.ctx().memory_mut(|m| m.request_focus(rename_id));
+        }
+
+        let has_focus = gui.ui.ctx().memory(|m| m.has_focus(rename_id));
+        let mut close_menu = false;
+        let mut apply_rename = false;
+
+        if has_focus {
+            let events: Vec<egui::Event> = gui.ui.ctx().input(|i| i.events.clone());
+            for event in &events {
+                match event {
+                    egui::Event::Text(text) => {
+                        if let Some(menu) = &mut state.context_menu {
+                            menu.rename_buffer.push_str(text);
+                        }
+                    }
+                    egui::Event::Key {
+                        key: egui::Key::Backspace,
+                        pressed: true,
+                        ..
+                    } => {
+                        if let Some(menu) = &mut state.context_menu {
+                            menu.rename_buffer.pop();
+                        }
+                    }
+                    egui::Event::Key {
+                        key: egui::Key::Enter,
+                        pressed: true,
+                        ..
+                    } => {
+                        apply_rename = true;
+                    }
+                    egui::Event::Key {
+                        key: egui::Key::Escape,
+                        pressed: true,
+                        ..
+                    } => {
+                        close_menu = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if apply_rename {
+            if let Some(menu) = &state.context_menu {
+                if !menu.rename_buffer.is_empty() {
+                    state
+                        .scene_tree
+                        .rename(node_id, &menu.rename_buffer.clone());
+                }
+            }
+            close_menu = true;
+        }
+
+        if close_menu {
+            state.context_menu = None;
+            return;
+        }
+
+        // Draw text
+        let display_text = state
+            .context_menu
+            .as_ref()
+            .map(|m| m.rename_buffer.clone())
+            .unwrap_or_default();
+        painter.text(
+            input_rect.center(),
+            egui::Align2::CENTER_CENTER,
+            &display_text,
+            FontId::proportional(12.0 * h_scale),
+            Color32::from_rgb(232, 232, 236),
+        );
+
+        // Show cursor when focused
+        if has_focus {
+            let cursor_x = input_rect.left()
+                + 8.0 * w_scale
+                + painter
+                    .layout(
+                        display_text,
+                        FontId::proportional(12.0 * h_scale),
+                        Color32::WHITE,
+                        input_rect.width() - 16.0 * w_scale,
+                    )
+                    .size()
+                    .x;
+            painter.add(Shape::line(
+                vec![
+                    Pos2::new(cursor_x, input_rect.top() + 4.0),
+                    Pos2::new(cursor_x, input_rect.bottom() - 4.0),
+                ],
+                Stroke::new(1.0_f32, Color32::from_rgb(0, 212, 170)),
+            ));
+        }
+        return;
+    }
+
+    for (j, (label, enabled)) in items.iter().enumerate() {
+        if *label == "─" {
+            // Draw separator
+            let sep_y = menu_y + j as f32 * item_h + item_h / 2.0;
+            painter.add(Shape::line(
+                vec![
+                    Pos2::new(menu_x + 8.0, sep_y),
+                    Pos2::new(menu_x + menu_w - 8.0, sep_y),
+                ],
+                Stroke::new(1.0_f32, Color32::from_rgb(55, 55, 60)),
+            ));
+            continue;
+        }
+
+        let item_y = menu_y + j as f32 * item_h;
+        let item_rect = Rect::from_min_size(Pos2::new(menu_x, item_y), Vec2::new(menu_w, item_h));
+        let item_id = egui::Id::new("ctx_item").with(j as u64);
+        let item_resp = gui.ui.interact(item_rect, item_id, egui::Sense::click());
+
+        if item_resp.hovered() && *enabled {
+            painter.add(Shape::rect_filled(
+                item_rect,
+                Rounding::ZERO,
+                Color32::from_rgb(0, 80, 60),
+            ));
+        }
+
+        let text_color = if *enabled {
+            Color32::from_gray(200)
+        } else {
+            Color32::from_gray(60)
+        };
+        painter.text(
+            Pos2::new(menu_x + 12.0 * w_scale, item_rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            *label,
+            FontId::proportional(12.0 * h_scale),
+            text_color,
+        );
+
+        if item_resp.clicked() && *enabled {
+            match *label {
+                "重命名" => {
+                    if let Some(menu) = &mut state.context_menu {
+                        menu.renaming = true;
+                        menu.rename_buffer = state
+                            .scene_tree
+                            .nodes
+                            .iter()
+                            .find(|n| n.id == node_id)
+                            .map(|n| n.name.clone())
+                            .unwrap_or_default();
+                    }
+                }
+                "复制" => {
+                    state.copy_selected();
+                }
+                "粘贴" => {
+                    state.paste();
+                }
+                "剪切" => {
+                    state.cut_selected();
+                }
+                "删除" => {
+                    state.delete_selected();
+                }
+                "复制节点" => {
+                    state.duplicate_selected();
+                }
+                "聚焦对象" => {
+                    state.focus_on_selection();
+                }
+                "创建子节点" => {
+                    let new_id = state.scene_tree.add_node("新节点", Some(node_id));
+                    state
+                        .node_transforms
+                        .insert(new_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+                    state.selected_nodes = vec![new_id];
+                }
+                "创建立方体" => {
+                    let new_id = state.scene_tree.add_node("立方体", Some(node_id));
+                    state
+                        .node_transforms
+                        .insert(new_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+                    state.node_render.insert(
+                        new_id,
+                        ("Default".into(), "Cube".into(), true),
+                    );
+                    state
+                        .node_materials
+                        .insert(new_id, crate::state::MaterialData::default());
+                    state.selected_nodes = vec![new_id];
+                }
+                "创建球体" => {
+                    let new_id = state.scene_tree.add_node("球体", Some(node_id));
+                    state
+                        .node_transforms
+                        .insert(new_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+                    state.node_render.insert(
+                        new_id,
+                        ("Default".into(), "Sphere".into(), true),
+                    );
+                    state
+                        .node_materials
+                        .insert(new_id, crate::state::MaterialData::default());
+                    state.selected_nodes = vec![new_id];
+                }
+                "创建光源" => {
+                    let new_id = state.scene_tree.add_node("光源", Some(node_id));
+                    state
+                        .node_lights
+                        .insert(new_id, crate::state::LightData::default());
+                    state.selected_nodes = vec![new_id];
+                }
+                _ => {}
+            }
+            state.context_menu = None;
+        }
+    }
 }
 
 #[cfg(test)]
