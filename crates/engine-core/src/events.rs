@@ -184,22 +184,26 @@ mod tests {
     use super::*;
     use crate::event::{EventBus, EventBusExt};
     use std::sync::atomic::{AtomicUsize, Ordering};
-
-    static EVENT_COUNT: AtomicUsize = AtomicUsize::new(0);
+    use std::sync::Arc;
 
     #[test]
     fn test_builtin_events() {
-        EVENT_COUNT.store(0, Ordering::SeqCst);
+        let count = Arc::new(AtomicUsize::new(0));
+        let count_clone = count.clone();
 
         let mut bus = EventBus::new();
-        bus.on_event::<CollisionEnter>(|_| {
-            EVENT_COUNT.fetch_add(1, Ordering::SeqCst);
+        bus.on_event::<CollisionEnter>(move |_| {
+            count_clone.fetch_add(1, Ordering::SeqCst);
         });
-        bus.on_event::<TriggerEnter>(|_| {
-            EVENT_COUNT.fetch_add(10, Ordering::SeqCst);
+
+        let count_clone2 = count.clone();
+        bus.on_event::<TriggerEnter>(move |_| {
+            count_clone2.fetch_add(10, Ordering::SeqCst);
         });
-        bus.on_event::<MouseDown>(|_| {
-            EVENT_COUNT.fetch_add(100, Ordering::SeqCst);
+
+        let count_clone3 = count.clone();
+        bus.on_event::<MouseDown>(move |_| {
+            count_clone3.fetch_add(100, Ordering::SeqCst);
         });
 
         let handle = crate::gameobject::GameObjectHandle::new(0, 0);
@@ -213,33 +217,36 @@ mod tests {
                 relative_velocity: engine_math::Vec3::ZERO,
             },
         });
-        assert_eq!(EVENT_COUNT.load(Ordering::SeqCst), 1);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
 
         bus.send(TriggerEnter {
             entity: handle,
             trigger: TriggerData { other: handle },
         });
-        assert_eq!(EVENT_COUNT.load(Ordering::SeqCst), 11);
+        assert_eq!(count.load(Ordering::SeqCst), 11);
 
         bus.send(MouseDown {
             entity: handle,
             button: MouseButton::Left,
         });
-        assert_eq!(EVENT_COUNT.load(Ordering::SeqCst), 111);
+        assert_eq!(count.load(Ordering::SeqCst), 111);
     }
 
     #[test]
     fn test_game_events() {
-        EVENT_COUNT.store(0, Ordering::SeqCst);
+        let count = Arc::new(AtomicUsize::new(0));
+        let count_clone = count.clone();
 
         let mut bus = EventBus::new();
-        bus.on_event::<HealthChanged>(|e| {
+        bus.on_event::<HealthChanged>(move |e| {
             if e.new_health <= 0.0 {
-                EVENT_COUNT.fetch_add(1, Ordering::SeqCst);
+                count_clone.fetch_add(1, Ordering::SeqCst);
             }
         });
-        bus.on_event::<EntityDied>(|_| {
-            EVENT_COUNT.fetch_add(10, Ordering::SeqCst);
+
+        let count_clone2 = count.clone();
+        bus.on_event::<EntityDied>(move |_| {
+            count_clone2.fetch_add(10, Ordering::SeqCst);
         });
 
         let handle = crate::gameobject::GameObjectHandle::new(0, 0);
@@ -249,16 +256,16 @@ mod tests {
             old_health: 100.0,
             new_health: 50.0,
         });
-        assert_eq!(EVENT_COUNT.load(Ordering::SeqCst), 0);
+        assert_eq!(count.load(Ordering::SeqCst), 0);
 
         bus.send(HealthChanged {
             entity: handle,
             old_health: 50.0,
             new_health: 0.0,
         });
-        assert_eq!(EVENT_COUNT.load(Ordering::SeqCst), 1);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
 
         bus.send(EntityDied { entity: handle });
-        assert_eq!(EVENT_COUNT.load(Ordering::SeqCst), 11);
+        assert_eq!(count.load(Ordering::SeqCst), 11);
     }
 }
