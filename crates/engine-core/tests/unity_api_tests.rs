@@ -1,6 +1,7 @@
 use engine_core::Phase;
 use engine_core::app::AppBuilder;
 use engine_core::context::Context;
+use engine_core::event::EventBus;
 use engine_core::gameobject::{Component, GameObject, GameObjectHandle};
 use engine_core::transform::Transform;
 use engine_core::world::World;
@@ -134,9 +135,10 @@ fn test_unity_like_player_loop() {
     // Run frames by invoking the player loop directly
     let mut world = World::new();
     let time = engine_core::time::Time::new();
+    let mut events = EventBus::new();
     for frame in 0..3 {
         if app.is_running() {
-            let mut ctx = Context::new(&mut world, time.clone(), frame);
+            let mut ctx = Context::new(&mut world, time.clone(), frame, &mut events);
             app.player_loop_mut().run(&mut ctx);
         }
     }

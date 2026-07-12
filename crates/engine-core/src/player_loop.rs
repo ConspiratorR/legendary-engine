@@ -138,6 +138,7 @@ impl Default for PlayerLoop {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::event::EventBus;
     use crate::time::Time;
     use crate::world::World;
     use std::sync::Arc;
@@ -163,7 +164,8 @@ mod tests {
 
         let mut world = World::new();
         let time = Time::default();
-        let mut context = Context::new(&mut world, time, 0);
+        let mut events = EventBus::new();
+        let mut context = Context::new(&mut world, time, 0, &mut events);
 
         loop_.run(&mut context);
         assert_eq!(counter.load(Ordering::Relaxed), 1);
@@ -188,7 +190,8 @@ mod tests {
 
         let mut world = World::new();
         let time = Time::default();
-        let mut context = Context::new(&mut world, time, 0);
+        let mut events = EventBus::new();
+        let mut context = Context::new(&mut world, time, 0, &mut events);
 
         loop_.run(&mut context); // Startup + Update
         assert_eq!(counter.load(Ordering::Relaxed), 11);
@@ -213,7 +216,8 @@ mod tests {
 
         let mut world = World::new();
         let time = Time::default();
-        let mut context = Context::new(&mut world, time, 0);
+        let mut events = EventBus::new();
+        let mut context = Context::new(&mut world, time, 0, &mut events);
 
         loop_.run(&mut context);
         // Update (1) should run before LateUpdate (100)

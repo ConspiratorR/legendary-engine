@@ -28,6 +28,7 @@ pub struct AppBuilder {
     post_render_hooks: Vec<Hook>,
     player_loop: crate::player_loop::PlayerLoop,
     time: crate::time::Time,
+    events: crate::event::EventBus,
     plugins: Vec<Box<dyn Plugin>>,
 }
 
@@ -52,6 +53,7 @@ impl AppBuilder {
             post_render_hooks: Vec::new(),
             player_loop: crate::player_loop::PlayerLoop::new(),
             time: crate::time::Time::new(),
+            events: crate::event::EventBus::new(),
             plugins: Vec::new(),
         }
     }
@@ -139,6 +141,16 @@ impl AppBuilder {
     /// Get mutable access to the resource registry.
     pub fn resources_mut(&mut self) -> &mut ResourceRegistry {
         &mut self.resources
+    }
+
+    /// Get shared access to the event bus.
+    pub fn events(&self) -> &crate::event::EventBus {
+        &self.events
+    }
+
+    /// Get mutable access to the event bus.
+    pub fn events_mut(&mut self) -> &mut crate::event::EventBus {
+        &mut self.events
     }
 
     /// Register a hook that runs before the update phase.
@@ -247,6 +259,7 @@ pub struct App {
     pub post_render_hooks: Vec<Hook>,
     player_loop: crate::player_loop::PlayerLoop,
     time: crate::time::Time,
+    events: crate::event::EventBus,
     running: bool,
     frame: u64,
 }
@@ -274,6 +287,7 @@ impl App {
             post_render_hooks: Vec::new(),
             player_loop: crate::player_loop::PlayerLoop::new(),
             time: crate::time::Time::new(),
+            events: crate::event::EventBus::new(),
             running: false,
             frame: 0,
         }
@@ -347,6 +361,16 @@ impl App {
     /// Get mutable access to the resource registry.
     pub fn resources_mut(&mut self) -> &mut ResourceRegistry {
         &mut self.resources
+    }
+
+    /// Get shared access to the event bus.
+    pub fn events(&self) -> &crate::event::EventBus {
+        &self.events
+    }
+
+    /// Get mutable access to the event bus.
+    pub fn events_mut(&mut self) -> &mut crate::event::EventBus {
+        &mut self.events
     }
 
     /// Get shared access to the system schedule.
@@ -501,6 +525,7 @@ impl From<AppBuilder> for App {
             post_render_hooks: b.post_render_hooks,
             player_loop: b.player_loop,
             time: b.time,
+            events: b.events,
             running: false,
             frame: 0,
         }

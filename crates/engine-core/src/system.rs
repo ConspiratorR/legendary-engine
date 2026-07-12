@@ -47,6 +47,7 @@ impl System for NamedSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::event::EventBus;
     use crate::time::Time;
     use crate::world::World;
 
@@ -56,7 +57,8 @@ mod tests {
             ctx.frame += 1;
         };
         let mut world = World::new();
-        let mut ctx = Context::new(&mut world, Time::default(), 0);
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
         system.run(&mut ctx);
         assert_eq!(ctx.frame, 1);
     }
@@ -67,7 +69,8 @@ mod tests {
             ctx.frame += 10;
         });
         let mut world = World::new();
-        let mut ctx = Context::new(&mut world, Time::default(), 0);
+        let mut events = EventBus::new();
+        let mut ctx = Context::new(&mut world, Time::default(), 0, &mut events);
         system.run(&mut ctx);
         assert_eq!(ctx.frame, 10);
         assert_eq!(system.name(), "increment");
