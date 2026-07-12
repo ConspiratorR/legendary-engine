@@ -1,6 +1,5 @@
-use std::any::Any;
-
 use crate::context::Context;
+use crate::events::*;
 use crate::gameobject::Component;
 
 /// Base class for user scripts (like Unity's MonoBehaviour).
@@ -37,22 +36,28 @@ pub trait MonoBehaviour: Component {
     fn on_mouse_exit(&mut self, _context: &mut Context) {}
 
     /// Called when the mouse is pressed on the Collider (like Unity's OnMouseDown).
-    fn on_mouse_down(&mut self, _context: &mut Context) {}
+    fn on_mouse_down(&mut self, _context: &mut Context, _button: MouseButton) {}
 
     /// Called when the mouse button is released (like Unity's OnMouseUp).
-    fn on_mouse_up(&mut self, _context: &mut Context) {}
+    fn on_mouse_up(&mut self, _context: &mut Context, _button: MouseButton) {}
+
+    /// Called when the mouse is dragged (like Unity's OnMouseDrag).
+    fn on_mouse_drag(&mut self, _context: &mut Context, _button: MouseButton) {}
+
+    /// Called when the mouse is hovering (like Unity's OnMouseOver).
+    fn on_mouse_over(&mut self, _context: &mut Context) {}
 
     /// Called when a collision starts (like Unity's OnCollisionEnter).
-    fn on_collision_enter(&mut self, _context: &mut Context, _collision: &dyn Any) {}
+    fn on_collision_enter(&mut self, _context: &mut Context, _collision: &Collision) {}
 
     /// Called when a collision ends (like Unity's OnCollisionExit).
-    fn on_collision_exit(&mut self, _context: &mut Context, _collision: &dyn Any) {}
+    fn on_collision_exit(&mut self, _context: &mut Context, _collision: &Collision) {}
 
     /// Called when a trigger is entered (like Unity's OnTriggerEnter).
-    fn on_trigger_enter(&mut self, _context: &mut Context, _other: &dyn Any) {}
+    fn on_trigger_enter(&mut self, _context: &mut Context, _other: &TriggerData) {}
 
     /// Called when a trigger is exited (like Unity's OnTriggerExit).
-    fn on_trigger_exit(&mut self, _context: &mut Context, _other: &dyn Any) {}
+    fn on_trigger_exit(&mut self, _context: &mut Context, _other: &TriggerData) {}
 
     /// Called for drawing gizmos (like Unity's OnDrawGizmos).
     fn on_draw_gizmos(&self, _context: &Context) {}
@@ -110,6 +115,7 @@ impl MonoBehaviourHolder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::any::Any;
 
     #[derive(Debug)]
     struct TestComponent {
