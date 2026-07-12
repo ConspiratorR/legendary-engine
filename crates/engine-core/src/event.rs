@@ -1,107 +1,185 @@
-use std::sync::Arc;
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
 
-/// Unique identifier for a registered event listener.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ListenerId(usize);
-
-type Listener<T> = (ListenerId, Arc<dyn Fn(&T) + Send + Sync>);
-
-/// Generic synchronous publish/subscribe event channel.
-///
-/// Listeners are called in registration order when `emit()` is invoked.
-/// Uses `Fn(&T)` so multiple listeners can fire without `&mut` conflicts.
-pub struct EventChannel<T: Send + 'static> {
-    listeners: Vec<Listener<T>>,
-    next_id: usize,
+/// Type-safe event bus (like Unity's SendMessage, but type-safe).
+pub struct EventBus {
+    handlers: HashMap<TypeId, Vec<Box<dyn EventHandler>>>,
 }
 
-impl<T: Send + 'static> EventChannel<T> {
-    /// Create a new, empty event channel with no listeners.
+/// Trait for event handlers.
+pub trait EventHandler: Send + Sync {
+    fn handle(&mut self, event: &dyn Any);
+}
+
+/// Event marker trait.
+pub trait Event: Any + Send + Sync + Clone {}
+
+impl EventBus {
+    /// Create a new EventBus.
     pub fn new() -> Self {
         Self {
-            listeners: Vec::new(),
-            next_id: 0,
+            handlers: HashMap::new(),
         }
     }
 
-    /// Register a listener. Returns a `ListenerId` for later removal.
-    pub fn subscribe(&mut self, handler: impl Fn(&T) + Send + Sync + 'static) -> ListenerId {
-        let id = ListenerId(self.next_id);
-        self.next_id += 1;
-        self.listeners.push((id, Arc::new(handler)));
-        id
+    /// Register a handler for an event type.
+    pub fn on<E: Event + 'static>(&mut self, handler: impl EventHandler + 'static) {
+        self.handlers
+            .entry(TypeId::of::<E>())
+            .or_default()
+            .push(Box::new(handler));
     }
 
-    /// Remove a listener by id. No-op if already removed.
-    pub fn unsubscribe(&mut self, id: ListenerId) {
-        self.listeners.retain(|(lid, _)| *lid != id);
-    }
-
-    /// Fire the event to all registered listeners.
-    pub fn emit(&self, event: &T) {
-        for (_, listener) in &self.listeners {
-            listener(event);
+    /// Send an event to all handlers (like Unity's SendMessage).
+    pub fn send<E: Event + 'static>(&mut self, event: E) {
+        if let Some(handlers) = self.handlers.get_mut(&TypeId::of::<E>()) {
+            for handler in handlers.iter_mut() {
+                handler.handle(&event);
+            }
         }
+    }
+
+    /// Clear all handlers.
+    pub fn clear(&mut self) {
+        self.handlers.clear();
+    }
+
+    /// Get the number of registered event types.
+    pub fn event_type_count(&self) -> usize {
+        self.handlers.len()
+    }
+
+    /// Get the number of handlers for a specific event type.
+    pub fn handler_count<E: Event + 'static>(&self) -> usize {
+        self.handlers
+            .get(&TypeId::of::<E>())
+            .map(|h| h.len())
+            .unwrap_or(0)
     }
 }
 
-impl<T: Send + 'static> Default for EventChannel<T> {
+impl Default for EventBus {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Wrapper for closure-based event handlers.
+struct ClosureHandler<F> {
+    handler: F,
+}
+
+impl<F> EventHandler for ClosureHandler<F>
+where
+    F: Fn(&dyn Any) + Send + Sync,
+{
+    fn handle(&mut self, event: &dyn Any) {
+        (self.handler)(event);
+    }
+}
+
+/// Extension trait for EventBus to add closure-based handlers.
+pub trait EventBusExt {
+    /// Register a closure handler for an event type.
+    fn on_event<E: Event + 'static>(&mut self, handler: impl Fn(&E) + Send + Sync + 'static);
+}
+
+impl EventBusExt for EventBus {
+    fn on_event<E: Event + 'static>(&mut self, handler: impl Fn(&E) + Send + Sync + 'static) {
+        let wrapper = ClosureHandler {
+            handler: move |event: &dyn Any| {
+                if let Some(typed) = event.downcast_ref::<E>() {
+                    handler(typed);
+                }
+            },
+        };
+        self.on::<E>(wrapper);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    #[test]
-    fn test_emit_calls_listener() {
-        let mut channel = EventChannel::<i32>::new();
-        let received = Arc::new(AtomicUsize::new(0));
-        let r = received.clone();
-        channel.subscribe(move |val| {
-            r.store(*val as usize, Ordering::Relaxed);
-        });
-        channel.emit(&42);
-        assert_eq!(received.load(Ordering::Relaxed), 42);
+    #[derive(Clone)]
+    struct TestEvent {
+        value: i32,
+    }
+
+    impl Event for TestEvent {}
+
+    struct TestHandler {
+        counter: Arc<AtomicUsize>,
+    }
+
+    impl EventHandler for TestHandler {
+        fn handle(&mut self, event: &dyn Any) {
+            if let Some(e) = event.downcast_ref::<TestEvent>() {
+                self.counter.fetch_add(e.value as usize, Ordering::SeqCst);
+            }
+        }
     }
 
     #[test]
-    fn test_multiple_listeners() {
-        let mut channel = EventChannel::<i32>::new();
-        let sum = Arc::new(AtomicUsize::new(0));
-
-        let s1 = sum.clone();
-        channel.subscribe(move |val| {
-            s1.fetch_add(*val as usize, Ordering::Relaxed);
-        });
-        let s2 = sum.clone();
-        channel.subscribe(move |val| {
-            s2.fetch_add(*val as usize, Ordering::Relaxed);
+    fn test_event_bus_send() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut bus = EventBus::new();
+        bus.on::<TestEvent>(TestHandler {
+            counter: counter.clone(),
         });
 
-        channel.emit(&10);
-        assert_eq!(sum.load(Ordering::Relaxed), 20);
+        bus.send(TestEvent { value: 5 });
+        assert_eq!(counter.load(Ordering::SeqCst), 5);
+
+        bus.send(TestEvent { value: 3 });
+        assert_eq!(counter.load(Ordering::SeqCst), 8);
     }
 
     #[test]
-    fn test_unsubscribe_removes_listener() {
-        let mut channel = EventChannel::<i32>::new();
-        let received = Arc::new(AtomicUsize::new(0));
-        let r = received.clone();
-        let id = channel.subscribe(move |val| {
-            r.store(*val as usize, Ordering::Relaxed);
+    fn test_event_bus_closure() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut bus = EventBus::new();
+
+        let c = counter.clone();
+        bus.on_event::<TestEvent>(move |e| {
+            c.fetch_add(e.value as usize, Ordering::SeqCst);
         });
-        channel.unsubscribe(id);
-        channel.emit(&42);
-        assert_eq!(received.load(Ordering::Relaxed), 0);
+
+        bus.send(TestEvent { value: 10 });
+        assert_eq!(counter.load(Ordering::SeqCst), 10);
     }
 
     #[test]
-    fn test_default_is_empty() {
-        let channel = EventChannel::<i32>::default();
-        channel.emit(&1); // should not panic
+    fn test_event_bus_multiple_handlers() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut bus = EventBus::new();
+        bus.on::<TestEvent>(TestHandler {
+            counter: counter.clone(),
+        });
+        bus.on::<TestEvent>(TestHandler {
+            counter: counter.clone(),
+        });
+
+        bus.send(TestEvent { value: 1 });
+        assert_eq!(counter.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn test_event_bus_handler_count() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut bus = EventBus::new();
+        assert_eq!(bus.handler_count::<TestEvent>(), 0);
+
+        bus.on::<TestEvent>(TestHandler {
+            counter: counter.clone(),
+        });
+        assert_eq!(bus.handler_count::<TestEvent>(), 1);
+
+        bus.on::<TestEvent>(TestHandler {
+            counter: counter.clone(),
+        });
+        assert_eq!(bus.handler_count::<TestEvent>(), 2);
     }
 }

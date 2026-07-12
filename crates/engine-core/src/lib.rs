@@ -118,6 +118,7 @@ pub mod world;
 
 // Re-export for convenience
 pub use context::Context;
+pub use event::{Event, EventBus, EventBusExt, EventHandler};
 pub use gameobject::{Component, GameObject, GameObjectHandle};
 pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
 pub use monobehaviour::{MonoBehaviour, MonoBehaviourHolder};
