@@ -26,9 +26,9 @@ pub struct NamedSystem {
 
 impl NamedSystem {
     /// Create a new named system.
-    pub fn new(name: &str, system: impl System + 'static) -> Self {
+    pub fn new(name: impl Into<String>, system: impl System + 'static) -> Self {
         Self {
-            name: name.to_string(),
+            name: name.into(),
             system: Box::new(system),
         }
     }
