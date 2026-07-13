@@ -6,13 +6,16 @@
 //! mutate shared data.
 
 use egui::{Context, Pos2};
-use engine_math::{Mat4, Vec3};
+use engine_math::{Mat4, Quat, Vec3};
 use engine_render::instancing::{InstanceBatch, InstanceKey};
 use engine_render::light::LightingUniform;
 use engine_render::resource::material::MaterialStore;
 use engine_render::resource::mesh::MeshStore;
 use engine_render::shadow::ShadowMapConfig;
 use engine_ui::GuiSkin;
+
+/// Re-export GameObjectHandle for convenience.
+pub use engine_core::GameObjectHandle;
 
 /// Editor play mode state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -530,8 +533,24 @@ pub struct EditorSceneData {
 }
 
 /// Central editor state holding all panel data, selections, and tool state.
+///
+/// # Unity-style Architecture
+/// The editor now uses the same unified World that the runtime uses.
+/// All game object creation, modification, and destruction goes through
+/// the World API (CreateGameObject, AddComponent, GetComponent, etc.).
 #[derive(Debug)]
 pub struct EditorState {
+    /// The unified World — same API as runtime (Unity-style).
+    /// All game object operations go through this World.
+    pub world: engine_core::world::World,
+
+    /// Mapping from node ID to GameObjectHandle (for hierarchy panel).
+    pub node_to_handle: HashMap<u64, GameObjectHandle>,
+    /// Mapping from GameObjectHandle to node ID (reverse lookup).
+    pub handle_to_node: HashMap<GameObjectHandle, u64>,
+    /// Next node ID to assign.
+    pub next_node_id: u64,
+
     pub selected_nodes: Vec<u64>,
     pub active_menu: Option<usize>,
     pub active_tool: ToolType,
@@ -665,81 +684,105 @@ impl Default for EditorState {
 
 impl EditorState {
     /// Creates a new editor state with default scene tree, camera, and panel data.
+    ///
+    /// # Unity-style Architecture
+    /// The editor uses the same unified World that the runtime uses.
+    /// All game object creation, modification, and destruction goes through
+    /// the World API (CreateGameObject, AddComponent, GetComponent, etc.).
     pub fn new() -> Self {
+        // Create the unified World (Unity-style)
+        let mut world = engine_core::world::World::new();
+        let mut node_to_handle: HashMap<u64, GameObjectHandle> = HashMap::new();
+        let mut handle_to_node: HashMap<GameObjectHandle, u64> = HashMap::new();
+        let mut next_node_id: u64 = 1;
+
+        // Helper to create a node and register mappings
+        let mut create_node =
+            |world: &mut engine_core::world::World,
+             name: &str,
+             nth: &mut HashMap<u64, GameObjectHandle>,
+             htn: &mut HashMap<GameObjectHandle, u64>,
+             nid: &mut u64| -> u64 {
+                let handle = world.CreateGameObject(name);
+                let id = *nid;
+                nth.insert(id, handle);
+                htn.insert(handle, id);
+                *nid += 1;
+                id
+            };
+
+        // Create default scene objects using World API
+        let root_id = create_node(&mut world, "Root", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+        let player_id = create_node(&mut world, "Player", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+        let terrain_id = create_node(&mut world, "Terrain", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+        let red_cube_id = create_node(&mut world, "Red Cube", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+        let blue_sphere_id = create_node(&mut world, "Blue Sphere", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+        let light_id = create_node(&mut world, "Point Light", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+        let green_cylinder_id = create_node(&mut world, "Green Cylinder", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+        let gold_sphere_id = create_node(&mut world, "Gold Sphere", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+        let white_cube_id = create_node(&mut world, "White Cube", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+
+        // Set tags and layers using World API
+        world.SetTag(node_to_handle[&player_id], "Player");
+        world.SetLayer(node_to_handle[&light_id], 5);
+
+        // Set transforms using World API
+        let transforms_data: Vec<(u64, [f32; 9])> = vec![
+            (root_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]),
+            (player_id, [-4.0, 0.5, 2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]),
+            (terrain_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 1.0, 20.0]),
+            (red_cube_id, [0.0, 0.5, 0.0, 0.0, 0.4, 0.0, 1.0, 1.0, 1.0]),
+            (blue_sphere_id, [3.0, 0.7, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 1.4]),
+            (light_id, [0.0, 5.0, -3.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3]),
+            (green_cylinder_id, [-3.0, 0.8, -2.0, 0.0, 0.0, 0.0, 1.0, 1.6, 1.0]),
+            (gold_sphere_id, [5.0, 1.0, 3.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0]),
+            (white_cube_id, [-2.0, 0.4, -4.0, 0.0, 0.3, 0.0, 0.8, 0.8, 0.8]),
+        ];
+
         let mut node_transforms = HashMap::new();
+        for (id, t) in &transforms_data {
+            node_transforms.insert(*id, *t);
+            if let Some(transform) = world.GetTransformMut(node_to_handle[id]) {
+                transform.SetLocalPosition(Vec3::new(t[0], t[1], t[2]));
+                transform.SetLocalRotation(Quat::from_euler(engine_math::EulerRot::XYZ, t[3], t[4], t[5]));
+                transform.SetLocalScale(Vec3::new(t[6], t[7], t[8]));
+            }
+        }
+
+        // Legacy HashMap data (kept for backward compatibility during migration)
         let mut node_render = HashMap::new();
+        node_render.insert(root_id, ("Default".into(), "Cube".into(), true));
+        node_render.insert(player_id, ("Default".into(), "Cube".into(), true));
+        node_render.insert(terrain_id, ("Default".into(), "Plane".into(), true));
+        node_render.insert(red_cube_id, ("Default".into(), "Cube".into(), true));
+        node_render.insert(blue_sphere_id, ("Default".into(), "Sphere".into(), true));
+        node_render.insert(light_id, ("Default".into(), "Sphere".into(), true));
+        node_render.insert(green_cylinder_id, ("Default".into(), "Cylinder".into(), true));
+        node_render.insert(gold_sphere_id, ("Default".into(), "Sphere".into(), true));
+        node_render.insert(white_cube_id, ("Default".into(), "Cube".into(), true));
+
         let mut node_physics = HashMap::new();
-        let mut node_lights = HashMap::new();
-        let mut node_materials = HashMap::new();
         for i in 1..=9 {
             node_physics.insert(i, ("Static".into(), "Box".into()));
         }
-        // Assign different mesh types per node
-        node_render.insert(1, ("Default".into(), "Cube".into(), true)); // Root
-        node_render.insert(2, ("Default".into(), "Cube".into(), true)); // Player
-        node_render.insert(3, ("Default".into(), "Plane".into(), true)); // Terrain
-        node_render.insert(4, ("Default".into(), "Cube".into(), true)); // Red Cube
-        node_render.insert(5, ("Default".into(), "Sphere".into(), true)); // Blue Sphere
-        node_render.insert(6, ("Default".into(), "Sphere".into(), true)); // Light marker
-        node_render.insert(7, ("Default".into(), "Cylinder".into(), true)); // Green Cylinder
-        node_render.insert(8, ("Default".into(), "Sphere".into(), true)); // Gold Sphere
-        node_render.insert(9, ("Default".into(), "Cube".into(), true)); // White Cube
+        node_physics.insert(player_id, ("Dynamic".into(), "Box".into()));
 
-        // Position objects in an interesting layout
-        node_transforms.insert(1, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Root
-        node_transforms.insert(2, [-4.0, 0.5, 2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]); // Player
-        node_transforms.insert(3, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 1.0, 20.0]); // Terrain
-        node_transforms.insert(4, [0.0, 0.5, 0.0, 0.0, 0.4, 0.0, 1.0, 1.0, 1.0]); // Red Cube (rotated)
-        node_transforms.insert(5, [3.0, 0.7, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 1.4]); // Blue Sphere
-        node_transforms.insert(6, [0.0, 5.0, -3.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3]); // Light marker
-        node_transforms.insert(7, [-3.0, 0.8, -2.0, 0.0, 0.0, 0.0, 1.0, 1.6, 1.0]); // Green Cylinder
-        node_transforms.insert(8, [5.0, 1.0, 3.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0]); // Gold Sphere
-        node_transforms.insert(9, [-2.0, 0.4, -4.0, 0.0, 0.3, 0.0, 0.8, 0.8, 0.8]); // White Cube
+        let mut node_lights = HashMap::new();
+        node_lights.insert(light_id, LightData::default());
 
-        // Add lights
-        node_lights.insert(6, LightData::default());
-
-        // Add varied materials
-        node_materials.insert(
-            4,
-            MaterialData {
-                base_color: [0.9, 0.2, 0.2, 1.0],
-                metallic: 0.1,
-                roughness: 0.6,
-                ..Default::default()
-            },
-        );
-        node_materials.insert(
-            5,
-            MaterialData {
-                base_color: [0.2, 0.4, 0.9, 1.0],
-                metallic: 0.9,
-                roughness: 0.1,
-                ..Default::default()
-            },
-        );
-        node_materials.insert(
-            7,
-            MaterialData {
-                base_color: [0.2, 0.8, 0.3, 1.0],
-                metallic: 0.0,
-                roughness: 0.7,
-                ..Default::default()
-            },
-        );
-        node_materials.insert(
-            8,
-            MaterialData {
-                base_color: [1.0, 0.85, 0.0, 1.0],
-                metallic: 1.0,
-                roughness: 0.2,
-                ..Default::default()
-            },
-        );
-        node_materials.insert(9, MaterialData::default());
-        // Make Player (id=2) dynamic for physics testing
-        node_physics.insert(2, ("Dynamic".into(), "Box".into()));
+        let mut node_materials = HashMap::new();
+        node_materials.insert(red_cube_id, MaterialData { base_color: [0.9, 0.2, 0.2, 1.0], metallic: 0.1, roughness: 0.6, ..Default::default() });
+        node_materials.insert(blue_sphere_id, MaterialData { base_color: [0.2, 0.4, 0.9, 1.0], metallic: 0.9, roughness: 0.1, ..Default::default() });
+        node_materials.insert(green_cylinder_id, MaterialData { base_color: [0.2, 0.8, 0.3, 1.0], metallic: 0.0, roughness: 0.7, ..Default::default() });
+        node_materials.insert(gold_sphere_id, MaterialData { base_color: [1.0, 0.85, 0.0, 1.0], metallic: 1.0, roughness: 0.2, ..Default::default() });
+        node_materials.insert(white_cube_id, MaterialData::default());
         Self {
+            // Unity-style World
+            world,
+            node_to_handle,
+            handle_to_node,
+            next_node_id,
+
             selected_nodes: Vec::new(),
             active_menu: None,
             active_tool: ToolType::Translate,

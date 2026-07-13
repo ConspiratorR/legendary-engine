@@ -82,6 +82,16 @@ pub struct World {
     next_instance_id: i32,
 }
 
+impl std::fmt::Debug for World {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("World")
+            .field("gameobject_count", &self.gameobject_data.iter().filter(|g| g.is_some()).count())
+            .field("transform_count", &self.transforms.iter().filter(|t| t.is_some()).count())
+            .field("pending_destroy", &self.pending_destroy.len())
+            .finish()
+    }
+}
+
 impl Default for World {
     fn default() -> Self {
         Self::new()
