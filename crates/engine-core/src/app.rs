@@ -355,20 +355,36 @@ impl App {
     pub fn run_with_lifecycle(&mut self) {
         let delta = self.time.delta_seconds();
 
-        // FixedUpdate (Unity-like: called 0+ times per frame)
+        // 1. FixedUpdate (Unity-like: called 0+ times per frame)
+        // Physics and fixed-rate logic happens here
         self.time.update_fixed();
 
-        // Update
+        // 2. Update
+        // Regular frame update
         self.time.update(delta);
         self.frame += 1;
 
-        // MonoBehaviour lifecycle dispatch would be called here
-        // MonoBehaviourRunner::run_update, run_late_update, etc.
+        // Execute systems (ECS schedule)
+        if let Some(ref mut ps) = self.parallel_schedule {
+            ps.run(&mut self.world);
+        } else {
+            self.schedule.run(&mut self.world);
+        }
 
-        // Sync transforms
+        // MonoBehaviour lifecycle dispatch
+        // Note: This requires engine_core::world::World which wraps engine_ecs::world::World
+        // The full integration would call:
+        // - MonoBehaviourRunner::run_fixed_update()
+        // - MonoBehaviourRunner::run_update()
+        // - MonoBehaviourRunner::run_late_update()
+        // For now, the ECS schedule handles system execution
+
+        // 3. Sync transforms
+        // Update world transforms from local transforms
         // crate::hierarchy::sync_transforms would be called here
 
-        // Flush destroy
+        // 4. Flush destroy
+        // Process pending destroys
         // self.world.flush_destroy() would be called here
     }
 
