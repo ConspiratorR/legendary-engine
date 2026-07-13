@@ -181,18 +181,20 @@ fn draw_menu_bar(state: &mut EditorState, ui: &mut egui::Ui) {
                                             (1, 4) => state.paste(),
                                             (2, 0) => {
                                                 let parent = state.selected_nodes.first().copied();
-                                                let id =
-                                                    state.scene_tree.add_node("新节点", parent);
+                                                let (id, _handle) = if let Some(p) = parent {
+                                                    state.CreateGameObjectWithParent("新节点", p)
+                                                } else {
+                                                    state.CreateGameObject("新节点")
+                                                };
                                                 state.selected_nodes = vec![id];
                                             }
                                             (2, 1) => {
                                                 let parent = state.selected_nodes.first().copied();
-                                                let id =
-                                                    state.scene_tree.add_node("立方体", parent);
-                                                state.node_transforms.insert(
-                                                    id,
-                                                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-                                                );
+                                                let (id, _handle) = if let Some(p) = parent {
+                                                    state.CreateGameObjectWithParent("立方体", p)
+                                                } else {
+                                                    state.CreateGameObject("立方体")
+                                                };
                                                 state.node_render.insert(
                                                     id,
                                                     ("Default".into(), "Cube".into(), true),
@@ -204,11 +206,11 @@ fn draw_menu_bar(state: &mut EditorState, ui: &mut egui::Ui) {
                                             }
                                             (2, 2) => {
                                                 let parent = state.selected_nodes.first().copied();
-                                                let id = state.scene_tree.add_node("球体", parent);
-                                                state.node_transforms.insert(
-                                                    id,
-                                                    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-                                                );
+                                                let (id, _handle) = if let Some(p) = parent {
+                                                    state.CreateGameObjectWithParent("球体", p)
+                                                } else {
+                                                    state.CreateGameObject("球体")
+                                                };
                                                 state.node_render.insert(
                                                     id,
                                                     ("Default".into(), "Sphere".into(), true),
@@ -220,7 +222,11 @@ fn draw_menu_bar(state: &mut EditorState, ui: &mut egui::Ui) {
                                             }
                                             (2, 3) => {
                                                 let parent = state.selected_nodes.first().copied();
-                                                let id = state.scene_tree.add_node("光源", parent);
+                                                let (id, _handle) = if let Some(p) = parent {
+                                                    state.CreateGameObjectWithParent("光源", p)
+                                                } else {
+                                                    state.CreateGameObject("光源")
+                                                };
                                                 state.node_lights.insert(id, LightData::default());
                                                 state.selected_nodes = vec![id];
                                             }
