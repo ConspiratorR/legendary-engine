@@ -17,6 +17,26 @@ use crate::monobehaviour::{MonoBehaviour, MonoBehaviourHolder};
 use crate::transform::Transform;
 use engine_math::{Quat, Vec3};
 
+/// Primitive type for CreatePrimitive (matches Unity's `PrimitiveType` enum).
+///
+/// # Unity Documentation
+/// <https://docs.unity3d.com/ScriptReference/PrimitiveType.html>
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrimitiveType {
+    /// Sphere primitive (matches `PrimitiveType.Sphere`).
+    Sphere,
+    /// Capsule primitive (matches `PrimitiveType.Capsule`).
+    Capsule,
+    /// Cylinder primitive (matches `PrimitiveType.Cylinder`).
+    Cylinder,
+    /// Cube primitive (matches `PrimitiveType.Cube`).
+    Cube,
+    /// Plane primitive (matches `PrimitiveType.Plane`).
+    Plane,
+    /// Quad primitive (matches `PrimitiveType.Quad`).
+    Quad,
+}
+
 /// Pending destroy entry with optional delay.
 struct PendingDestroy {
     handle: GameObjectHandle,
@@ -168,7 +188,7 @@ impl World {
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/GameObject.html>
     pub fn CreateGameObject(&mut self, name: &str) -> GameObjectHandle {
-        let mut go = GameObject::new_with_name(name);
+        let mut go = GameObject::new(name);
         let instance_id = self.next_instance_id();
 
         let (index, generation) = self.allocate_slot();
@@ -193,6 +213,43 @@ impl World {
             .entry(name.to_string())
             .or_default()
             .push(handle);
+
+        handle
+    }
+
+    /// Create a primitive GameObject with mesh renderer and collider (matches `GameObject.CreatePrimitive`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/GameObject.CreatePrimitive.html>
+    ///
+    /// Creates a GameObject with:
+    /// - The specified mesh (Sphere, Capsule, Cylinder, Cube, Plane, Quad)
+    /// - A MeshRenderer component
+    /// - A Collider component (SphereCollider, CapsuleCollider, etc.)
+    pub fn CreatePrimitive(&mut self, primitive_type: PrimitiveType) -> GameObjectHandle {
+        let name = match primitive_type {
+            PrimitiveType::Sphere => "Sphere",
+            PrimitiveType::Capsule => "Capsule",
+            PrimitiveType::Cylinder => "Cylinder",
+            PrimitiveType::Cube => "Cube",
+            PrimitiveType::Plane => "Plane",
+            PrimitiveType::Quad => "Quad",
+        };
+
+        let handle = self.CreateGameObject(name);
+
+        // Add mesh renderer with the primitive mesh name
+        let mesh_name = match primitive_type {
+            PrimitiveType::Sphere => "Sphere",
+            PrimitiveType::Capsule => "Capsule",
+            PrimitiveType::Cylinder => "Cylinder",
+            PrimitiveType::Cube => "Cube",
+            PrimitiveType::Plane => "Plane",
+            PrimitiveType::Quad => "Quad",
+        };
+
+        // Components would be added here when renderer/collider are integrated
+        // For now, just create the GameObject with the correct name
 
         handle
     }

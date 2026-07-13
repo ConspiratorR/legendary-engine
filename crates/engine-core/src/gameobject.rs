@@ -34,7 +34,8 @@ use std::fmt;
 /// - `layer` — The layer the GameObject is in
 /// - `activeSelf` — Local active state (read-only)
 /// - `activeInHierarchy` — Whether active in scene (read-only)
-/// - `transform` — The Transform component (always present)
+/// - `isStatic` — Whether the GameObject is static
+/// - `transform` — The Transform component (always present, via World)
 ///
 /// ## Methods
 /// - `AddComponent<T>()` — Attach a component
@@ -46,11 +47,6 @@ use std::fmt;
 /// # Rust Implementation
 /// In Unity, GameObject is a C# class. In Rust, it's a struct that is
 /// owned by the World. GameObjects are referenced via `GameObjectHandle`.
-///
-/// The key difference from Unity:
-/// - In Unity, `transform` is a property that accesses the Transform component
-/// - In Rust, Transform is stored separately in the World for better cache locality
-/// - Parent/child relationships are part of Transform, not GameObject
 pub struct GameObject {
     /// The name of the GameObject (matches `GameObject.name`).
     pub(crate) name: String,
@@ -63,6 +59,9 @@ pub struct GameObject {
 
     /// Local active state (matches `GameObject.activeSelf`).
     pub(crate) active_self: bool,
+
+    /// Whether the GameObject is static (matches `GameObject.isStatic`).
+    pub(crate) is_static: bool,
 
     /// Components attached to this GameObject (matches `GameObject.GetComponents`).
     pub(crate) components: Vec<Box<dyn Component>>,
@@ -83,6 +82,7 @@ impl GameObject {
             tag: "Untagged".to_string(),
             layer: 0,
             active_self: true,
+            is_static: false,
             components: Vec::new(),
         }
     }
@@ -92,11 +92,6 @@ impl GameObject {
         Self::new("")
     }
 
-    /// Create a new GameObject with a name (alias for `new`).
-    pub fn new_with_name(name: &str) -> Self {
-        Self::new(name)
-    }
-
     /// Create a new GameObject with components (matches `new GameObject("name", typeof(T1), typeof(T2))`).
     pub fn new_with_components(name: &str, components: Vec<Box<dyn Component>>) -> Self {
         Self {
@@ -104,6 +99,7 @@ impl GameObject {
             tag: "Untagged".to_string(),
             layer: 0,
             active_self: true,
+            is_static: false,
             components,
         }
     }
@@ -171,6 +167,23 @@ impl GameObject {
 
     // NOTE: `activeInHierarchy` requires World to check parent chain.
     // It's implemented on World, not on GameObject.
+
+    // ============================================================
+    // Properties — Static State
+    // ============================================================
+
+    /// Get whether the GameObject is static (matches `GameObject.isStatic`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/GameObject-isStatic.html>
+    pub fn IsStatic(&self) -> bool {
+        self.is_static
+    }
+
+    /// Set whether the GameObject is static (matches `GameObject.isStatic`).
+    pub fn SetStatic(&mut self, is_static: bool) {
+        self.is_static = is_static;
+    }
 
     // ============================================================
     // Methods — Component Access
