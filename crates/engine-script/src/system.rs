@@ -256,6 +256,11 @@ impl ScriptSystem {
         // world:delta_time() → float
         world_table.set("delta_time", lua.create_function(move |_, ()| Ok(dt))?)?;
 
+        // NOTE: Unity-style API (CreateGameObject, Find, FindWithTag, SetActive, SetTag)
+        // requires engine_core::world::World. The script system currently uses
+        // engine_ecs::world::World. Full Unity-style script API integration will be
+        // implemented when the World types are unified.
+
         lua.globals().set("world", world_table)?;
 
         // Call update(dt) if defined
