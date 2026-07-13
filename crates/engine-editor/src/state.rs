@@ -624,6 +624,8 @@ pub struct EditorState {
     pub show_create_menu: bool,
     /// Hierarchy context menu state.
     pub context_menu: Option<ContextMenuState>,
+    /// Persistent hierarchy panel state (preserves selection, search, drag state across frames).
+    pub hierarchy_panel: crate::hierarchy::HierarchyPanel,
 }
 
 /// State for the hierarchy context menu.
@@ -798,6 +800,7 @@ impl EditorState {
             gizmo_drag_start_pos: None,
             show_create_menu: false,
             context_menu: None,
+            hierarchy_panel: crate::hierarchy::HierarchyPanel::new(),
             drag_source: None,
             drag_hover_target: None,
             command_manager: CommandManager::default(),
