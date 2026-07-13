@@ -85,6 +85,9 @@ pub mod monobehaviour;
 /// ScriptableObject — data container for sharing data.
 pub mod scriptable_object;
 
+/// Unity-style built-in components (Rigidbody, Collider, Camera, Light, etc.).
+pub mod components;
+
 /// World — central container for all GameObjects.
 pub mod world;
 
