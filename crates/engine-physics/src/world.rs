@@ -796,7 +796,7 @@ mod tests {
         pw.step(&mut world);
 
         let transform = world.get_by_index::<Transform>(e.index()).unwrap();
-        assert_eq!(transform.position, Vec3::ZERO);
+        assert_eq!(transform.position(), Vec3::ZERO);
     }
 
     #[test]

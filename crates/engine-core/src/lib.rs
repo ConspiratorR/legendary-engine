@@ -93,6 +93,8 @@ pub mod error;
 pub use error::EngineError;
 
 pub mod app;
+pub mod asset_database;
+pub mod asset_handle;
 pub mod color;
 pub mod config;
 pub mod context;
@@ -111,15 +113,20 @@ pub mod player_loop;
 pub mod plugin;
 pub mod plugin_loader;
 pub mod plugins;
+pub mod prefab;
 pub mod profiler;
 pub mod resource;
 pub mod scriptable_object;
+pub mod serialization;
 pub mod system;
 pub mod time;
 pub mod transform;
+pub mod undo;
 pub mod world;
 
 // Re-export for convenience
+pub use asset_database::AssetDatabase;
+pub use asset_handle::AssetHandle;
 pub use context::Context;
 pub use event::{Event, EventBus, EventBusExt, EventHandler};
 pub use events::*;

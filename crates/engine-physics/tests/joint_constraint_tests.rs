@@ -57,8 +57,14 @@ fn ball_socket_limits_distance() {
 
     solver.solve_constraints(&mut world, 1.0 / 60.0);
 
-    let pos_a = world.get_by_index::<Transform>(a.index()).unwrap().position;
-    let pos_b = world.get_by_index::<Transform>(b.index()).unwrap().position;
+    let pos_a = world
+        .get_by_index::<Transform>(a.index())
+        .unwrap()
+        .position();
+    let pos_b = world
+        .get_by_index::<Transform>(b.index())
+        .unwrap()
+        .position();
     let dist = (pos_b - pos_a).length();
     assert!(
         dist <= max_dist + 0.5,

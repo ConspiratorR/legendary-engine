@@ -1,3 +1,4 @@
+use crate::asset_database::AssetDatabase;
 use crate::plugin::Plugin;
 use crate::resource::ResourceRegistry;
 use engine_ecs::schedule::{ParallelSchedule, Schedule};
@@ -23,6 +24,7 @@ pub struct AppBuilder {
     schedule: Schedule,
     parallel_schedule: Option<ParallelSchedule>,
     resources: ResourceRegistry,
+    asset_database: AssetDatabase,
     pre_update_hooks: Vec<Hook>,
     post_update_hooks: Vec<Hook>,
     post_render_hooks: Vec<Hook>,
@@ -48,6 +50,7 @@ impl AppBuilder {
             schedule: Schedule::new(),
             parallel_schedule: None,
             resources: ResourceRegistry::new(),
+            asset_database: AssetDatabase::new(),
             pre_update_hooks: Vec::new(),
             post_update_hooks: Vec::new(),
             post_render_hooks: Vec::new(),
@@ -153,6 +156,16 @@ impl AppBuilder {
         &mut self.events
     }
 
+    /// Get shared access to the asset database.
+    pub fn asset_database(&self) -> &AssetDatabase {
+        &self.asset_database
+    }
+
+    /// Get mutable access to the asset database.
+    pub fn asset_database_mut(&mut self) -> &mut AssetDatabase {
+        &mut self.asset_database
+    }
+
     /// Register a hook that runs before the update phase.
     pub fn add_pre_update_hook(&mut self, hook: Hook) -> &mut Self {
         self.pre_update_hooks.push(hook);
@@ -251,6 +264,8 @@ pub struct App {
     /// Asset registry for texture loading (lazily initialized in render_phase).
     /// Registry is not Send+Sync but is only accessed from the main thread.
     asset_registry: Option<engine_asset::registry::Registry>,
+    /// Centralized asset database for managing ScriptableObject assets.
+    asset_database: AssetDatabase,
     /// Hooks executed before the update phase.
     pub pre_update_hooks: Vec<Hook>,
     /// Hooks executed after the update phase.
@@ -282,6 +297,7 @@ impl App {
             resources: ResourceRegistry::new(),
             renderer: None,
             asset_registry: None,
+            asset_database: AssetDatabase::new(),
             pre_update_hooks: Vec::new(),
             post_update_hooks: Vec::new(),
             post_render_hooks: Vec::new(),
@@ -371,6 +387,16 @@ impl App {
     /// Get mutable access to the event bus.
     pub fn events_mut(&mut self) -> &mut crate::event::EventBus {
         &mut self.events
+    }
+
+    /// Get shared access to the asset database.
+    pub fn asset_database(&self) -> &AssetDatabase {
+        &self.asset_database
+    }
+
+    /// Get mutable access to the asset database.
+    pub fn asset_database_mut(&mut self) -> &mut AssetDatabase {
+        &mut self.asset_database
     }
 
     /// Get shared access to the system schedule.
@@ -520,6 +546,7 @@ impl From<AppBuilder> for App {
             resources: b.resources,
             renderer: None,
             asset_registry: None,
+            asset_database: b.asset_database,
             pre_update_hooks: b.pre_update_hooks,
             post_update_hooks: b.post_update_hooks,
             post_render_hooks: b.post_render_hooks,

@@ -81,7 +81,7 @@ impl<T: ScriptableObject> Eq for AssetHandle<T> {}
 mod tests {
     use super::*;
     use crate::scriptable_object::ScriptableObject;
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     struct TestAsset {

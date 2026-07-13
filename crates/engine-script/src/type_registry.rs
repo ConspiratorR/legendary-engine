@@ -799,15 +799,15 @@ mod tests {
     #[test]
     fn test_transform_roundtrip_lua() {
         let lua = Lua::new();
-        let tr = Transform {
-            position: Vec3::new(1.0, 2.0, 3.0),
-            rotation: Vec3::new(0.1, 0.2, 0.3),
-            scale: Vec3::new(2.0, 2.0, 2.0),
-        };
+        let tr = Transform::from_position_rotation_scale(
+            Vec3::new(1.0, 2.0, 3.0),
+            Quat::from_euler(EulerRot::XYZ, 0.1, 0.2, 0.3),
+            Vec3::new(2.0, 2.0, 2.0),
+        );
         let t = transform_to_lua(&lua, tr).unwrap();
         let tr2 = lua_to_transform(&t).unwrap();
-        assert!((tr2.position.x - 1.0).abs() < 1e-6);
-        assert!((tr2.scale.y - 2.0).abs() < 1e-6);
+        assert!((tr2.position().x - 1.0).abs() < 1e-6);
+        assert!((tr2.lossy_scale().y - 2.0).abs() < 1e-6);
     }
 
     #[test]
@@ -863,17 +863,19 @@ mod tests {
 
     #[test]
     fn test_transform_roundtrip_bytes() {
-        let tr = Transform {
-            position: Vec3::new(1.0, 2.0, 3.0),
-            rotation: Vec3::new(0.1, 0.2, 0.3),
-            scale: Vec3::new(2.0, 2.0, 2.0),
-        };
+        let tr = Transform::from_position_rotation_scale(
+            Vec3::new(1.0, 2.0, 3.0),
+            Quat::from_euler(EulerRot::XYZ, 0.1, 0.2, 0.3),
+            Vec3::new(2.0, 2.0, 2.0),
+        );
         let bytes = transform_to_bytes(&tr);
         assert_eq!(bytes.len(), 36);
         let tr2 = bytes_to_transform(&bytes);
-        assert!((tr2.position.x - 1.0).abs() < 1e-6);
-        assert!((tr2.rotation.y - 0.2).abs() < 1e-6);
-        assert!((tr2.scale.z - 2.0).abs() < 1e-6);
+        assert!((tr2.position().x - 1.0).abs() < 1e-6);
+        let rot = tr2.rotation();
+        let (_ex, ey, _ez) = rot.to_euler(EulerRot::XYZ);
+        assert!((ey - 0.2).abs() < 1e-6);
+        assert!((tr2.lossy_scale().z - 2.0).abs() < 1e-6);
     }
 
     #[test]

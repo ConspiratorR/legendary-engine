@@ -95,9 +95,9 @@ fn main() {
                         println!(
                             "  [{:?}] pos=({:.2}, {:.2}, {:.2}) vel=({:.2}, {:.2}, {:.2})",
                             t,
-                            transform.position.x,
-                            transform.position.y,
-                            transform.position.z,
+                            transform.position().x,
+                            transform.position().y,
+                            transform.position().z,
                             body.linear_velocity.x,
                             body.linear_velocity.y,
                             body.linear_velocity.z

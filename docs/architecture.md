@@ -2,6 +2,17 @@
 
 RustEngine is a modular game engine built in Rust with 17 crates organized in layers. This document describes the high-level architecture, crate relationships, and data flow.
 
+## Unity-like API
+
+RustEngine includes a Unity-inspired API for game object management, component systems, and lifecycle callbacks. Key concepts:
+
+- **GameObject**: Entity with name, tag, layer, and component list
+- **Component**: Trait for data containers with lifecycle callbacks
+- **MonoBehaviour**: Script with Update, FixedUpdate, LateUpdate, and other callbacks
+- **Transform**: Local/world transform synchronization
+- **PlayerLoop**: Phase-based execution matching Unity's execution order
+- **EventBus**: Type-safe event system for decoupled communication
+
 ## Validated Dependency Layers
 
 All inter-crate dependencies flow downward only. No circular or upward dependencies exist (verified via `cargo tree`).
@@ -161,7 +172,7 @@ Depend on Layers 0–3. Central integration point.
 
 | Crate | Purpose | Key Dependencies |
 |-------|---------|-----------------|
-| **engine-core** | `AppBuilder`, plugin system, time management, config, logging, profiler | engine-asset, engine-audio, engine-ecs, engine-input, engine-math, engine-render, engine-scene, engine-window |
+| **engine-core** | `AppBuilder`, plugin system, time management, config, logging, profiler, Unity-like API (GameObject, MonoBehaviour, PlayerLoop, EventBus) | engine-asset, engine-audio, engine-ecs, engine-input, engine-math, engine-render, engine-scene, engine-window, libloading, serde, serde_json |
 
 ### Layer 5 — Systems
 
@@ -186,36 +197,58 @@ Depend on all lower layers.
 
 ## Data Flow
 
-### Frame Lifecycle
+### Frame Lifecycle (PlayerLoop)
+
+RustEngine uses a Unity-like PlayerLoop for phase-based execution:
 
 ```mermaid
 sequenceDiagram
     participant W as winit EventLoop
     participant A as App
-    participant I as Input
+    participant P as PlayerLoop
     participant E as ECS World
-    participant S as Schedule
     participant R as Renderer
 
     W->>A: AboutToWait
-    A->>I: Process input events
-    A->>E: Apply commands
-    A->>S: Run systems
-    S->>E: Update components
+    A->>P: Run PlayerLoop phases
+    P->>E: Execute systems per phase
+    P->>E: Initialization → FixedUpdate → Update → LateUpdate → Render
     A->>R: Render frame
     R->>R: Execute render graph
     R->>W: Present surface
 ```
 
-### ECS System Execution
+### PlayerLoop Phases
 
-Systems are registered via the plugin system and run in a `Schedule`:
+Systems are registered for specific phases (matching Unity's execution order):
 
-1. **Startup systems** — Run once after app initialization
-2. **Pre-update systems** — Input processing, event handling
-3. **Update systems** — Game logic, physics, animation
-4. **Post-update systems** — Transform sync, camera sort
-5. **Render systems** — Collect draw calls, submit to GPU
+1. **Initialization** — Time, input setup
+2. **PreFixedUpdate** — Before fixed timestep
+3. **FixedUpdate** — Physics, animation (fixed timestep)
+4. **PostFixedUpdate** — After fixed timestep
+5. **PreUpdate** — Before main update
+6. **Update** — Main game logic, input handling
+7. **PostUpdate** — After main update
+8. **PreLateUpdate** — Before late update
+9. **LateUpdate** — Camera follow, final adjustments
+10. **PostLateUpdate** — After late update
+11. **Render** — Rendering systems
+12. **AfterRender** — Post-render cleanup
+13. **Cleanup** — Final cleanup
+
+### Event System
+
+Type-safe event dispatch via `EventBus`:
+
+```rust
+// Register handler
+ctx.events.on_event::<CollisionEvent>(|event, ctx| {
+    println!("Collision: {:?} vs {:?}", event.entity_a, event.entity_b);
+});
+
+// Send event
+ctx.events.send(CollisionEvent { entity_a, entity_b }, &mut ctx);
+```
 
 ### Render Pipeline
 
@@ -241,6 +274,8 @@ graph LR
 
 The engine uses a plugin architecture for modularity:
 
+### Static Plugins
+
 ```rust
 use engine_core::app::AppBuilder;
 use engine_core::plugin::Plugin;
@@ -263,6 +298,217 @@ Plugins can:
 - Configure the renderer
 - Add custom asset loaders
 
+### Dynamic Plugins
+
+Load plugins at runtime from shared libraries:
+
+```json
+// plugin.json manifest
+{
+    "name": "my-plugin",
+    "version": "1.0.0",
+    "description": "My awesome plugin",
+    "author": "Developer",
+    "entry_point": "create_plugin",
+    "engine_version": ">=0.1.0",
+    "dependencies": {}
+}
+```
+
+```rust
+// Load dynamic plugins
+app.load_dynamic_plugins(Path::new("plugins/"))?;
+
+// Or use stored plugins for deferred execution
+app.add_plugin_stored(MyPlugin);
+```
+
+Dynamic plugins:
+- Are compiled as shared libraries (.dll, .so, .dylib)
+- Use `libloading` for runtime loading
+- Have version compatibility checking
+- Can be installed/uninstalled without recompilation
+
+## Unity-like API
+
+RustEngine includes a Unity-inspired API for game development:
+
+### Core Concepts
+
+**GameObject** - Entity with components:
+```rust
+use engine_core::gameobject::GameObject;
+
+let mut go = GameObject::new("Player");
+go.set_tag("Player");
+go.set_layer(1);
+go.add_component(Transform::from_xyz(0.0, 0.0, 0.0));
+```
+
+**Component** - Data container with lifecycle:
+```rust
+use engine_core::gameobject::Component;
+
+#[derive(Debug)]
+struct Health {
+    current: f32,
+    max: f32,
+}
+
+impl Component for Health {
+    fn on_added(&mut self, handle: GameObjectHandle) {
+        println!("Health added to {:?}", handle);
+    }
+}
+```
+
+**MonoBehaviour** - Script with callbacks:
+```rust
+use engine_core::monobehaviour::MonoBehaviour;
+
+struct PlayerController {
+    speed: f32,
+}
+
+impl MonoBehaviour for PlayerController {
+    fn update(&mut self, context: &mut Context) {
+        // Game logic here
+    }
+    
+    fn on_collision_enter(&mut self, context: &mut Context, collision: &Collision) {
+        // Handle collision
+    }
+}
+```
+
+**Transform** - Local/world synchronization:
+```rust
+use engine_core::transform::Transform;
+
+let mut transform = Transform::from_xyz(1.0, 2.0, 3.0);
+transform.set_position(Vec3::new(4.0, 5.0, 6.0));
+// World transform automatically computed from parent hierarchy
+```
+
+**World** - GameObject container:
+```rust
+use engine_core::world::World;
+
+let mut world = World::new();
+let handle = world.spawn(GameObject::new("Player"));
+let go = world.get_gameobject(handle).unwrap();
+```
+
+**ScriptableObject** - Data assets:
+```rust
+use engine_core::scriptable_object::ScriptableObject;
+
+#[derive(Serialize, Deserialize)]
+struct WeaponData {
+    name: String,
+    damage: f32,
+}
+
+impl ScriptableObject for WeaponData {
+    fn name(&self) -> &str { &self.name }
+}
+```
+
+**Prefab** - Reusable GameObject templates:
+```rust
+use engine_core::prefab::Prefab;
+
+let prefab = Prefab::new("Enemy");
+// Instantiate multiple times with overrides
+```
+
+**AssetDatabase** - Centralized asset management:
+```rust
+use engine_core::asset_database::AssetDatabase;
+
+let mut db = AssetDatabase::new();
+let handle = db.create_asset("player_data", PlayerData { health: 100 });
+let asset = db.get_asset::<PlayerData>(&handle);
+```
+
+**Serialization** - Scene and prefab saving/loading:
+```rust
+use engine_core::serialization::{SceneSerializer, SceneDeserializer};
+
+// Serialize scene
+let serializer = SceneSerializer::new();
+let json = serializer.serialize(&world)?;
+
+// Deserialize scene
+let deserializer = SceneDeserializer::new();
+let world = deserializer.deserialize(&json)?;
+```
+
+**UndoSystem** - Undo/redo for editor operations:
+```rust
+use engine_core::undo::{UndoSystem, UndoCommand};
+
+let mut undo_system = UndoSystem::new(100); // 100 history depth
+undo_system.execute(CreateGameObjectCommand::new("Player"), &mut world);
+undo_system.undo(&mut world); // Undo creation
+undo_system.redo(&mut world); // Redo creation
+```
+
+### World Types
+
+RustEngine has two World types:
+
+1. **`engine_core::World`** - GameObject container (Unity-like API)
+   - Stores GameObjects with components
+   - Provides spawn/despawn/find operations
+   - Used with MonoBehaviour and PlayerLoop
+
+2. **`engine_ecs::World`** - ECS World (traditional ECS)
+   - Sparse-set component storage
+   - Used with ECS systems and queries
+   - Lower-level API for performance-critical code
+
+Most game code uses `engine_core::World` for the Unity-like API. Use `engine_ecs::World` only when you need direct ECS access for performance.
+
+### Execution Order
+
+The PlayerLoop ensures consistent execution order:
+
+1. **Initialization** - Setup systems
+2. **FixedUpdate** - Physics, animation (fixed timestep)
+3. **Update** - Main game logic
+4. **LateUpdate** - Camera follow, final adjustments
+5. **Render** - Rendering systems
+
+### Event System
+
+Type-safe decoupled communication:
+```rust
+// Define event
+#[derive(Clone)]
+struct DamageEvent {
+    amount: f32,
+}
+impl Event for DamageEvent {}
+
+// Register handler
+ctx.events.on_event::<DamageEvent>(|event, ctx| {
+    println!("Damage: {}", event.amount);
+});
+
+// Send event
+ctx.events.send(DamageEvent { amount: 10.0 }, &mut ctx);
+```
+
+### Built-in Events
+
+RustEngine includes Unity-like built-in events:
+
+- **Collision**: `CollisionEnter`, `CollisionExit`, `CollisionStay`
+- **Trigger**: `TriggerEnter`, `TriggerExit`, `TriggerStay`
+- **Mouse**: `MouseEnter`, `MouseExit`, `MouseDown`, `MouseUp`, `MouseDrag`, `MouseOver`
+- **Lifecycle**: `Awake`, `Start`, `Update`, `FixedUpdate`, `LateUpdate`, `OnDestroy`
+
 ## Feature Flags
 
 | Crate | Feature | Description |
@@ -273,6 +519,13 @@ Plugins can:
 | `engine-editor` | `native-dialogs` (default) | Native file dialogs via `rfd` |
 | `engine-editor` | `native` (default) | Native platform support |
 | `engine-editor` | `web` | Web/WASM platform support |
+
+### Dynamic Plugin Features
+
+Dynamic plugins require:
+- `libloading` for runtime library loading
+- `serde` and `serde_json` for manifest serialization
+- Plugin manifests (`plugin.json`) with version compatibility
 
 ## Cross-Platform Support
 
