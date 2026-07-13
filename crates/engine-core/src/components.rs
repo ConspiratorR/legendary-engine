@@ -195,6 +195,88 @@ impl ColliderTrait for CapsuleCollider {
 }
 
 // ============================================================
+// Material (Unity: UnityEngine.Material)
+// ============================================================
+
+/// Material component (matches Unity's `Material`).
+///
+/// # Unity Documentation
+/// <https://docs.unity3d.com/ScriptReference/Material.html>
+#[derive(Debug, Clone)]
+pub struct Material {
+    /// Base color (RGBA) (matches `Material.color`).
+    pub base_color: [f32; 4],
+    /// Metallic value (0.0 to 1.0) (matches `Material.SetFloat("_Metallic")`).
+    pub metallic: f32,
+    /// Smoothness value (0.0 to 1.0) (matches `Material.SetFloat("_Smoothness")`).
+    pub smoothness: f32,
+    /// Normal map texture path.
+    pub normal_map: String,
+    /// Emission color (RGB).
+    pub emission_color: [f32; 3],
+    /// Whether emission is enabled.
+    pub emission_enabled: bool,
+}
+
+impl Default for Material {
+    fn default() -> Self {
+        Self {
+            base_color: [1.0, 1.0, 1.0, 1.0],
+            metallic: 0.0,
+            smoothness: 0.5,
+            normal_map: String::new(),
+            emission_color: [0.0, 0.0, 0.0],
+            emission_enabled: false,
+        }
+    }
+}
+
+impl Component for Material {
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
+impl Material {
+    /// Create a material with a specific color (matches `new Material(Color)`).
+    pub fn new_with_color(color: [f32; 4]) -> Self {
+        Self {
+            base_color: color,
+            ..Default::default()
+        }
+    }
+
+    /// Get the base color (matches `Material.color`).
+    pub fn Color(&self) -> [f32; 4] {
+        self.base_color
+    }
+
+    /// Set the base color (matches `Material.color`).
+    pub fn SetColor(&mut self, color: [f32; 4]) {
+        self.base_color = color;
+    }
+
+    /// Get metallic value (matches `Material.GetFloat("_Metallic")`).
+    pub fn Metallic(&self) -> f32 {
+        self.metallic
+    }
+
+    /// Set metallic value (matches `Material.SetFloat("_Metallic")`).
+    pub fn SetMetallic(&mut self, metallic: f32) {
+        self.metallic = metallic;
+    }
+
+    /// Get smoothness value (matches `Material.GetFloat("_Smoothness")`).
+    pub fn Smoothness(&self) -> f32 {
+        self.smoothness
+    }
+
+    /// Set smoothness value (matches `Material.SetFloat("_Smoothness")`).
+    pub fn SetSmoothness(&mut self, smoothness: f32) {
+        self.smoothness = smoothness;
+    }
+}
+
+// ============================================================
 // Camera (Unity: UnityEngine.Camera)
 // ============================================================
 

@@ -465,4 +465,28 @@ mod tests {
         rb.mass = 5.0;
         assert_eq!(rb.mass, 5.0);
     }
+
+    #[test]
+    fn test_material_component() {
+        use engine_core::components::Material;
+
+        let mut world = World::new();
+        let cube = world.CreateGameObject("Cube");
+
+        // Add Material (Unity: GameObject.AddComponent<Material>())
+        world.AddComponent(cube, Material::new_with_color([1.0, 0.0, 0.0, 1.0]));
+
+        // Get and modify
+        let mat = world.GetComponent::<Material>(cube).unwrap();
+        assert_eq!(mat.Color(), [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(mat.Metallic(), 0.0);
+        assert_eq!(mat.Smoothness(), 0.5);
+
+        // Set properties
+        let mat = world.GetComponentMut::<Material>(cube).unwrap();
+        mat.SetMetallic(0.8);
+        mat.SetSmoothness(0.9);
+        assert_eq!(mat.Metallic(), 0.8);
+        assert_eq!(mat.Smoothness(), 0.9);
+    }
 }
