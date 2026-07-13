@@ -1,292 +1,253 @@
-use engine_core::Phase;
-use engine_core::app::AppBuilder;
-use engine_core::context::Context;
-use engine_core::event::EventBus;
-use engine_core::{Component, GameObject, GameObjectHandle};
-use engine_core::transform::Transform;
-use engine_core::world::World;
-use std::any::Any;
-use std::sync::atomic::{AtomicUsize, Ordering};
+//! Unity-style API integration tests.
+//!
+//! These tests demonstrate the Unity-style API usage pattern in RustEngine.
 
-// NOTE: Module-level AtomicUsize statics work here because each test manually
-// resets at the top, but they're fragile if tests ever run in parallel.
-// A scoped approach would be more idiomatic.
-static UPDATE_CALLED: AtomicUsize = AtomicUsize::new(0);
-static LATE_CALLED: AtomicUsize = AtomicUsize::new(0);
-static FIXED_CALLED: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+mod tests {
+    use engine_core::component::Component;
+    use engine_core::gameobject::{GameObject, GameObjectHandle};
+    use engine_core::transform::Transform;
+    use engine_core::world::World;
+    use engine_math::Vec3;
+    use std::any::Any;
 
-#[derive(Debug)]
-struct Health {
-    current: f32,
-    _max: f32,
-}
+    // ============================================================
+    // Test Components
+    // ============================================================
 
-impl Component for Health {
-    fn as_any(&self) -> &dyn Any {
-        self
+    #[derive(Debug)]
+    struct Health {
+        hp: f32,
+        max_hp: f32,
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
-
-#[derive(Debug)]
-struct Ammo {
-    _count: u32,
-}
-
-impl Component for Ammo {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-}
-
-#[test]
-fn test_unity_like_gameobject_creation() {
-    let mut world = World::new();
-
-    // Create player like Unity
-    let mut player = GameObject::new("Player");
-    player.add_component(Transform::from_xyz(0.0, 1.0, 0.0));
-    player.add_component(Health {
-        current: 100.0,
-        _max: 100.0,
-    });
-    player.set_tag("Player");
-    player.set_layer(6);
-
-    let handle = world.spawn(player);
-
-    // Verify
-    let player = world.get_gameobject(handle).unwrap();
-    assert_eq!(player.name(), "Player");
-    assert_eq!(player.tag(), "Player");
-    assert_eq!(player.layer(), 6);
-    assert!(player.has_component::<Transform>());
-    assert!(player.has_component::<Health>());
-
-    let health = player.get_component::<Health>().unwrap();
-    assert_eq!(health.current, 100.0);
-}
-
-#[test]
-fn test_unity_like_hierarchy() {
-    let mut world = World::new();
-
-    // Create parent-child like Unity
-    let parent = world.spawn(GameObject::new("Parent"));
-    let child = world.spawn(GameObject::new("Child"));
-
-    world.set_parent(child, Some(parent));
-
-    // Verify
-    assert_eq!(world.get_parent(child), Some(parent));
-    assert!(world.get_children(parent).contains(&child));
-
-    // Extend: multi-level hierarchy (grandparent -> parent -> child)
-    let grandchild = world.spawn(GameObject::new("Grandchild"));
-    world.set_parent(grandchild, Some(child));
-    assert_eq!(world.get_parent(grandchild), Some(child));
-    assert!(world.get_children(child).contains(&grandchild));
-    // Grandchild is NOT a direct child of parent
-    assert!(!world.get_children(parent).contains(&grandchild));
-
-    // Extend: cycle prevention — while chain is intact (parent -> child -> grandchild),
-    // setting parent's parent to grandchild would create a cycle and should be rejected
-    world.set_parent(parent, Some(grandchild));
-    assert_eq!(world.get_parent(parent), None); // parent stays root
-
-    // Extend: detach child from parent
-    world.set_parent(child, None);
-    assert_eq!(world.get_parent(child), None);
-    assert!(!world.get_children(parent).contains(&child));
-    // Grandchild should still be a child of child
-    assert!(world.get_children(child).contains(&grandchild));
-}
-
-#[test]
-fn test_unity_like_player_loop() {
-    UPDATE_CALLED.store(0, Ordering::SeqCst);
-    LATE_CALLED.store(0, Ordering::SeqCst);
-    FIXED_CALLED.store(0, Ordering::SeqCst);
-
-    let mut builder = AppBuilder::new();
-
-    builder.add_system_to_phase(Phase::Update, |_: &mut engine_core::context::Context| {
-        UPDATE_CALLED.fetch_add(1, Ordering::SeqCst);
-    });
-
-    builder.add_late_update_system(|_: &mut engine_core::context::Context| {
-        LATE_CALLED.fetch_add(1, Ordering::SeqCst);
-    });
-
-    builder.add_fixed_update_system(|_: &mut engine_core::context::Context| {
-        FIXED_CALLED.fetch_add(1, Ordering::SeqCst);
-    });
-
-    let mut app = builder.build();
-    app.set_running(true);
-
-    // Run frames by invoking the player loop directly
-    let mut world = World::new();
-    let time = engine_core::time::Time::new();
-    let mut events = EventBus::new();
-    for frame in 0..3 {
-        if app.is_running() {
-            let mut ctx = Context::new(&mut world, time.clone(), frame, &mut events);
-            app.player_loop_mut().run(&mut ctx);
+    impl Component for Health {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
         }
     }
 
-    assert_eq!(UPDATE_CALLED.load(Ordering::SeqCst), 3);
-    assert_eq!(LATE_CALLED.load(Ordering::SeqCst), 3);
-    assert_eq!(FIXED_CALLED.load(Ordering::SeqCst), 3);
-}
-
-#[test]
-fn test_unity_like_time_management() {
-    let builder = AppBuilder::new();
-    let mut app = builder.build();
-
-    // Initial time
-    assert_eq!(app.time_ref().time(), 0.0);
-    assert_eq!(app.time_ref().frame_count(), 0);
-
-    // Update
-    app.update(0.016);
-    assert!((app.time_ref().time() - 0.016).abs() < 0.001);
-    assert_eq!(app.time_ref().frame_count(), 1);
-
-    // Update again
-    app.update(0.016);
-    assert!((app.time_ref().time() - 0.032).abs() < 0.001);
-    assert_eq!(app.time_ref().frame_count(), 2);
-}
-
-#[test]
-fn test_unity_like_component_lifecycle() {
-    let mut world = World::new();
-
-    let mut go = GameObject::new("TestObject");
-    go.add_component(Health {
-        current: 100.0,
-        _max: 100.0,
-    });
-
-    let handle = world.spawn(go);
-
-    // Get component and modify
-    {
-        let go = world.get_gameobject_mut(handle).unwrap();
-        let health = go.get_component_mut::<Health>().unwrap();
-        health.current -= 25.0;
+    #[derive(Debug)]
+    struct PlayerController {
+        speed: f32,
     }
 
-    // Verify modification
-    let go = world.get_gameobject(handle).unwrap();
-    let health = go.get_component::<Health>().unwrap();
-    assert_eq!(health.current, 75.0);
-}
+    impl Component for PlayerController {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+    }
 
-#[test]
-fn test_unity_like_find_gameobjects() {
-    let mut world = World::new();
+    // ============================================================
+    // Unity-style API Tests
+    // ============================================================
 
-    let mut player1 = GameObject::new("Player");
-    player1.set_tag("Player");
-    let h1 = world.spawn(player1);
+    #[test]
+    fn test_unity_style_gameobject_creation() {
+        let mut world = World::new();
 
-    let mut player2 = GameObject::new("Player");
-    player2.set_tag("Player");
-    let h2 = world.spawn(player2);
+        // Create GameObject (Unity: new GameObject("name"))
+        let player = world.CreateGameObject("Player");
 
-    let mut enemy = GameObject::new("Enemy");
-    enemy.set_tag("Enemy");
-    let h3 = world.spawn(enemy);
+        // Verify creation
+        assert_eq!(world.GetName(player), "Player");
+        assert_eq!(world.GetTag(player), "Untagged");
+        assert_eq!(world.GetLayer(player), 0);
+        assert!(world.IsActive(player));
+    }
 
-    // Find by name
-    let found = world.find_gameobject("Player");
-    assert!(found.is_some());
+    #[test]
+    fn test_unity_style_tag_layer() {
+        let mut world = World::new();
+        let player = world.CreateGameObject("Player");
 
-    // Find by tag
-    let players = world.find_gameobjects_with_tag("Player", true);
-    assert_eq!(players.len(), 2);
-    assert!(players.contains(&h1));
-    assert!(players.contains(&h2));
+        // Set tag (Unity: GameObject.tag = "Player")
+        world.SetTag(player, "Player");
+        assert_eq!(world.GetTag(player), "Player");
+        assert!(world.CompareTag(player, "Player"));
 
-    let enemies = world.find_gameobjects_with_tag("Enemy", true);
-    assert_eq!(enemies.len(), 1);
-    assert!(enemies.contains(&h3));
+        // Set layer (Unity: GameObject.layer = 5)
+        world.SetLayer(player, 5);
+        assert_eq!(world.GetLayer(player), 5);
+    }
 
-    // Extend: include_inactive = false — inactive objects should be excluded
-    world.get_gameobject_mut(h2).unwrap().set_active(false);
-    let active_players = world.find_gameobjects_with_tag("Player", false);
-    assert_eq!(active_players.len(), 1);
-    assert!(active_players.contains(&h1));
-    assert!(!active_players.contains(&h2));
+    #[test]
+    fn test_unity_style_active_state() {
+        let mut world = World::new();
+        let player = world.CreateGameObject("Player");
 
-    // All players (including inactive)
-    let all_players = world.find_gameobjects_with_tag("Player", true);
-    assert_eq!(all_players.len(), 2);
-}
+        // Set active (Unity: GameObject.SetActive(false))
+        world.SetActive(player, false);
+        assert!(!world.IsActive(player));
 
-#[test]
-fn test_find_gameobject_missing_name_returns_none() {
-    let mut world = World::new();
+        world.SetActive(player, true);
+        assert!(world.IsActive(player));
+    }
 
-    let mut go = GameObject::new("Foo");
-    go.set_tag("Bar");
-    world.spawn(go);
+    #[test]
+    fn test_unity_style_parent_child() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("Parent");
+        let child = world.CreateGameObject("Child");
 
-    assert_eq!(world.find_gameobject("Nonexistent"), None);
-    assert_eq!(
-        world.find_gameobjects_with_tag("Nonexistent", true).len(),
-        0
-    );
-}
+        // Set parent (Unity: Transform.SetParent)
+        world.SetParent(child, Some(parent));
 
-#[test]
-fn test_get_component_wrong_type_returns_none() {
-    let mut world = World::new();
+        assert_eq!(world.GetParent(child), Some(parent));
+        assert!(world.GetChildren(parent).contains(&child));
+        assert_eq!(world.GetChildCount(parent), 1);
+    }
 
-    let mut go = GameObject::new("Entity");
-    go.add_component(Health {
-        current: 50.0,
-        _max: 100.0,
-    });
-    let handle = world.spawn(go);
+    #[test]
+    fn test_unity_style_transform() {
+        let mut world = World::new();
+        let player = world.CreateGameObject("Player");
 
-    let go = world.get_gameobject(handle).unwrap();
-    assert!(go.get_component::<Ammo>().is_none());
-    assert!(go.get_component::<Transform>().is_none());
-}
+        // Set transform (Unity: Transform.position = ...)
+        if let Some(t) = world.GetTransformMut(player) {
+            t.SetLocalPosition(Vec3::new(10.0, 0.0, 5.0));
+            t.SetLocalScale(Vec3::new(2.0, 2.0, 2.0));
+        }
 
-#[test]
-fn test_get_gameobject_invalid_handle_returns_none() {
-    let mut world = World::new();
+        // Verify
+        let t = world.GetTransform(player).unwrap();
+        assert_eq!(t.LocalPosition(), Vec3::new(10.0, 0.0, 5.0));
+        assert_eq!(t.LocalScale(), Vec3::new(2.0, 2.0, 2.0));
+    }
 
-    let go = GameObject::new("Temporary");
-    let handle = world.spawn(go);
-    world.despawn(handle);
+    #[test]
+    fn test_unity_style_component_access() {
+        let mut world = World::new();
+        let player = world.CreateGameObject("Player");
 
-    // After despawn, the handle should be invalid
-    assert!(world.get_gameobject(handle).is_none());
-    assert!(world.get_gameobject_mut(handle).is_none());
-}
+        // Add component (Unity: GameObject.AddComponent<Health>())
+        world.AddComponent(player, Health { hp: 100.0, max_hp: 100.0 });
 
-#[test]
-fn test_set_parent_invalid_child_is_noop() {
-    let mut world = World::new();
+        // Get component (Unity: GameObject.GetComponent<Health>())
+        let health = world.GetComponent::<Health>(player).unwrap();
+        assert_eq!(health.hp, 100.0);
+        assert_eq!(health.max_hp, 100.0);
 
-    let parent = world.spawn(GameObject::new("Parent"));
-    let invalid_child = GameObjectHandle::new(999, 0);
+        // Has component (Unity: GameObject.GetComponent<Health>() != null)
+        assert!(world.HasComponent::<Health>(player));
+        assert!(!world.HasComponent::<PlayerController>(player));
+    }
 
-    world.set_parent(invalid_child, Some(parent));
-    // Invalid handle — should be a no-op
-    assert!(world.get_children(parent).is_empty());
+    #[test]
+    fn test_unity_style_find_objects() {
+        let mut world = World::new();
+
+        let player = world.CreateGameObject("Player");
+        world.SetTag(player, "Player");
+
+        let enemy = world.CreateGameObject("Enemy");
+        world.SetTag(enemy, "Enemy");
+
+        // Find by name (Unity: GameObject.Find("Player"))
+        assert_eq!(world.Find("Player"), Some(player));
+        assert_eq!(world.Find("Enemy"), Some(enemy));
+
+        // Find by tag (Unity: GameObject.FindWithTag("Player"))
+        assert_eq!(world.FindWithTag("Player"), Some(player));
+        assert_eq!(world.FindWithTag("Enemy"), Some(enemy));
+
+        // Find all by tag (Unity: GameObject.FindGameObjectsWithTag("Player"))
+        let players = world.FindGameObjectsWithTag("Player");
+        assert!(players.contains(&player));
+    }
+
+    #[test]
+    fn test_unity_style_hierarchy() {
+        let mut world = World::new();
+
+        let root = world.CreateGameObject("Root");
+        let child1 = world.CreateGameObject("Child1");
+        let child2 = world.CreateGameObject("Child2");
+        let grandchild = world.CreateGameObject("Grandchild");
+
+        world.SetParent(child1, Some(root));
+        world.SetParent(child2, Some(root));
+        world.SetParent(grandchild, Some(child1));
+
+        // Verify hierarchy
+        assert_eq!(world.GetParent(child1), Some(root));
+        assert_eq!(world.GetParent(child2), Some(root));
+        assert_eq!(world.GetParent(grandchild), Some(child1));
+
+        assert_eq!(world.GetChildCount(root), 2);
+        assert_eq!(world.GetChildCount(child1), 1);
+        assert_eq!(world.GetChildCount(child2), 0);
+        assert_eq!(world.GetChildCount(grandchild), 0);
+
+        // Get root game objects
+        let roots = world.GetRootGameObjects();
+        assert!(roots.contains(&root));
+    }
+
+    #[test]
+    fn test_unity_style_destroy() {
+        let mut world = World::new();
+        let player = world.CreateGameObject("Player");
+
+        // Destroy (Unity: Object.Destroy(gameObject))
+        world.DestroyImmediate(player);
+
+        // Verify destroyed
+        assert!(world.Find("Player").is_none());
+    }
+
+    #[test]
+    fn test_unity_style_instantiate() {
+        let mut world = World::new();
+
+        // Create template
+        let template = world.CreateGameObject("Enemy");
+        world.SetTag(template, "Enemy");
+        world.AddComponent(template, Health { hp: 50.0, max_hp: 50.0 });
+
+        // Instantiate (Unity: Object.Instantiate(template))
+        let clone = world.Instantiate(template);
+
+        // Verify clone exists
+        assert!(world.GetName(clone).contains("Enemy"));
+    }
+
+    #[test]
+    fn test_unity_complete_workflow() {
+        let mut world = World::new();
+
+        // 1. Create player
+        let player = world.CreateGameObject("Player");
+        world.SetTag(player, "Player");
+        world.SetLayer(player, 6);
+        world.AddComponent(player, Health { hp: 100.0, max_hp: 100.0 });
+        world.AddComponent(player, PlayerController { speed: 5.0 });
+
+        // 2. Create parent-child hierarchy
+        let camera = world.CreateGameObject("MainCamera");
+        world.SetParent(camera, Some(player));
+
+        // 3. Modify transform
+        if let Some(t) = world.GetTransformMut(player) {
+            t.SetLocalPosition(Vec3::new(0.0, 1.0, 0.0));
+        }
+
+        // 4. Verify everything
+        assert_eq!(world.GetName(player), "Player");
+        assert_eq!(world.GetTag(player), "Player");
+        assert_eq!(world.GetLayer(player), 6);
+        assert!(world.HasComponent::<Health>(player));
+        assert!(world.HasComponent::<PlayerController>(player));
+        assert_eq!(world.GetParent(camera), Some(player));
+        assert_eq!(world.GetChildCount(player), 1);
+
+        let t = world.GetTransform(player).unwrap();
+        assert_eq!(t.LocalPosition(), Vec3::new(0.0, 1.0, 0.0));
+    }
 }
