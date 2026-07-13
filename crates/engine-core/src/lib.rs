@@ -113,6 +113,7 @@ pub mod plugin_loader;
 pub mod plugins;
 pub mod profiler;
 pub mod resource;
+pub mod scriptable_object;
 pub mod system;
 pub mod time;
 pub mod transform;
@@ -127,6 +128,7 @@ pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transf
 pub use monobehaviour::{MonoBehaviour, MonoBehaviourHolder};
 pub use monobehaviour_runner::MonoBehaviourRunner;
 pub use player_loop::{Phase, PlayerLoop};
+pub use scriptable_object::{ScriptableObject, ScriptableObjectHolder};
 pub use system::System;
 pub use time::Time;
 pub use transform::{Space, Transform};
