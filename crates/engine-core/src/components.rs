@@ -47,61 +47,34 @@ impl Default for Rigidbody {
 }
 
 impl Component for Rigidbody {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl Rigidbody {
-    /// Add force to the rigidbody (matches `Rigidbody.AddForce`).
     pub fn AddForce(&mut self, force: Vec3) {
         self.velocity += force / self.mass;
     }
-
-    /// Add torque to the rigidbody (matches `Rigidbody.AddTorque`).
     pub fn AddTorque(&mut self, torque: Vec3) {
         self.angular_velocity += torque / self.mass;
     }
-
-    /// Move to position (matches `Rigidbody.MovePosition`).
-    pub fn MovePosition(&mut self, position: Vec3) {
-        // Would be handled by physics system
-    }
-
-    /// Move to rotation (matches `Rigidbody.MoveRotation`).
-    pub fn MoveRotation(&mut self, rotation: Quat) {
-        // Would be handled by physics system
-    }
-
-    /// Put to sleep (matches `Rigidbody.Sleep`).
     pub fn Sleep(&mut self) {
         self.velocity = Vec3::ZERO;
         self.angular_velocity = Vec3::ZERO;
     }
-
-    /// Wake up from sleep (matches `Rigidbody.WakeUp`).
-    pub fn WakeUp(&mut self) {
-        // Would be handled by physics system
-    }
-
-    /// Check if sleeping (matches `Rigidbody.IsSleeping`).
     pub fn IsSleeping(&self) -> bool {
-        self.velocity.length_squared() < 0.001
-            && self.angular_velocity.length_squared() < 0.001
+        self.velocity.length_squared() < 0.001 && self.angular_velocity.length_squared() < 0.001
     }
 }
 
 // ============================================================
-// Collider (Unity: UnityEngine.Collider)
+// Colliders (Unity: UnityEngine.Collider)
 // ============================================================
 
 /// Base trait for all collider components.
 pub trait ColliderTrait: Component {
-    /// Get the collider's bounds (matches `Collider.bounds`).
-    fn Bounds(&self) -> (Vec3, Vec3); // (min, max)
+    /// Get the collider's bounds (min, max).
+    fn Bounds(&self) -> (Vec3, Vec3);
 
     /// Check if this is a trigger (matches `Collider.isTrigger`).
     fn IsTrigger(&self) -> bool;
@@ -126,21 +99,13 @@ pub struct BoxCollider {
 
 impl Default for BoxCollider {
     fn default() -> Self {
-        Self {
-            center: Vec3::ZERO,
-            size: Vec3::ONE,
-            is_trigger: false,
-        }
+        Self { center: Vec3::ZERO, size: Vec3::ONE, is_trigger: false }
     }
 }
 
 impl Component for BoxCollider {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl ColliderTrait for BoxCollider {
@@ -148,14 +113,8 @@ impl ColliderTrait for BoxCollider {
         let half = self.size * 0.5;
         (self.center - half, self.center + half)
     }
-
-    fn IsTrigger(&self) -> bool {
-        self.is_trigger
-    }
-
-    fn SetIsTrigger(&mut self, trigger: bool) {
-        self.is_trigger = trigger;
-    }
+    fn IsTrigger(&self) -> bool { self.is_trigger }
+    fn SetIsTrigger(&mut self, trigger: bool) { self.is_trigger = trigger; }
 }
 
 /// Sphere collider (matches Unity's `SphereCollider`).
@@ -174,38 +133,21 @@ pub struct SphereCollider {
 
 impl Default for SphereCollider {
     fn default() -> Self {
-        Self {
-            center: Vec3::ZERO,
-            radius: 0.5,
-            is_trigger: false,
-        }
+        Self { center: Vec3::ZERO, radius: 0.5, is_trigger: false }
     }
 }
 
 impl Component for SphereCollider {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl ColliderTrait for SphereCollider {
     fn Bounds(&self) -> (Vec3, Vec3) {
-        (
-            self.center - Vec3::splat(self.radius),
-            self.center + Vec3::splat(self.radius),
-        )
+        (self.center - Vec3::splat(self.radius), self.center + Vec3::splat(self.radius))
     }
-
-    fn IsTrigger(&self) -> bool {
-        self.is_trigger
-    }
-
-    fn SetIsTrigger(&mut self, trigger: bool) {
-        self.is_trigger = trigger;
-    }
+    fn IsTrigger(&self) -> bool { self.is_trigger }
+    fn SetIsTrigger(&mut self, trigger: bool) { self.is_trigger = trigger; }
 }
 
 /// Capsule collider (matches Unity's `CapsuleCollider`).
@@ -228,50 +170,28 @@ pub struct CapsuleCollider {
 
 impl Default for CapsuleCollider {
     fn default() -> Self {
-        Self {
-            center: Vec3::ZERO,
-            radius: 0.5,
-            height: 2.0,
-            direction: 1, // Y-axis
-            is_trigger: false,
-        }
+        Self { center: Vec3::ZERO, radius: 0.5, height: 2.0, direction: 1, is_trigger: false }
     }
 }
 
 impl Component for CapsuleCollider {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 impl ColliderTrait for CapsuleCollider {
     fn Bounds(&self) -> (Vec3, Vec3) {
         match self.direction {
-            0 => (
-                self.center - Vec3::new(self.height * 0.5, self.radius, self.radius),
-                self.center + Vec3::new(self.height * 0.5, self.radius, self.radius),
-            ),
-            1 => (
-                self.center - Vec3::new(self.radius, self.height * 0.5, self.radius),
-                self.center + Vec3::new(self.radius, self.height * 0.5, self.radius),
-            ),
-            _ => (
-                self.center - Vec3::new(self.radius, self.radius, self.height * 0.5),
-                self.center + Vec3::new(self.radius, self.radius, self.height * 0.5),
-            ),
+            0 => (self.center - Vec3::new(self.height * 0.5, self.radius, self.radius),
+                  self.center + Vec3::new(self.height * 0.5, self.radius, self.radius)),
+            1 => (self.center - Vec3::new(self.radius, self.height * 0.5, self.radius),
+                  self.center + Vec3::new(self.radius, self.height * 0.5, self.radius)),
+            _ => (self.center - Vec3::new(self.radius, self.radius, self.height * 0.5),
+                  self.center + Vec3::new(self.radius, self.radius, self.height * 0.5)),
         }
     }
-
-    fn IsTrigger(&self) -> bool {
-        self.is_trigger
-    }
-
-    fn SetIsTrigger(&mut self, trigger: bool) {
-        self.is_trigger = trigger;
-    }
+    fn IsTrigger(&self) -> bool { self.is_trigger }
+    fn SetIsTrigger(&mut self, trigger: bool) { self.is_trigger = trigger; }
 }
 
 // ============================================================
