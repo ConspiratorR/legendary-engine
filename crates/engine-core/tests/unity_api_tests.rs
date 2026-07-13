@@ -250,4 +250,219 @@ mod tests {
         let t = world.GetTransform(player).unwrap();
         assert_eq!(t.LocalPosition(), Vec3::new(0.0, 1.0, 0.0));
     }
+
+    // ============================================================
+    // Built-in Component Tests
+    // ============================================================
+
+    #[test]
+    fn test_rigidbody_component() {
+        use engine_core::components::Rigidbody;
+
+        let mut world = World::new();
+        let cube = world.CreateGameObject("Cube");
+
+        // Add Rigidbody (Unity: GameObject.AddComponent<Rigidbody>())
+        world.AddComponent(cube, Rigidbody {
+            mass: 2.0,
+            use_gravity: true,
+            is_kinematic: false,
+            ..Default::default()
+        });
+
+        // Get and modify
+        let rb = world.GetComponent::<Rigidbody>(cube).unwrap();
+        assert_eq!(rb.mass, 2.0);
+        assert!(rb.use_gravity);
+
+        // Add force
+        let rb = world.GetComponentMut::<Rigidbody>(cube).unwrap();
+        rb.AddForce(Vec3::new(0.0, 10.0, 0.0));
+        assert!(rb.velocity.y > 0.0);
+    }
+
+    #[test]
+    fn test_collider_components() {
+        use engine_core::components::{BoxCollider, SphereCollider, CapsuleCollider, ColliderTrait};
+
+        let mut world = World::new();
+        let cube = world.CreateGameObject("Cube");
+        let sphere = world.CreateGameObject("Sphere");
+        let capsule = world.CreateGameObject("Capsule");
+
+        // Add colliders
+        world.AddComponent(cube, BoxCollider {
+            size: Vec3::new(1.0, 1.0, 1.0),
+            is_trigger: false,
+            ..Default::default()
+        });
+
+        world.AddComponent(sphere, SphereCollider {
+            radius: 0.5,
+            is_trigger: true,
+            ..Default::default()
+        });
+
+        world.AddComponent(capsule, CapsuleCollider {
+            height: 2.0,
+            radius: 0.5,
+            is_trigger: false,
+            ..Default::default()
+        });
+
+        // Verify
+        let box_col = world.GetComponent::<BoxCollider>(cube).unwrap();
+        assert_eq!(box_col.size, Vec3::new(1.0, 1.0, 1.0));
+        assert!(!box_col.IsTrigger());
+
+        let sphere_col = world.GetComponent::<SphereCollider>(sphere).unwrap();
+        assert_eq!(sphere_col.radius, 0.5);
+        assert!(sphere_col.IsTrigger());
+
+        let capsule_col = world.GetComponent::<CapsuleCollider>(capsule).unwrap();
+        assert_eq!(capsule_col.height, 2.0);
+        assert_eq!(capsule_col.radius, 0.5);
+    }
+
+    #[test]
+    fn test_camera_component() {
+        use engine_core::components::Camera;
+
+        let mut world = World::new();
+        let cam = world.CreateGameObject("MainCamera");
+
+        world.AddComponent(cam, Camera {
+            field_of_view: 60.0,
+            near_clip: 0.1,
+            far_clip: 1000.0,
+            ..Default::default()
+        });
+
+        let camera = world.GetComponent::<Camera>(cam).unwrap();
+        assert_eq!(camera.field_of_view, 60.0);
+        assert_eq!(camera.near_clip, 0.1);
+        assert_eq!(camera.far_clip, 1000.0);
+        assert!(!camera.orthographic);
+
+        // Test projection matrix
+        let proj = camera.ProjectionMatrix();
+        assert!(proj.col(0)[0] != 0.0);
+    }
+
+    #[test]
+    fn test_light_component() {
+        use engine_core::components::{Light, LightType};
+
+        let mut world = World::new();
+        let light = world.CreateGameObject("PointLight");
+
+        world.AddComponent(light, Light {
+            light_type: LightType::Point,
+            color: [1.0, 0.8, 0.6],
+            intensity: 2.0,
+            range: 15.0,
+            ..Default::default()
+        });
+
+        let light_comp = world.GetComponent::<Light>(light).unwrap();
+        assert_eq!(light_comp.light_type, LightType::Point);
+        assert_eq!(light_comp.color, [1.0, 0.8, 0.6]);
+        assert_eq!(light_comp.intensity, 2.0);
+        assert_eq!(light_comp.range, 15.0);
+    }
+
+    #[test]
+    fn test_mesh_renderer_component() {
+        use engine_core::components::MeshRenderer;
+
+        let mut world = World::new();
+        let cube = world.CreateGameObject("Cube");
+
+        world.AddComponent(cube, MeshRenderer {
+            mesh: "Cube".to_string(),
+            material: "Default".to_string(),
+            cast_shadows: true,
+            receive_shadows: true,
+        });
+
+        let renderer = world.GetComponent::<MeshRenderer>(cube).unwrap();
+        assert_eq!(renderer.mesh, "Cube");
+        assert_eq!(renderer.material, "Default");
+        assert!(renderer.cast_shadows);
+        assert!(renderer.receive_shadows);
+    }
+
+    #[test]
+    fn test_sprite_renderer_component() {
+        use engine_core::components::SpriteRenderer;
+
+        let mut world = World::new();
+        let sprite = world.CreateGameObject("PlayerSprite");
+
+        world.AddComponent(sprite, SpriteRenderer {
+            sprite: "player.png".to_string(),
+            color: [1.0, 1.0, 1.0, 1.0],
+            flip_x: false,
+            flip_y: false,
+            sorting_order: 0,
+        });
+
+        let renderer = world.GetComponent::<SpriteRenderer>(sprite).unwrap();
+        assert_eq!(renderer.sprite, "player.png");
+        assert_eq!(renderer.color, [1.0, 1.0, 1.0, 1.0]);
+        assert!(!renderer.flip_x);
+        assert!(!renderer.flip_y);
+    }
+
+    #[test]
+    fn test_audio_source_component() {
+        use engine_core::components::AudioSource;
+
+        let mut world = World::new();
+        let audio = world.CreateGameObject("MusicPlayer");
+
+        world.AddComponent(audio, AudioSource {
+            clip: "background_music.ogg".to_string(),
+            volume: 0.8,
+            pitch: 1.0,
+            loop_playing: true,
+            play_on_awake: true,
+            spatial_blend: 0.0,
+            ..Default::default()
+        });
+
+        let source = world.GetComponent::<AudioSource>(audio).unwrap();
+        assert_eq!(source.clip, "background_music.ogg");
+        assert_eq!(source.volume, 0.8);
+        assert!(source.loop_playing);
+        assert!(source.play_on_awake);
+        assert_eq!(source.spatial_blend, 0.0);
+    }
+
+    #[test]
+    fn test_mixed_components() {
+        use engine_core::components::{Rigidbody, BoxCollider, MeshRenderer};
+
+        let mut world = World::new();
+        let cube = world.CreateGameObject("PhysicsCube");
+
+        // Add multiple components (Unity: multiple AddComponent calls)
+        world.AddComponent(cube, Rigidbody {
+            mass: 1.0,
+            use_gravity: true,
+            ..Default::default()
+        });
+        world.AddComponent(cube, BoxCollider::default());
+        world.AddComponent(cube, MeshRenderer::default());
+
+        // Verify all components exist
+        assert!(world.HasComponent::<Rigidbody>(cube));
+        assert!(world.HasComponent::<BoxCollider>(cube));
+        assert!(world.HasComponent::<MeshRenderer>(cube));
+
+        // Modify via reference
+        let rb = world.GetComponentMut::<Rigidbody>(cube).unwrap();
+        rb.mass = 5.0;
+        assert_eq!(rb.mass, 5.0);
+    }
 }
