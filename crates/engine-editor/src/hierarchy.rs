@@ -190,18 +190,18 @@ impl HierarchyPanel {
                         .root_ids
                         .first()
                         .copied());
-                    let mut cm = std::mem::take(&mut state.command_manager);
-                    cm.execute(
-                        Box::new(crate::commands::CreateNodeCommand::new(
-                            label.to_string(),
-                            parent,
-                        )),
-                        state,
-                    );
-                    state.command_manager = cm;
-                    let new_id = state.selected_nodes.first().copied().unwrap_or(0);
+
+                    // Use Unity-style World API to create the object
+                    let (new_id, handle) = if let Some(parent_id) = parent {
+                        state.CreateGameObjectWithParent(label, parent_id)
+                    } else {
+                        state.CreateGameObject(label)
+                    };
+
+                    // Set up component data based on object type
                     match j {
                         1 => {
+                            // Cube
                             state
                                 .node_render
                                 .insert(new_id, ("Default".into(), "Cube".into(), true));
@@ -210,6 +210,7 @@ impl HierarchyPanel {
                                 .insert(new_id, crate::state::MaterialData::default());
                         }
                         2 => {
+                            // Sphere
                             state
                                 .node_render
                                 .insert(new_id, ("Default".into(), "Sphere".into(), true));
@@ -224,11 +225,13 @@ impl HierarchyPanel {
                             );
                         }
                         3 => {
+                            // Directional Light
                             state
                                 .node_lights
                                 .insert(new_id, crate::state::LightData::default());
                         }
                         4 => {
+                            // Point Light
                             state.node_lights.insert(
                                 new_id,
                                 crate::state::LightData {
@@ -241,6 +244,7 @@ impl HierarchyPanel {
                             );
                         }
                         5 => {
+                            // Spot Light
                             state.node_lights.insert(
                                 new_id,
                                 crate::state::LightData {
@@ -876,17 +880,11 @@ fn draw_context_menu(
                     state.focus_on_selection();
                 }
                 "创建子节点" => {
-                    let new_id = state.scene_tree.add_node("新节点", Some(node_id));
-                    state
-                        .node_transforms
-                        .insert(new_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+                    let (new_id, _handle) = state.CreateGameObjectWithParent("新节点", node_id);
                     panel.selected = vec![new_id];
                 }
                 "创建立方体" => {
-                    let new_id = state.scene_tree.add_node("立方体", Some(node_id));
-                    state
-                        .node_transforms
-                        .insert(new_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+                    let (new_id, _handle) = state.CreateGameObjectWithParent("立方体", node_id);
                     state
                         .node_render
                         .insert(new_id, ("Default".into(), "Cube".into(), true));
@@ -896,10 +894,7 @@ fn draw_context_menu(
                     panel.selected = vec![new_id];
                 }
                 "创建球体" => {
-                    let new_id = state.scene_tree.add_node("球体", Some(node_id));
-                    state
-                        .node_transforms
-                        .insert(new_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+                    let (new_id, _handle) = state.CreateGameObjectWithParent("球体", node_id);
                     state
                         .node_render
                         .insert(new_id, ("Default".into(), "Sphere".into(), true));
@@ -909,7 +904,7 @@ fn draw_context_menu(
                     panel.selected = vec![new_id];
                 }
                 "创建光源" => {
-                    let new_id = state.scene_tree.add_node("光源", Some(node_id));
+                    let (new_id, _handle) = state.CreateGameObjectWithParent("光源", node_id);
                     state
                         .node_lights
                         .insert(new_id, crate::state::LightData::default());
