@@ -119,6 +119,11 @@ impl GameObject {
         self.components.push(Box::new(component));
     }
 
+    /// Add a boxed component (for use with dynamic deserialization).
+    pub fn add_component_boxed(&mut self, component: Box<dyn Component>) {
+        self.components.push(component);
+    }
+
     /// Get a component by type (like Unity's GetComponent<T>()).
     pub fn get_component<T: Component + 'static>(&self) -> Option<&T> {
         self.components
