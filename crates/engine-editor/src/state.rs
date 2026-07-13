@@ -859,6 +859,101 @@ impl EditorState {
         }
     }
 
+    // ============================================================
+    // Unity-style World API Helpers
+    // ============================================================
+
+    /// Create a new GameObject using the World API (Unity-style).
+    ///
+    /// This is the primary way to create objects in the editor.
+    /// It creates the GameObject in the World and registers the node mappings.
+    pub fn CreateGameObject(&mut self, name: &str) -> (u64, GameObjectHandle) {
+        let handle = self.world.CreateGameObject(name);
+        let node_id = self.next_node_id;
+        self.node_to_handle.insert(node_id, handle);
+        self.handle_to_node.insert(handle, node_id);
+        self.next_node_id += 1;
+
+        // Initialize legacy HashMaps for backward compatibility
+        self.node_transforms
+            .insert(node_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
+        self.node_render
+            .insert(node_id, ("Default".into(), "Cube".into(), true));
+        self.node_physics
+            .insert(node_id, ("Static".into(), "Box".into()));
+
+        // Add to scene tree
+        self.scene_tree.add_node(name, None);
+
+        (node_id, handle)
+    }
+
+    /// Create a new GameObject with a parent (Unity-style).
+    pub fn CreateGameObjectWithParent(
+        &mut self,
+        name: &str,
+        parent_node_id: u64,
+    ) -> (u64, GameObjectHandle) {
+        let parent_handle = self.node_to_handle.get(&parent_node_id).copied();
+        let (node_id, handle) = self.CreateGameObject(name);
+
+        if let Some(parent_handle) = parent_handle {
+            self.world.SetParent(handle, Some(parent_handle));
+        }
+
+        (node_id, handle)
+    }
+
+    /// Destroy a GameObject (Unity-style).
+    pub fn DestroyGameObject(&mut self, node_id: u64) {
+        if let Some(handle) = self.node_to_handle.remove(&node_id) {
+            self.handle_to_node.remove(&handle);
+            self.world.DestroyImmediate(handle);
+
+            // Clean up legacy HashMaps
+            self.node_transforms.remove(&node_id);
+            self.node_render.remove(&node_id);
+            self.node_physics.remove(&node_id);
+            self.node_lights.remove(&node_id);
+            self.node_materials.remove(&node_id);
+            self.node_sprites.remove(&node_id);
+            self.node_particles.remove(&node_id);
+            self.node_audio.remove(&node_id);
+            self.node_scripts.remove(&node_id);
+            self.node_tags.remove(&node_id);
+
+            // Remove from scene tree
+            self.scene_tree.remove_node(node_id);
+
+            // Remove from selection
+            self.selected_nodes.retain(|&id| id != node_id);
+        }
+    }
+
+    /// Get the GameObjectHandle for a node ID.
+    pub fn GetHandle(&self, node_id: u64) -> Option<GameObjectHandle> {
+        self.node_to_handle.get(&node_id).copied()
+    }
+
+    /// Get the node ID for a GameObjectHandle.
+    pub fn GetNodeId(&self, handle: GameObjectHandle) -> Option<u64> {
+        self.handle_to_node.get(&handle).copied()
+    }
+
+    /// Get the World reference.
+    pub fn World(&self) -> &engine_core::world::World {
+        &self.world
+    }
+
+    /// Get a mutable World reference.
+    pub fn WorldMut(&mut self) -> &mut engine_core::world::World {
+        &mut self.world
+    }
+
+    // ============================================================
+    // End Unity-style World API Helpers
+    // ============================================================
+
     /// Runs one frame of the editor UI, drawing all panels via egui.
     pub fn frame(
         &mut self,
