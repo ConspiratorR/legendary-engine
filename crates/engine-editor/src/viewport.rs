@@ -687,8 +687,22 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
                 // Start gizmo drag
                 state.gizmo_drag_axis = Some(0);
                 state.gizmo_drag_start_screen = Some((pointer_pos.x, pointer_pos.y));
+                // Use Unity-style World API to get start transform
                 let first_id = state.selected_nodes[0];
-                state.gizmo_drag_start_pos = state.node_transforms.get(&first_id).copied();
+                if let Some(handle) = state.GetHandle(first_id) {
+                    if let Some(t) = state.world.GetTransform(handle) {
+                        let pos = t.Position();
+                        let rot = t.Rotation();
+                        let scale = t.LossyScale();
+                        state.gizmo_drag_start_pos = Some([
+                            pos.x, pos.y, pos.z,
+                            rot.to_euler(engine_math::EulerRot::XYZ).0.to_degrees(),
+                            rot.to_euler(engine_math::EulerRot::XYZ).1.to_degrees(),
+                            rot.to_euler(engine_math::EulerRot::XYZ).2.to_degrees(),
+                            scale.x, scale.y, scale.z,
+                        ]);
+                    }
+                }
             } else if let (Some((sx, sy)), Some(start_pos)) =
                 (state.gizmo_drag_start_screen, state.gizmo_drag_start_pos)
             {
@@ -696,41 +710,46 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
                 let dy = pointer_pos.y - sy;
                 let sensitivity = state.camera.distance * 0.003;
 
-                match state.active_tool {
-                    crate::state::ToolType::Translate => {
-                        // Move on XZ plane
-                        let world_dx = dx * sensitivity;
-                        let world_dz = dy * sensitivity;
-                        if let Some(&first_id) = state.selected_nodes.first()
-                            && let Some(t) = state.node_transforms.get_mut(&first_id)
-                        {
-                            t[0] = start_pos[0] + world_dx;
-                            t[2] = start_pos[2] + world_dz;
+                // Use Unity-style World API for transform manipulation
+                let first_id = state.selected_nodes[0];
+                if let Some(handle) = state.GetHandle(first_id) {
+                    if let Some(t) = state.world.GetTransformMut(handle) {
+                        match state.active_tool {
+                            crate::state::ToolType::Translate => {
+                                let world_dx = dx * sensitivity;
+                                let world_dz = dy * sensitivity;
+                                t.SetPosition(engine_math::Vec3::new(
+                                    start_pos[0] + world_dx,
+                                    start_pos[1],
+                                    start_pos[2] + world_dz,
+                                ));
+                            }
+                            crate::state::ToolType::Rotate => {
+                                let rot_sensitivity = 0.01;
+                                let new_euler = engine_math::Vec3::new(
+                                    start_pos[3] + dy * rot_sensitivity,
+                                    start_pos[4] + dx * rot_sensitivity,
+                                    start_pos[5],
+                                );
+                                t.SetRotation(engine_math::Quat::from_euler(
+                                    engine_math::EulerRot::XYZ,
+                                    new_euler.x.to_radians(),
+                                    new_euler.y.to_radians(),
+                                    new_euler.z.to_radians(),
+                                ));
+                            }
+                            crate::state::ToolType::Scale => {
+                                let scale_sensitivity = 0.005;
+                                let scale_factor = 1.0 + dy * scale_sensitivity;
+                                t.SetLocalScale(engine_math::Vec3::new(
+                                    (start_pos[6] * scale_factor).max(0.01),
+                                    (start_pos[7] * scale_factor).max(0.01),
+                                    (start_pos[8] * scale_factor).max(0.01),
+                                ));
+                            }
+                            _ => {}
                         }
                     }
-                    crate::state::ToolType::Rotate => {
-                        // Rotate around Y axis (horizontal) and X axis (vertical)
-                        let rot_sensitivity = 0.01;
-                        if let Some(&first_id) = state.selected_nodes.first()
-                            && let Some(t) = state.node_transforms.get_mut(&first_id)
-                        {
-                            t[3] = start_pos[3] + dy * rot_sensitivity; // X rotation
-                            t[4] = start_pos[4] + dx * rot_sensitivity; // Y rotation
-                        }
-                    }
-                    crate::state::ToolType::Scale => {
-                        // Uniform scale based on vertical drag (non-accumulative)
-                        let scale_sensitivity = 0.005;
-                        let scale_factor = 1.0 + dy * scale_sensitivity;
-                        if let Some(&first_id) = state.selected_nodes.first()
-                            && let Some(t) = state.node_transforms.get_mut(&first_id)
-                        {
-                            t[6] = (start_pos[6] * scale_factor).max(0.01);
-                            t[7] = (start_pos[7] * scale_factor).max(0.01);
-                            t[8] = (start_pos[8] * scale_factor).max(0.01);
-                        }
-                    }
-                    _ => {}
                 }
             }
         } else if state.gizmo_drag_axis.is_some() {
@@ -753,18 +772,17 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         let canvas_h = canvas_rect.height();
 
         // Project each object to screen space and find nearest to click
+        // Use Unity-style World API for transform access
         let aspect = canvas_w / canvas_h.max(1.0);
         let vp = state.camera.projection_matrix(aspect) * state.camera.view_matrix();
 
         let mut best_id = None;
         let mut best_dist_sq = f32::MAX;
 
-        for node in &state.scene_tree.nodes {
-            if node.parent.is_none() {
-                continue;
-            }
-            if let Some(t) = state.node_transforms.get(&node.id) {
-                let world_pos = engine_math::Vec3::new(t[0], t[1], t[2]);
+        // Iterate through all node_to_handle mappings
+        for (&node_id, &handle) in &state.node_to_handle {
+            if let Some(t) = state.world.GetTransform(handle) {
+                let world_pos = t.Position();
                 let clip = vp * world_pos.extend(1.0);
                 if clip.w <= 0.001 {
                     continue;
@@ -777,7 +795,7 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
                 let dist_sq = dx * dx + dy * dy;
                 if dist_sq < best_dist_sq {
                     best_dist_sq = dist_sq;
-                    best_id = Some(node.id);
+                    best_id = Some(node_id);
                 }
             }
         }

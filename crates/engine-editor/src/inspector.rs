@@ -286,50 +286,42 @@ impl InspectorPanel {
         if Self::section_matches(
             "变换 位置 旋转 缩放 transform position rotation scale",
             search_lower,
-        ) && let Some(t) = state.node_transforms.get_mut(&id)
-        {
-            let old_transform = *t;
+        ) {
+            // Use Unity-style World API to access Transform
+            if let Some(handle) = state.GetHandle(id) {
+                if let Some(t) = state.world.GetTransformMut(handle) {
+                    let old_pos = t.LocalPosition();
+                    let old_rot = t.LocalRotation();
+                    let old_scale = t.LocalScale();
 
-            Self::section_separator(gui);
-            Self::section_header(gui, "变换");
+                    Self::section_separator(gui);
+                    Self::section_header(gui, "变换");
 
-            let (mut px, mut py, mut pz) = (t[0], t[1], t[2]);
-            Self::vec3_row(gui, "位置", &mut px, &mut py, &mut pz);
-            t[0] = px;
-            t[1] = py;
-            t[2] = pz;
+                    let (mut px, mut py, mut pz) = (
+                        old_pos.x, old_pos.y, old_pos.z,
+                    );
+                    Self::vec3_row(gui, "位置", &mut px, &mut py, &mut pz);
+                    t.SetLocalPosition(engine_math::Vec3::new(px, py, pz));
 
-            let (mut rx, mut ry, mut rz) = (t[3], t[4], t[5]);
-            Self::vec3_row(gui, "旋转", &mut rx, &mut ry, &mut rz);
-            t[3] = rx;
-            t[4] = ry;
-            t[5] = rz;
+                    let (mut rx, mut ry, mut rz) = (
+                        old_rot.to_euler(engine_math::EulerRot::XYZ).0.to_degrees(),
+                        old_rot.to_euler(engine_math::EulerRot::XYZ).1.to_degrees(),
+                        old_rot.to_euler(engine_math::EulerRot::XYZ).2.to_degrees(),
+                    );
+                    Self::vec3_row(gui, "旋转", &mut rx, &mut ry, &mut rz);
+                    t.SetLocalRotation(engine_math::Quat::from_euler(
+                        engine_math::EulerRot::XYZ,
+                        rx.to_radians(),
+                        ry.to_radians(),
+                        rz.to_radians(),
+                    ));
 
-            let (mut sx, mut sy, mut sz) = (t[6], t[7], t[8]);
-            Self::vec3_row(gui, "缩放", &mut sx, &mut sy, &mut sz);
-            t[6] = sx;
-            t[7] = sy;
-            t[8] = sz;
-
-            // Undo tracking
-            let new_transform = *t;
-            if new_transform != old_transform {
-                if state.pending_transform_edit.is_none() {
-                    state.pending_transform_edit = Some((id, old_transform));
+                    let (mut sx, mut sy, mut sz) = (
+                        old_scale.x, old_scale.y, old_scale.z,
+                    );
+                    Self::vec3_row(gui, "缩放", &mut sx, &mut sy, &mut sz);
+                    t.SetLocalScale(engine_math::Vec3::new(sx, sy, sz));
                 }
-            } else if let Some((pending_id, pending_old)) = state.pending_transform_edit.take()
-                && pending_id == id
-            {
-                let mut cm = std::mem::take(&mut state.command_manager);
-                cm.execute(
-                    Box::new(crate::commands::TransformEntityCommand::new(
-                        id,
-                        pending_old,
-                        new_transform,
-                    )),
-                    state,
-                );
-                state.command_manager = cm;
             }
         }
 
