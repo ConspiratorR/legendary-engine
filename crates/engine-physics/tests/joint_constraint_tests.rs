@@ -60,11 +60,11 @@ fn ball_socket_limits_distance() {
     let pos_a = world
         .get_by_index::<Transform>(a.index())
         .unwrap()
-        .position();
+        .Position();
     let pos_b = world
         .get_by_index::<Transform>(b.index())
         .unwrap()
-        .position();
+        .Position();
     let dist = (pos_b - pos_a).length();
     assert!(
         dist <= max_dist + 0.5,

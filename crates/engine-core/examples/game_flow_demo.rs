@@ -174,7 +174,7 @@ fn physics_step_system() -> impl IntoSystem {
             }
 
             let pos = match world.get_by_index::<Transform>(idx) {
-                Some(t) => t.position(),
+                Some(t) => t.Position(),
                 None => continue,
             };
 
@@ -219,7 +219,7 @@ fn physics_step_system() -> impl IntoSystem {
                 body.velocity = new_vel;
             }
             if let Some(transform) = world.get_by_index_mut::<Transform>(idx) {
-                transform.set_position(new_pos);
+                transform.SetPosition(new_pos);
             }
         }
     }
@@ -615,7 +615,7 @@ pub fn main() {
                 .first()
                 .and_then(|&idx| app.world.get_by_index::<Transform>(idx))
                 .map(|t| {
-                    let pos = t.position();
+                    let pos = t.Position();
                     format!("({:.1}, {:.1}, {:.1})", pos.x, pos.y, pos.z)
                 })
                 .unwrap_or_else(|| "N/A".to_string());

@@ -1,8 +1,8 @@
 use engine_core::World;
+use engine_core::Component;
 use engine_core::app::AppBuilder;
 use engine_core::context::Context;
 use engine_core::event::EventBus;
-use engine_core::gameobject::{Component, GameObject};
 use engine_core::player_loop::Phase;
 use engine_core::time::Time;
 use engine_core::transform::Transform;
@@ -43,37 +43,31 @@ pub fn main() {
     builder.add_startup_system(|ctx: &mut Context| {
         let world = &mut ctx.world;
 
-        let player = world.spawn({
-            let mut go = GameObject::new("Player");
-            go.add_component(Transform::from_xyz(0.0, 0.0, 0.0));
-            go.add_component(Position(Vec3::new(0.0, 0.0, 0.0)));
-            go.add_component(Velocity(Vec3::new(1.0, 2.0, 0.0)));
-            go
-        });
-        let _ = player;
+        let player = world.CreateGameObject("Player");
+        if let Some(t) = world.GetTransformMut(player) {
+            *t = Transform::from_xyz(0.0, 0.0, 0.0);
+        }
+        world.AddComponent(player, Position(Vec3::new(0.0, 0.0, 0.0)));
+        world.AddComponent(player, Velocity(Vec3::new(1.0, 2.0, 0.0)));
 
-        let enemy = world.spawn({
-            let mut go = GameObject::new("Enemy");
-            go.add_component(Transform::from_xyz(10.0, 5.0, 0.0));
-            go.add_component(Position(Vec3::new(10.0, 5.0, 0.0)));
-            go.add_component(Velocity(Vec3::new(-1.0, -0.5, 0.0)));
-            go
-        });
-        let _ = enemy;
+        let enemy = world.CreateGameObject("Enemy");
+        if let Some(t) = world.GetTransformMut(enemy) {
+            *t = Transform::from_xyz(10.0, 5.0, 0.0);
+        }
+        world.AddComponent(enemy, Position(Vec3::new(10.0, 5.0, 0.0)));
+        world.AddComponent(enemy, Velocity(Vec3::new(-1.0, -0.5, 0.0)));
     });
 
     // Update system: move entities
     builder.add_system_to_phase(Phase::Update, |ctx: &mut Context| {
         let world = &mut ctx.world;
-        let handles: Vec<_> = world.all_gameobjects();
+        let handles: Vec<_> = world.GetRootGameObjects();
         for handle in handles {
-            if let Some(go) = world.get_gameobject_mut(handle) {
-                let vel = go.get_component::<Velocity>().map(|v| v.0);
-                if let Some(pos) = go.get_component_mut::<Position>()
-                    && let Some(vel) = vel
-                {
-                    pos.0 += vel * 0.016;
-                }
+            let vel = world.GetComponent::<Velocity>(handle).map(|v| v.0);
+            if let Some(pos) = world.GetComponentMut::<Position>(handle)
+                && let Some(vel) = vel
+            {
+                pos.0 += vel * 0.016;
             }
         }
     });
@@ -81,12 +75,11 @@ pub fn main() {
     // Print system: display positions each frame
     builder.add_system_to_phase(Phase::Update, |ctx: &mut Context| {
         let world = &ctx.world;
-        let handles = world.all_gameobjects();
+        let handles = world.GetRootGameObjects();
         for handle in handles {
-            if let Some(go) = world.get_gameobject(handle)
-                && let Some(pos) = go.get_component::<Position>()
-            {
-                println!("{}: Position = {:?}", go.name(), pos.0);
+            if let Some(pos) = world.GetComponent::<Position>(handle) {
+                let name = world.GetName(handle);
+                println!("{}: Position = {:?}", name, pos.0);
             }
         }
     });

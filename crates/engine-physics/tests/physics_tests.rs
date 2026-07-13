@@ -187,7 +187,7 @@ fn collider_entity_spawning() {
     let t = world.get_by_index::<Transform>(e.index()).unwrap();
 
     assert_eq!(body.body_type, BodyType::Dynamic);
-    assert!((t.position().x - 1.0).abs() < 1e-6);
+    assert!((t.Position().x - 1.0).abs() < 1e-6);
     match &col.shape {
         engine_physics::collider::ColliderShape::Sphere { radius } => {
             assert!((radius - 0.5).abs() < 1e-6);
@@ -313,7 +313,7 @@ fn gravity_does_not_affect_static_body() {
     pw.step(&mut world);
 
     let transform = world.get_by_index::<Transform>(e.index()).unwrap();
-    assert_eq!(transform.position(), Vec3::ZERO);
+    assert_eq!(transform.Position(), Vec3::ZERO);
 }
 
 #[test]
@@ -855,7 +855,7 @@ mod physics_2d_tests {
         let transform = world
             .get_by_index::<engine_core::transform::Transform>(entity.index())
             .unwrap();
-        assert!(transform.position().y < 10.0);
+        assert!(transform.Position().y < 10.0);
     }
 
     #[test]

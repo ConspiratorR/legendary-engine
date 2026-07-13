@@ -80,6 +80,8 @@ impl<T: ScriptableObject> Eq for AssetHandle<T> {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::component::Component;
+    use crate::object::{InstanceId, Object};
     use crate::scriptable_object::ScriptableObject;
     use serde::{Deserialize, Serialize};
 
@@ -89,11 +91,21 @@ mod tests {
         value: i32,
     }
 
-    impl ScriptableObject for TestAsset {
-        fn name(&self) -> &str {
+    impl Object for TestAsset {
+        fn Name(&self) -> &str {
             &self.name
         }
 
+        fn SetName(&mut self, name: &str) {
+            self.name = name.to_string();
+        }
+
+        fn GetInstanceID(&self) -> InstanceId {
+            0
+        }
+    }
+
+    impl Component for TestAsset {
         fn as_any(&self) -> &dyn std::any::Any {
             self
         }
@@ -102,6 +114,8 @@ mod tests {
             self
         }
     }
+
+    impl ScriptableObject for TestAsset {}
 
     fn test_asset(name: &str, value: i32) -> TestAsset {
         TestAsset {
@@ -114,7 +128,7 @@ mod tests {
     fn test_creation_new() {
         let asset = test_asset("sky", 42);
         let handle = AssetHandle::new(asset);
-        assert_eq!(handle.get().name(), "sky");
+        assert_eq!(handle.get().Name(), "sky");
         assert_eq!(handle.path(), None);
         assert!(handle.is_loaded());
     }
@@ -123,7 +137,7 @@ mod tests {
     fn test_creation_with_path() {
         let asset = test_asset("mesh", 7);
         let handle = AssetHandle::with_path(asset, "assets/models/mesh.glb");
-        assert_eq!(handle.get().name(), "mesh");
+        assert_eq!(handle.get().Name(), "mesh");
         assert_eq!(handle.path(), Some("assets/models/mesh.glb"));
     }
 
@@ -131,7 +145,7 @@ mod tests {
     fn test_clone_shares_arc() {
         let h1 = AssetHandle::with_path(test_asset("a", 1), "a.txt");
         let h2 = h1.clone();
-        assert_eq!(h1.get().name(), h2.get().name());
+        assert_eq!(h1.get().Name(), h2.get().Name());
         assert!(Arc::ptr_eq(&h1.inner, &h2.inner));
         assert_eq!(h1.ref_count(), 2);
     }
@@ -184,7 +198,7 @@ mod tests {
     fn test_get_returns_inner_asset() {
         let asset = test_asset("player", 100);
         let handle = AssetHandle::new(asset);
-        assert_eq!(handle.get().name(), "player");
+        assert_eq!(handle.get().Name(), "player");
     }
 
     #[test]

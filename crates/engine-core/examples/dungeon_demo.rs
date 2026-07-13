@@ -690,7 +690,7 @@ fn player_control_system(world: &mut World) {
             .map(|p| p.pitch)
             .unwrap_or(0.0);
         if let Some(transform) = world.get_by_index_mut::<Transform>(eid) {
-            transform.set_rotation(Quat::from_euler(
+            transform.SetRotation(Quat::from_euler(
                 engine_math::EulerRot::YXZ,
                 yaw,
                 pitch,
@@ -712,7 +712,7 @@ fn enemy_ai_system(world: &mut World) {
         let players = world.component_entities::<PlayerState>();
         players
             .first()
-            .and_then(|&eid| world.get_by_index::<Transform>(eid).map(|t| t.position()))
+            .and_then(|&eid| world.get_by_index::<Transform>(eid).map(|t| t.Position()))
     };
     let player_pos = match player_pos {
         Some(p) => p,
@@ -736,7 +736,7 @@ fn enemy_ai_system(world: &mut World) {
 
         let current_pos = world
             .get_by_index::<Transform>(eid)
-            .map(|t| t.position())
+            .map(|t| t.Position())
             .unwrap_or(Vec3::ZERO);
 
         let dist_to_player = (current_pos - player_pos).length();
@@ -960,7 +960,7 @@ fn status_report_system(world: &mut World) {
             world.get_by_index::<PlayerState>(eid),
             world.get_by_index::<Transform>(eid),
         ) {
-            let pos = transform.position();
+            let pos = transform.Position();
             println!(
                 "[Status] t={:.1}s | Pos: ({:.1}, {:.1}, {:.1}) | Lives: {} | Score: {} | Key: {}",
                 elapsed, pos.x, pos.y, pos.z, player.lives, player.score, player.has_key,

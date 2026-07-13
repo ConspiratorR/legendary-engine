@@ -257,8 +257,8 @@ impl PhysicsWorld2D {
             if let Some(transform) =
                 world.get_by_index_mut::<engine_core::transform::Transform>(eid)
             {
-                let pos = transform.position();
-                transform.set_position(Vec3::new(pos.x + vel.x * dt, pos.y + vel.y * dt, pos.z));
+                let pos = transform.Position();
+                transform.SetPosition(Vec3::new(pos.x + vel.x * dt, pos.y + vel.y * dt, pos.z));
             }
         }
 
@@ -289,7 +289,7 @@ impl PhysicsWorld2D {
                 .map(|b| b.body_type)
                 .unwrap_or(BodyType2D::Static);
             if let Some(transform) = world.get_by_index::<engine_core::transform::Transform>(eid) {
-                let pos = transform.position();
+                let pos = transform.Position();
                 let pos2 = Vec2::new(pos.x, pos.y);
                 colliders.push((eid, pos2, collider.clone(), body_type));
             }
@@ -366,8 +366,8 @@ impl PhysicsWorld2D {
         if let Some(transform) =
             world.get_by_index_mut::<engine_core::transform::Transform>(push_eid)
         {
-            let pos = transform.position();
-            transform.set_position(Vec3::new(
+            let pos = transform.Position();
+            transform.SetPosition(Vec3::new(
                 pos.x + push_normal.x * pen,
                 pos.y + push_normal.y * pen,
                 pos.z,

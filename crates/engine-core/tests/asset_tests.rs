@@ -1,5 +1,7 @@
 use engine_core::asset_database::AssetDatabase;
 use engine_core::asset_handle::AssetHandle;
+use engine_core::component::Component;
+use engine_core::object::{InstanceId, Object};
 use engine_core::scriptable_object::{ScriptableObject, ScriptableObjectHolder};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,29 +29,37 @@ impl Default for HealthData {
     }
 }
 
-impl ScriptableObject for HealthData {
-    fn name(&self) -> &str {
+impl Object for HealthData {
+    fn Name(&self) -> &str {
         &self.name
     }
 
-    fn set_name(&mut self, name: &str) {
+    fn SetName(&mut self, name: &str) {
         self.name = name.to_string();
     }
 
-    fn asset_path(&self) -> Option<&str> {
-        self.asset_path.as_deref()
+    fn GetInstanceID(&self) -> InstanceId {
+        0
     }
+}
 
-    fn set_asset_path(&mut self, path: &str) {
-        self.asset_path = Some(path.to_string());
-    }
-
+impl Component for HealthData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+}
+
+impl ScriptableObject for HealthData {
+    fn AssetPath(&self) -> Option<&str> {
+        self.asset_path.as_deref()
+    }
+
+    fn SetAssetPath(&mut self, path: &str) {
+        self.asset_path = Some(path.to_string());
     }
 }
 
@@ -60,15 +70,21 @@ struct WeaponData {
     fire_rate: f32,
 }
 
-impl ScriptableObject for WeaponData {
-    fn name(&self) -> &str {
+impl Object for WeaponData {
+    fn Name(&self) -> &str {
         &self.name
     }
 
-    fn set_name(&mut self, name: &str) {
+    fn SetName(&mut self, name: &str) {
         self.name = name.to_string();
     }
 
+    fn GetInstanceID(&self) -> InstanceId {
+        0
+    }
+}
+
+impl Component for WeaponData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -77,6 +93,8 @@ impl ScriptableObject for WeaponData {
         self
     }
 }
+
+impl ScriptableObject for WeaponData {}
 
 // ---------------------------------------------------------------------------
 // ScriptableObject lifecycle tracking
@@ -92,37 +110,45 @@ struct LifecycleAsset {
     name: String,
 }
 
-impl ScriptableObject for LifecycleAsset {
-    fn on_create(&mut self) {
-        LIFECYCLE_CREATE.store(true, Ordering::SeqCst);
-    }
-
-    fn on_enable(&mut self) {
-        LIFECYCLE_ENABLE.store(true, Ordering::SeqCst);
-    }
-
-    fn on_disable(&mut self) {
-        LIFECYCLE_DISABLE.store(true, Ordering::SeqCst);
-    }
-
-    fn on_destroy(&mut self) {
-        LIFECYCLE_DESTROY.store(true, Ordering::SeqCst);
-    }
-
-    fn name(&self) -> &str {
+impl Object for LifecycleAsset {
+    fn Name(&self) -> &str {
         &self.name
     }
 
-    fn set_name(&mut self, name: &str) {
+    fn SetName(&mut self, name: &str) {
         self.name = name.to_string();
     }
 
+    fn GetInstanceID(&self) -> InstanceId {
+        0
+    }
+}
+
+impl Component for LifecycleAsset {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+}
+
+impl ScriptableObject for LifecycleAsset {
+    fn Awake(&mut self) {
+        LIFECYCLE_CREATE.store(true, Ordering::SeqCst);
+    }
+
+    fn OnEnable(&mut self) {
+        LIFECYCLE_ENABLE.store(true, Ordering::SeqCst);
+    }
+
+    fn OnDisable(&mut self) {
+        LIFECYCLE_DISABLE.store(true, Ordering::SeqCst);
+    }
+
+    fn OnDestroy(&mut self) {
+        LIFECYCLE_DESTROY.store(true, Ordering::SeqCst);
     }
 }
 
@@ -147,10 +173,10 @@ fn test_holder_creates_with_name_and_value() {
     };
     let holder = ScriptableObjectHolder::new(asset);
 
-    assert_eq!(holder.name(), "Player");
-    assert_eq!(holder.get().max_health, 200);
-    assert_eq!(holder.get().regen_rate, 2.5);
-    assert!(holder.is_enabled());
+    assert_eq!(holder.Get().Name(), "Player");
+    assert_eq!(holder.Get().max_health, 200);
+    assert_eq!(holder.Get().regen_rate, 2.5);
+    assert!(holder.Enabled());
 }
 
 #[test]
@@ -163,8 +189,8 @@ fn test_holder_with_path_sets_metadata() {
     };
     let holder = ScriptableObjectHolder::with_path(asset, "EnemyData", "/Game/Data/Enemy");
 
-    assert_eq!(holder.name(), "EnemyData");
-    assert_eq!(holder.asset_path(), Some("/Game/Data/Enemy"));
+    assert_eq!(holder.Get().Name(), "EnemyData");
+    assert_eq!(holder.Get().AssetPath(), Some("/Game/Data/Enemy"));
 }
 
 #[test]
@@ -176,11 +202,11 @@ fn test_holder_disable_enable_toggles() {
         regen_rate: 1.0,
     });
 
-    assert!(holder.is_enabled());
-    holder.set_enabled(false);
-    assert!(!holder.is_enabled());
-    holder.set_enabled(true);
-    assert!(holder.is_enabled());
+    assert!(holder.Enabled());
+    holder.SetEnabled(false);
+    assert!(!holder.Enabled());
+    holder.SetEnabled(true);
+    assert!(holder.Enabled());
 }
 
 #[test]
@@ -224,7 +250,7 @@ fn test_holder_type_name() {
         max_health: 1,
         regen_rate: 0.0,
     });
-    let tn = holder.type_name();
+    let tn = holder.TypeName();
     assert!(tn.contains("HealthData"), "got {tn}");
 }
 
@@ -237,12 +263,12 @@ fn test_holder_mutable_access() {
         regen_rate: 0.1,
     });
     {
-        let inner = holder.get_mut();
+        let inner = holder.GetMut();
         inner.max_health = 999;
         inner.regen_rate = 5.0;
     }
-    assert_eq!(holder.get().max_health, 999);
-    assert_eq!(holder.get().regen_rate, 5.0);
+    assert_eq!(holder.Get().max_health, 999);
+    assert_eq!(holder.Get().regen_rate, 5.0);
 }
 
 #[test]
@@ -253,7 +279,7 @@ fn test_holder_serde_roundtrip() {
         max_health: 150,
         regen_rate: 3.0,
     });
-    let json = serde_json::to_string(holder.get()).unwrap();
+    let json = serde_json::to_string(holder.Get()).unwrap();
     let deserialized: HealthData = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.name, "SaveMe");
     assert_eq!(deserialized.max_health, 150);
@@ -263,9 +289,9 @@ fn test_holder_serde_roundtrip() {
 #[test]
 fn test_holder_default_asset() {
     let holder = ScriptableObjectHolder::new(HealthData::default());
-    assert_eq!(holder.name(), "");
-    assert_eq!(holder.get().max_health, 100);
-    assert_eq!(holder.get().regen_rate, 1.0);
+    assert_eq!(holder.Get().Name(), "");
+    assert_eq!(holder.Get().max_health, 100);
+    assert_eq!(holder.Get().regen_rate, 1.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +307,7 @@ fn test_asset_handle_new() {
     };
     let handle = AssetHandle::new(asset);
 
-    assert_eq!(handle.get().name(), "Sword");
+    assert_eq!(handle.get().Name(), "Sword");
     assert_eq!(handle.get().damage, 25.0);
     assert!(handle.path().is_none());
     assert!(handle.is_loaded());
@@ -297,7 +323,7 @@ fn test_asset_handle_with_path() {
     };
     let handle = AssetHandle::with_path(asset, "/Game/Weapons/Bow");
 
-    assert_eq!(handle.get().name(), "Bow");
+    assert_eq!(handle.get().Name(), "Bow");
     assert_eq!(handle.path(), Some("/Game/Weapons/Bow"));
 }
 
@@ -316,7 +342,7 @@ fn test_asset_handle_clone_shares_data() {
     // PartialEq uses Arc::ptr_eq, so equality means shared allocation
     assert_eq!(handle1, handle2);
     assert_eq!(handle1.ref_count(), 2);
-    assert_eq!(handle2.get().name(), "Staff");
+    assert_eq!(handle2.get().Name(), "Staff");
 }
 
 #[test]
@@ -454,7 +480,7 @@ fn test_database_create_and_retrieve() {
     assert_eq!(db.asset_count(), 1);
 
     let retrieved = db.get_asset::<HealthData>("player_health").unwrap();
-    assert_eq!(retrieved.get().name(), "Player");
+    assert_eq!(retrieved.get().Name(), "Player");
 }
 
 #[test]
@@ -584,7 +610,7 @@ fn test_database_replace_asset() {
 
     assert_eq!(db.asset_count(), 1);
     let handle = db.get_asset::<HealthData>("key").unwrap();
-    assert_eq!(handle.get().name(), "New");
+    assert_eq!(handle.get().Name(), "New");
     assert_eq!(handle.get().max_health, 20);
 }
 
@@ -653,7 +679,7 @@ fn test_database_handle_shares_with_stored() {
     // The returned handle and the one stored in the DB should share the same Arc
     let stored = db.get_asset::<HealthData>("shared").unwrap();
     // They point to the same underlying data because create_asset clones the Arc
-    assert_eq!(handle.get().name(), stored.get().name());
+    assert_eq!(handle.get().Name(), stored.get().Name());
 }
 
 #[test]
@@ -676,7 +702,7 @@ fn test_database_get_asset_mut() {
     // After modifying via get_asset_mut, the change is visible through get_asset
     // (This tests the mutable access path exists, not inner mutation)
     let handle_ref = db.get_asset::<HealthData>("mut").unwrap();
-    assert_eq!(handle_ref.get().name(), "Orig");
+    assert_eq!(handle_ref.get().Name(), "Orig");
 }
 
 // ---------------------------------------------------------------------------
@@ -789,7 +815,7 @@ fn test_handle_clone_dropped_before_original() {
 
     drop(h2);
     assert_eq!(h1.ref_count(), 1);
-    assert_eq!(h1.get().name(), "A");
+    assert_eq!(h1.get().Name(), "A");
     // Original handle remains valid after clone is dropped
 }
 

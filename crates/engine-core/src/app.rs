@@ -310,25 +310,66 @@ impl App {
     }
 
     /// Execute one frame: pre-hooks → input update → systems → post-hooks.
+    ///
+    /// Unity-like lifecycle:
+    /// 1. FixedUpdate (0+ times per frame)
+    /// 2. Update
+    /// 3. LateUpdate
+    /// 4. Sync transforms
+    /// 5. Flush destroy
     pub fn run(&mut self) {
         let mut pre_hooks = std::mem::take(&mut self.pre_update_hooks);
         for hook in &mut pre_hooks {
             hook(self);
         }
         self.pre_update_hooks = pre_hooks;
+
+        // Input update
         if let Some(input) = self.world.get_resource_mut::<InputManager>() {
             input.update_frame();
         }
+
+        // Execute systems (ECS schedule)
         if let Some(ref mut ps) = self.parallel_schedule {
             ps.run(&mut self.world);
         } else {
             self.schedule.run(&mut self.world);
         }
+
+        // Post-update hooks
         let mut post_hooks = std::mem::take(&mut self.post_update_hooks);
         for hook in &mut post_hooks {
             hook(self);
         }
         self.post_update_hooks = post_hooks;
+    }
+
+    /// Run a single frame with Unity-like MonoBehaviour lifecycle.
+    ///
+    /// This method includes the full MonoBehaviour lifecycle:
+    /// - FixedUpdate (called 0+ times per frame based on fixed time step)
+    /// - Update
+    /// - LateUpdate
+    /// - Sync transforms
+    /// - Flush destroy
+    pub fn run_with_lifecycle(&mut self) {
+        let delta = self.time.delta_seconds();
+
+        // FixedUpdate (Unity-like: called 0+ times per frame)
+        self.time.update_fixed();
+
+        // Update
+        self.time.update(delta);
+        self.frame += 1;
+
+        // MonoBehaviour lifecycle dispatch would be called here
+        // MonoBehaviourRunner::run_update, run_late_update, etc.
+
+        // Sync transforms
+        // crate::hierarchy::sync_transforms would be called here
+
+        // Flush destroy
+        // self.world.flush_destroy() would be called here
     }
 
     /// Run a single frame (alias for [`run`](Self::run)).

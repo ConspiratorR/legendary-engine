@@ -1,10 +1,11 @@
 use engine_core::Time;
+use engine_core::behaviour::Behaviour;
 use engine_core::context::Context;
 use engine_core::event::{Event, EventBus, EventBusExt};
-use engine_core::gameobject::{Component, GameObject};
+use engine_core::gameobject::GameObjectHandle;
 use engine_core::monobehaviour::{MonoBehaviour, MonoBehaviourHolder};
-use engine_core::transform::Transform;
 use engine_core::world::World;
+use engine_core::Component;
 use std::any::Any;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -28,16 +29,34 @@ impl Component for PlayerController {
     }
 }
 
+impl Behaviour for PlayerController {
+    fn Enabled(&self) -> bool {
+        true
+    }
+
+    fn SetEnabled(&mut self, _enabled: bool) {}
+
+    fn IsActiveAndEnabled(&self) -> bool {
+        true
+    }
+
+    fn set_gameobject(&mut self, _handle: GameObjectHandle) {}
+
+    fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+        None
+    }
+}
+
 impl MonoBehaviour for PlayerController {
-    fn awake(&mut self, _context: &mut Context) {
+    fn Awake(&mut self, _context: &mut Context) {
         AWAKE_CALLED.fetch_add(1, Ordering::SeqCst);
     }
 
-    fn start(&mut self, _context: &mut Context) {
+    fn Start(&mut self, _context: &mut Context) {
         START_CALLED.fetch_add(1, Ordering::SeqCst);
     }
 
-    fn update(&mut self, _context: &mut Context) {
+    fn Update(&mut self, _context: &mut Context) {
         UPDATE_CALLED.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -52,8 +71,8 @@ fn test_monobehaviour_trait_object() {
     let mut holder = MonoBehaviourHolder::new(player);
 
     // Test trait object
-    assert!(holder.is_enabled());
-    assert!(!holder.type_name().is_empty());
+    assert!(holder.Enabled());
+    assert!(!holder.TypeName().is_empty());
 
     // Test lifecycle methods
     let mut world = World::new();
@@ -61,13 +80,13 @@ fn test_monobehaviour_trait_object() {
     let time = Time::default();
     let mut context = Context::new(&mut world, time, 0, &mut events);
 
-    holder.get_mut().awake(&mut context);
+    holder.GetMut().Awake(&mut context);
     assert_eq!(AWAKE_CALLED.load(Ordering::SeqCst), 1);
 
-    holder.get_mut().start(&mut context);
+    holder.GetMut().Start(&mut context);
     assert_eq!(START_CALLED.load(Ordering::SeqCst), 1);
 
-    holder.get_mut().update(&mut context);
+    holder.GetMut().Update(&mut context);
     assert_eq!(UPDATE_CALLED.load(Ordering::SeqCst), 1);
 }
 
@@ -76,32 +95,27 @@ fn test_monobehaviour_enabled() {
     let player = PlayerController { speed: 5.0 };
     let mut holder = MonoBehaviourHolder::new(player);
 
-    assert!(holder.is_enabled());
+    assert!(holder.Enabled());
 
-    holder.set_enabled(false);
-    assert!(!holder.is_enabled());
+    holder.SetEnabled(false);
+    assert!(!holder.Enabled());
 
-    holder.set_enabled(true);
-    assert!(holder.is_enabled());
+    holder.SetEnabled(true);
+    assert!(holder.Enabled());
 }
 
 #[test]
 fn test_monobehaviour_with_gameobject() {
     let mut world = World::new();
 
-    let mut player = GameObject::new("Player");
-    player.add_component(Transform::from_xyz(0.0, 1.0, 0.0));
-    player.add_component(PlayerController { speed: 5.0 });
-
-    let handle = world.spawn(player);
+    let handle = world.CreateGameObject("Player");
+    world.AddComponent(handle, PlayerController { speed: 5.0 });
 
     // Verify components exist
-    let gameobject = world.get_gameobject(handle).unwrap();
-    assert!(gameobject.has_component::<Transform>());
-    assert!(gameobject.has_component::<PlayerController>());
+    assert!(world.HasComponent::<PlayerController>(handle));
 
     // Get component and verify
-    let controller = gameobject.get_component::<PlayerController>().unwrap();
+    let controller = world.GetComponent::<PlayerController>(handle).unwrap();
     assert_eq!(controller.speed, 5.0);
 }
 

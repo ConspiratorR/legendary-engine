@@ -1,6 +1,6 @@
 use engine_core::event::{EventBus, EventBusExt};
 use engine_core::events::*;
-use engine_core::gameobject::{Component, GameObject};
+use engine_core::{Component, GameObject};
 use engine_core::world::World;
 use std::any::Any;
 use std::sync::Arc;

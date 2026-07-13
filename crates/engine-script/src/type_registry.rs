@@ -116,17 +116,17 @@ pub fn lua_to_color(t: &LuaTable) -> LuaResult<Color> {
 }
 
 /// Create a Lua table representing a `Transform`.
-pub fn transform_to_lua(lua: &Lua, tr: Transform) -> LuaResult<LuaTable> {
+pub fn transform_to_lua(lua: &Lua, tr: &Transform) -> LuaResult<LuaTable> {
     let t = lua.create_table()?;
-    t.set("position", vec3_to_lua(lua, tr.position())?)?;
+    t.set("position", vec3_to_lua(lua, tr.Position())?)?;
     t.set(
         "rotation",
         vec3_to_lua(
             lua,
-            Vec3::new(tr.rotation().x, tr.rotation().y, tr.rotation().z),
+            Vec3::new(tr.Rotation().x, tr.Rotation().y, tr.Rotation().z),
         )?,
     )?;
-    t.set("scale", vec3_to_lua(lua, tr.lossy_scale())?)?;
+    t.set("scale", vec3_to_lua(lua, tr.LossyScale())?)?;
     Ok(t)
 }
 
@@ -255,10 +255,10 @@ pub fn bytes_to_color(buf: &[u8]) -> Color {
 /// Serialize a `Transform` to 36 bytes (9×f32 LE: position + rotation(euler) + scale).
 pub fn transform_to_bytes(t: &Transform) -> [u8; 36] {
     let mut buf = [0u8; 36];
-    let pos = t.position();
-    let rot = t.rotation();
+    let pos = t.Position();
+    let rot = t.Rotation();
     let (euler_x, euler_y, euler_z) = rot.to_euler(EulerRot::XYZ);
-    let scl = t.lossy_scale();
+    let scl = t.LossyScale();
     write_f32_le(&mut buf, 0, pos.x);
     write_f32_le(&mut buf, 4, pos.y);
     write_f32_le(&mut buf, 8, pos.z);
@@ -480,11 +480,11 @@ impl TypeRegistry {
     // Internal registration helpers
     // -----------------------------------------------------------------------
 
-    fn register_type<T: Send + Sync + Copy + 'static>(
+    fn register_type<T: Send + Sync + 'static>(
         &mut self,
         name: impl Into<String>,
         wasm_size: usize,
-        to_lua: fn(&Lua, T) -> LuaResult<LuaValue>,
+        to_lua: fn(&Lua, &T) -> LuaResult<LuaValue>,
         from_lua: fn(&Lua, &LuaValue) -> LuaResult<T>,
         to_bytes: fn(&T) -> Vec<u8>,
         from_bytes: fn(&[u8]) -> T,
@@ -494,7 +494,7 @@ impl TypeRegistry {
             name,
             TypeEntry {
                 lua_get: Box::new(move |lua, world, idx| match world.get_by_index::<T>(idx) {
-                    Some(val) => Ok(Some(to_lua(lua, *val)?)),
+                    Some(val) => Ok(Some(to_lua(lua, val)?)),
                     None => Ok(None),
                 }),
                 lua_set: Box::new(move |lua, world, idx, lua_val| {
@@ -539,7 +539,7 @@ impl TypeRegistry {
         self.register_type::<Vec2>(
             "Vec2",
             8,
-            |lua, v| Ok(LuaValue::Table(vec2_to_lua(lua, v)?)),
+            |lua, v| Ok(LuaValue::Table(vec2_to_lua(lua, *v)?)),
             |_lua, lv| {
                 if let LuaValue::Table(t) = lv {
                     lua_to_vec2(t)
@@ -556,7 +556,7 @@ impl TypeRegistry {
         self.register_type::<Vec3>(
             "Vec3",
             12,
-            |lua, v| Ok(LuaValue::Table(vec3_to_lua(lua, v)?)),
+            |lua, v| Ok(LuaValue::Table(vec3_to_lua(lua, *v)?)),
             |_lua, lv| {
                 if let LuaValue::Table(t) = lv {
                     lua_to_vec3(t)
@@ -573,7 +573,7 @@ impl TypeRegistry {
         self.register_type::<Vec4>(
             "Vec4",
             16,
-            |lua, v| Ok(LuaValue::Table(vec4_to_lua(lua, v)?)),
+            |lua, v| Ok(LuaValue::Table(vec4_to_lua(lua, *v)?)),
             |_lua, lv| {
                 if let LuaValue::Table(t) = lv {
                     lua_to_vec4(t)
@@ -590,7 +590,7 @@ impl TypeRegistry {
         self.register_type::<Quat>(
             "Quat",
             16,
-            |lua, q| Ok(LuaValue::Table(quat_to_lua(lua, q)?)),
+            |lua, q| Ok(LuaValue::Table(quat_to_lua(lua, *q)?)),
             |_lua, lv| {
                 if let LuaValue::Table(t) = lv {
                     lua_to_quat(t)
@@ -607,7 +607,7 @@ impl TypeRegistry {
         self.register_type::<Color>(
             "Color",
             16,
-            |lua, c| Ok(LuaValue::Table(color_to_lua(lua, c)?)),
+            |lua, c| Ok(LuaValue::Table(color_to_lua(lua, *c)?)),
             |_lua, lv| {
                 if let LuaValue::Table(t) = lv {
                     lua_to_color(t)
@@ -641,7 +641,7 @@ impl TypeRegistry {
         self.register_type::<f32>(
             "f32",
             4,
-            |_, v| Ok(LuaValue::Number(v as f64)),
+            |_, v| Ok(LuaValue::Number(*v as f64)),
             |_, lv| {
                 if let LuaValue::Number(n) = lv {
                     Ok(*n as f32)
@@ -658,7 +658,7 @@ impl TypeRegistry {
         self.register_type::<f64>(
             "f64",
             8,
-            |_, v| Ok(LuaValue::Number(v)),
+            |_, v| Ok(LuaValue::Number(*v)),
             |_, lv| {
                 if let LuaValue::Number(n) = lv {
                     Ok(*n)
@@ -679,7 +679,7 @@ impl TypeRegistry {
         self.register_type::<i32>(
             "i32",
             4,
-            |_, v| Ok(LuaValue::Integer(v as i64)),
+            |_, v| Ok(LuaValue::Integer(*v as i64)),
             |_, lv| {
                 if let LuaValue::Integer(i) = lv {
                     Ok(*i as i32)
@@ -696,7 +696,7 @@ impl TypeRegistry {
         self.register_type::<u32>(
             "u32",
             4,
-            |_, v| Ok(LuaValue::Integer(v as i64)),
+            |_, v| Ok(LuaValue::Integer(*v as i64)),
             |_, lv| {
                 if let LuaValue::Integer(i) = lv {
                     Ok(*i as u32)
@@ -713,7 +713,7 @@ impl TypeRegistry {
         self.register_type::<bool>(
             "bool",
             1,
-            |_, v| Ok(LuaValue::Boolean(v)),
+            |_, v| Ok(LuaValue::Boolean(*v)),
             |_, lv| {
                 if let LuaValue::Boolean(b) = lv {
                     Ok(*b)
@@ -804,10 +804,10 @@ mod tests {
             Quat::from_euler(EulerRot::XYZ, 0.1, 0.2, 0.3),
             Vec3::new(2.0, 2.0, 2.0),
         );
-        let t = transform_to_lua(&lua, tr).unwrap();
+        let t = transform_to_lua(&lua, &tr).unwrap();
         let tr2 = lua_to_transform(&t).unwrap();
-        assert!((tr2.position().x - 1.0).abs() < 1e-6);
-        assert!((tr2.lossy_scale().y - 2.0).abs() < 1e-6);
+        assert!((tr2.Position().x - 1.0).abs() < 1e-6);
+        assert!((tr2.LossyScale().y - 2.0).abs() < 1e-6);
     }
 
     #[test]
@@ -871,11 +871,11 @@ mod tests {
         let bytes = transform_to_bytes(&tr);
         assert_eq!(bytes.len(), 36);
         let tr2 = bytes_to_transform(&bytes);
-        assert!((tr2.position().x - 1.0).abs() < 1e-6);
-        let rot = tr2.rotation();
+        assert!((tr2.Position().x - 1.0).abs() < 1e-6);
+        let rot = tr2.Rotation();
         let (_ex, ey, _ez) = rot.to_euler(EulerRot::XYZ);
         assert!((ey - 0.2).abs() < 1e-6);
-        assert!((tr2.lossy_scale().z - 2.0).abs() < 1e-6);
+        assert!((tr2.LossyScale().z - 2.0).abs() < 1e-6);
     }
 
     #[test]

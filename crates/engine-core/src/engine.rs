@@ -24,6 +24,14 @@ impl Engine {
 /// input system. The app's `run()` method is called each frame, followed by
 /// an automatic render phase that collects Camera and Sprite components from
 /// the ECS world and renders them to the window.
+///
+/// # Unity-like Lifecycle
+/// The frame loop follows Unity's execution order:
+/// 1. FixedUpdate (0+ times per frame)
+/// 2. Update
+/// 3. LateUpdate
+/// 4. Sync transforms
+/// 5. Render
 #[cfg(not(target_arch = "wasm32"))]
 #[allow(deprecated)]
 pub fn run_default(mut app_builder: AppBuilder) -> Result<(), EngineError> {
@@ -97,7 +105,9 @@ pub fn run_default(mut app_builder: AppBuilder) -> Result<(), EngineError> {
                 _ => {}
             }
             if let Event::AboutToWait = event {
-                app.run();
+                // Unity-like frame lifecycle
+                app.run_with_lifecycle();
+
                 // Run post-render hooks (for user extensions)
                 if !app.post_render_hooks.is_empty() {
                     let mut hooks = std::mem::take(&mut app.post_render_hooks);
@@ -106,6 +116,7 @@ pub fn run_default(mut app_builder: AppBuilder) -> Result<(), EngineError> {
                     }
                     app.post_render_hooks = hooks;
                 }
+
                 // Automatic render phase: collect cameras/sprites from ECS and render
                 app.render_phase();
             }

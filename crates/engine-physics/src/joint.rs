@@ -319,10 +319,10 @@ impl JointSolver {
 
         let pos_a = world
             .get_by_index::<Transform>(idx_a)
-            .map_or(Vec3::ZERO, |t| t.position());
+            .map_or(Vec3::ZERO, |t| t.Position());
         let pos_b = world
             .get_by_index::<Transform>(idx_b)
-            .map_or(Vec3::ZERO, |t| t.position());
+            .map_or(Vec3::ZERO, |t| t.Position());
 
         let anchor_world_a = pos_a + joint.anchor_a;
         let anchor_world_b = pos_b + joint.anchor_b;
@@ -374,14 +374,14 @@ impl JointSolver {
         if inv_mass_a > 0.0
             && let Some(transform) = world.get_by_index_mut::<Transform>(idx_a)
         {
-            let pos = transform.position();
-            transform.set_position(pos + correction * (inv_mass_a / inv_mass_sum));
+            let pos = transform.Position();
+            transform.SetPosition(pos + correction * (inv_mass_a / inv_mass_sum));
         }
         if inv_mass_b > 0.0
             && let Some(transform) = world.get_by_index_mut::<Transform>(idx_b)
         {
-            let pos = transform.position();
-            transform.set_position(pos - correction * (inv_mass_b / inv_mass_sum));
+            let pos = transform.Position();
+            transform.SetPosition(pos - correction * (inv_mass_b / inv_mass_sum));
         }
 
         // Velocity correction to prevent drift

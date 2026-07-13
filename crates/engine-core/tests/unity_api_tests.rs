@@ -2,7 +2,7 @@ use engine_core::Phase;
 use engine_core::app::AppBuilder;
 use engine_core::context::Context;
 use engine_core::event::EventBus;
-use engine_core::gameobject::{Component, GameObject, GameObjectHandle};
+use engine_core::{Component, GameObject, GameObjectHandle};
 use engine_core::transform::Transform;
 use engine_core::world::World;
 use std::any::Any;

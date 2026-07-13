@@ -7,7 +7,7 @@
 //! - PlayerLoop execution
 
 use engine_core::context::Context;
-use engine_core::gameobject::{Component, GameObject};
+use engine_core::{Behaviour, BehaviourState, Component, GameObject};
 use engine_core::hierarchy::sync_transforms;
 use engine_core::monobehaviour::MonoBehaviour;
 use engine_core::player_loop::{Phase, PlayerLoop};
@@ -34,6 +34,7 @@ impl Component for Marker {
 struct Logger {
     name: String,
     update_count: usize,
+    state: BehaviourState,
 }
 
 impl Component for Logger {
@@ -46,29 +47,51 @@ impl Component for Logger {
     }
 }
 
+impl Behaviour for Logger {
+    fn Enabled(&self) -> bool {
+        self.state.enabled()
+    }
+
+    fn SetEnabled(&mut self, enabled: bool) {
+        self.state.set_enabled(enabled);
+    }
+
+    fn IsActiveAndEnabled(&self) -> bool {
+        self.state.enabled()
+    }
+
+    fn set_gameobject(&mut self, handle: engine_core::GameObjectHandle) {
+        self.state.set_gameobject(handle);
+    }
+
+    fn gameobject_handle(&self) -> Option<engine_core::GameObjectHandle> {
+        self.state.gameobject()
+    }
+}
+
 impl MonoBehaviour for Logger {
-    fn awake(&mut self, _context: &mut Context) {
+    fn Awake(&mut self, _context: &mut Context) {
         println!("[{}] Awake!", self.name);
     }
 
-    fn start(&mut self, _context: &mut Context) {
+    fn Start(&mut self, _context: &mut Context) {
         println!("[{}] Start!", self.name);
     }
 
-    fn update(&mut self, _context: &mut Context) {
+    fn Update(&mut self, _context: &mut Context) {
         self.update_count += 1;
         println!("[{}] Update #{}", self.name, self.update_count);
     }
 
-    fn fixed_update(&mut self, _context: &mut Context) {
+    fn FixedUpdate(&mut self, _context: &mut Context) {
         println!("[{}] FixedUpdate", self.name);
     }
 
-    fn late_update(&mut self, _context: &mut Context) {
+    fn LateUpdate(&mut self, _context: &mut Context) {
         println!("[{}] LateUpdate", self.name);
     }
 
-    fn on_destroy(&mut self, _context: &mut Context) {
+    fn OnDestroy(&mut self, _context: &mut Context) {
         println!("[{}] OnDestroy!", self.name);
     }
 }
@@ -77,6 +100,7 @@ impl MonoBehaviour for Logger {
 struct Mover {
     speed: f32,
     direction: Vec3,
+    state: BehaviourState,
 }
 
 impl Component for Mover {
@@ -89,8 +113,30 @@ impl Component for Mover {
     }
 }
 
+impl Behaviour for Mover {
+    fn Enabled(&self) -> bool {
+        self.state.enabled()
+    }
+
+    fn SetEnabled(&mut self, enabled: bool) {
+        self.state.set_enabled(enabled);
+    }
+
+    fn IsActiveAndEnabled(&self) -> bool {
+        self.state.enabled()
+    }
+
+    fn set_gameobject(&mut self, handle: engine_core::GameObjectHandle) {
+        self.state.set_gameobject(handle);
+    }
+
+    fn gameobject_handle(&self) -> Option<engine_core::GameObjectHandle> {
+        self.state.gameobject()
+    }
+}
+
 impl MonoBehaviour for Mover {
-    fn update(&mut self, context: &mut Context) {
+    fn Update(&mut self, context: &mut Context) {
         // In a real engine, we'd look up our transform and move it.
         // Here we just print to demonstrate the lifecycle.
         println!(
@@ -134,7 +180,7 @@ fn main() {
             println!("Player marker: {}", marker.0);
         }
         if let Some(transform) = go.get_component::<Transform>() {
-            println!("Player position: {:?}", transform.local_position);
+            println!("Player position: {:?}", transform.LocalPosition());
         }
     }
 
@@ -177,15 +223,15 @@ fn main() {
     println!("\nWorld positions after sync:");
     if let Some(go) = world.get_gameobject(parent) {
         let t = go.get_component::<Transform>().unwrap();
-        println!("  Parent: {:?}", t.position());
+        println!("  Parent: {:?}", t.Position());
     }
     if let Some(go) = world.get_gameobject(child) {
         let t = go.get_component::<Transform>().unwrap();
-        println!("  Child: {:?}", t.position());
+        println!("  Child: {:?}", t.Position());
     }
     if let Some(go) = world.get_gameobject(grandchild) {
         let t = go.get_component::<Transform>().unwrap();
-        println!("  Grandchild: {:?}", t.position());
+        println!("  Grandchild: {:?}", t.Position());
     }
 
     println!();
@@ -199,6 +245,7 @@ fn main() {
         go.add_component(Logger {
             name: "LoggerA".to_string(),
             update_count: 0,
+            state: BehaviourState::new(),
         });
         go
     });
@@ -208,6 +255,7 @@ fn main() {
         go.add_component(Logger {
             name: "LoggerB".to_string(),
             update_count: 0,
+            state: BehaviourState::new(),
         });
         go
     });
@@ -219,6 +267,7 @@ fn main() {
         go.add_component(Mover {
             speed: 5.0,
             direction: Vec3::new(1.0, 0.0, 0.0),
+            state: BehaviourState::new(),
         });
         go
     });
@@ -311,7 +360,7 @@ fn main() {
 
 /// Helper to run lifecycle on all components of a given type.
 /// In a real engine, MonoBehaviourRunner would handle this automatically.
-fn run_lifecycle_on_all<T: engine_core::gameobject::Component + 'static>(
+fn run_lifecycle_on_all<T: engine_core::Component + 'static>(
     world: &mut World,
     method: &str,
 ) {

@@ -215,7 +215,7 @@ impl PhysicsWorld {
                 }
                 let vel = body.linear_velocity;
                 if let Some(transform) = world.get_by_index::<Transform>(idx) {
-                    let desired_pos = transform.position() + vel * dt;
+                    let desired_pos = transform.Position() + vel * dt;
 
                     // CCD: sweep if body has CcdBody and speed exceeds threshold
                     let ccd = world.get_by_index::<CcdBody>(idx);
@@ -225,7 +225,7 @@ impl PhysicsWorld {
 
                     if has_ccd && speed_sq > threshold * threshold {
                         let safe_pos =
-                            self.ccd_sweep(world, idx, transform.position(), desired_pos);
+                            self.ccd_sweep(world, idx, transform.Position(), desired_pos);
                         updates.push((idx, safe_pos));
                     } else {
                         updates.push((idx, desired_pos));
@@ -237,7 +237,7 @@ impl PhysicsWorld {
         // Phase 2: apply position updates
         for (idx, new_pos) in updates {
             if let Some(transform) = world.get_by_index_mut::<Transform>(idx) {
-                transform.set_position(new_pos);
+                transform.SetPosition(new_pos);
             }
         }
     }
@@ -288,11 +288,11 @@ impl PhysicsWorld {
                     start,
                     end,
                     radius,
-                    other_transform.position(),
+                    other_transform.Position(),
                     other_radius,
                 ),
                 ColliderShape::Box { half_extents } => {
-                    let other_pos = other_transform.position();
+                    let other_pos = other_transform.Position();
                     let aabb_min = other_pos - *half_extents;
                     let aabb_max = other_pos + *half_extents;
                     sweep_sphere_aabb(start, end, radius, aabb_min, aabb_max)
@@ -303,7 +303,7 @@ impl PhysicsWorld {
                         start,
                         end,
                         radius,
-                        other_transform.position(),
+                        other_transform.Position(),
                         other_radius,
                     )
                 }
@@ -414,7 +414,7 @@ impl PhysicsWorld {
                 };
                 self.broadphase.insert(BroadphaseEntry {
                     entity_index: idx,
-                    center: transform.position(),
+                    center: transform.Position(),
                     half_extents,
                     collision_layers: collider.collision_layers,
                     collision_mask: collider.collision_mask,
@@ -448,16 +448,16 @@ impl PhysicsWorld {
                     return None;
                 }
 
-                let rot_a = transform_a.rotation();
-                let rot_b = transform_b.rotation();
+                let rot_a = transform_a.Rotation();
+                let rot_b = transform_b.Rotation();
 
                 // Sensor pairs: overlap test only
                 if collider_a.is_sensor || collider_b.is_sensor {
                     let overlap = check_collision(
-                        transform_a.position(),
+                        transform_a.Position(),
                         rot_a,
                         collider_a,
-                        transform_b.position(),
+                        transform_b.Position(),
                         rot_b,
                         collider_b,
                     );
@@ -468,10 +468,10 @@ impl PhysicsWorld {
                 }
 
                 let mut info = check_collision(
-                    transform_a.position(),
+                    transform_a.Position(),
                     rot_a,
                     collider_a,
-                    transform_b.position(),
+                    transform_b.Position(),
                     rot_b,
                     collider_b,
                 )?;
@@ -731,14 +731,14 @@ impl PhysicsWorld {
                     if is_dynamic_a
                         && let Some(transform) = world_ref.get_by_index_mut::<Transform>(idx_a)
                     {
-                        let pos = transform.position();
-                        transform.set_position(pos - correction * inv_mass_a);
+                        let pos = transform.Position();
+                        transform.SetPosition(pos - correction * inv_mass_a);
                     }
                     if is_dynamic_b
                         && let Some(transform) = world_ref.get_by_index_mut::<Transform>(idx_b)
                     {
-                        let pos = transform.position();
-                        transform.set_position(pos + correction * inv_mass_b);
+                        let pos = transform.Position();
+                        transform.SetPosition(pos + correction * inv_mass_b);
                     }
                 }
             }
@@ -796,7 +796,7 @@ mod tests {
         pw.step(&mut world);
 
         let transform = world.get_by_index::<Transform>(e.index()).unwrap();
-        assert_eq!(transform.position(), Vec3::ZERO);
+        assert_eq!(transform.Position(), Vec3::ZERO);
     }
 
     #[test]

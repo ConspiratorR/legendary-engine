@@ -1,96 +1,102 @@
 //! # engine-core
 //!
-//! Core engine systems for the RustEngine.
-//!
-//! This is the central crate ("Layer 4") that ties together all engine subsystems:
-//! - Application builder and plugin system
-//! - Time management
-//! - Configuration system
-//! - Logging and performance profiling
-//! - Memory tracking and object pools
-//! - Event channels
+//! Core engine systems for the RustEngine — a Rust implementation of Unity's architecture.
 //!
 //! ## Architecture
 //!
-//! engine-core follows a plugin-based architecture where each subsystem is
-//! integrated as a [`Plugin`](crate::plugin::Plugin) that registers systems,
-//! resources, and lifecycle hooks with the [`AppBuilder`](crate::app::AppBuilder).
+//! This crate follows Unity's documented architecture:
+//! - [`GameObject`](gameobject::GameObject) is the fundamental building block
+//! - [`Component`](component::Component) is the base trait for all components
+//! - [`Behaviour`](behaviour::Behaviour) extends Component with enabled state
+//! - [`MonoBehaviour`](monobehaviour::MonoBehaviour) is the base class for user scripts
+//! - [`Transform`](transform::Transform) is built-in to every GameObject (mandatory, cannot be removed)
+//! - [`ScriptableObject`](scriptable_object::ScriptableObject) is for data containers
+//! - [`World`](world::World) is the central container for all GameObjects
+//!
+//! ## Class Hierarchy
 //!
 //! ```text
-//! AppBuilder::new()
-//!   .add_plugin(CorePlugins)      // registers Time, ActionMap, etc.
-//!   .add_plugin(MyGamePlugin)     // registers game-specific systems
-//!   .build()                      // produces an App
-//!   .run()                        // executes one frame
+//! Object (trait)
+//!   +-- Component (trait)
+//!   |     +-- Transform (built-in, not user-attached)
+//!   |     +-- Behaviour (trait)
+//!   |     |     +-- MonoBehaviour (user scripts)
+//!   |     |     +-- Camera
+//!   |     |     +-- Collider (BoxCollider, SphereCollider, etc.)
+//!   |     |     +-- Renderer (MeshRenderer, SpriteRenderer)
+//!   |     |     +-- Rigidbody
+//!   |     |     +-- AudioSource
+//!   |     |     +-- Light
+//!   |     |     +-- Animator
+//!   |     +-- Rigidbody
+//!   |     +-- Collider
+//!   +-- ScriptableObject (data containers)
 //! ```
-//!
-//! ## AppBuilder Pattern
-//!
-//! [`AppBuilder`](crate::app::AppBuilder) is the primary entry point for
-//! constructing an application. It accumulates:
-//!
-//! - **Plugins** via [`add_plugin`](crate::app::AppBuilder::add_plugin) —
-//!   each plugin's `build()` method is called immediately in registration order.
-//! - **Systems** via [`add_system`](crate::app::AppBuilder::add_system) —
-//!   added to either the sequential or parallel schedule.
-//! - **Resources** via [`insert_resource`](crate::app::AppBuilder::insert_resource) —
-//!   global singletons accessible from any system.
-//! - **Lifecycle hooks** via `add_pre_update_hook` / `add_post_update_hook` —
-//!   closures that run before/after the system schedule each frame.
-//!
-//! Call [`build`](crate::app::AppBuilder::build) to finalize and produce an
-//! [`App`](crate::app::App). The `App` holds the ECS world, schedule, and
-//! renderer. Call [`run`](crate::app::App::run) each frame to execute:
-//!
-//! ```text
-//! pre-update hooks → input frame advance → systems → post-update hooks
-//! ```
-//!
-//! ## Plugin Lifecycle
-//!
-//! 1. **Registration**: `app.add_plugin(MyPlugin)` calls `MyPlugin::build(&self, &mut AppBuilder)`.
-//! 2. **Build phase**: The plugin inserts resources, registers systems, and adds hooks.
-//! 3. **Build order**: Plugins execute `build()` in the order they are registered.
-//!    Dependencies between plugins must be handled by registration order.
-//! 4. **App finalization**: `app_builder.build()` consumes the builder and
-//!    produces an `App` with all registered systems and hooks.
-//! 5. **Runtime**: `app.run()` executes the frame cycle. Hooks and systems
-//!    see all resources and components registered during the build phase.
-//!
-//! ## Crate Dependencies
-//!
-//! engine-core depends on all major engine crates. Mandatory dependencies:
-//! - `engine-ecs` — Entity-Component-World and scheduling
-//! - `engine-input` — Input manager and action maps
-//! - `engine-render` — Renderer (set via `App::set_renderer`)
-//! - `engine-math` — Vector math types
-//! - `engine-scene`, `engine-asset`, `engine-window` — Error type integration
-//!
-//! Optional (feature-gated):
-//! - `engine-audio` — Audio playback (feature `"audio"`, enabled by default)
 //!
 //! ## Quick Start
 //!
 //! ```rust
-//! use engine_core::app::AppBuilder;
-//! use engine_core::plugin::Plugin;
+//! use engine_core::world::World;
+//! use engine_core::gameobject::GameObjectHandle;
 //!
-//! struct MyPlugin;
-//! impl Plugin for MyPlugin {
-//!     fn build(&self, app: &mut AppBuilder) {
-//!         app.add_system(my_system);
-//!     }
-//! }
+//! let mut world = World::new();
 //!
-//! # fn my_system(_world: &mut engine_ecs::world::World) {}
-//! let mut app = AppBuilder::new();
-//! app.add_plugin(MyPlugin);
-//! let mut app = app.build();
-//! app.run();
+//! // Create a GameObject (matches Unity's new GameObject("name"))
+//! let player = world.CreateGameObject("Player");
+//!
+//! // Set tag (matches Unity's GameObject.tag = "Player")
+//! world.SetTag(player, "Player");
+//!
+//! // Set parent (matches Unity's Transform.SetParent)
+//! let root = world.CreateGameObject("Root");
+//! world.SetParent(player, Some(root));
+//!
+//! // Find objects (matches Unity's GameObject.FindWithTag)
+//! let found = world.FindWithTag("Player");
+//! assert_eq!(found, Some(player));
 //! ```
 
-pub mod error;
-pub use error::EngineError;
+// ============================================================
+// New Unity-style modules
+// ============================================================
+
+/// Object trait — base class for all Unity objects.
+pub mod object;
+
+/// Component trait — base class for all components attached to GameObjects.
+pub mod component;
+
+/// Behaviour trait — base class for components that can be enabled/disabled.
+pub mod behaviour;
+
+// ============================================================
+// Rewritten modules
+// ============================================================
+
+/// Transform — built-in component for position, rotation, scale, and hierarchy.
+pub mod transform;
+
+/// GameObject — fundamental building block of Unity scenes.
+pub mod gameobject;
+
+/// MonoBehaviour — base class for all user scripts.
+pub mod monobehaviour;
+
+/// ScriptableObject — data container for sharing data.
+pub mod scriptable_object;
+
+/// World — central container for all GameObjects.
+pub mod world;
+
+/// Hierarchy utilities — helper functions for working with Transform hierarchy.
+pub mod hierarchy;
+
+/// MonoBehaviour lifecycle runner.
+pub mod monobehaviour_runner;
+
+// ============================================================
+// Existing modules (to be refactored in later phases)
+// ============================================================
 
 pub mod app;
 pub mod asset_database;
@@ -100,15 +106,12 @@ pub mod config;
 pub mod context;
 pub mod debug;
 pub mod engine;
+pub mod error;
 pub mod event;
 pub mod events;
-pub mod gameobject;
-pub mod hierarchy;
 pub mod logger;
 pub mod math_utils;
 pub mod memory;
-pub mod monobehaviour;
-pub mod monobehaviour_runner;
 pub mod player_loop;
 pub mod plugin;
 pub mod plugin_loader;
@@ -116,30 +119,32 @@ pub mod plugins;
 pub mod prefab;
 pub mod profiler;
 pub mod resource;
-pub mod scriptable_object;
 pub mod serialization;
 pub mod system;
 pub mod time;
-pub mod transform;
 pub mod undo;
-pub mod world;
 
 // Re-export for convenience
-pub use asset_database::AssetDatabase;
-pub use asset_handle::AssetHandle;
+pub use object::{Object, ObjectUtil};
+pub use component::Component;
+pub use behaviour::{Behaviour, BehaviourState};
+pub use transform::{Space, Transform};
+pub use gameobject::{GameObject, GameObjectHandle};
+pub use monobehaviour::{MonoBehaviour, MonoBehaviourHolder, CoroutineHandle};
+pub use scriptable_object::ScriptableObject;
+pub use world::World;
+pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
+pub use monobehaviour_runner::MonoBehaviourRunner;
 pub use context::Context;
 pub use event::{Event, EventBus, EventBusExt, EventHandler};
 pub use events::*;
-pub use gameobject::{Component, GameObject, GameObjectHandle};
-pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
-pub use monobehaviour::{MonoBehaviour, MonoBehaviourHolder};
-pub use monobehaviour_runner::MonoBehaviourRunner;
 pub use player_loop::{Phase, PlayerLoop};
-pub use scriptable_object::{ScriptableObject, ScriptableObjectHolder};
 pub use system::System;
 pub use time::Time;
-pub use transform::{Space, Transform};
-pub use world::World;
+pub use app::AppBuilder;
+
+// Re-export macros - impl_component is defined in component.rs with #[macro_export]
+// It's automatically available at crate root
 
 #[cfg(target_os = "android")]
 pub mod android;
