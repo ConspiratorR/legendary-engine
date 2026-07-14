@@ -855,8 +855,17 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
                 }
             }
         } else if state.gizmo_drag_axis.is_some() {
-            // Release gizmo drag
-            crate::gizmo::end_drag(state);
+            // Release gizmo drag and record undo
+            if let Some((node_id, old_transform, new_transform)) = crate::gizmo::end_drag(state) {
+                let cmd = crate::commands::TransformEntityCommand::new(
+                    node_id,
+                    old_transform,
+                    new_transform,
+                );
+                let mut cm = std::mem::take(&mut state.command_manager);
+                cm.execute(Box::new(cmd), state);
+                state.command_manager = cm;
+            }
         }
     }
 

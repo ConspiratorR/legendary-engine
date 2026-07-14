@@ -68,6 +68,7 @@ pub fn start_drag(state: &mut EditorState, axis: usize, mouse_pos: Pos2) {
         interaction.drag_start_screen = mouse_pos;
         interaction.drag_start_world_pos = [world_pos[0], world_pos[1], world_pos[2]];
         interaction.drag_axis = axis;
+        interaction.drag_start_full_transform = world_pos;
     }
     // Also update the legacy drag fields for backward compatibility
     state.gizmo_drag_axis = Some(axis as u8);
@@ -120,24 +121,23 @@ pub fn update_drag(
     }
 }
 
-/// End drag, returning (node_id, old_world_pos, new_world_pos) if a drag was active.
-pub fn end_drag(state: &mut EditorState) -> Option<(u64, [f32; 3], [f32; 3])> {
-    let (axis, old_pos) = if let Some(ref interaction) = state.gizmo_interaction {
+/// End drag, returning (node_id, old_full_transform, new_full_transform) if a drag was active.
+pub fn end_drag(state: &mut EditorState) -> Option<(u64, [f32; 9], [f32; 9])> {
+    let old_full = if let Some(ref interaction) = state.gizmo_interaction {
         match interaction.state {
-            GizmoState::DraggingAxis(axis) => (axis, interaction.drag_start_world_pos),
+            GizmoState::DraggingAxis(_) => interaction.drag_start_full_transform,
             _ => return None,
         }
     } else {
         return None;
     };
-    let _ = axis;
 
     let node_id = state.selected_nodes.first().copied().unwrap_or(0);
-    let new_pos = state
+    let new_full = state
         .node_transforms
         .get(&node_id)
-        .map(|t| [t[0], t[1], t[2]])
-        .unwrap_or(old_pos);
+        .copied()
+        .unwrap_or(old_full);
 
     // Reset state
     if let Some(ref mut interaction) = state.gizmo_interaction {
@@ -147,7 +147,7 @@ pub fn end_drag(state: &mut EditorState) -> Option<(u64, [f32; 3], [f32; 3])> {
     state.gizmo_drag_start_screen = None;
     state.gizmo_drag_start_pos = None;
 
-    Some((node_id, old_pos, new_pos))
+    Some((node_id, old_full, new_full))
 }
 
 /// Get the current gizmo center and size for the given canvas rect.
@@ -167,36 +167,22 @@ pub fn draw(
 ) {
     let (gizmo_center, gizmo_size) = gizmo_metrics(canvas_rect, h_scale);
 
-    // Update hover state when idle — detect first, then update state
-    if mouse_pos.is_some() && !state.selected_nodes.is_empty() {
-        let should_update = state
+    // Update hover state when not dragging — supports axis-to-axis transitions
+    if !matches!(
+        state
             .gizmo_interaction
             .as_ref()
-            .map(|i| i.state == GizmoState::Idle)
-            .unwrap_or(false);
-        if should_update {
-            let mp = mouse_pos.unwrap();
-            let hover_axis = detect_hover(state, mp, gizmo_center, gizmo_size);
-            if let Some(axis) = hover_axis {
+            .map(|i| i.state)
+            .unwrap_or(GizmoState::Idle),
+        GizmoState::DraggingAxis(_)
+    ) {
+        if let Some(mp) = mouse_pos {
+            if let Some(axis) = detect_hover(state, mp, gizmo_center, gizmo_size) {
                 if let Some(ref mut interaction) = state.gizmo_interaction {
                     interaction.state = GizmoState::HoverAxis(axis);
                 }
-            }
-        }
-    }
-
-    // Clear hover if mouse moved off the axis
-    if let Some(mp) = mouse_pos {
-        let is_hover = state
-            .gizmo_interaction
-            .as_ref()
-            .map(|i| matches!(i.state, GizmoState::HoverAxis(_)))
-            .unwrap_or(false);
-        if is_hover {
-            if detect_hover(state, mp, gizmo_center, gizmo_size).is_none() {
-                if let Some(ref mut interaction) = state.gizmo_interaction {
-                    interaction.state = GizmoState::Idle;
-                }
+            } else if let Some(ref mut interaction) = state.gizmo_interaction {
+                interaction.state = GizmoState::Idle;
             }
         }
     }

@@ -73,6 +73,8 @@ pub struct GizmoInteraction {
     pub drag_start_world_pos: [f32; 3],
     /// Which axis is being dragged (0=X, 1=Y, 2=Z).
     pub drag_axis: usize,
+    /// Full 9-component transform at drag start [pos(3), rot(3), scale(3)].
+    pub drag_start_full_transform: [f32; 9],
 }
 
 /// A single node in the scene hierarchy tree.
@@ -927,6 +929,7 @@ impl EditorState {
                 drag_start_screen: Pos2::ZERO,
                 drag_start_world_pos: [0.0; 3],
                 drag_axis: 0,
+                drag_start_full_transform: [0.0; 9],
             }),
             gizmo_size: 60.0,
             hierarchy_search: String::new(),
