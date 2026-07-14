@@ -37,11 +37,12 @@ pub fn detect_hover(
     mouse_pos: Pos2,
     gizmo_center: Pos2,
     gizmo_size: f32,
+    h_scale: f32,
 ) -> Option<usize> {
     if state.selected_nodes.is_empty() {
         return None;
     }
-    let threshold = 12.0;
+    let threshold = 12.0 * h_scale;
     for (i, &dir) in AXIS_DIRS.iter().enumerate() {
         let tip = Pos2::new(
             gizmo_center.x + dir.x * gizmo_size,
@@ -77,12 +78,7 @@ pub fn start_drag(state: &mut EditorState, axis: usize, mouse_pos: Pos2) {
 }
 
 /// Update drag position (called each frame while dragging).
-pub fn update_drag(
-    state: &mut EditorState,
-    mouse_pos: Pos2,
-    _gizmo_center: Pos2,
-    _gizmo_size: f32,
-) {
+pub fn update_drag(state: &mut EditorState, mouse_pos: Pos2) {
     let (axis, start_screen, start_world) = if let Some(ref interaction) = state.gizmo_interaction {
         match interaction.state {
             GizmoState::DraggingAxis(axis) => (
@@ -100,7 +96,13 @@ pub fn update_drag(
     let delta_screen = Vec2::new(mouse_pos.x - start_screen.x, mouse_pos.y - start_screen.y);
     let scale = state.camera.distance * 0.003;
     let mut world_delta = [0.0f32; 3];
-    world_delta[axis] = delta_screen.x * scale;
+    let screen_delta = match axis {
+        0 => delta_screen.x,  // X axis: horizontal mouse movement
+        1 => -delta_screen.y, // Y axis: vertical mouse movement (negate because screen Y is down)
+        2 => delta_screen.x,  // Z axis: horizontal mouse movement (screen-space proxy)
+        _ => 0.0,
+    };
+    world_delta[axis] = screen_delta * scale;
 
     if let Some(t) = state.node_transforms.get_mut(&node_id) {
         t[0] = start_world[0] + world_delta[0];
@@ -177,7 +179,7 @@ pub fn draw(
         GizmoState::DraggingAxis(_)
     ) {
         if let Some(mp) = mouse_pos {
-            if let Some(axis) = detect_hover(state, mp, gizmo_center, gizmo_size) {
+            if let Some(axis) = detect_hover(state, mp, gizmo_center, gizmo_size, h_scale) {
                 if let Some(ref mut interaction) = state.gizmo_interaction {
                     interaction.state = GizmoState::HoverAxis(axis);
                 }

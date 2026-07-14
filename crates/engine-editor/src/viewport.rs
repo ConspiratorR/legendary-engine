@@ -766,9 +766,13 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         if primary_down && canvas_rect.contains(pointer_pos) {
             if state.gizmo_drag_axis.is_none() {
                 // Check if clicking on a gizmo axis
-                if let Some(axis) =
-                    crate::gizmo::detect_hover(state, pointer_pos, gizmo_center, gizmo_size)
-                {
+                if let Some(axis) = crate::gizmo::detect_hover(
+                    state,
+                    pointer_pos,
+                    gizmo_center,
+                    gizmo_size,
+                    h_scale,
+                ) {
                     crate::gizmo::start_drag(state, axis, pointer_pos);
                 } else {
                     // Start generic drag (no axis selected)
@@ -804,7 +808,7 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
                     .unwrap_or(false);
 
                 if has_axis_drag {
-                    crate::gizmo::update_drag(state, pointer_pos, gizmo_center, gizmo_size);
+                    crate::gizmo::update_drag(state, pointer_pos);
                 } else if let (Some((sx, sy)), Some(start_pos)) =
                     (state.gizmo_drag_start_screen, state.gizmo_drag_start_pos)
                 {
