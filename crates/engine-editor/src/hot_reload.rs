@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 
+use anyhow::Context;
 use engine_asset::types::ResourceType;
 use log::{info, warn};
 use notify::{RecommendedWatcher, RecursiveMode};
@@ -65,13 +66,19 @@ impl HotReloadManager {
     }
 }
 
+impl Default for HotReloadManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Reload a texture from disk.
 pub fn reload_texture(
     path: &str,
     queue: &wgpu::Queue,
     device: &wgpu::Device,
-) -> Result<(), String> {
-    let img = image::open(path).map_err(|e| format!("Failed to load image: {e}"))?;
+) -> anyhow::Result<()> {
+    let img = image::open(path).context("Failed to load image")?;
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
 
@@ -114,12 +121,11 @@ pub fn reload_texture(
 }
 
 /// Reload a material from disk.
-pub fn reload_material(path: &str) -> Result<serde_json::Value, String> {
-    let content =
-        std::fs::read_to_string(path).map_err(|e| format!("Failed to read material file: {e}"))?;
+pub fn reload_material(path: &str) -> anyhow::Result<serde_json::Value> {
+    let content = std::fs::read_to_string(path).context("Failed to read material file")?;
 
-    let material_data: serde_json::Value = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse material JSON: {e}"))?;
+    let material_data: serde_json::Value =
+        serde_json::from_str(&content).context("Failed to parse material JSON")?;
 
     Ok(material_data)
 }
@@ -193,10 +199,10 @@ pub struct FileWatcher {
 
 impl FileWatcher {
     /// Creates a new `FileWatcher` with a 500ms debounce delay.
-    pub fn new() -> Result<Self, String> {
+    pub fn new() -> anyhow::Result<Self> {
         let (tx, receiver) = std::sync::mpsc::channel();
-        let debouncer = new_debouncer(Duration::from_millis(500), tx)
-            .map_err(|e| format!("Failed to create file debouncer: {e}"))?;
+        let debouncer =
+            new_debouncer(Duration::from_millis(500), tx).context("Failed to create file debouncer")?;
 
         Ok(Self {
             _debouncer: debouncer,
@@ -207,11 +213,11 @@ impl FileWatcher {
     }
 
     /// Watches a directory recursively for file changes.
-    pub fn watch(&mut self, path: &Path) -> Result<(), String> {
+    pub fn watch(&mut self, path: &Path) -> anyhow::Result<()> {
         self._debouncer
             .watcher()
             .watch(path, RecursiveMode::Recursive)
-            .map_err(|e| format!("Failed to watch path {}: {e}", path.display()))?;
+            .context(format!("Failed to watch path {}", path.display()))?;
         self.watched_paths.push(path.to_path_buf());
         Ok(())
     }
@@ -252,7 +258,7 @@ pub struct ReloadManager {
 
 impl ReloadManager {
     /// Creates a new `ReloadManager` that watches the given path.
-    pub fn new(watch_path: &Path) -> Result<Self, String> {
+    pub fn new(watch_path: &Path) -> anyhow::Result<Self> {
         let mut file_watcher = FileWatcher::new()?;
         file_watcher.watch(watch_path)?;
         info!("Hot reload watching: {}", watch_path.display());
@@ -271,7 +277,7 @@ impl ReloadManager {
     }
 
     pub fn update(&mut self) {
-        self.file_watcher.poll();
+        // Don't poll here - callers should use process_pending() which handles polling
         let requests = self.file_watcher.take_pending();
 
         for req in &requests {
