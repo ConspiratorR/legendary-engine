@@ -3,14 +3,177 @@
 //! Watches file system changes and triggers recompilation/reload
 //! of modified assets, shaders, and scripts.
 
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Receiver;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use engine_asset::types::ResourceType;
 use log::{info, warn};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{DebouncedEvent, Debouncer, new_debouncer};
+
+/// Notification for hot-reloaded assets.
+#[derive(Debug, Clone)]
+pub struct ReloadNotification {
+    pub message: String,
+    pub timestamp: Instant,
+    pub level: ReloadLevel,
+}
+
+/// Severity level of a reload notification.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ReloadLevel {
+    Info,
+    Warning,
+    Error,
+}
+
+/// Hot reload manager with notifications.
+pub struct HotReloadManager {
+    pub notifications: VecDeque<ReloadNotification>,
+    pub max_notifications: usize,
+}
+
+impl HotReloadManager {
+    pub fn new() -> Self {
+        Self {
+            notifications: VecDeque::with_capacity(20),
+            max_notifications: 20,
+        }
+    }
+
+    pub fn notify(&mut self, message: String, level: ReloadLevel) {
+        self.notifications.push_back(ReloadNotification {
+            message,
+            timestamp: Instant::now(),
+            level,
+        });
+        while self.notifications.len() > self.max_notifications {
+            self.notifications.pop_front();
+        }
+    }
+
+    pub fn clear_old(&mut self, max_age: Duration) {
+        let now = Instant::now();
+        self.notifications
+            .retain(|n| now.duration_since(n.timestamp) < max_age);
+    }
+
+    pub fn latest(&self) -> Option<&ReloadNotification> {
+        self.notifications.back()
+    }
+}
+
+/// Reload a texture from disk.
+pub fn reload_texture(
+    path: &str,
+    queue: &wgpu::Queue,
+    device: &wgpu::Device,
+) -> Result<(), String> {
+    let img = image::open(path).map_err(|e| format!("Failed to load image: {e}"))?;
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some(path),
+        size: wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+
+    queue.write_texture(
+        wgpu::ImageCopyTexture {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        rgba.as_raw(),
+        wgpu::ImageDataLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * width),
+            rows_per_image: Some(height),
+        },
+        wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    Ok(())
+}
+
+/// Reload a material from disk.
+pub fn reload_material(path: &str) -> Result<serde_json::Value, String> {
+    let content =
+        std::fs::read_to_string(path).map_err(|e| format!("Failed to read material file: {e}"))?;
+
+    let material_data: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse material JSON: {e}"))?;
+
+    Ok(material_data)
+}
+
+/// Draw hot reload notifications on screen.
+pub fn draw_notifications(
+    manager: &HotReloadManager,
+    painter: &egui::Painter,
+    screen_rect: egui::Rect,
+) {
+    let start_y = screen_rect.top() + 10.0;
+    let mut y = start_y;
+
+    for notification in manager.notifications.iter().rev() {
+        let age = notification.timestamp.elapsed();
+        if age > Duration::from_secs(5) {
+            continue;
+        }
+
+        let alpha = if age > Duration::from_secs(3) {
+            1.0 - (age.as_secs_f32() - 3.0) / 2.0
+        } else {
+            1.0
+        };
+
+        let color = match notification.level {
+            ReloadLevel::Info => {
+                egui::Color32::from_rgba_premultiplied(100, 200, 100, (alpha * 255.0) as u8)
+            }
+            ReloadLevel::Warning => {
+                egui::Color32::from_rgba_premultiplied(200, 200, 100, (alpha * 255.0) as u8)
+            }
+            ReloadLevel::Error => {
+                egui::Color32::from_rgba_premultiplied(200, 100, 100, (alpha * 255.0) as u8)
+            }
+        };
+
+        let prefix = match notification.level {
+            ReloadLevel::Info => "[INFO] ",
+            ReloadLevel::Warning => "[WARN] ",
+            ReloadLevel::Error => "[ERROR] ",
+        };
+
+        painter.text(
+            egui::Pos2::new(screen_rect.left() + 10.0, y),
+            egui::Align2::LEFT_CENTER,
+            format!("{prefix}{}", notification.message),
+            egui::FontId::proportional(12.0),
+            color,
+        );
+
+        y += 20.0;
+    }
+}
 
 /// A pending reload request for a changed file.
 #[derive(Debug, Clone)]
@@ -32,7 +195,7 @@ impl FileWatcher {
     /// Creates a new `FileWatcher` with a 500ms debounce delay.
     pub fn new() -> Result<Self, String> {
         let (tx, receiver) = std::sync::mpsc::channel();
-        let debouncer = new_debouncer(std::time::Duration::from_millis(500), tx)
+        let debouncer = new_debouncer(Duration::from_millis(500), tx)
             .map_err(|e| format!("Failed to create file debouncer: {e}"))?;
 
         Ok(Self {
@@ -193,5 +356,50 @@ mod tests {
     fn test_file_watcher_creation() {
         let watcher = FileWatcher::new();
         assert!(watcher.is_ok());
+    }
+
+    #[test]
+    fn test_hot_reload_manager() {
+        let mut manager = HotReloadManager::new();
+        assert!(manager.latest().is_none());
+
+        manager.notify("Test reload".into(), ReloadLevel::Info);
+        assert_eq!(manager.notifications.len(), 1);
+        assert_eq!(manager.latest().unwrap().message, "Test reload");
+        assert_eq!(manager.latest().unwrap().level, ReloadLevel::Info);
+
+        manager.notify("Warning msg".into(), ReloadLevel::Warning);
+        assert_eq!(manager.notifications.len(), 2);
+        assert_eq!(manager.latest().unwrap().level, ReloadLevel::Warning);
+    }
+
+    #[test]
+    fn test_hot_reload_manager_max_notifications() {
+        let mut manager = HotReloadManager::new();
+        manager.max_notifications = 3;
+
+        for i in 0..5 {
+            manager.notify(format!("msg {i}"), ReloadLevel::Info);
+        }
+
+        assert_eq!(manager.notifications.len(), 3);
+        assert_eq!(manager.notifications.front().unwrap().message, "msg 2");
+        assert_eq!(manager.notifications.back().unwrap().message, "msg 4");
+    }
+
+    #[test]
+    fn test_hot_reload_manager_clear_old() {
+        let mut manager = HotReloadManager::new();
+        manager.notify("msg".into(), ReloadLevel::Info);
+
+        // Should not clear anything since the notification was just created
+        manager.clear_old(Duration::from_secs(10));
+        assert_eq!(manager.notifications.len(), 1);
+    }
+
+    #[test]
+    fn test_reload_level_eq() {
+        assert_eq!(ReloadLevel::Info, ReloadLevel::Info);
+        assert_ne!(ReloadLevel::Info, ReloadLevel::Error);
     }
 }
