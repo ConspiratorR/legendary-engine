@@ -205,6 +205,20 @@ impl SceneBridge {
             }
         }
 
+        // Find entities with Parent or Children (hierarchy-only)
+        for idx in world.component_entities::<Parent>() {
+            let e = Entity::new(idx, 0);
+            if !entity_set.contains(&e) {
+                entity_set.push(e);
+            }
+        }
+        for idx in world.component_entities::<Children>() {
+            let e = Entity::new(idx, 0);
+            if !entity_set.contains(&e) {
+                entity_set.push(e);
+            }
+        }
+
         // Build index map: Entity index -> scene entity ID
         let mut entity_to_id: HashMap<u32, u64> = HashMap::new();
         for (i, entity) in entity_set.iter().enumerate() {
@@ -308,18 +322,6 @@ impl SceneBridge {
                     } else {
                         world.add_component(parent_entity, Children(vec![child_entity]));
                     }
-                }
-            }
-
-            // Restore children relationship (if this entity has children listed)
-            if !scene_entity.children.is_empty() {
-                let child_entities: Vec<Entity> = scene_entity
-                    .children
-                    .iter()
-                    .filter_map(|&child_id| entities.get(child_id as usize).copied())
-                    .collect();
-                if !child_entities.is_empty() {
-                    world.add_component(child_entity, Children(child_entities));
                 }
             }
         }
@@ -497,5 +499,46 @@ mod tests {
         let entities = bridge.import_world(&loaded, &mut world2).unwrap();
         let t = world2.get::<Transform>(entities[0]).unwrap();
         assert!((t.translation.x - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_roundtrip_hierarchy() {
+        let mut world = World::new();
+        let parent = world.spawn();
+        world.add_component(parent, Transform::from_xyz(0.0, 0.0, 0.0));
+        let child = world.spawn();
+        world.add_component(child, Transform::from_xyz(1.0, 0.0, 0.0));
+        world.add_component(child, Parent(parent));
+        world.add_component(parent, Children(vec![child]));
+
+        let bridge = SceneBridge::new();
+        let scene = bridge.export_world(&world, "HierarchyTest");
+
+        // Verify parent/children are recorded
+        let parent_entity = scene
+            .entities
+            .iter()
+            .find(|e| e.name.contains(&parent.index().to_string()));
+        assert!(parent_entity.is_some());
+        assert!(parent_entity.unwrap().children.len() > 0);
+
+        // Import into new world
+        let mut world2 = World::new();
+        let entities = bridge.import_world(&scene, &mut world2).unwrap();
+
+        // Verify hierarchy is restored
+        assert_eq!(entities.len(), 2);
+
+        // The first entity in scene is parent (index 0), second is child (index 1)
+        let parent_entity_imported = entities[0];
+        let child_entity_imported = entities[1];
+
+        // Verify parent has Children component
+        let children_comp = world2.get::<Children>(parent_entity_imported).unwrap();
+        assert!(children_comp.0.contains(&child_entity_imported));
+
+        // Verify child has Parent component
+        let parent_comp = world2.get::<Parent>(child_entity_imported).unwrap();
+        assert_eq!(parent_comp.0, parent_entity_imported);
     }
 }
