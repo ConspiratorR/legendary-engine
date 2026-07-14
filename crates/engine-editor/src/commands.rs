@@ -183,6 +183,8 @@ pub struct DeleteEntityCommand {
     entity_name: String,
     transform: Option<[f32; 9]>,
     parent: Option<u64>,
+    material: Option<crate::state::MaterialData>,
+    light: Option<crate::state::LightData>,
 }
 
 impl DeleteEntityCommand {
@@ -193,6 +195,8 @@ impl DeleteEntityCommand {
             entity_name: node.map(|n| n.name.clone()).unwrap_or_default(),
             transform: state.node_transforms.get(&entity_id).copied(),
             parent: node.and_then(|n| n.parent),
+            material: state.node_materials.get(&entity_id).cloned(),
+            light: state.node_lights.get(&entity_id).cloned(),
         }
     }
 }
@@ -211,7 +215,12 @@ impl Command for DeleteEntityCommand {
         if let Some(t) = self.transform {
             state.node_transforms.insert(new_id, t);
         }
-        // Update the entity_id to the new ID for future redo
+        if let Some(mat) = &self.material {
+            state.node_materials.insert(new_id, mat.clone());
+        }
+        if let Some(light) = &self.light {
+            state.node_lights.insert(new_id, light.clone());
+        }
         self.entity_id = new_id;
     }
 
@@ -236,6 +245,7 @@ pub struct SculptCommand {
     pub affected_max: (u32, u32),
     pub resolution: u32,
     pub height_snapshot: Vec<f32>,
+    pub post_sculpt_snapshot: Vec<f32>,
     pub description: String,
 }
 
@@ -277,6 +287,7 @@ impl SculptCommand {
             affected_max: (max_i, max_j),
             resolution: res,
             height_snapshot: snapshot,
+            post_sculpt_snapshot: Vec::new(),
             description: "Sculpt Terrain".to_string(),
         }
     }
@@ -285,14 +296,20 @@ impl SculptCommand {
 impl Command for SculptCommand {
     fn execute(&mut self, _state: &mut EditorState) {
         // Brush already applied by the sculpt system.
+        // post_sculpt_snapshot should be set via set_post_sculpt_snapshot()
+        // after the brush is applied but before this command is pushed to the stack.
     }
 
     fn undo(&mut self, _state: &mut EditorState) {
-        // Restoration requires World access — handled by editor integration.
+        // Restore pre-sculpt heightmap.
+        // Requires terrain access — caller must apply height_snapshot to the
+        // Terrain component's heightmap for the affected region.
     }
 
     fn redo(&mut self, _state: &mut EditorState) {
-        // Re-application requires World access — handled by editor integration.
+        // Restore post-sculpt heightmap.
+        // Requires terrain access — caller must apply post_sculpt_snapshot to the
+        // Terrain component's heightmap for the affected region.
     }
 
     fn description(&self) -> String {
