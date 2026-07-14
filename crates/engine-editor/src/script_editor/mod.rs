@@ -17,14 +17,236 @@ use watcher::{VarType, VariableWatcher};
 
 use crate::state::EditorState;
 
+/// Text cursor position (line and column, 0-indexed).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Cursor {
+    pub line: usize,
+    pub col: usize,
+}
+
+/// Text selection range.
+#[derive(Debug, Clone, Copy)]
+pub struct Selection {
+    pub start: Cursor,
+    pub end: Cursor,
+}
+
+/// Text buffer with editing history.
+#[derive(Debug, Clone)]
+pub struct TextBuffer {
+    pub lines: Vec<String>,
+    pub cursor: Cursor,
+    pub selection: Option<Selection>,
+    pub history: Vec<Vec<String>>,
+    pub history_index: usize,
+}
+
+impl TextBuffer {
+    pub fn new(content: &str) -> Self {
+        let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        let history = vec![lines.clone()];
+        Self {
+            lines,
+            cursor: Cursor::default(),
+            selection: None,
+            history,
+            history_index: 0,
+        }
+    }
+
+    pub fn move_left(&mut self) {
+        if self.cursor.col > 0 {
+            self.cursor.col -= 1;
+        } else if self.cursor.line > 0 {
+            self.cursor.line -= 1;
+            self.cursor.col = self.lines[self.cursor.line].len();
+        }
+    }
+
+    pub fn move_right(&mut self) {
+        if self.cursor.line < self.lines.len() {
+            if self.cursor.col < self.lines[self.cursor.line].len() {
+                self.cursor.col += 1;
+            } else if self.cursor.line + 1 < self.lines.len() {
+                self.cursor.line += 1;
+                self.cursor.col = 0;
+            }
+        }
+    }
+
+    pub fn move_up(&mut self) {
+        if self.cursor.line > 0 {
+            self.cursor.line -= 1;
+            self.cursor.col = self.cursor.col.min(self.lines[self.cursor.line].len());
+        }
+    }
+
+    pub fn move_down(&mut self) {
+        if self.cursor.line + 1 < self.lines.len() {
+            self.cursor.line += 1;
+            self.cursor.col = self.cursor.col.min(self.lines[self.cursor.line].len());
+        }
+    }
+
+    pub fn insert_char(&mut self, ch: char) {
+        if self.cursor.line < self.lines.len() {
+            self.lines[self.cursor.line].insert(self.cursor.col, ch);
+            self.cursor.col += 1;
+            self.push_history();
+        }
+    }
+
+    pub fn delete_char(&mut self) {
+        if self.cursor.col > 0 {
+            self.lines[self.cursor.line].remove(self.cursor.col - 1);
+            self.cursor.col -= 1;
+            self.push_history();
+        } else if self.cursor.line > 0 {
+            let current = self.lines.remove(self.cursor.line);
+            self.cursor.line -= 1;
+            self.cursor.col = self.lines[self.cursor.line].len();
+            self.lines[self.cursor.line].push_str(&current);
+            self.push_history();
+        }
+    }
+
+    pub fn insert_newline(&mut self) {
+        if self.cursor.line < self.lines.len() {
+            let remaining = self.lines[self.cursor.line][self.cursor.col..].to_string();
+            self.lines[self.cursor.line].truncate(self.cursor.col);
+            self.cursor.line += 1;
+            self.cursor.col = 0;
+            self.lines.insert(self.cursor.line, remaining);
+            self.push_history();
+        }
+    }
+
+    fn push_history(&mut self) {
+        self.history.truncate(self.history_index + 1);
+        self.history.push(self.lines.clone());
+        self.history_index = self.history.len() - 1;
+    }
+
+    pub fn undo(&mut self) {
+        if self.history_index > 0 {
+            self.history_index -= 1;
+            self.lines = self.history[self.history_index].clone();
+        }
+    }
+
+    pub fn redo(&mut self) {
+        if self.history_index + 1 < self.history.len() {
+            self.history_index += 1;
+            self.lines = self.history[self.history_index].clone();
+        }
+    }
+
+    pub fn select_all(&mut self) {
+        if !self.lines.is_empty() {
+            self.selection = Some(Selection {
+                start: Cursor { line: 0, col: 0 },
+                end: Cursor {
+                    line: self.lines.len() - 1,
+                    col: self.lines.last().map(|l| l.len()).unwrap_or(0),
+                },
+            });
+        }
+    }
+
+    pub fn copy_selection(&self) -> Option<String> {
+        let sel = self.selection?;
+        let (start, end) = if less_than(sel.start, sel.end) {
+            (sel.start, sel.end)
+        } else {
+            (sel.end, sel.start)
+        };
+
+        let mut result = String::new();
+        for i in start.line..=end.line {
+            let line = &self.lines[i];
+            if i == start.line && i == end.line {
+                result.push_str(&line[start.col..end.col]);
+            } else if i == start.line {
+                result.push_str(&line[start.col..]);
+                result.push('\n');
+            } else if i == end.line {
+                result.push_str(&line[..end.col]);
+            } else {
+                result.push_str(line);
+                result.push('\n');
+            }
+        }
+        Some(result)
+    }
+
+    pub fn cut_selection(&mut self) -> Option<String> {
+        let text = self.copy_selection()?;
+        self.delete_selection();
+        Some(text)
+    }
+
+    pub fn paste(&mut self, text: &str) {
+        self.delete_selection();
+        for (i, line) in text.lines().enumerate() {
+            if i == 0 {
+                self.lines[self.cursor.line].insert_str(self.cursor.col, line);
+                self.cursor.col += line.len();
+            } else {
+                let remaining = self.lines[self.cursor.line][self.cursor.col..].to_string();
+                self.lines[self.cursor.line].truncate(self.cursor.col);
+                self.cursor.line += 1;
+                self.cursor.col = 0;
+                self.lines.insert(self.cursor.line, line.to_string());
+                self.lines[self.cursor.line].push_str(&remaining);
+                self.cursor.col = line.len();
+            }
+        }
+        self.selection = None;
+        self.push_history();
+    }
+
+    fn delete_selection(&mut self) {
+        if let Some(sel) = self.selection.take() {
+            let (start, end) = if less_than(sel.start, sel.end) {
+                (sel.start, sel.end)
+            } else {
+                (sel.end, sel.start)
+            };
+
+            // Delete characters from start to end
+            if start.line == end.line {
+                // Same line
+                self.lines[start.line].replace_range(start.col..end.col, "");
+            } else {
+                // Multiple lines
+                let start_line = self.lines[start.line][..start.col].to_string();
+                let end_line = self.lines[end.line][end.col..].to_string();
+                // Remove lines from start.line+1 to end.line (inclusive)
+                self.lines.drain(start.line + 1..=end.line);
+                self.lines[start.line] = format!("{}{}", start_line, end_line);
+            }
+            self.cursor = start;
+            self.push_history();
+        }
+    }
+
+    /// Convert the buffer content to a single string.
+    pub fn to_string(&self) -> String {
+        self.lines.join("\n")
+    }
+}
+
+fn less_than(a: Cursor, b: Cursor) -> bool {
+    a.line < b.line || (a.line == b.line && a.col < b.col)
+}
+
 #[derive(Debug, Clone)]
 pub struct OpenScript {
     pub path: PathBuf,
     pub name: String,
-    pub content: String,
+    pub buffer: TextBuffer,
     pub language: ScriptLanguage,
     pub modified: bool,
-    pub cursor_line: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -83,10 +305,9 @@ impl ScriptEditorState {
         self.open_scripts.push(OpenScript {
             path,
             name: name.to_string(),
-            content: content.to_string(),
+            buffer: TextBuffer::new(content),
             language,
             modified: false,
-            cursor_line: 0,
         });
         self.active_script = self.open_scripts.len() - 1;
     }
@@ -498,11 +719,12 @@ fn draw_code_area(
     let font_id = FontId::monospace(font_sz);
 
     // Get active script data
-    let (mut content, language, paused_line) = {
+    let (content_str, language, paused_line) = {
         let script = &state.script_editor.open_scripts[state.script_editor.active_script];
         let paused = state.script_editor.breakpoints.paused_line;
-        (script.content.clone(), script.language, paused)
+        (script.buffer.lines.join("\n"), script.language, paused)
     };
+    let mut content = content_str;
 
     // Gutter background
     let gutter_rect = Rect::from_min_size(
@@ -613,42 +835,98 @@ fn draw_code_area(
                 let mut content_changed = false;
                 ui.ctx().input(|i| {
                     for event in &i.events {
-                        if let egui::Event::Text(text) = event {
-                            content.push_str(text);
-                            content_changed = true;
-                        }
-                        if let egui::Event::Key {
-                            key: egui::Key::Backspace,
-                            pressed: true,
-                            ..
-                        } = event
-                        {
-                            content.pop();
-                            content_changed = true;
-                        }
-                        if let egui::Event::Key {
-                            key: egui::Key::Enter,
-                            pressed: true,
-                            ..
-                        } = event
-                        {
-                            content.push('\n');
-                            content_changed = true;
-                        }
-                        if let egui::Event::Key {
-                            key: egui::Key::Tab,
-                            pressed: true,
-                            ..
-                        } = event
-                        {
-                            content.push_str("    ");
-                            content_changed = true;
+                        match event {
+                            egui::Event::Text(text) => {
+                                for ch in text.chars() {
+                                    state.script_editor.open_scripts
+                                        [state.script_editor.active_script]
+                                        .buffer
+                                        .insert_char(ch);
+                                    content_changed = true;
+                                }
+                            }
+                            egui::Event::Key {
+                                key: egui::Key::Backspace,
+                                pressed: true,
+                                ..
+                            } => {
+                                state.script_editor.open_scripts[state.script_editor.active_script]
+                                    .buffer
+                                    .delete_char();
+                                content_changed = true;
+                            }
+                            egui::Event::Key {
+                                key: egui::Key::Enter,
+                                pressed: true,
+                                ..
+                            } => {
+                                state.script_editor.open_scripts[state.script_editor.active_script]
+                                    .buffer
+                                    .insert_newline();
+                                content_changed = true;
+                            }
+                            egui::Event::Key {
+                                key: egui::Key::Tab,
+                                pressed: true,
+                                ..
+                            } => {
+                                // Insert 4 spaces
+                                for _ in 0..4 {
+                                    state.script_editor.open_scripts
+                                        [state.script_editor.active_script]
+                                        .buffer
+                                        .insert_char(' ');
+                                }
+                                content_changed = true;
+                            }
+                            egui::Event::Key {
+                                key: egui::Key::ArrowLeft,
+                                pressed: true,
+                                ..
+                            } => {
+                                state.script_editor.open_scripts[state.script_editor.active_script]
+                                    .buffer
+                                    .move_left();
+                            }
+                            egui::Event::Key {
+                                key: egui::Key::ArrowRight,
+                                pressed: true,
+                                ..
+                            } => {
+                                state.script_editor.open_scripts[state.script_editor.active_script]
+                                    .buffer
+                                    .move_right();
+                            }
+                            egui::Event::Key {
+                                key: egui::Key::ArrowUp,
+                                pressed: true,
+                                ..
+                            } => {
+                                state.script_editor.open_scripts[state.script_editor.active_script]
+                                    .buffer
+                                    .move_up();
+                            }
+                            egui::Event::Key {
+                                key: egui::Key::ArrowDown,
+                                pressed: true,
+                                ..
+                            } => {
+                                state.script_editor.open_scripts[state.script_editor.active_script]
+                                    .buffer
+                                    .move_down();
+                            }
+                            _ => {}
                         }
                     }
                 });
                 if content_changed {
-                    state.script_editor.open_scripts[state.script_editor.active_script].content =
-                        content.clone();
+                    // Update content string from buffer for syntax highlighting
+                    content = state.script_editor.open_scripts[state.script_editor.active_script]
+                        .buffer
+                        .lines
+                        .join("\n");
+                    state.script_editor.open_scripts[state.script_editor.active_script].modified =
+                        true;
                 }
             }
             // Render syntax-highlighted code
@@ -1007,6 +1285,6 @@ mod tests {
         state.open_script("test.lua", "v1");
         state.open_script("test.lua", "v2");
         assert_eq!(state.open_scripts.len(), 2);
-        assert_eq!(state.open_scripts[1].content, "v1");
+        assert_eq!(state.open_scripts[1].buffer.lines.join("\n"), "v1");
     }
 }
