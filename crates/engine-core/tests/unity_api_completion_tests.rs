@@ -183,7 +183,11 @@ fn test_force_mode_velocity_change() {
 fn test_add_force_at_position() {
     let mut rb = Rigidbody::default();
     rb.mass = 1.0;
-    rb.AddForceAtPosition(Vec3::new(0.0, 10.0, 0.0), Vec3::new(1.0, 0.0, 0.0), Vec3::ZERO);
+    rb.AddForceAtPosition(
+        Vec3::new(0.0, 10.0, 0.0),
+        Vec3::new(1.0, 0.0, 0.0),
+        Vec3::ZERO,
+    );
     assert!((rb.velocity.y - 10.0).abs() < 0.001);
     assert!(rb.angular_velocity.z.abs() > 0.0);
 }
@@ -276,30 +280,60 @@ fn test_monobehaviour_new_callbacks() {
     }
 
     impl Component for TestBehaviour {
-        fn as_any(&self) -> &dyn std::any::Any { self }
-        fn as_any_mut(&mut self) -> &mut dyn std::any::Any { self }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
     }
 
     impl Behaviour for TestBehaviour {
-        fn Enabled(&self) -> bool { true }
+        fn Enabled(&self) -> bool {
+            true
+        }
         fn SetEnabled(&mut self, _enabled: bool) {}
-        fn IsActiveAndEnabled(&self) -> bool { true }
+        fn IsActiveAndEnabled(&self) -> bool {
+            true
+        }
         fn set_gameobject(&mut self, _handle: GameObjectHandle) {}
-        fn gameobject_handle(&self) -> Option<GameObjectHandle> { None }
+        fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+            None
+        }
     }
 
     impl MonoBehaviour for TestBehaviour {
-        fn TypeName(&self) -> &str { "TestBehaviour" }
+        fn TypeName(&self) -> &str {
+            "TestBehaviour"
+        }
 
-        fn OnValidate(&mut self) { self.validated = true; }
-        fn Reset(&mut self) { self.reset_called = true; }
-        fn OnTransformParentChanged(&mut self) { self.parent_changed = true; }
-        fn OnTransformChildrenChanged(&mut self) { self.children_changed = true; }
-        fn OnJointBreak(&mut self, _breakForce: f32) { self.joint_broken = true; }
-        fn OnRenderObject(&mut self) { self.rendered = true; }
-        fn OnWillRenderObject(&mut self) { self.will_render = true; }
-        fn OnPreRender(&mut self) { self.pre_render = true; }
-        fn OnPostRender(&mut self) { self.post_render = true; }
+        fn OnValidate(&mut self) {
+            self.validated = true;
+        }
+        fn Reset(&mut self) {
+            self.reset_called = true;
+        }
+        fn OnTransformParentChanged(&mut self) {
+            self.parent_changed = true;
+        }
+        fn OnTransformChildrenChanged(&mut self) {
+            self.children_changed = true;
+        }
+        fn OnJointBreak(&mut self, _breakForce: f32) {
+            self.joint_broken = true;
+        }
+        fn OnRenderObject(&mut self) {
+            self.rendered = true;
+        }
+        fn OnWillRenderObject(&mut self) {
+            self.will_render = true;
+        }
+        fn OnPreRender(&mut self) {
+            self.pre_render = true;
+        }
+        fn OnPostRender(&mut self) {
+            self.post_render = true;
+        }
     }
 
     let mut tb = TestBehaviour {

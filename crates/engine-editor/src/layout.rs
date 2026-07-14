@@ -6,10 +6,10 @@
 
 use crate::state::{EditorState, LightData, MaterialData, PlayState, ToolType};
 use egui::{Color32, Rounding};
-use engine_ui::{Gui, GuiSkin};
-use engine_ui::imgui::panels::{Panels, Side};
 use engine_ui::imgui::gui::GUI;
 use engine_ui::imgui::gui_content::GUIContent;
+use engine_ui::imgui::panels::{Panels, Side};
+use engine_ui::{Gui, GuiSkin};
 use std::path::PathBuf;
 
 #[cfg(feature = "native-dialogs")]
@@ -71,22 +71,30 @@ pub fn frame(
 
     // Left panel (hierarchy)
     if state.show_left_panel {
-        panels.SidePanel(Side::Left, "hierarchy").Resizable(true).DefaultWidth(250.0).Show(|ui| {
-            ui.set_min_width(ui.max_rect().width());
-            let rect = ui.max_rect();
-            let mut gui = Gui::new(ui, skin);
-            crate::hierarchy::draw(state, &mut gui, rect);
-        });
+        panels
+            .SidePanel(Side::Left, "hierarchy")
+            .Resizable(true)
+            .DefaultWidth(250.0)
+            .Show(|ui| {
+                ui.set_min_width(ui.max_rect().width());
+                let rect = ui.max_rect();
+                let mut gui = Gui::new(ui, skin);
+                crate::hierarchy::draw(state, &mut gui, rect);
+            });
     }
 
     // Right panel (inspector)
     if state.show_right_panel {
-        panels.SidePanel(Side::Right, "inspector").Resizable(true).DefaultWidth(300.0).Show(|ui| {
-            ui.set_min_width(ui.max_rect().width());
-            let rect = ui.max_rect();
-            let mut gui = Gui::new(ui, skin);
-            crate::inspector::draw(state, &mut gui, rect);
-        });
+        panels
+            .SidePanel(Side::Right, "inspector")
+            .Resizable(true)
+            .DefaultWidth(300.0)
+            .Show(|ui| {
+                ui.set_min_width(ui.max_rect().width());
+                let rect = ui.max_rect();
+                let mut gui = Gui::new(ui, skin);
+                crate::inspector::draw(state, &mut gui, rect);
+            });
     }
 
     // Central viewport

@@ -1486,6 +1486,7 @@ dependencies = [
  "engine-ui",
  "engine-window",
  "env_logger",
+ "image",
  "log",
  "mlua",
  "notify 6.1.1",

@@ -29,7 +29,9 @@ impl Mathf {
     }
 
     pub fn InverseLerp(a: f32, b: f32, value: f32) -> f32 {
-        if (a - b).abs() < Self::Epsilon { return 0.0; }
+        if (a - b).abs() < Self::Epsilon {
+            return 0.0;
+        }
         ((value - a) / (b - a)).clamp(0.0, 1.0)
     }
 
@@ -41,17 +43,30 @@ impl Mathf {
 
     pub fn MoveTowards(current: f32, target: f32, max_delta: f32) -> f32 {
         let diff = target - current;
-        if diff.abs() <= max_delta { target }
-        else { current + diff.signum() * max_delta }
+        if diff.abs() <= max_delta {
+            target
+        } else {
+            current + diff.signum() * max_delta
+        }
     }
 
     pub fn MoveTowardsAngle(current: f32, target: f32, max_delta: f32) -> f32 {
         let delta = Self::DeltaAngle(current, target);
-        if -max_delta < delta && delta < max_delta { target }
-        else { Self::MoveTowards(current, target, max_delta) }
+        if -max_delta < delta && delta < max_delta {
+            target
+        } else {
+            Self::MoveTowards(current, target, max_delta)
+        }
     }
 
-    pub fn SmoothDamp(current: f32, target: f32, velocity: &mut f32, smooth_time: f32, max_speed: f32, delta_time: f32) -> f32 {
+    pub fn SmoothDamp(
+        current: f32,
+        target: f32,
+        velocity: &mut f32,
+        smooth_time: f32,
+        max_speed: f32,
+        delta_time: f32,
+    ) -> f32 {
         let smooth_time = smooth_time.max(0.0001);
         let omega = 2.0 / smooth_time;
         let x = omega * delta_time;
@@ -92,14 +107,22 @@ impl Mathf {
     }
 
     pub fn ClosestPowerOfTwo(value: i32) -> i32 {
-        if value <= 1 { return 1; }
+        if value <= 1 {
+            return 1;
+        }
         let upper = Self::NextPowerOfTwo(value);
         let lower = upper >> 1;
-        if (value - lower).abs() <= (upper - value).abs() { lower } else { upper }
+        if (value - lower).abs() <= (upper - value).abs() {
+            lower
+        } else {
+            upper
+        }
     }
 
     pub fn NextPowerOfTwo(value: i32) -> i32 {
-        if value <= 0 { return 1; }
+        if value <= 0 {
+            return 1;
+        }
         let mut v = value;
         v -= 1;
         v |= v >> 1;
@@ -115,12 +138,18 @@ impl Mathf {
     }
 
     pub fn GammaToLinearSpace(value: f32) -> f32 {
-        if value <= 0.04045 { value / 12.92 }
-        else { ((value + 0.055) / 1.055).powf(2.4) }
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
     }
 
     pub fn LinearToGammaSpace(value: f32) -> f32 {
-        if value <= 0.0031308 { value * 12.92 }
-        else { 1.055 * value.powf(1.0 / 2.4) - 0.055 }
+        if value <= 0.0031308 {
+            value * 12.92
+        } else {
+            1.055 * value.powf(1.0 / 2.4) - 0.055
+        }
     }
 }

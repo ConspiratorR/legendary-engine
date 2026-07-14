@@ -229,7 +229,6 @@ impl TextBuffer {
             self.push_history();
         }
     }
-
 }
 
 impl std::fmt::Display for TextBuffer {

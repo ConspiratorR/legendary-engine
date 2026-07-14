@@ -201,8 +201,8 @@ impl FileWatcher {
     /// Creates a new `FileWatcher` with a 500ms debounce delay.
     pub fn new() -> anyhow::Result<Self> {
         let (tx, receiver) = std::sync::mpsc::channel();
-        let debouncer =
-            new_debouncer(Duration::from_millis(500), tx).context("Failed to create file debouncer")?;
+        let debouncer = new_debouncer(Duration::from_millis(500), tx)
+            .context("Failed to create file debouncer")?;
 
         Ok(Self {
             _debouncer: debouncer,
