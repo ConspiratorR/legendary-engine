@@ -230,9 +230,17 @@ impl TextBuffer {
         }
     }
 
-    /// Convert the buffer content to a single string.
-    pub fn to_string(&self) -> String {
-        self.lines.join("\n")
+}
+
+impl std::fmt::Display for TextBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (i, line) in self.lines.iter().enumerate() {
+            if i > 0 {
+                writeln!(f)?;
+            }
+            write!(f, "{}", line)?;
+        }
+        Ok(())
     }
 }
 
@@ -884,36 +892,44 @@ fn draw_code_area(
                                 pressed: true,
                                 ..
                             } => {
-                                state.script_editor.open_scripts[state.script_editor.active_script]
-                                    .buffer
-                                    .move_left();
+                                let buf = &mut state.script_editor.open_scripts
+                                    [state.script_editor.active_script]
+                                    .buffer;
+                                buf.selection = None;
+                                buf.move_left();
                             }
                             egui::Event::Key {
                                 key: egui::Key::ArrowRight,
                                 pressed: true,
                                 ..
                             } => {
-                                state.script_editor.open_scripts[state.script_editor.active_script]
-                                    .buffer
-                                    .move_right();
+                                let buf = &mut state.script_editor.open_scripts
+                                    [state.script_editor.active_script]
+                                    .buffer;
+                                buf.selection = None;
+                                buf.move_right();
                             }
                             egui::Event::Key {
                                 key: egui::Key::ArrowUp,
                                 pressed: true,
                                 ..
                             } => {
-                                state.script_editor.open_scripts[state.script_editor.active_script]
-                                    .buffer
-                                    .move_up();
+                                let buf = &mut state.script_editor.open_scripts
+                                    [state.script_editor.active_script]
+                                    .buffer;
+                                buf.selection = None;
+                                buf.move_up();
                             }
                             egui::Event::Key {
                                 key: egui::Key::ArrowDown,
                                 pressed: true,
                                 ..
                             } => {
-                                state.script_editor.open_scripts[state.script_editor.active_script]
-                                    .buffer
-                                    .move_down();
+                                let buf = &mut state.script_editor.open_scripts
+                                    [state.script_editor.active_script]
+                                    .buffer;
+                                buf.selection = None;
+                                buf.move_down();
                             }
                             _ => {}
                         }
@@ -1286,5 +1302,66 @@ mod tests {
         state.open_script("test.lua", "v2");
         assert_eq!(state.open_scripts.len(), 2);
         assert_eq!(state.open_scripts[1].buffer.lines.join("\n"), "v1");
+    }
+}
+
+#[cfg(test)]
+mod text_buffer_tests {
+    use super::*;
+
+    #[test]
+    fn test_insert_char() {
+        let mut buf = TextBuffer::new("hello");
+        buf.cursor.col = 5;
+        buf.insert_char('!');
+        assert_eq!(buf.lines[0], "hello!");
+        assert_eq!(buf.cursor.col, 6);
+    }
+
+    #[test]
+    fn test_delete_char() {
+        let mut buf = TextBuffer::new("hello");
+        buf.cursor.col = 3;
+        buf.delete_char();
+        assert_eq!(buf.lines[0], "helo");
+        assert_eq!(buf.cursor.col, 2);
+    }
+
+    #[test]
+    fn test_insert_newline() {
+        let mut buf = TextBuffer::new("helloworld");
+        buf.cursor.col = 5;
+        buf.insert_newline();
+        assert_eq!(buf.lines.len(), 2);
+        assert_eq!(buf.lines[0], "hello");
+        assert_eq!(buf.lines[1], "world");
+    }
+
+    #[test]
+    fn test_undo_redo() {
+        let mut buf = TextBuffer::new("hello");
+        buf.cursor.col = 5;
+        buf.insert_char('!');
+        assert_eq!(buf.lines[0], "hello!");
+        buf.undo();
+        assert_eq!(buf.lines[0], "hello");
+        buf.redo();
+        assert_eq!(buf.lines[0], "hello!");
+    }
+
+    #[test]
+    fn test_move_left_right() {
+        let mut buf = TextBuffer::new("hello");
+        buf.move_right();
+        assert_eq!(buf.cursor.col, 1);
+        buf.move_left();
+        assert_eq!(buf.cursor.col, 0);
+    }
+
+    #[test]
+    fn test_select_all() {
+        let mut buf = TextBuffer::new("hello\nworld");
+        buf.select_all();
+        assert!(buf.selection.is_some());
     }
 }
