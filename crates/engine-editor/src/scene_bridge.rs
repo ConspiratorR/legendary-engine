@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use engine_ecs::entity::Entity;
 use engine_ecs::world::World;
 use engine_math::{Quat, Vec3};
+use engine_scene::hierarchy::{Children, Parent};
 use engine_scene::transform::Transform;
 use std::collections::HashMap;
 
@@ -204,6 +205,12 @@ impl SceneBridge {
             }
         }
 
+        // Build index map: Entity index -> scene entity ID
+        let mut entity_to_id: HashMap<u32, u64> = HashMap::new();
+        for (i, entity) in entity_set.iter().enumerate() {
+            entity_to_id.insert(entity.index(), i as u64);
+        }
+
         for entity in entity_set {
             let mut scene_entity =
                 SceneEntity::new(entity_id, format!("Entity_{}", entity.index()));
@@ -215,6 +222,23 @@ impl SceneBridge {
                     rotation: [t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w],
                     scale: [t.scale.x, t.scale.y, t.scale.z],
                 };
+            }
+
+            // Extract parent-child relationships from hierarchy components
+            if let Some(parent_comp) = world.get::<Parent>(entity) {
+                let parent_entity = parent_comp.0;
+                if let Some(&parent_id) = entity_to_id.get(&parent_entity.index()) {
+                    scene_entity.parent = Some(parent_id);
+                }
+            }
+
+            if let Some(children_comp) = world.get::<Children>(entity) {
+                let child_ids: Vec<u64> = children_comp
+                    .0
+                    .iter()
+                    .filter_map(|child| entity_to_id.get(&child.index()).copied())
+                    .collect();
+                scene_entity.children = child_ids;
             }
 
             // Extract all registered components
@@ -238,6 +262,7 @@ impl SceneBridge {
     pub fn import_world(&self, scene: &Scene, world: &mut World) -> Result<Vec<Entity>> {
         let mut entities: Vec<Entity> = Vec::new();
 
+        // Phase 1: Create all entities and add components
         for scene_entity in &scene.entities {
             let entity = world.spawn();
 
@@ -260,6 +285,43 @@ impl SceneBridge {
             }
 
             entities.push(entity);
+        }
+
+        // Phase 2: Restore parent-child relationships
+        for (i, scene_entity) in scene.entities.iter().enumerate() {
+            if i >= entities.len() {
+                continue;
+            }
+            let child_entity = entities[i];
+
+            // Restore parent relationship
+            if let Some(parent_id) = scene_entity.parent {
+                if (parent_id as usize) < entities.len() {
+                    let parent_entity = entities[parent_id as usize];
+                    world.add_component(child_entity, Parent(parent_entity));
+
+                    // Also update parent's Children component
+                    if let Some(children) = world.get_mut::<Children>(parent_entity) {
+                        if !children.0.contains(&child_entity) {
+                            children.0.push(child_entity);
+                        }
+                    } else {
+                        world.add_component(parent_entity, Children(vec![child_entity]));
+                    }
+                }
+            }
+
+            // Restore children relationship (if this entity has children listed)
+            if !scene_entity.children.is_empty() {
+                let child_entities: Vec<Entity> = scene_entity
+                    .children
+                    .iter()
+                    .filter_map(|&child_id| entities.get(child_id as usize).copied())
+                    .collect();
+                if !child_entities.is_empty() {
+                    world.add_component(child_entity, Children(child_entities));
+                }
+            }
         }
 
         Ok(entities)
