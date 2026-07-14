@@ -1,11 +1,31 @@
-//! 3-D viewport panel — renders the scene preview, toolbar, camera controls,
-//! and delegates gizmo interaction to [`crate::gizmo`].
+//! 3D viewport with tabs (Scene/Game/Physics), toolbar, camera controls.
+//!
+//! Unity Reference: https://docs.unity3d.com/ScriptReference/SceneView.html
+//!
+//! # IMGUI Architecture
+//!
+//! This module follows Unity's IMGUI (Immediate Mode GUI) pattern:
+//! - Layout is computed every frame from current state
+//! - Widgets are drawn immediately and return interaction results
+//! - No retained widget tree — the UI is rebuilt each frame
+//!
+//! Key IMGUI patterns used here:
+//! - `gui.tab()` — tab selector (Unity: GUILayout.Toolbar)
+//! - `gui.tool_button()` — toggle button (Unity: GUILayout.Toolbar)
+//! - `gui.ui.painter_at(rect)` — low-level drawing (Unity: Handles.DrawRectangle)
+//! - `gui.ui.interact(rect, id, Sense::click())` — input capture (Unity: Event.current.mousePosition)
+//!
+//! The `Gui` wrapper from `engine_ui` provides skinned IMGUI widgets.
+//! Direct `painter_at`/`interact` calls handle viewport-specific rendering
+//! that goes beyond standard widget layouts.
 
 use crate::state::EditorState;
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use engine_math::{Mat4, Vec3};
 use engine_ui::Gui;
 
+// --- IMGUI Helper: Orthographic projection matrix ---
+// Equivalent to Unity's Matrix4x4.Ortho for 2D/orthographic viewport rendering.
 fn ortho_projection(aspect: f32) -> Mat4 {
     let size = 10.0;
     Mat4::orthographic_rh(-size * aspect, size * aspect, -size, size, -1000.0, 1000.0)
@@ -19,6 +39,10 @@ fn view_matrix_for(target: [f32; 3], up: [f32; 3], position: [f32; 3]) -> Mat4 {
     )
 }
 
+// --- IMGUI: Viewport Header ---
+// Draws the tab bar (Scene/Game/Physics) and toolbar buttons.
+// This is pure IMGUI: layout is computed from state, widgets are drawn immediately.
+// Equivalent to Unity's OnGUI() method in a custom EditorWindow.
 fn draw_viewport_header(
     state: &mut EditorState,
     gui: &mut Gui,
@@ -48,6 +72,8 @@ fn draw_viewport_header(
     let tab_pad = 12.0 * w_scale;
     let tab_font = 12.0 * h_scale;
     let tab_gap = 16.0 * w_scale;
+    // IMGUI Tab Bar: iterate tabs, compute rect, check interaction
+    // Unity equivalent: GUILayout.Toolbar with GUILayoutOption width
     let mut tx = rect.left() + 12.0 * w_scale;
     let tabs = &["场景", "游戏", "物理"];
     for (i, label) in tabs.iter().enumerate() {
@@ -90,6 +116,8 @@ fn draw_viewport_header(
         tx += text_w + tab_pad * 2.0 + tab_gap;
     }
 
+    // IMGUI Tool Buttons: right-aligned toolbar with toggle state
+    // Unity equivalent: GUILayout.Toolbar with active state management
     let tool_btn = 24.0 * h_scale;
     let tool_gap = 4.0 * w_scale;
     let tool_font = 12.0 * h_scale;
@@ -142,6 +170,10 @@ fn draw_viewport_header(
     }
 }
 
+// --- IMGUI: Main Viewport Entry Point ---
+// Called every frame to draw the 3D viewport panel.
+// Handles layout splitting (Single/Horizontal/Vertical/Quad) and delegates
+// to draw_single_viewport for each viewport region.
 pub fn draw(
     state: &mut EditorState,
     gui: &mut Gui,
@@ -284,6 +316,10 @@ pub fn draw(
     }
 }
 
+// --- IMGUI: Single Viewport Render ---
+// Renders one viewport region: 3D scene, overlays, axis labels, and HUD.
+// This is the core IMGUI render loop for a single viewport panel.
+// Unity equivalent: OnGUI() in a SceneView with Handles.DrawCamera.
 #[allow(clippy::too_many_arguments)]
 fn draw_single_viewport(
     state: &mut EditorState,
@@ -419,10 +455,13 @@ fn draw_single_viewport(
                 }
                 if let Some(t) = state.node_transforms.get(&node.id) {
                     let pos = [t[0], t[1], t[2]];
-                    let is_dynamic = state
-                        .node_physics
-                        .get(&node.id)
-                        .map(|(bt, _)| bt == "Dynamic")
+                    let is_dynamic = state.GetHandle(node.id)
+                        .map(|h| {
+                            state.world.HasComponent::<engine_core::components::Rigidbody>(h)
+                                && state.world.GetComponent::<engine_core::components::Rigidbody>(h)
+                                    .map(|rb| !rb.is_kinematic && rb.mass > 0.0)
+                                    .unwrap_or(false)
+                        })
                         .unwrap_or(false);
                     let c = if is_dynamic {
                         dynamic_color
@@ -440,27 +479,36 @@ fn draw_single_viewport(
                         overlay.line(pos, [pos[0], pos[1] - 2.0, pos[2]], [1.0, 0.3, 0.0, 1.0]);
                     }
                     // Show collider type label position in Physics tab
-                    if state.active_viewport_tab == 2
-                        && let Some((_, collider)) = state.node_physics.get(&node.id)
-                    {
-                        let collider_color = match collider.as_str() {
-                            "Box" => [0.0, 0.8, 1.0, 0.8],
-                            "Sphere" => [1.0, 0.5, 0.0, 0.8],
-                            "Capsule" => [0.5, 1.0, 0.5, 0.8],
-                            _ => [0.5, 0.5, 0.5, 0.6],
-                        };
-                        // Draw collider wireframe based on type
-                        match collider.as_str() {
-                            "Sphere" => {
-                                overlay.selection_sphere(pos, 0.6, collider_color);
-                            }
-                            _ => {
-                                // Box collider (default)
-                                overlay.aabb(
-                                    [pos[0] - 0.5, pos[1] - 0.5, pos[2] - 0.5],
-                                    [pos[0] + 0.5, pos[1] + 0.5, pos[2] + 0.5],
-                                    collider_color,
-                                );
+                    if state.active_viewport_tab == 2 {
+                        if let Some(handle) = state.GetHandle(node.id) {
+                            let collider_type = if state.world.HasComponent::<engine_core::components::BoxCollider>(handle) {
+                                "Box"
+                            } else if state.world.HasComponent::<engine_core::components::SphereCollider>(handle) {
+                                "Sphere"
+                            } else if state.world.HasComponent::<engine_core::components::CapsuleCollider>(handle) {
+                                "Capsule"
+                            } else {
+                                ""
+                            };
+                            if !collider_type.is_empty() {
+                                let collider_color = match collider_type {
+                                    "Box" => [0.0, 0.8, 1.0, 0.8],
+                                    "Sphere" => [1.0, 0.5, 0.0, 0.8],
+                                    "Capsule" => [0.5, 1.0, 0.5, 0.8],
+                                    _ => [0.5, 0.5, 0.5, 0.6],
+                                };
+                                match collider_type {
+                                    "Sphere" => {
+                                        overlay.selection_sphere(pos, 0.6, collider_color);
+                                    }
+                                    _ => {
+                                        overlay.aabb(
+                                            [pos[0] - 0.5, pos[1] - 0.5, pos[2] - 0.5],
+                                            [pos[0] + 0.5, pos[1] + 0.5, pos[2] + 0.5],
+                                            collider_color,
+                                        );
+                                    }
+                                }
                             }
                         }
                     }
@@ -473,7 +521,8 @@ fn draw_single_viewport(
         let target_view = vp_renderer.target_view(viewport_type).unwrap();
         vp_renderer.render_overlays(target_view, &overlay, renderer);
 
-        // Register viewport texture with egui and display it
+        // IMGUI: Register render texture and display in viewport
+        // Unity equivalent: GUI.DrawTexture(rect, renderTexture)
         let tex_id = if let Some(id) = vp_renderer.egui_texture_id(viewport_type) {
             id
         } else {
@@ -493,7 +542,8 @@ fn draw_single_viewport(
         .paint_at(gui.ui, img_rect);
     }
 
-    // Axis label indicators (HUD overlay)
+    // IMGUI: Axis label indicators (X/Y/Z HUD overlay)
+    // Unity equivalent: Handles.DrawGizmo with axis labels
     let axes = [
         ("X", Color32::from_rgb(255, 107, 107)),
         ("Y", Color32::from_rgb(46, 213, 115)),
@@ -568,6 +618,9 @@ fn draw_single_viewport(
     handle_camera_input(state, gui, canvas_rect);
 }
 
+// --- IMGUI: Transform Overlay ---
+// Draws the position/rotation/scale readout at the bottom of the viewport.
+// Unity equivalent: Handles.BeginGUI() / Handles.EndGUI() with GUI.Label.
 fn draw_transform_overlay(
     state: &EditorState,
     painter: &egui::Painter,
@@ -627,6 +680,10 @@ fn draw_transform_overlay(
     }
 }
 
+// --- IMGUI: Camera Input Handling ---
+// Processes mouse/keyboard input for camera orbit, pan, zoom, and gizmo manipulation.
+// This is pure IMGUI input handling: check Event.current each frame.
+// Unity equivalent: HandleUtility.AddDefaultControl + SceneView camera control.
 fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect) {
     let ctx = gui.ui.ctx();
 
@@ -673,7 +730,8 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         .ui
         .interact(canvas_rect, canvas_id, egui::Sense::click_and_drag());
 
-    // Gizmo drag: translate/rotate/scale selected object with left-click
+    // IMGUI: Gizmo drag (left-click to translate/rotate/scale)
+    // Unity equivalent: Handles.PositionHandle / RotationHandle / ScaleHandle
     if (state.active_tool == crate::state::ToolType::Translate
         || state.active_tool == crate::state::ToolType::Rotate
         || state.active_tool == crate::state::ToolType::Scale)
@@ -760,7 +818,8 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         }
     }
 
-    // Left-click selection: click on viewport to select nearest object
+    // IMGUI: Object selection (left-click with distance check)
+    // Unity equivalent: HandleUtility.PickGameObject in OnSceneGUI
     if canvas_response.clicked()
         && state.active_tool != crate::state::ToolType::Terrain
         && state.gizmo_drag_axis.is_none()
@@ -820,25 +879,29 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         }
     }
 
-    // Camera orbit: right-click drag
+    // IMGUI: Camera orbit (right-click drag)
+    // Unity equivalent: SceneView.CameraSettings orbit control
     if canvas_response.dragged_by(egui::PointerButton::Secondary) {
         let delta = canvas_response.drag_delta();
         state.camera.orbit(delta.x, -delta.y);
     }
 
-    // Camera pan: middle-click drag
+    // IMGUI: Camera pan (middle-click drag)
+    // Unity equivalent: SceneView.CameraSettings pan control
     if canvas_response.dragged_by(egui::PointerButton::Middle) {
         let delta = canvas_response.drag_delta();
         state.camera.pan(delta.x, delta.y);
     }
 
-    // Camera zoom: scroll
+    // IMGUI: Camera zoom (scroll wheel)
+    // Unity equivalent: SceneView.CameraSettings zoom control
     let scroll = ctx.input(|i| i.raw_scroll_delta);
     if scroll.y != 0.0 {
         state.camera.zoom(scroll.y / 120.0);
     }
 
-    // Camera controls help overlay (press H to toggle)
+    // IMGUI: Camera help overlay (toggle with H key)
+    // Unity equivalent: Handles.BeginGUI() with GUI.Box and GUI.Label
     if ctx.input(|i| i.key_pressed(egui::Key::H)) {
         state.show_camera_help = !state.show_camera_help;
     }

@@ -1,5 +1,11 @@
-//! Scene hierarchy panel — displays the entity tree with drag-and-drop
-//! selection and right-click context actions.
+//! Scene hierarchy tree (drag-and-drop, context menu).
+//!
+//! Unity Reference: https://docs.unity3d.com/ScriptReference/TreeView.html
+//! Uses IMGUI wrapper (engine_ui) for Unity-style layout.
+//!
+//! IMGUI Pattern: Each frame, `render()` lays out the full tree using
+//! immediate-mode draw calls (painter_at / interact). Selection, drag,
+//! and context-menu state live on `HierarchyPanel` and survive frames.
 
 use crate::state::{ContextMenuState, EditorState};
 use egui::{Color32, FontId, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
@@ -63,10 +69,15 @@ impl HierarchyPanel {
     }
 
     /// Render the entire hierarchy panel.
+    ///
+    /// IMGUI: Draws header bar, search field, tree nodes, and context menu
+    /// each frame. All interaction is captured via `gui.ui.interact()`.
     pub fn render(&mut self, state: &mut EditorState, gui: &mut Gui, rect: Rect) {
+        // Unity-style DPI-aware layout scaling
         let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
         let w_scale = gui.ui.ctx().screen_rect().width() / 1920.0;
 
+        // IMGUI: Paint background and border
         let painter = gui.ui.painter_at(rect);
         painter.add(Shape::rect_filled(
             rect,
@@ -81,6 +92,7 @@ impl HierarchyPanel {
             Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
         ));
 
+        // IMGUI: Header bar with title and action buttons
         let header_h = 36.0 * h_scale;
         let header_rect = Rect::from_min_size(rect.left_top(), Vec2::new(rect.width(), header_h));
         painter.add(Shape::rect_filled(
@@ -192,7 +204,7 @@ impl HierarchyPanel {
                         .copied());
 
                     // Use Unity-style World API to create the object
-                    let (new_id, handle) = if let Some(parent_id) = parent {
+                    let (new_id, _handle) = if let Some(parent_id) = parent {
                         state.CreateGameObjectWithParent(label, parent_id)
                     } else {
                         state.CreateGameObject(label)
@@ -275,6 +287,7 @@ impl HierarchyPanel {
             Stroke::new(1.0_f32, Color32::from_rgb(45, 45, 53)),
         ));
 
+        // IMGUI: Search filter field
         let search_h = 28.0 * h_scale;
         let search_rect = Rect::from_min_size(
             Pos2::new(
@@ -330,6 +343,7 @@ impl HierarchyPanel {
             }
         }
 
+        // IMGUI: Tree content area — lay out all root nodes recursively
         let content_top = search_rect.bottom() + 4.0 * h_scale;
         let content_rect = Rect::from_min_size(
             Pos2::new(rect.left(), content_top),
@@ -378,6 +392,10 @@ impl HierarchyPanel {
     }
 
     /// Render a single game object (node) in the hierarchy tree.
+    ///
+    /// IMGUI: Each node is an interactive rect with icon, label, and
+    /// expand/collapse arrow. Selection and drag state are captured via
+    /// `gui.ui.interact()` each frame.
     #[allow(clippy::too_many_arguments)]
     pub fn render_gameobject(
         &mut self,
@@ -597,6 +615,9 @@ fn is_descendant(tree: &crate::state::SceneTree, target_id: u64, ancestor_id: u6
 }
 
 /// Draw the context menu for the hierarchy panel.
+///
+/// IMGUI: Context menu is a floating overlay drawn each frame while
+/// `state.context_menu` is `Some`. Click outside to dismiss.
 fn draw_context_menu(
     state: &mut EditorState,
     panel: &mut HierarchyPanel,

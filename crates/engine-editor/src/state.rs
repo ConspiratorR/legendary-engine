@@ -571,7 +571,6 @@ pub struct EditorState {
     pub hierarchy_search: String,
     pub node_transforms: HashMap<u64, [f32; 9]>,
     pub node_render: HashMap<u64, (String, String, bool)>,
-    pub node_physics: HashMap<u64, (String, String)>,
     pub node_lights: HashMap<u64, LightData>,
     pub node_materials: HashMap<u64, MaterialData>,
     pub resource_browser: ResourceBrowser,
@@ -586,11 +585,6 @@ pub struct EditorState {
     pub terrain_panel: crate::terrain_panel::TerrainPanel,
     pub terrain_sculpt_active: bool,
     pub terrain_sculpt_screen_pos: Option<(f32, f32)>,
-    pub node_sprites: HashMap<u64, SpriteData>,
-    pub node_particles: HashMap<u64, ParticleData>,
-    pub node_audio: HashMap<u64, AudioData>,
-    pub node_scripts: HashMap<u64, ScriptData>,
-    pub node_tags: HashMap<u64, Vec<String>>,
     pub viewport_layout: crate::viewport_renderer::ViewportLayout,
     /// Current play mode state.
     pub play_state: PlayState,
@@ -761,12 +755,6 @@ impl EditorState {
         node_render.insert(gold_sphere_id, ("Default".into(), "Sphere".into(), true));
         node_render.insert(white_cube_id, ("Default".into(), "Cube".into(), true));
 
-        let mut node_physics = HashMap::new();
-        for i in 1..=9 {
-            node_physics.insert(i, ("Static".into(), "Box".into()));
-        }
-        node_physics.insert(player_id, ("Dynamic".into(), "Box".into()));
-
         let mut node_lights = HashMap::new();
         node_lights.insert(light_id, LightData::default());
 
@@ -810,7 +798,6 @@ impl EditorState {
             hierarchy_search: String::new(),
             node_transforms,
             node_render,
-            node_physics,
             node_lights,
             node_materials,
             resource_browser: ResourceBrowser::new(),
@@ -825,11 +812,6 @@ impl EditorState {
             terrain_panel: crate::terrain_panel::TerrainPanel::default(),
             terrain_sculpt_active: false,
             terrain_sculpt_screen_pos: None,
-            node_sprites: HashMap::new(),
-            node_particles: HashMap::new(),
-            node_audio: HashMap::new(),
-            node_scripts: HashMap::new(),
-            node_tags: HashMap::new(),
             viewport_layout: crate::viewport_renderer::ViewportLayout::default(),
             play_state: PlayState::Editing,
             editor_transform_snapshot: HashMap::new(),
@@ -879,8 +861,6 @@ impl EditorState {
             .insert(node_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
         self.node_render
             .insert(node_id, ("Default".into(), "Cube".into(), true));
-        self.node_physics
-            .insert(node_id, ("Static".into(), "Box".into()));
 
         // Add to scene tree
         self.scene_tree.add_node(name, None);
@@ -913,14 +893,8 @@ impl EditorState {
             // Clean up legacy HashMaps
             self.node_transforms.remove(&node_id);
             self.node_render.remove(&node_id);
-            self.node_physics.remove(&node_id);
             self.node_lights.remove(&node_id);
             self.node_materials.remove(&node_id);
-            self.node_sprites.remove(&node_id);
-            self.node_particles.remove(&node_id);
-            self.node_audio.remove(&node_id);
-            self.node_scripts.remove(&node_id);
-            self.node_tags.remove(&node_id);
 
             // Remove from scene tree
             self.scene_tree.remove_node(node_id);
@@ -1038,14 +1012,18 @@ impl EditorState {
                 },
             );
 
-            // Add RigidBody if physics data exists
-            if let Some((body_type, _collider_type)) = self.node_physics.get(&node.id) {
-                let rb = match body_type.as_str() {
-                    "Dynamic" => engine_physics::RigidBody::new_dynamic(),
-                    "Kinematic" => engine_physics::RigidBody::new_kinematic(),
-                    _ => engine_physics::RigidBody::new_static(),
-                };
-                world.add_component(entity, rb);
+            // Add RigidBody from World API
+            if let Some(handle) = self.GetHandle(node.id) {
+                if let Some(rb) = self.world.GetComponent::<engine_core::components::Rigidbody>(handle) {
+                    let physics_rb = if rb.is_kinematic {
+                        engine_physics::RigidBody::new_kinematic()
+                    } else if rb.use_gravity {
+                        engine_physics::RigidBody::new_dynamic()
+                    } else {
+                        engine_physics::RigidBody::new_static()
+                    };
+                    world.add_component(entity, physics_rb);
+                }
             }
         }
 
@@ -1774,14 +1752,8 @@ impl EditorState {
         self.selected_nodes.clear();
         self.node_transforms.clear();
         self.node_render.clear();
-        self.node_physics.clear();
         self.node_lights.clear();
         self.node_materials.clear();
-        self.node_sprites.clear();
-        self.node_particles.clear();
-        self.node_audio.clear();
-        self.node_scripts.clear();
-        self.node_tags.clear();
         self.loaded_models.clear();
         self.prefabs.clear();
         self.command_manager = CommandManager::default();

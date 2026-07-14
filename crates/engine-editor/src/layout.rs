@@ -1,9 +1,15 @@
 //! Top-level editor layout — composes all panels into the main window with
 //! menu bar, toolbar, and dockable panel regions.
+//!
+//! Unity Reference: https://docs.unity3d.com/ScriptReference/EditorWindow.html
+//! Uses IMGUI wrapper (engine_ui::imgui) for Unity-style layout.
 
 use crate::state::{EditorState, LightData, MaterialData, PlayState, ToolType};
 use egui::{Color32, Rounding};
 use engine_ui::{Gui, GuiSkin};
+use engine_ui::imgui::panels::{Panels, Side};
+use engine_ui::imgui::gui::GUI;
+use engine_ui::imgui::gui_content::GUIContent;
 use std::path::PathBuf;
 
 #[cfg(feature = "native-dialogs")]
@@ -40,60 +46,51 @@ pub fn frame(
     vp_renderer: &mut crate::viewport_renderer::ViewportRenderer,
     egui_state: &mut engine_ui::EguiState,
 ) {
+    // Unity-style Panel layout
+    let panels = Panels::new(ctx);
+
     // Top menu bar
-    egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+    panels.TopPanel("menu_bar").Show(|ui| {
         draw_menu_bar(state, ui);
     });
 
     // Toolbar below menu
-    egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+    panels.TopPanel("toolbar").Show(|ui| {
         draw_toolbar(state, ui);
     });
 
     // Bottom panel (console/logs)
-    egui::TopBottomPanel::bottom("bottom_panel")
-        .resizable(true)
-        .default_height(180.0)
-        .show(ctx, |ui| {
-            draw_bottom_panel(state, ui);
-        });
+    panels.BottomPanel("bottom_panel").Show(|ui| {
+        draw_bottom_panel(state, ui);
+    });
 
     // Status bar
-    egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
+    panels.BottomPanel("status_bar").Show(|ui| {
         draw_status_bar(state, ui);
     });
 
     // Left panel (hierarchy)
     if state.show_left_panel {
-        egui::SidePanel::left("hierarchy")
-            .resizable(true)
-            .default_width(250.0)
-            .show(ctx, |ui| {
-                // Workaround: egui 0.30 SidePanel doesn't force Frame to fill full width
-                // like TopBottomPanel does. Without this, PanelState stores the minimum
-                // width and the panel snaps back every frame.
-                ui.set_min_width(ui.max_rect().width());
-                let rect = ui.max_rect();
-                let mut gui = Gui::new(ui, skin);
-                crate::hierarchy::draw(state, &mut gui, rect);
-            });
+        panels.SidePanel(Side::Left, "hierarchy").Resizable(true).DefaultWidth(250.0).Show(|ui| {
+            ui.set_min_width(ui.max_rect().width());
+            let rect = ui.max_rect();
+            let mut gui = Gui::new(ui, skin);
+            crate::hierarchy::draw(state, &mut gui, rect);
+        });
     }
 
     // Right panel (inspector)
     if state.show_right_panel {
-        egui::SidePanel::right("inspector")
-            .resizable(true)
-            .default_width(300.0)
-            .show(ctx, |ui| {
-                ui.set_min_width(ui.max_rect().width());
-                let rect = ui.max_rect();
-                let mut gui = Gui::new(ui, skin);
-                crate::inspector::draw(state, &mut gui, rect);
-            });
+        panels.SidePanel(Side::Right, "inspector").Resizable(true).DefaultWidth(300.0).Show(|ui| {
+            ui.set_min_width(ui.max_rect().width());
+            let rect = ui.max_rect();
+            let mut gui = Gui::new(ui, skin);
+            crate::inspector::draw(state, &mut gui, rect);
+        });
     }
 
     // Central viewport
-    egui::CentralPanel::default().show(ctx, |ui| {
+    panels.CentralPanel().Show(|ui| {
         let rect = ui.max_rect();
         let mut gui = Gui::new(ui, skin);
         crate::viewport::draw(state, &mut gui, rect, renderer, vp_renderer, egui_state);
@@ -298,8 +295,10 @@ fn draw_menu_bar(state: &mut EditorState, ui: &mut egui::Ui) {
 }
 
 fn draw_toolbar(state: &mut EditorState, ui: &mut egui::Ui) {
+    // Unity-style toolbar layout
+    // Reference: https://docs.unity3d.com/ScriptReference/EditorWindow.html
     ui.horizontal(|ui| {
-        // Play/Pause/Stop
+        // Play/Pause/Stop buttons
         let play_text = match state.play_state {
             PlayState::Playing => "⏸ 暂停",
             _ => "▶ 播放",
@@ -323,7 +322,7 @@ fn draw_toolbar(state: &mut EditorState, ui: &mut egui::Ui) {
 
         ui.separator();
 
-        // Tool buttons
+        // Tool buttons (Q/W/E/R)
         let tools = [
             ("Q", "选择", ToolType::Select),
             ("W", "移动", ToolType::Translate),
@@ -340,6 +339,7 @@ fn draw_toolbar(state: &mut EditorState, ui: &mut egui::Ui) {
 
         ui.separator();
 
+        // Grid and debug toggles
         let grid_btn = ui.selectable_label(state.show_grid, "网格");
         if grid_btn.clicked() {
             state.show_grid = !state.show_grid;

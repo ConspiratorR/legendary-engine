@@ -8,8 +8,8 @@
 //! # Unity Documentation
 //! <https://docs.unity3d.com/ScriptReference/Component.html>
 
-use std::any::Any;
 use crate::gameobject::GameObjectHandle;
+use std::any::Any;
 
 /// Base trait for all components attached to GameObjects (matches `UnityEngine.Component`).
 ///

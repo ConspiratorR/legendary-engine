@@ -7,12 +7,12 @@
 //! - PlayerLoop execution
 
 use engine_core::context::Context;
-use engine_core::{Behaviour, BehaviourState, Component, GameObject};
 use engine_core::hierarchy::sync_transforms;
 use engine_core::monobehaviour::MonoBehaviour;
 use engine_core::player_loop::{Phase, PlayerLoop};
 use engine_core::transform::Transform;
 use engine_core::world::World;
+use engine_core::{Behaviour, BehaviourState, Component, GameObject};
 use engine_math::Vec3;
 
 // === Custom Components ===
@@ -360,10 +360,7 @@ fn main() {
 
 /// Helper to run lifecycle on all components of a given type.
 /// In a real engine, MonoBehaviourRunner would handle this automatically.
-fn run_lifecycle_on_all<T: engine_core::Component + 'static>(
-    world: &mut World,
-    method: &str,
-) {
+fn run_lifecycle_on_all<T: engine_core::Component + 'static>(world: &mut World, method: &str) {
     let handles: Vec<_> = world.all_gameobjects();
     for handle in handles {
         if let Some(go) = world.get_gameobject_mut(handle)

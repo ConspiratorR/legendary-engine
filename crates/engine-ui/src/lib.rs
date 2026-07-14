@@ -68,6 +68,7 @@ pub use error::UiError;
 
 pub mod animation;
 pub mod gui;
+pub mod imgui;
 pub mod imgui_plugin;
 pub mod integration;
 pub mod layout;

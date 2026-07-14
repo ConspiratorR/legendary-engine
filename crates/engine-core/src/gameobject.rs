@@ -197,7 +197,12 @@ impl GameObject {
     /// Returns a mutable reference to the added component.
     pub fn AddComponent<T: Component + 'static>(&mut self, component: T) -> &mut T {
         self.components.push(Box::new(component));
-        self.components.last_mut().unwrap().as_any_mut().downcast_mut::<T>().unwrap()
+        self.components
+            .last_mut()
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<T>()
+            .unwrap()
     }
 
     /// Add a boxed component (for dynamic deserialization).

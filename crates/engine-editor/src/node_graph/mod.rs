@@ -1,5 +1,8 @@
 //! Node graph editor — visual scripting with blueprint components, data-flow
 //! evaluation, export, and a drag-and-drop renderer.
+//!
+//! TODO: Migrate from direct egui to IMGUI wrapper (engine_ui::imgui)
+//! Unity Reference: https://docs.unity3d.com/ScriptReference/VisualScripting.html
 
 pub mod blueprint;
 pub mod blueprint_component;

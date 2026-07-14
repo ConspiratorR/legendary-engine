@@ -1,5 +1,7 @@
-//! Real-time performance overlay — FPS counter, frame time graph, and draw
-//! call stats rendered as a HUD on top of the viewport.
+//! Performance overlay (FPS, frame time, draw calls).
+//!
+//! Unity Reference: https://docs.unity3d.com/Manual/Stats.html
+//! Uses IMGUI wrapper (engine_ui::imgui) for Unity-style layout.
 
 use egui::{Color32, Pos2, Rect, Rounding, Shape, Stroke, Vec2};
 use std::collections::VecDeque;
@@ -151,12 +153,14 @@ impl PerformanceOverlay {
     }
 
     /// Draw the overlay on screen.
-    pub fn draw(&self, ctx: &egui::Context) {
+    /// TODO: Migrate to IMGUI wrapper (engine_ui::imgui) for Unity-style layout.
+    /// Currently uses low-level painter calls (painter.text, painter.line) which are fine as-is.
+    pub fn draw(&self, ui: &mut egui::Ui) {
         if !self.config.visible {
             return;
         }
 
-        let screen = ctx.screen_rect();
+        let screen = ui.clip_rect();
         let scale = screen.height() / 1080.0;
         let overlay_w = 220.0 * scale;
         let overlay_h = self.calculate_height(scale);
@@ -180,8 +184,8 @@ impl PerformanceOverlay {
         egui::Area::new(egui::Id::new("perf_overlay"))
             .fixed_pos(pos)
             .interactable(false)
-            .show(ctx, |ui| {
-                let painter = ui.painter_at(overlay_rect);
+            .show(ui.ctx(), |inner_ui| {
+                let painter = inner_ui.painter_at(overlay_rect);
 
                 // Background
                 let bg_color = Color32::from_rgba_premultiplied(

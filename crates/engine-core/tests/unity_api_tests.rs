@@ -127,7 +127,13 @@ mod tests {
         let player = world.CreateGameObject("Player");
 
         // Add component (Unity: GameObject.AddComponent<Health>())
-        world.AddComponent(player, Health { hp: 100.0, max_hp: 100.0 });
+        world.AddComponent(
+            player,
+            Health {
+                hp: 100.0,
+                max_hp: 100.0,
+            },
+        );
 
         // Get component (Unity: GameObject.GetComponent<Health>())
         let health = world.GetComponent::<Health>(player).unwrap();
@@ -209,7 +215,13 @@ mod tests {
         // Create template
         let template = world.CreateGameObject("Enemy");
         world.SetTag(template, "Enemy");
-        world.AddComponent(template, Health { hp: 50.0, max_hp: 50.0 });
+        world.AddComponent(
+            template,
+            Health {
+                hp: 50.0,
+                max_hp: 50.0,
+            },
+        );
 
         // Instantiate (Unity: Object.Instantiate(template))
         let clone = world.Instantiate(template);
@@ -226,7 +238,13 @@ mod tests {
         let player = world.CreateGameObject("Player");
         world.SetTag(player, "Player");
         world.SetLayer(player, 6);
-        world.AddComponent(player, Health { hp: 100.0, max_hp: 100.0 });
+        world.AddComponent(
+            player,
+            Health {
+                hp: 100.0,
+                max_hp: 100.0,
+            },
+        );
         world.AddComponent(player, PlayerController { speed: 5.0 });
 
         // 2. Create parent-child hierarchy
@@ -263,12 +281,15 @@ mod tests {
         let cube = world.CreateGameObject("Cube");
 
         // Add Rigidbody (Unity: GameObject.AddComponent<Rigidbody>())
-        world.AddComponent(cube, Rigidbody {
-            mass: 2.0,
-            use_gravity: true,
-            is_kinematic: false,
-            ..Default::default()
-        });
+        world.AddComponent(
+            cube,
+            Rigidbody {
+                mass: 2.0,
+                use_gravity: true,
+                is_kinematic: false,
+                ..Default::default()
+            },
+        );
 
         // Get and modify
         let rb = world.GetComponent::<Rigidbody>(cube).unwrap();
@@ -283,7 +304,9 @@ mod tests {
 
     #[test]
     fn test_collider_components() {
-        use engine_core::components::{BoxCollider, SphereCollider, CapsuleCollider, ColliderTrait};
+        use engine_core::components::{
+            BoxCollider, CapsuleCollider, ColliderTrait, SphereCollider,
+        };
 
         let mut world = World::new();
         let cube = world.CreateGameObject("Cube");
@@ -291,24 +314,33 @@ mod tests {
         let capsule = world.CreateGameObject("Capsule");
 
         // Add colliders
-        world.AddComponent(cube, BoxCollider {
-            size: Vec3::new(1.0, 1.0, 1.0),
-            is_trigger: false,
-            ..Default::default()
-        });
+        world.AddComponent(
+            cube,
+            BoxCollider {
+                size: Vec3::new(1.0, 1.0, 1.0),
+                is_trigger: false,
+                ..Default::default()
+            },
+        );
 
-        world.AddComponent(sphere, SphereCollider {
-            radius: 0.5,
-            is_trigger: true,
-            ..Default::default()
-        });
+        world.AddComponent(
+            sphere,
+            SphereCollider {
+                radius: 0.5,
+                is_trigger: true,
+                ..Default::default()
+            },
+        );
 
-        world.AddComponent(capsule, CapsuleCollider {
-            height: 2.0,
-            radius: 0.5,
-            is_trigger: false,
-            ..Default::default()
-        });
+        world.AddComponent(
+            capsule,
+            CapsuleCollider {
+                height: 2.0,
+                radius: 0.5,
+                is_trigger: false,
+                ..Default::default()
+            },
+        );
 
         // Verify
         let box_col = world.GetComponent::<BoxCollider>(cube).unwrap();
@@ -331,12 +363,15 @@ mod tests {
         let mut world = World::new();
         let cam = world.CreateGameObject("MainCamera");
 
-        world.AddComponent(cam, Camera {
-            field_of_view: 60.0,
-            near_clip: 0.1,
-            far_clip: 1000.0,
-            ..Default::default()
-        });
+        world.AddComponent(
+            cam,
+            Camera {
+                field_of_view: 60.0,
+                near_clip: 0.1,
+                far_clip: 1000.0,
+                ..Default::default()
+            },
+        );
 
         let camera = world.GetComponent::<Camera>(cam).unwrap();
         assert_eq!(camera.field_of_view, 60.0);
@@ -356,13 +391,16 @@ mod tests {
         let mut world = World::new();
         let light = world.CreateGameObject("PointLight");
 
-        world.AddComponent(light, Light {
-            light_type: LightType::Point,
-            color: [1.0, 0.8, 0.6],
-            intensity: 2.0,
-            range: 15.0,
-            ..Default::default()
-        });
+        world.AddComponent(
+            light,
+            Light {
+                light_type: LightType::Point,
+                color: [1.0, 0.8, 0.6],
+                intensity: 2.0,
+                range: 15.0,
+                ..Default::default()
+            },
+        );
 
         let light_comp = world.GetComponent::<Light>(light).unwrap();
         assert_eq!(light_comp.light_type, LightType::Point);
@@ -378,12 +416,15 @@ mod tests {
         let mut world = World::new();
         let cube = world.CreateGameObject("Cube");
 
-        world.AddComponent(cube, MeshRenderer {
-            mesh: "Cube".to_string(),
-            material: "Default".to_string(),
-            cast_shadows: true,
-            receive_shadows: true,
-        });
+        world.AddComponent(
+            cube,
+            MeshRenderer {
+                mesh: "Cube".to_string(),
+                material: "Default".to_string(),
+                cast_shadows: true,
+                receive_shadows: true,
+            },
+        );
 
         let renderer = world.GetComponent::<MeshRenderer>(cube).unwrap();
         assert_eq!(renderer.mesh, "Cube");
@@ -399,13 +440,16 @@ mod tests {
         let mut world = World::new();
         let sprite = world.CreateGameObject("PlayerSprite");
 
-        world.AddComponent(sprite, SpriteRenderer {
-            sprite: "player.png".to_string(),
-            color: [1.0, 1.0, 1.0, 1.0],
-            flip_x: false,
-            flip_y: false,
-            sorting_order: 0,
-        });
+        world.AddComponent(
+            sprite,
+            SpriteRenderer {
+                sprite: "player.png".to_string(),
+                color: [1.0, 1.0, 1.0, 1.0],
+                flip_x: false,
+                flip_y: false,
+                sorting_order: 0,
+            },
+        );
 
         let renderer = world.GetComponent::<SpriteRenderer>(sprite).unwrap();
         assert_eq!(renderer.sprite, "player.png");
@@ -421,15 +465,18 @@ mod tests {
         let mut world = World::new();
         let audio = world.CreateGameObject("MusicPlayer");
 
-        world.AddComponent(audio, AudioSource {
-            clip: "background_music.ogg".to_string(),
-            volume: 0.8,
-            pitch: 1.0,
-            loop_playing: true,
-            play_on_awake: true,
-            spatial_blend: 0.0,
-            ..Default::default()
-        });
+        world.AddComponent(
+            audio,
+            AudioSource {
+                clip: "background_music.ogg".to_string(),
+                volume: 0.8,
+                pitch: 1.0,
+                loop_playing: true,
+                play_on_awake: true,
+                spatial_blend: 0.0,
+                ..Default::default()
+            },
+        );
 
         let source = world.GetComponent::<AudioSource>(audio).unwrap();
         assert_eq!(source.clip, "background_music.ogg");
@@ -441,17 +488,20 @@ mod tests {
 
     #[test]
     fn test_mixed_components() {
-        use engine_core::components::{Rigidbody, BoxCollider, MeshRenderer};
+        use engine_core::components::{BoxCollider, MeshRenderer, Rigidbody};
 
         let mut world = World::new();
         let cube = world.CreateGameObject("PhysicsCube");
 
         // Add multiple components (Unity: multiple AddComponent calls)
-        world.AddComponent(cube, Rigidbody {
-            mass: 1.0,
-            use_gravity: true,
-            ..Default::default()
-        });
+        world.AddComponent(
+            cube,
+            Rigidbody {
+                mass: 1.0,
+                use_gravity: true,
+                ..Default::default()
+            },
+        );
         world.AddComponent(cube, BoxCollider::default());
         world.AddComponent(cube, MeshRenderer::default());
 

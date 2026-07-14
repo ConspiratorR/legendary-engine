@@ -1,5 +1,7 @@
-//! Material editor — visual material authoring with a node-graph backend,
-//! preset library, and live preview.
+//! Visual material authoring with node-graph backend.
+//!
+//! TODO: Migrate from direct egui to IMGUI wrapper (engine_ui::imgui)
+//! Unity Reference: https://docs.unity3d.com/ScriptReference/ShaderGraph.html
 
 pub mod material_library;
 

@@ -88,11 +88,17 @@ pub mod scriptable_object;
 /// Unity-style built-in components (Rigidbody, Collider, Camera, Light, etc.).
 pub mod components;
 
+/// Character controller component (matches Unity's CharacterController).
+pub mod character_controller;
+
 /// World — central container for all GameObjects.
 pub mod world;
 
 /// Hierarchy utilities — helper functions for working with Transform hierarchy.
 pub mod hierarchy;
+
+/// Scene management (matches Unity's SceneManager).
+pub mod scene_management;
 
 /// MonoBehaviour lifecycle runner.
 pub mod monobehaviour_runner;
@@ -127,24 +133,39 @@ pub mod system;
 pub mod time;
 pub mod undo;
 
+/// Mathf utility struct (matches Unity's Mathf).
+pub mod mathf;
+
+/// Debug utilities — Unity-style Debug and Gizmos static classes.
+pub mod debug_utils;
+
+/// Ray casting types (Ray, RaycastHit, LayerMask).
+pub mod raycast;
+
+/// Axis-aligned bounding box (matches Unity's Bounds).
+pub mod bounds;
+
+/// Random utility (matches Unity's Random).
+pub mod random;
+
 // Re-export for convenience
-pub use object::{Object, ObjectUtil};
-pub use component::Component;
+pub use app::AppBuilder;
 pub use behaviour::{Behaviour, BehaviourState};
-pub use transform::{Space, Transform};
-pub use gameobject::{GameObject, GameObjectHandle};
-pub use monobehaviour::{MonoBehaviour, MonoBehaviourHolder, CoroutineHandle};
-pub use scriptable_object::ScriptableObject;
-pub use world::World;
-pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
-pub use monobehaviour_runner::MonoBehaviourRunner;
+pub use component::Component;
 pub use context::Context;
 pub use event::{Event, EventBus, EventBusExt, EventHandler};
 pub use events::*;
+pub use gameobject::{GameObject, GameObjectHandle};
+pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
+pub use monobehaviour::{CoroutineHandle, MonoBehaviour, MonoBehaviourHolder};
+pub use monobehaviour_runner::MonoBehaviourRunner;
+pub use object::{Object, ObjectUtil};
 pub use player_loop::{Phase, PlayerLoop};
+pub use scriptable_object::ScriptableObject;
 pub use system::System;
 pub use time::Time;
-pub use app::AppBuilder;
+pub use transform::{Space, Transform};
+pub use world::World;
 
 // Re-export macros - impl_component is defined in component.rs with #[macro_export]
 // It's automatically available at crate root

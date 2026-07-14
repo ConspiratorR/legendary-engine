@@ -1,5 +1,7 @@
-//! Resource browser panel — lists project assets and allows browsing,
-//! filtering, and selecting resources for use in the scene.
+//! File/asset browser panel.
+//!
+//! Unity Reference: https://docs.unity3d.com/Manual/ProjectView.html
+//! Uses IMGUI wrapper (engine_ui::imgui) for Unity-style layout.
 
 use crate::state::EditorState;
 use egui::Color32;

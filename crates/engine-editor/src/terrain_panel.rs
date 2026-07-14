@@ -1,5 +1,10 @@
-//! Terrain editor panel — brush settings, sculpt/paint modes, texture
-//! layer management, and vegetation tools for terrain entities.
+//! Terrain sculpt/paint/vegetation editor.
+//!
+//! Unity Reference: https://docs.unity3d.com/Manual/class-Terrain.html
+//!
+//! TODO: Migrate from direct egui to IMGUI wrapper (engine_ui::imgui).
+//! Currently receives `&mut egui::Ui` directly from inspector.rs;
+//! should accept `&mut Gui` like hierarchy/inspector do.
 
 use engine_terrain::components::{
     BrushFalloff, PaintBrushSettings, PaintMode, SculptMode, Terrain, TerrainTextureLayers,
@@ -58,6 +63,10 @@ impl TerrainPanel {
     ///
     /// `terrain` is the currently selected terrain entity's component.
     /// `texture_layers` and `vegetation_data` are global resources.
+    //
+    // TODO: Change `ui` parameter to `gui: &mut Gui` to match the IMGUI wrapper
+    // pattern used by hierarchy.rs and inspector.rs. Update the call site in
+    // inspector.rs accordingly.
     pub fn draw(
         &mut self,
         ui: &mut egui::Ui,

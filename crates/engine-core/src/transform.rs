@@ -665,6 +665,48 @@ impl Transform {
         self.parent == Some(parent)
     }
 
+    /// Set local position, rotation, and scale simultaneously (matches Unity's Transform.SetLocalPositionAndRotationAndScale).
+    pub fn SetLocalPositionAndRotationAndScale(
+        &mut self,
+        position: Vec3,
+        rotation: Quat,
+        scale: Vec3,
+    ) {
+        self.local_position = position;
+        self.local_rotation = rotation;
+        self.local_scale = scale;
+        self.has_changed = true;
+    }
+
+    /// Batch transform points from local to world space (matches Unity's Transform.TransformPoints).
+    pub fn TransformPoints(&self, points: &[Vec3]) -> Vec<Vec3> {
+        points.iter().map(|&p| self.TransformPoint(p)).collect()
+    }
+
+    /// Batch transform points from world to local space (matches Unity's Transform.InverseTransformPoints).
+    pub fn InverseTransformPoints(&self, points: &[Vec3]) -> Vec<Vec3> {
+        points
+            .iter()
+            .map(|&p| self.InverseTransformPoint(p))
+            .collect()
+    }
+
+    /// Batch transform directions from local to world space (matches Unity's Transform.TransformDirections).
+    pub fn TransformDirections(&self, directions: &[Vec3]) -> Vec<Vec3> {
+        directions
+            .iter()
+            .map(|&d| self.TransformDirection(d))
+            .collect()
+    }
+
+    /// Batch transform directions from world to local space (matches Unity's Transform.InverseTransformDirections).
+    pub fn InverseTransformDirections(&self, directions: &[Vec3]) -> Vec<Vec3> {
+        directions
+            .iter()
+            .map(|&d| self.InverseTransformDirection(d))
+            .collect()
+    }
+
     // ============================================================
     // Internal — World Transform Sync
     // ============================================================

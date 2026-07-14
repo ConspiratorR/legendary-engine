@@ -210,15 +210,17 @@ fn main() -> anyhow::Result<()> {
                                         // Create audio manager for runtime
                                         match engine_audio::audio_manager::AudioManager::new() {
                                             Ok(mut am) => {
-                                                // Collect audio sources to play
-                                                let audio_sources: Vec<(String, bool)> = editor_state.scene_tree.nodes.iter()
-                                                    .filter_map(|node| {
-                                                        editor_state.node_audio.get(&node.id).map(|a| {
-                                                            (a.source.clone(), a.source.contains("music") || a.source.contains("bg"))
-                                                        })
+                                        // Collect audio sources to play
+                                        let audio_sources: Vec<(String, bool)> = editor_state.scene_tree.nodes.iter()
+                                            .filter_map(|node| {
+                                                editor_state.GetHandle(node.id).and_then(|h| {
+                                                    editor_state.world.GetComponent::<engine_core::components::AudioSource>(h).map(|a| {
+                                                        (a.clip.clone(), a.clip.contains("music") || a.clip.contains("bg"))
                                                     })
-                                                    .filter(|(source, _)| !source.is_empty())
-                                                    .collect();
+                                                })
+                                            })
+                                            .filter(|(source, _)| !source.is_empty())
+                                            .collect();
 
                                                 // Play audio for nodes with AudioData
                                                 for (source, is_music) in audio_sources {
@@ -275,12 +277,14 @@ fn main() -> anyhow::Result<()> {
                                                 .nodes
                                                 .iter()
                                                 .filter_map(|node| {
-                                                    editor_state.node_scripts.get(&node.id).and_then(|sd| {
-                                                        if sd.enabled && !sd.script_path.is_empty() {
-                                                            Some((node.name.clone(), sd.script_path.clone(), node.name.clone()))
-                                                        } else {
-                                                            None
-                                                        }
+                                                    editor_state.GetHandle(node.id).and_then(|h| {
+                                                        editor_state.world.GetComponent::<engine_core::components::ScriptBehaviour>(h).and_then(|sd| {
+                                                            if sd.enabled && !sd.script_path.is_empty() {
+                                                                Some((node.name.clone(), sd.script_path.clone(), node.name.clone()))
+                                                            } else {
+                                                                None
+                                                            }
+                                                        })
                                                     })
                                                 })
                                                 .collect();

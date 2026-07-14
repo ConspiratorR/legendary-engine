@@ -47,8 +47,12 @@ impl Default for Rigidbody {
 }
 
 impl Component for Rigidbody {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl Rigidbody {
@@ -64,6 +68,61 @@ impl Rigidbody {
     }
     pub fn IsSleeping(&self) -> bool {
         self.velocity.length_squared() < 0.001 && self.angular_velocity.length_squared() < 0.001
+    }
+}
+
+/// Force application mode (matches Unity's `ForceMode`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForceMode {
+    Force,
+    Impulse,
+    VelocityChange,
+    Acceleration,
+}
+
+impl Default for ForceMode {
+    fn default() -> Self {
+        Self::Force
+    }
+}
+
+impl Rigidbody {
+    pub fn AddForceWithMode(&mut self, force: Vec3, mode: ForceMode) {
+        match mode {
+            ForceMode::Force => self.velocity += force / self.mass,
+            ForceMode::Impulse => self.velocity += force / self.mass,
+            ForceMode::VelocityChange => self.velocity += force,
+            ForceMode::Acceleration => self.velocity += force,
+        }
+    }
+
+    pub fn AddTorqueWithMode(&mut self, torque: Vec3, mode: ForceMode) {
+        match mode {
+            ForceMode::Force => self.angular_velocity += torque / self.mass,
+            ForceMode::Impulse => self.angular_velocity += torque / self.mass,
+            ForceMode::VelocityChange => self.angular_velocity += torque,
+            ForceMode::Acceleration => self.angular_velocity += torque,
+        }
+    }
+
+    pub fn AddForceAtPosition(&mut self, force: Vec3, position: Vec3, center_of_mass: Vec3) {
+        self.velocity += force / self.mass;
+        let torque = (position - center_of_mass).cross(force);
+        self.angular_velocity += torque / self.mass;
+    }
+
+    pub fn AddRelativeForce(&mut self, force: Vec3, rotation: Quat) {
+        let world_force = rotation * force;
+        self.velocity += world_force / self.mass;
+    }
+
+    pub fn AddRelativeTorque(&mut self, torque: Vec3, rotation: Quat) {
+        let world_torque = rotation * torque;
+        self.angular_velocity += world_torque / self.mass;
+    }
+
+    pub fn WakeUp(&mut self) {
+        // Wake up is implicit when velocity is set
     }
 }
 
@@ -99,13 +158,21 @@ pub struct BoxCollider {
 
 impl Default for BoxCollider {
     fn default() -> Self {
-        Self { center: Vec3::ZERO, size: Vec3::ONE, is_trigger: false }
+        Self {
+            center: Vec3::ZERO,
+            size: Vec3::ONE,
+            is_trigger: false,
+        }
     }
 }
 
 impl Component for BoxCollider {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl ColliderTrait for BoxCollider {
@@ -113,8 +180,12 @@ impl ColliderTrait for BoxCollider {
         let half = self.size * 0.5;
         (self.center - half, self.center + half)
     }
-    fn IsTrigger(&self) -> bool { self.is_trigger }
-    fn SetIsTrigger(&mut self, trigger: bool) { self.is_trigger = trigger; }
+    fn IsTrigger(&self) -> bool {
+        self.is_trigger
+    }
+    fn SetIsTrigger(&mut self, trigger: bool) {
+        self.is_trigger = trigger;
+    }
 }
 
 /// Sphere collider (matches Unity's `SphereCollider`).
@@ -133,21 +204,36 @@ pub struct SphereCollider {
 
 impl Default for SphereCollider {
     fn default() -> Self {
-        Self { center: Vec3::ZERO, radius: 0.5, is_trigger: false }
+        Self {
+            center: Vec3::ZERO,
+            radius: 0.5,
+            is_trigger: false,
+        }
     }
 }
 
 impl Component for SphereCollider {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl ColliderTrait for SphereCollider {
     fn Bounds(&self) -> (Vec3, Vec3) {
-        (self.center - Vec3::splat(self.radius), self.center + Vec3::splat(self.radius))
+        (
+            self.center - Vec3::splat(self.radius),
+            self.center + Vec3::splat(self.radius),
+        )
     }
-    fn IsTrigger(&self) -> bool { self.is_trigger }
-    fn SetIsTrigger(&mut self, trigger: bool) { self.is_trigger = trigger; }
+    fn IsTrigger(&self) -> bool {
+        self.is_trigger
+    }
+    fn SetIsTrigger(&mut self, trigger: bool) {
+        self.is_trigger = trigger;
+    }
 }
 
 /// Capsule collider (matches Unity's `CapsuleCollider`).
@@ -170,28 +256,48 @@ pub struct CapsuleCollider {
 
 impl Default for CapsuleCollider {
     fn default() -> Self {
-        Self { center: Vec3::ZERO, radius: 0.5, height: 2.0, direction: 1, is_trigger: false }
+        Self {
+            center: Vec3::ZERO,
+            radius: 0.5,
+            height: 2.0,
+            direction: 1,
+            is_trigger: false,
+        }
     }
 }
 
 impl Component for CapsuleCollider {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl ColliderTrait for CapsuleCollider {
     fn Bounds(&self) -> (Vec3, Vec3) {
         match self.direction {
-            0 => (self.center - Vec3::new(self.height * 0.5, self.radius, self.radius),
-                  self.center + Vec3::new(self.height * 0.5, self.radius, self.radius)),
-            1 => (self.center - Vec3::new(self.radius, self.height * 0.5, self.radius),
-                  self.center + Vec3::new(self.radius, self.height * 0.5, self.radius)),
-            _ => (self.center - Vec3::new(self.radius, self.radius, self.height * 0.5),
-                  self.center + Vec3::new(self.radius, self.radius, self.height * 0.5)),
+            0 => (
+                self.center - Vec3::new(self.height * 0.5, self.radius, self.radius),
+                self.center + Vec3::new(self.height * 0.5, self.radius, self.radius),
+            ),
+            1 => (
+                self.center - Vec3::new(self.radius, self.height * 0.5, self.radius),
+                self.center + Vec3::new(self.radius, self.height * 0.5, self.radius),
+            ),
+            _ => (
+                self.center - Vec3::new(self.radius, self.radius, self.height * 0.5),
+                self.center + Vec3::new(self.radius, self.radius, self.height * 0.5),
+            ),
         }
     }
-    fn IsTrigger(&self) -> bool { self.is_trigger }
-    fn SetIsTrigger(&mut self, trigger: bool) { self.is_trigger = trigger; }
+    fn IsTrigger(&self) -> bool {
+        self.is_trigger
+    }
+    fn SetIsTrigger(&mut self, trigger: bool) {
+        self.is_trigger = trigger;
+    }
 }
 
 // ============================================================
@@ -232,8 +338,12 @@ impl Default for Material {
 }
 
 impl Component for Material {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl Material {
@@ -491,6 +601,37 @@ impl Component for MeshRenderer {
 }
 
 // ============================================================
+// MeshFilter (Unity: UnityEngine.MeshFilter)
+// ============================================================
+
+/// Mesh filter component (matches Unity's `MeshFilter`).
+///
+/// # Unity Documentation
+/// <https://docs.unity3d.com/ScriptReference/MeshFilter.html>
+#[derive(Debug, Clone)]
+pub struct MeshFilter {
+    /// The mesh used by this filter (matches `MeshFilter.mesh`).
+    pub mesh: String,
+}
+
+impl Default for MeshFilter {
+    fn default() -> Self {
+        Self {
+            mesh: "Cube".to_string(),
+        }
+    }
+}
+
+impl Component for MeshFilter {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+// ============================================================
 // SpriteRenderer (Unity: UnityEngine.SpriteRenderer)
 // ============================================================
 
@@ -587,3 +728,148 @@ impl Component for AudioSource {
         self
     }
 }
+
+// ============================================================
+// ParticleSystem (Unity: UnityEngine.ParticleSystem)
+// ============================================================
+
+/// Particle system component (matches Unity's `ParticleSystem`).
+///
+/// # Unity Documentation
+/// <https://docs.unity3d.com/ScriptReference/ParticleSystem.html>
+#[derive(Debug, Clone)]
+pub struct ParticleSystem {
+    /// Emission rate (matches `ParticleSystem.emission.rateOverTime`).
+    pub rate: f32,
+    /// Particle lifetime in seconds (matches `ParticleSystem.main.startLifetime`).
+    pub lifetime: f32,
+    /// Start speed (matches `ParticleSystem.main.startSpeed`).
+    pub start_speed: f32,
+    /// Start size (matches `ParticleSystem.main.startSize`).
+    pub start_size: f32,
+    /// End size (linearly interpolated over lifetime).
+    pub end_size: f32,
+    /// Start color (matches `ParticleSystem.main.startColor`).
+    pub start_color: [f32; 4],
+    /// End color (linearly interpolated over lifetime).
+    pub end_color: [f32; 4],
+    /// Gravity modifier (matches `ParticleSystem.main.gravityModifier`).
+    pub gravity_modifier: f32,
+    /// Max particles (matches `ParticleSystem.main.maxParticles`).
+    pub max_particles: i32,
+    /// Simulation speed (matches `ParticleSystem.main.simulationSpeed`).
+    pub simulation_speed: f32,
+}
+
+impl Default for ParticleSystem {
+    fn default() -> Self {
+        Self {
+            rate: 10.0,
+            lifetime: 2.0,
+            start_speed: 1.0,
+            start_size: 1.0,
+            end_size: 0.0,
+            start_color: [1.0, 1.0, 1.0, 1.0],
+            end_color: [1.0, 1.0, 1.0, 0.0],
+            gravity_modifier: 0.0,
+            max_particles: 1000,
+            simulation_speed: 1.0,
+        }
+    }
+}
+
+impl Component for ParticleSystem {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+// ============================================================
+// ScriptBehaviour (Unity: user-defined MonoBehaviour)
+// ============================================================
+
+/// Script behaviour component — stores a reference to a user script.
+///
+/// In Unity terms this is a `MonoBehaviour` attached to a GameObject.
+/// The `script_path` points to the Lua/WASM script file.
+#[derive(Debug, Clone)]
+pub struct ScriptBehaviour {
+    /// Path to the script file (e.g. "scripts/player.lua").
+    pub script_path: String,
+    /// Whether this script is enabled (matches `Behaviour.enabled`).
+    pub enabled: bool,
+    /// User-defined properties serialized as key/value pairs.
+    pub properties: std::collections::HashMap<String, String>,
+}
+
+impl Default for ScriptBehaviour {
+    fn default() -> Self {
+        Self {
+            script_path: String::new(),
+            enabled: true,
+            properties: std::collections::HashMap::new(),
+        }
+    }
+}
+
+impl Component for ScriptBehaviour {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+// ============================================================
+// Tag (Unity: tag system)
+// ============================================================
+
+/// Tag component — stores tags associated with a GameObject.
+///
+/// In Unity, tags are a built-in part of GameObject. Here we model them
+/// as a component for ECS compatibility.
+#[derive(Debug, Clone)]
+pub struct Tag {
+    /// The list of tags on this GameObject (matches `GameObject.tag` / `GameObject.tags`).
+    pub tags: Vec<String>,
+}
+
+impl Default for Tag {
+    fn default() -> Self {
+        Self { tags: Vec::new() }
+    }
+}
+
+impl Component for Tag {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl Tag {
+    /// Check if this object has a specific tag (matches `GameObject.CompareTag`).
+    pub fn CompareTag(&self, tag: &str) -> bool {
+        self.tags.iter().any(|t| t == tag)
+    }
+
+    /// Add a tag (matches `GameObject.tags` append).
+    pub fn AddTag(&mut self, tag: String) {
+        if !self.tags.contains(&tag) {
+            self.tags.push(tag);
+        }
+    }
+
+    /// Remove a tag.
+    pub fn RemoveTag(&mut self, tag: &str) {
+        self.tags.retain(|t| t != tag);
+    }
+}
+
+pub use crate::character_controller::CharacterController;

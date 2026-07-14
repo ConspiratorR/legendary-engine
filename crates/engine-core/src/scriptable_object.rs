@@ -60,7 +60,9 @@ static NEXT_INSTANCE_ID: AtomicI32 = AtomicI32::new(1);
 /// - `OnEnable()` — called when ScriptableObject is loaded
 /// - `OnDisable()` — called when ScriptableObject goes out of scope
 /// - `OnDestroy()` — called when ScriptableObject is destroyed
-pub trait ScriptableObject: Object + Any + Send + Sync + Serialize + for<'de> Deserialize<'de> {
+pub trait ScriptableObject:
+    Object + Any + Send + Sync + Serialize + for<'de> Deserialize<'de>
+{
     /// Create a new instance of this ScriptableObject (matches `ScriptableObject.CreateInstance<T>()`).
     ///
     /// # Unity Documentation

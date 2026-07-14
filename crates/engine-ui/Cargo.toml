@@ -11,6 +11,7 @@ serde = ["dep:serde", "dep:serde_json"]
 [dependencies]
 engine-core = { path = "../engine-core" }
 engine-input = { path = "../engine-input" }
+engine-math = { path = "../engine-math" }
 engine-render = { path = "../engine-render" }
 egui = "=0.30.0"
 egui-wgpu = "=0.30.0"

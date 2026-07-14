@@ -1,5 +1,7 @@
-//! Inspector panel — shows and edits properties of the selected entity,
-//! including transform, light parameters, material assignments, and tags.
+//! Property inspector for selected entity.
+//!
+//! Unity Reference: https://docs.unity3d.com/ScriptReference/Editor.html
+//! Uses IMGUI wrapper (engine_ui::imgui) for Unity-style layout.
 
 use crate::material_editor::MaterialEditorState;
 use crate::state::{EditorState, LightType};
@@ -326,191 +328,358 @@ impl InspectorPanel {
         }
 
         // ── Material (PBR) ──
-        if Self::section_matches("材质 pbr material 基础颜色 金属度 粗糙度", search_lower)
-            && let Some(mat) = state.node_materials.get_mut(&id)
-        {
-            Self::section_separator(gui);
-            Self::section_header(gui, "材质 (PBR)");
+        if Self::section_matches("材质 pbr material 基础颜色 金属度 粗糙度", search_lower) {
+            // Try World API first, fallback to legacy HashMap
+            let has_material_in_world = state.GetHandle(id)
+                .map(|h| state.world.HasComponent::<engine_core::components::Material>(h))
+                .unwrap_or(false);
+            let has_material_in_map = state.node_materials.contains_key(&id);
 
-            let (mut r, mut g, mut b) = (mat.base_color[0], mat.base_color[1], mat.base_color[2]);
-            Self::vec3_row(gui, "基础颜色", &mut r, &mut g, &mut b);
-            mat.base_color[0] = r;
-            mat.base_color[1] = g;
-            mat.base_color[2] = b;
+            if has_material_in_world || has_material_in_map {
+                Self::section_separator(gui);
+                Self::section_header(gui, "材质 (PBR)");
 
-            Self::slider_row(gui, "金属度", &mut mat.metallic, 0.0, 1.0);
-            Self::slider_row(gui, "粗糙度", &mut mat.roughness, 0.0, 1.0);
-            Self::slider_row(gui, "环境光遮蔽", &mut mat.ao, 0.0, 1.0);
+                if let Some(handle) = state.GetHandle(id) {
+                    if let Some(mat) = state.world.GetComponentMut::<engine_core::components::Material>(handle) {
+                        let (mut r, mut g, mut b) = (
+                            mat.base_color[0], mat.base_color[1], mat.base_color[2],
+                        );
+                        Self::vec3_row(gui, "基础颜色", &mut r, &mut g, &mut b);
+                        mat.base_color[0] = r;
+                        mat.base_color[1] = g;
+                        mat.base_color[2] = b;
 
-            gui.ui.add_space(ROW_SPACING);
-            if gui.ui.button("编辑材质图").clicked() {
-                let graph = MaterialEditorState::graph_from_material(mat);
-                state.node_graph_state.graph = graph;
-                state.material_editor.open();
-                state.material_editor.material_name = format!("材质 #{}", id);
+                        // Map smoothness to roughness (roughness ≈ 1 - smoothness)
+                        let mut roughness = 1.0 - mat.smoothness;
+                        Self::slider_row(gui, "金属度", &mut mat.metallic, 0.0, 1.0);
+                        Self::slider_row(gui, "粗糙度", &mut roughness, 0.0, 1.0);
+                        mat.smoothness = 1.0 - roughness;
+
+                        gui.ui.add_space(ROW_SPACING);
+                        if gui.ui.button("编辑材质图").clicked() {
+                            // Sync to legacy MaterialData for editor graph
+                            let legacy_mat = crate::state::MaterialData {
+                                base_color: mat.base_color,
+                                metallic: mat.metallic,
+                                roughness,
+                                ao: 1.0,
+                                emissive: mat.emission_color,
+                            };
+                            let graph = MaterialEditorState::graph_from_material(&legacy_mat);
+                            state.node_graph_state.graph = graph;
+                            state.material_editor.open();
+                            state.material_editor.material_name = format!("材质 #{}", id);
+                        }
+
+                        // Sync to legacy HashMap for backward compatibility (viewport)
+                        if let Some(legacy_mat) = state.node_materials.get_mut(&id) {
+                            legacy_mat.base_color = mat.base_color;
+                            legacy_mat.metallic = mat.metallic;
+                            legacy_mat.roughness = roughness;
+                        }
+                    }
+                } else if let Some(mat) = state.node_materials.get_mut(&id) {
+                    // Fallback: read from legacy HashMap
+                    let (mut r, mut g, mut b) = (mat.base_color[0], mat.base_color[1], mat.base_color[2]);
+                    Self::vec3_row(gui, "基础颜色", &mut r, &mut g, &mut b);
+                    mat.base_color[0] = r;
+                    mat.base_color[1] = g;
+                    mat.base_color[2] = b;
+
+                    Self::slider_row(gui, "金属度", &mut mat.metallic, 0.0, 1.0);
+                    Self::slider_row(gui, "粗糙度", &mut mat.roughness, 0.0, 1.0);
+                    Self::slider_row(gui, "环境光遮蔽", &mut mat.ao, 0.0, 1.0);
+
+                    gui.ui.add_space(ROW_SPACING);
+                    if gui.ui.button("编辑材质图").clicked() {
+                        let graph = MaterialEditorState::graph_from_material(mat);
+                        state.node_graph_state.graph = graph;
+                        state.material_editor.open();
+                        state.material_editor.material_name = format!("材质 #{}", id);
+                    }
+                }
             }
         }
 
-        // ── Render ──
-        if Self::section_matches("渲染 render 材质 网格 阴影 shadow mesh", search_lower)
-            && let Some((mat, mesh, shadow)) = state.node_render.get_mut(&id)
-        {
-            Self::section_separator(gui);
-            Self::section_header(gui, "渲染");
+        // ── Render (MeshRenderer) ──
+        if Self::section_matches("渲染 render 材质 网格 阴影 shadow mesh", search_lower) {
+            // Try World API first, fallback to legacy HashMap
+            let has_mesh_in_world = state.GetHandle(id)
+                .map(|h| state.world.HasComponent::<engine_core::components::MeshRenderer>(h))
+                .unwrap_or(false);
+            let has_mesh_in_map = state.node_render.contains_key(&id);
 
-            Self::read_only_row(gui, "材质", mat);
+            if has_mesh_in_world || has_mesh_in_map {
+                Self::section_separator(gui);
+                Self::section_header(gui, "渲染");
 
-            // Mesh combo
-            gui.ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("网格")
-                        .color(Color32::from_gray(152))
-                        .size(12.0),
-                );
-                egui::ComboBox::from_id_salt(egui::Id::new("mesh_combo").with(id))
-                    .selected_text(mesh.as_str())
-                    .show_ui(ui, |ui| {
-                        for mt in ["Cube", "Sphere", "Plane", "Cylinder"] {
-                            ui.selectable_value(mesh, mt.to_string(), mt);
+                if let Some(handle) = state.GetHandle(id) {
+                    if let Some(renderer) = state.world.GetComponentMut::<engine_core::components::MeshRenderer>(handle) {
+                        Self::read_only_row(gui, "材质", &renderer.material);
+
+                        // Mesh combo
+                        gui.ui.horizontal(|ui| {
+                            ui.label(
+                                egui::RichText::new("网格")
+                                    .color(Color32::from_gray(152))
+                                    .size(12.0),
+                            );
+                            egui::ComboBox::from_id_salt(egui::Id::new("mesh_combo").with(id))
+                                .selected_text(renderer.mesh.as_str())
+                                .show_ui(ui, |ui| {
+                                    for mt in ["Cube", "Sphere", "Plane", "Cylinder"] {
+                                        ui.selectable_value(&mut renderer.mesh, mt.to_string(), mt);
+                                    }
+                                });
+                        });
+                        gui.ui.add_space(ROW_SPACING);
+
+                        Self::checkbox_row(gui, "投射阴影", &mut renderer.cast_shadows);
+                        Self::checkbox_row(gui, "接收阴影", &mut renderer.receive_shadows);
+
+                        // Sync to legacy HashMap for backward compatibility (viewport)
+                        if let Some((mat, mesh, shadow)) = state.node_render.get_mut(&id) {
+                            *mat = renderer.material.clone();
+                            *mesh = renderer.mesh.clone();
+                            *shadow = renderer.cast_shadows;
                         }
-                    });
-            });
-            gui.ui.add_space(ROW_SPACING);
+                    }
+                } else if let Some((mat, mesh, shadow)) = state.node_render.get_mut(&id) {
+                    // Fallback: read from legacy HashMap
+                    Self::read_only_row(gui, "材质", mat);
 
-            Self::checkbox_row(gui, "投射阴影", shadow);
+                    // Mesh combo
+                    gui.ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new("网格")
+                                .color(Color32::from_gray(152))
+                                .size(12.0),
+                        );
+                        egui::ComboBox::from_id_salt(egui::Id::new("mesh_combo").with(id))
+                            .selected_text(mesh.as_str())
+                            .show_ui(ui, |ui| {
+                                for mt in ["Cube", "Sphere", "Plane", "Cylinder"] {
+                                    ui.selectable_value(mesh, mt.to_string(), mt);
+                                }
+                            });
+                    });
+                    gui.ui.add_space(ROW_SPACING);
+
+                    Self::checkbox_row(gui, "投射阴影", shadow);
+                }
+            }
         }
 
         // ── Light ──
         if Self::section_matches(
             "光照 光 light 方向光 点光源 聚光灯 directional point spot",
             search_lower,
-        ) && let Some(light) = state.node_lights.get_mut(&id)
-        {
-            Self::section_separator(gui);
+        ) {
+            // Try World API first, fallback to legacy HashMap
+            let has_light_in_world = state.GetHandle(id)
+                .map(|h| state.world.HasComponent::<engine_core::components::Light>(h))
+                .unwrap_or(false);
+            let has_light_in_map = state.node_lights.contains_key(&id);
 
-            let type_label = match light.light_type {
-                LightType::Directional => "光照 (方向光)",
-                LightType::Point => "光照 (点光源)",
-                LightType::Spot => "光照 (聚光灯)",
-            };
-            Self::section_header(gui, type_label);
+            if has_light_in_world || has_light_in_map {
+                Self::section_separator(gui);
 
-            Self::checkbox_row(gui, "启用", &mut light.enabled);
+                if let Some(handle) = state.GetHandle(id) {
+                    if let Some(light) = state.world.GetComponentMut::<engine_core::components::Light>(handle) {
+                        let type_label = match light.light_type {
+                            engine_core::components::LightType::Directional => "光照 (方向光)",
+                            engine_core::components::LightType::Point => "光照 (点光源)",
+                            engine_core::components::LightType::Spot => "光照 (聚光灯)",
+                        };
+                        Self::section_header(gui, type_label);
 
-            let (mut lr, mut lg, mut lb) = (light.color[0], light.color[1], light.color[2]);
-            Self::vec3_row(gui, "颜色", &mut lr, &mut lg, &mut lb);
-            light.color[0] = lr;
-            light.color[1] = lg;
-            light.color[2] = lb;
+                        let (mut lr, mut lg, mut lb) = (light.color[0], light.color[1], light.color[2]);
+                        Self::vec3_row(gui, "颜色", &mut lr, &mut lg, &mut lb);
+                        light.color[0] = lr;
+                        light.color[1] = lg;
+                        light.color[2] = lb;
 
-            Self::slider_row(gui, "强度", &mut light.intensity, 0.0, 10.0);
+                        Self::slider_row(gui, "强度", &mut light.intensity, 0.0, 10.0);
 
-            if light.light_type != LightType::Directional {
-                Self::slider_row(gui, "范围", &mut light.range, 0.0, 100.0);
-            }
+                        if light.light_type != engine_core::components::LightType::Directional {
+                            Self::slider_row(gui, "范围", &mut light.range, 0.0, 100.0);
+                        }
 
-            if light.light_type != LightType::Point {
-                let (mut dx, mut dy, mut dz) =
-                    (light.direction[0], light.direction[1], light.direction[2]);
-                Self::vec3_row(gui, "方向", &mut dx, &mut dy, &mut dz);
-                light.direction[0] = dx;
-                light.direction[1] = dy;
-                light.direction[2] = dz;
-            }
+                        if light.light_type != engine_core::components::LightType::Point {
+                            Self::slider_row(gui, "内角 (°)", &mut light.inner_angle, 0.0, 90.0);
+                            Self::slider_row(gui, "外角 (°)", &mut light.outer_angle, 0.0, 90.0);
+                        }
 
-            if light.light_type == LightType::Spot {
-                Self::slider_row(gui, "内角 (°)", &mut light.inner_angle, 0.0, 90.0);
-                Self::slider_row(gui, "外角 (°)", &mut light.outer_angle, 0.0, 90.0);
+                        Self::checkbox_row(gui, "投射阴影", &mut light.shadows);
+
+                        // Sync to legacy HashMap for backward compatibility (viewport)
+                        if let Some(legacy_light) = state.node_lights.get_mut(&id) {
+                            legacy_light.color = light.color;
+                            legacy_light.intensity = light.intensity;
+                            legacy_light.range = light.range;
+                            legacy_light.inner_angle = light.inner_angle;
+                            legacy_light.outer_angle = light.outer_angle;
+                        }
+                    }
+                } else if let Some(light) = state.node_lights.get_mut(&id) {
+                    // Fallback: read from legacy HashMap
+                    let type_label = match light.light_type {
+                        LightType::Directional => "光照 (方向光)",
+                        LightType::Point => "光照 (点光源)",
+                        LightType::Spot => "光照 (聚光灯)",
+                    };
+                    Self::section_header(gui, type_label);
+
+                    Self::checkbox_row(gui, "启用", &mut light.enabled);
+
+                    let (mut lr, mut lg, mut lb) = (light.color[0], light.color[1], light.color[2]);
+                    Self::vec3_row(gui, "颜色", &mut lr, &mut lg, &mut lb);
+                    light.color[0] = lr;
+                    light.color[1] = lg;
+                    light.color[2] = lb;
+
+                    Self::slider_row(gui, "强度", &mut light.intensity, 0.0, 10.0);
+
+                    if light.light_type != LightType::Directional {
+                        Self::slider_row(gui, "范围", &mut light.range, 0.0, 100.0);
+                    }
+
+                    if light.light_type != LightType::Point {
+                        let (mut dx, mut dy, mut dz) =
+                            (light.direction[0], light.direction[1], light.direction[2]);
+                        Self::vec3_row(gui, "方向", &mut dx, &mut dy, &mut dz);
+                        light.direction[0] = dx;
+                        light.direction[1] = dy;
+                        light.direction[2] = dz;
+                    }
+
+                    if light.light_type == LightType::Spot {
+                        Self::slider_row(gui, "内角 (°)", &mut light.inner_angle, 0.0, 90.0);
+                        Self::slider_row(gui, "外角 (°)", &mut light.outer_angle, 0.0, 90.0);
+                    }
+                }
             }
         }
 
         // ── Physics ──
-        if Self::section_matches("物理 physics 刚体 碰撞 rigidbody collider", search_lower)
-            && let Some((body, col)) = state.node_physics.get_mut(&id)
-        {
-            Self::section_separator(gui);
-            Self::section_header(gui, "物理");
+        if Self::section_matches("物理 physics 刚体 碰撞 rigidbody collider", search_lower) {
+            if let Some(handle) = state.GetHandle(id) {
+                if state.world.HasComponent::<engine_core::components::Rigidbody>(handle) {
+                    Self::section_separator(gui);
+                    Self::section_header(gui, "物理");
 
-            Self::read_only_row(gui, "刚体", body);
-            Self::read_only_row(gui, "碰撞", col);
+                    // Query collider info before mutable borrow
+                    let collider_name = if state.world.HasComponent::<engine_core::components::BoxCollider>(handle) {
+                        "BoxCollider".to_string()
+                    } else if state.world.HasComponent::<engine_core::components::SphereCollider>(handle) {
+                        "SphereCollider".to_string()
+                    } else if state.world.HasComponent::<engine_core::components::CapsuleCollider>(handle) {
+                        "CapsuleCollider".to_string()
+                    } else {
+                        "无".to_string()
+                    };
+
+                    if let Some(rb) = state.world.GetComponentMut::<engine_core::components::Rigidbody>(handle) {
+                        Self::slider_row(gui, "质量", &mut rb.mass, 0.01, 100.0);
+                        Self::slider_row(gui, "阻力", &mut rb.drag, 0.0, 10.0);
+                        Self::slider_row(gui, "角阻力", &mut rb.angular_drag, 0.0, 10.0);
+                        Self::checkbox_row(gui, "重力", &mut rb.use_gravity);
+                        Self::checkbox_row(gui, "运动学", &mut rb.is_kinematic);
+
+                        Self::read_only_row(gui, "碰撞体", &collider_name);
+                    }
+                }
+            }
         }
 
         // ── Sprite ──
-        if Self::section_matches("精灵 sprite 纹理 翻转", search_lower)
-            && let Some(sprite) = state.node_sprites.get_mut(&id)
-        {
-            Self::section_separator(gui);
-            Self::section_header(gui, "精灵");
+        if Self::section_matches("精灵 sprite 纹理 翻转", search_lower) {
+            if let Some(handle) = state.GetHandle(id) {
+                if let Some(sprite) = state.world.GetComponentMut::<engine_core::components::SpriteRenderer>(handle) {
+                    Self::section_separator(gui);
+                    Self::section_header(gui, "精灵");
 
-            Self::text_input_row(gui, "纹理", &mut sprite.texture);
-            Self::slider_row(gui, "宽度", &mut sprite.size[0], 0.0, 100.0);
-            Self::slider_row(gui, "高度", &mut sprite.size[1], 0.0, 100.0);
+                    Self::text_input_row(gui, "纹理", &mut sprite.sprite);
 
-            let (mut r, mut g, mut b) = (sprite.color[0], sprite.color[1], sprite.color[2]);
-            Self::vec3_row(gui, "颜色", &mut r, &mut g, &mut b);
-            sprite.color[0] = r;
-            sprite.color[1] = g;
-            sprite.color[2] = b;
+                    let (mut r, mut g, mut b) = (sprite.color[0], sprite.color[1], sprite.color[2]);
+                    Self::vec3_row(gui, "颜色", &mut r, &mut g, &mut b);
+                    sprite.color[0] = r;
+                    sprite.color[1] = g;
+                    sprite.color[2] = b;
 
-            Self::checkbox_row(gui, "水平翻转", &mut sprite.flip_x);
-            Self::checkbox_row(gui, "垂直翻转", &mut sprite.flip_y);
+                    Self::checkbox_row(gui, "水平翻转", &mut sprite.flip_x);
+                    Self::checkbox_row(gui, "垂直翻转", &mut sprite.flip_y);
+                }
+            }
         }
 
         // ── Particle ──
-        if Self::section_matches("粒子 particle 发射器 粒子系统", search_lower)
-            && let Some(particle) = state.node_particles.get_mut(&id)
-        {
-            Self::section_separator(gui);
-            Self::section_header(gui, "粒子系统");
+        if Self::section_matches("粒子 particle 发射器 粒子系统", search_lower) {
+            if let Some(handle) = state.GetHandle(id) {
+                if let Some(ps) = state.world.GetComponentMut::<engine_core::components::ParticleSystem>(handle) {
+                    Self::section_separator(gui);
+                    Self::section_header(gui, "粒子系统");
 
-            Self::text_input_row(gui, "发射器", &mut particle.emitter_type);
-            Self::slider_row(gui, "发射速率", &mut particle.rate, 0.0, 100.0);
-            Self::slider_row(gui, "生命周期", &mut particle.lifetime, 0.1, 10.0);
-            Self::slider_row(gui, "速度", &mut particle.speed, 0.0, 50.0);
-            Self::slider_row(gui, "起始大小", &mut particle.size_start, 0.0, 10.0);
-            Self::slider_row(gui, "结束大小", &mut particle.size_end, 0.0, 10.0);
+                    Self::slider_row(gui, "发射速率", &mut ps.rate, 0.0, 100.0);
+                    Self::slider_row(gui, "生命周期", &mut ps.lifetime, 0.1, 10.0);
+                    Self::slider_row(gui, "起始速度", &mut ps.start_speed, 0.0, 50.0);
+                    Self::slider_row(gui, "起始大小", &mut ps.start_size, 0.0, 10.0);
+                    Self::slider_row(gui, "结束大小", &mut ps.end_size, 0.0, 10.0);
+                    Self::slider_row(gui, "重力修改", &mut ps.gravity_modifier, 0.0, 10.0);
+                    Self::slider_row(gui, "模拟速度", &mut ps.simulation_speed, 0.0, 10.0);
+                }
+            }
         }
 
         // ── Audio ──
-        if Self::section_matches("音频 audio 声音 音量", search_lower)
-            && let Some(audio) = state.node_audio.get_mut(&id)
-        {
-            Self::section_separator(gui);
-            Self::section_header(gui, "音频");
+        if Self::section_matches("音频 audio 声音 音量", search_lower) {
+            if let Some(handle) = state.GetHandle(id) {
+                if let Some(audio) = state.world.GetComponentMut::<engine_core::components::AudioSource>(handle) {
+                    Self::section_separator(gui);
+                    Self::section_header(gui, "音频");
 
-            Self::text_input_row(gui, "音频源", &mut audio.source);
-            Self::slider_row(gui, "音量", &mut audio.volume, 0.0, 1.0);
-            Self::checkbox_row(gui, "循环", &mut audio.looping);
-            Self::checkbox_row(gui, "空间音频", &mut audio.spatial);
+                    Self::text_input_row(gui, "音频源", &mut audio.clip);
+                    Self::slider_row(gui, "音量", &mut audio.volume, 0.0, 1.0);
+                    Self::slider_row(gui, "音调", &mut audio.pitch, 0.0, 3.0);
+                    Self::checkbox_row(gui, "循环", &mut audio.loop_playing);
+                    let mut spatial = audio.spatial_blend > 0.5;
+                    Self::checkbox_row(gui, "空间音频", &mut spatial);
+                    audio.spatial_blend = if spatial { 1.0 } else { 0.0 };
+                }
+            }
         }
 
         // ── Script ──
-        if Self::section_matches("脚本 script lua wasm", search_lower)
-            && let Some(script) = state.node_scripts.get_mut(&id)
-        {
-            Self::section_separator(gui);
-            Self::section_header(gui, "脚本");
+        if Self::section_matches("脚本 script lua wasm", search_lower) {
+            if let Some(handle) = state.GetHandle(id) {
+                if let Some(script) = state.world.GetComponentMut::<engine_core::components::ScriptBehaviour>(handle) {
+                    Self::section_separator(gui);
+                    Self::section_header(gui, "脚本");
 
-            Self::text_input_row(gui, "脚本路径", &mut script.script_path);
-            Self::checkbox_row(gui, "启用", &mut script.enabled);
+                    Self::text_input_row(gui, "脚本路径", &mut script.script_path);
+                    Self::checkbox_row(gui, "启用", &mut script.enabled);
+                }
+            }
         }
 
         // ── Tags ──
-        if Self::section_matches("标签 tags tag", search_lower)
-            && let Some(tags) = state.node_tags.get_mut(&id)
-        {
-            Self::section_separator(gui);
-            Self::section_header(gui, "标签");
+        if Self::section_matches("标签 tags tag", search_lower) {
+            if let Some(handle) = state.GetHandle(id) {
+                if let Some(tag_comp) = state.world.GetComponentMut::<engine_core::components::Tag>(handle) {
+                    Self::section_separator(gui);
+                    Self::section_header(gui, "标签");
 
-            let tag_str = tags.join(", ");
-            let mut tag_edit = tag_str.clone();
-            Self::text_input_row(gui, "标签", &mut tag_edit);
-            if tag_edit != tag_str {
-                *tags = tag_edit
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
+                    let tag_str = tag_comp.tags.join(", ");
+                    let mut tag_edit = tag_str.clone();
+                    Self::text_input_row(gui, "标签", &mut tag_edit);
+                    if tag_edit != tag_str {
+                        tag_comp.tags = tag_edit
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                    }
+                }
             }
         }
 
@@ -577,16 +746,21 @@ impl InspectorPanel {
 
         // Remove Component dropdown
         if state.show_remove_component_menu {
+            // Check World API for component existence
+            let wh = state.GetHandle(id);
             let existing_components: Vec<(&str, bool)> = vec![
-                ("材质 (PBR)", state.node_materials.contains_key(&id)),
-                ("渲染", state.node_render.contains_key(&id)),
-                ("光照", state.node_lights.contains_key(&id)),
-                ("物理", state.node_physics.contains_key(&id)),
-                ("精灵", state.node_sprites.contains_key(&id)),
-                ("粒子系统", state.node_particles.contains_key(&id)),
-                ("音频", state.node_audio.contains_key(&id)),
-                ("脚本", state.node_scripts.contains_key(&id)),
-                ("标签", state.node_tags.contains_key(&id)),
+                ("材质 (PBR)", wh.map(|h| state.world.HasComponent::<engine_core::components::Material>(h)).unwrap_or(false)),
+                ("渲染", wh.map(|h| state.world.HasComponent::<engine_core::components::MeshRenderer>(h)).unwrap_or(false)),
+                ("光照", wh.map(|h| state.world.HasComponent::<engine_core::components::Light>(h)).unwrap_or(false)),
+                ("物理", wh.map(|h| state.world.HasComponent::<engine_core::components::Rigidbody>(h)
+                    || state.world.HasComponent::<engine_core::components::BoxCollider>(h)
+                    || state.world.HasComponent::<engine_core::components::SphereCollider>(h)
+                    || state.world.HasComponent::<engine_core::components::CapsuleCollider>(h)).unwrap_or(false)),
+                ("精灵", wh.map(|h| state.world.HasComponent::<engine_core::components::SpriteRenderer>(h)).unwrap_or(false)),
+                ("粒子系统", wh.map(|h| state.world.HasComponent::<engine_core::components::ParticleSystem>(h)).unwrap_or(false)),
+                ("音频", wh.map(|h| state.world.HasComponent::<engine_core::components::AudioSource>(h)).unwrap_or(false)),
+                ("脚本", wh.map(|h| state.world.HasComponent::<engine_core::components::ScriptBehaviour>(h)).unwrap_or(false)),
+                ("标签", wh.map(|h| state.world.HasComponent::<engine_core::components::Tag>(h)).unwrap_or(false)),
             ];
             let comp_types = [
                 "material", "render", "light", "physics", "sprite", "particle", "audio", "script",
@@ -644,75 +818,46 @@ impl InspectorPanel {
     }
 
     fn vec3_row(gui: &mut Gui, label: &str, x: &mut f32, y: &mut f32, z: &mut f32) {
-        let axis_colors = [
-            Color32::from_rgb(255, 107, 107),
-            Color32::from_rgb(46, 213, 115),
-            Color32::from_rgb(77, 171, 247),
-        ];
-
-        gui.ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new(label)
-                    .color(Color32::from_gray(152))
-                    .size(12.0),
-            );
-
-            for (val, (axis_label, acolor)) in [
-                (x, ("X", axis_colors[0])),
-                (y, ("Y", axis_colors[1])),
-                (z, ("Z", axis_colors[2])),
-            ] {
-                let mut buf = format!("{:.1}", *val);
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new(axis_label).color(acolor).size(10.0));
-                    let resp = ui.add(
-                        egui::TextEdit::singleline(&mut buf)
-                            .desired_width(48.0)
-                            .margin(egui::Margin::symmetric(4.0, 2.0)),
-                    );
-                    if resp.lost_focus()
-                        && let Ok(v) = buf.trim().parse::<f32>()
-                    {
-                        *val = v;
-                    }
-                });
-            }
-        });
+        let row_h = 28.0;
+        let row_rect = gui.ui.allocate_ui_with_layout(
+            egui::vec2(gui.ui.available_width(), row_h),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |_| {},
+        );
+        gui.vec3_input(row_rect.response.rect, label, x, y, z);
         gui.ui.add_space(ROW_SPACING);
     }
 
     fn slider_row(gui: &mut Gui, label: &str, value: &mut f32, min: f32, max: f32) {
-        gui.ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new(label)
-                    .color(Color32::from_gray(152))
-                    .size(12.0),
-            );
-            ui.add(egui::Slider::new(value, min..=max).show_value(true));
-        });
+        let row_h = 22.0;
+        let row_rect = gui.ui.allocate_ui_with_layout(
+            egui::vec2(gui.ui.available_width(), row_h),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |_| {},
+        );
+        gui.slider_f32(row_rect.response.rect, label, value, min, max);
         gui.ui.add_space(ROW_SPACING);
     }
 
     fn checkbox_row(gui: &mut Gui, label: &str, checked: &mut bool) {
-        gui.ui.horizontal(|ui| {
-            ui.checkbox(checked, label);
-        });
+        let row_h = 22.0;
+        let row_rect = gui.ui.allocate_ui_with_layout(
+            egui::vec2(gui.ui.available_width(), row_h),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |_| {},
+        );
+        gui.checkbox(row_rect.response.rect, label, checked);
         gui.ui.add_space(ROW_SPACING);
     }
 
     fn read_only_row(gui: &mut Gui, label: &str, value: &str) {
-        gui.ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new(label)
-                    .color(Color32::from_gray(152))
-                    .size(12.0),
-            );
-            ui.add(
-                egui::TextEdit::singleline(&mut value.to_string())
-                    .desired_width(ui.available_width())
-                    .interactive(false),
-            );
-        });
+        let row_h = 22.0;
+        let row_rect = gui.ui.allocate_ui_with_layout(
+            egui::vec2(gui.ui.available_width(), row_h),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |_| {},
+        );
+        gui.input_labeled(row_rect.response.rect, label, value);
         gui.ui.add_space(ROW_SPACING);
     }
 
@@ -729,76 +874,97 @@ impl InspectorPanel {
     }
 
     fn remove_component(state: &mut EditorState, id: u64, comp_type: &str) {
-        match comp_type {
-            "material" => {
-                state.node_materials.remove(&id);
+        if let Some(handle) = state.GetHandle(id) {
+            match comp_type {
+                "material" => {
+                    state.world.RemoveComponent::<engine_core::components::Material>(handle);
+                }
+                "render" => {
+                    state.world.RemoveComponent::<engine_core::components::MeshRenderer>(handle);
+                }
+                "light" => {
+                    state.world.RemoveComponent::<engine_core::components::Light>(handle);
+                }
+                "physics" => {
+                    state.world.RemoveComponent::<engine_core::components::Rigidbody>(handle);
+                    state.world.RemoveComponent::<engine_core::components::BoxCollider>(handle);
+                    state.world.RemoveComponent::<engine_core::components::SphereCollider>(handle);
+                    state.world.RemoveComponent::<engine_core::components::CapsuleCollider>(handle);
+                }
+                "sprite" => {
+                    state.world.RemoveComponent::<engine_core::components::SpriteRenderer>(handle);
+                }
+                "particle" => {
+                    state.world.RemoveComponent::<engine_core::components::ParticleSystem>(handle);
+                }
+                "audio" => {
+                    state.world.RemoveComponent::<engine_core::components::AudioSource>(handle);
+                }
+                "script" => {
+                    state.world.RemoveComponent::<engine_core::components::ScriptBehaviour>(handle);
+                }
+                "tags" => {
+                    state.world.RemoveComponent::<engine_core::components::Tag>(handle);
+                }
+                _ => {}
             }
-            "render" => {
-                state.node_render.remove(&id);
-            }
-            "light" => {
-                state.node_lights.remove(&id);
-            }
-            "physics" => {
-                state.node_physics.remove(&id);
-            }
-            "sprite" => {
-                state.node_sprites.remove(&id);
-            }
-            "particle" => {
-                state.node_particles.remove(&id);
-            }
-            "audio" => {
-                state.node_audio.remove(&id);
-            }
-            "script" => {
-                state.node_scripts.remove(&id);
-            }
-            "tags" => {
-                state.node_tags.remove(&id);
-            }
-            _ => {}
         }
     }
 
     fn add_component_to_node(state: &mut EditorState, node_id: u64, comp_type: &str) {
-        match comp_type {
-            "material" => {
-                state.node_materials.entry(node_id).or_default();
-                state.log_info(&format!("已添加材质组件到节点 {}", node_id));
+        // Add to World API if handle exists
+        if let Some(handle) = state.GetHandle(node_id) {
+            match comp_type {
+                "material" => {
+                    if !state.world.HasComponent::<engine_core::components::Material>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::Material::default());
+                    }
+                }
+                "render" => {
+                    if !state.world.HasComponent::<engine_core::components::MeshRenderer>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::MeshRenderer::default());
+                    }
+                }
+                "light" => {
+                    if !state.world.HasComponent::<engine_core::components::Light>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::Light::default());
+                    }
+                }
+                "physics" => {
+                    if !state.world.HasComponent::<engine_core::components::Rigidbody>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::Rigidbody::default());
+                    }
+                    if !state.world.HasComponent::<engine_core::components::BoxCollider>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::BoxCollider::default());
+                    }
+                }
+                "sprite" => {
+                    if !state.world.HasComponent::<engine_core::components::SpriteRenderer>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::SpriteRenderer::default());
+                    }
+                }
+                "particle" => {
+                    if !state.world.HasComponent::<engine_core::components::ParticleSystem>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::ParticleSystem::default());
+                    }
+                }
+                "audio" => {
+                    if !state.world.HasComponent::<engine_core::components::AudioSource>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::AudioSource::default());
+                    }
+                }
+                "script" => {
+                    if !state.world.HasComponent::<engine_core::components::ScriptBehaviour>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::ScriptBehaviour::default());
+                    }
+                }
+                "tags" => {
+                    if !state.world.HasComponent::<engine_core::components::Tag>(handle) {
+                        state.world.AddComponent(handle, engine_core::components::Tag::default());
+                    }
+                }
+                _ => {}
             }
-            "light" => {
-                state.node_lights.entry(node_id).or_default();
-                state.log_info(&format!("已添加光照组件到节点 {}", node_id));
-            }
-            "sprite" => {
-                state.node_sprites.entry(node_id).or_default();
-                state.log_info(&format!("已添加精灵组件到节点 {}", node_id));
-            }
-            "particle" => {
-                state.node_particles.entry(node_id).or_default();
-                state.log_info(&format!("已添加粒子组件到节点 {}", node_id));
-            }
-            "audio" => {
-                state.node_audio.entry(node_id).or_default();
-                state.log_info(&format!("已添加音频组件到节点 {}", node_id));
-            }
-            "script" => {
-                state.node_scripts.entry(node_id).or_default();
-                state.log_info(&format!("已添加脚本组件到节点 {}", node_id));
-            }
-            "physics" => {
-                state
-                    .node_physics
-                    .entry(node_id)
-                    .or_insert_with(|| ("Static".into(), "Box".into()));
-                state.log_info(&format!("已添加物理组件到节点 {}", node_id));
-            }
-            "tags" => {
-                state.node_tags.entry(node_id).or_default();
-                state.log_info(&format!("已添加标签组件到节点 {}", node_id));
-            }
-            _ => {}
         }
     }
 }

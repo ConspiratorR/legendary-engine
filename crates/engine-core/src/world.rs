@@ -105,8 +105,14 @@ pub struct World {
 impl std::fmt::Debug for World {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("World")
-            .field("gameobject_count", &self.gameobject_data.iter().filter(|g| g.is_some()).count())
-            .field("transform_count", &self.transforms.iter().filter(|t| t.is_some()).count())
+            .field(
+                "gameobject_count",
+                &self.gameobject_data.iter().filter(|g| g.is_some()).count(),
+            )
+            .field(
+                "transform_count",
+                &self.transforms.iter().filter(|t| t.is_some()).count(),
+            )
             .field("pending_destroy", &self.pending_destroy.len())
             .finish()
     }
@@ -522,7 +528,11 @@ impl World {
     ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/GameObject.AddComponent.html>
-    pub fn AddComponent<T: Component + 'static>(&mut self, handle: GameObjectHandle, component: T) -> &mut T {
+    pub fn AddComponent<T: Component + 'static>(
+        &mut self,
+        handle: GameObjectHandle,
+        component: T,
+    ) -> &mut T {
         let index = handle.index() as usize;
 
         if let Some(go) = self.gameobject_data.get_mut(index) {
@@ -671,6 +681,24 @@ impl World {
         result
     }
 
+    /// Remove a component from a GameObject (matches `Object.Destroy(component)`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/Object.Destroy.html>
+    ///
+    /// Returns `true` if the component was found and removed.
+    pub fn RemoveComponent<T: Component + 'static>(&mut self, handle: GameObjectHandle) -> bool {
+        let index = handle.index() as usize;
+
+        if let Some(go) = self.gameobject_data.get_mut(index) {
+            if let Some(go) = go {
+                return go.RemoveComponent::<T>().is_some();
+            }
+        }
+
+        false
+    }
+
     // ============================================================
     // Transform Access (built-in)
     // ============================================================
@@ -719,9 +747,7 @@ impl World {
         let child_index = child.index() as usize;
 
         // Remove from old parent's children list
-        let old_parent = self.transforms[child_index]
-            .as_ref()
-            .and_then(|t| t.parent);
+        let old_parent = self.transforms[child_index].as_ref().and_then(|t| t.parent);
 
         if let Some(old_parent) = old_parent {
             let old_parent_index = old_parent.index() as usize;
@@ -991,7 +1017,12 @@ impl World {
     }
 
     /// Send message with a value (matches `GameObject.SendMessage(methodName, value)`).
-    pub fn SendMessageWithValue(&mut self, handle: GameObjectHandle, method: &str, _value: &dyn Any) {
+    pub fn SendMessageWithValue(
+        &mut self,
+        handle: GameObjectHandle,
+        method: &str,
+        _value: &dyn Any,
+    ) {
         let index = handle.index() as usize;
 
         if let Some(go) = self.gameobject_data.get_mut(index) {
@@ -1065,7 +1096,8 @@ impl World {
             None
         } else {
             self.GetParent(handle).and_then(|ph| {
-                self.GetTransform(ph).map(|t| (t.Position(), t.Rotation(), t.LossyScale()))
+                self.GetTransform(ph)
+                    .map(|t| (t.Position(), t.Rotation(), t.LossyScale()))
             })
         };
 

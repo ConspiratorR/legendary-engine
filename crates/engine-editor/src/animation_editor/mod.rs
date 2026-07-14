@@ -1,5 +1,7 @@
-//! Animation editor — clip management, curve editing, keyframe manipulation,
-//! timeline scrubbing, and animation preview/IO.
+//! Clip management, curve editing, timeline scrubbing.
+//!
+//! TODO: Migrate from direct egui to IMGUI wrapper (engine_ui::imgui)
+//! Unity Reference: https://docs.unity3d.com/ScriptReference/AnimationWindow.html
 
 pub mod curve_editor;
 pub mod io;

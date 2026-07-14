@@ -1,5 +1,7 @@
-//! Script editor — code editing with syntax highlighting, breakpoints,
-//! output console, and file-watcher integration.
+//! Code editor with syntax highlighting, breakpoints, output console.
+//!
+//! TODO: Migrate from direct egui to IMGUI wrapper (engine_ui::imgui)
+//! Unity Reference: https://docs.unity3d.com/ScriptReference/TextEditor.html
 
 pub mod breakpoints;
 pub mod output;

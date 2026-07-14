@@ -477,7 +477,11 @@ mod tests {
         let handle = world.CreateGameObject("TestObject");
         let go = world.GetTransform(handle); // Just to verify it exists
 
-        let prefab = Prefab::Create("TestPrefab", &GameObject::new_with_name("TestObject"), &world);
+        let prefab = Prefab::Create(
+            "TestPrefab",
+            &GameObject::new_with_name("TestObject"),
+            &world,
+        );
 
         assert_eq!(prefab.Name(), "TestPrefab");
         assert!(prefab.Id().0 > 0);
@@ -488,7 +492,11 @@ mod tests {
         let mut world = World::new();
         let handle = world.CreateGameObject("TestObject");
 
-        let prefab = Prefab::Create("TestPrefab", &GameObject::new_with_name("TestObject"), &world);
+        let prefab = Prefab::Create(
+            "TestPrefab",
+            &GameObject::new_with_name("TestObject"),
+            &world,
+        );
 
         let instance = prefab.Instantiate(&mut world);
         assert_eq!(instance.PrefabId(), prefab.Id());
@@ -498,7 +506,11 @@ mod tests {
     #[test]
     fn test_apply_and_check_overrides() {
         let mut world = World::new();
-        let prefab = Prefab::Create("TestPrefab", &GameObject::new_with_name("TestObject"), &world);
+        let prefab = Prefab::Create(
+            "TestPrefab",
+            &GameObject::new_with_name("TestObject"),
+            &world,
+        );
         let mut instance = prefab.Instantiate(&mut world);
 
         assert!(!instance.HasOverrides());
@@ -516,7 +528,11 @@ mod tests {
     #[test]
     fn test_revert_single_override() {
         let mut world = World::new();
-        let prefab = Prefab::Create("TestPrefab", &GameObject::new_with_name("TestObject"), &world);
+        let prefab = Prefab::Create(
+            "TestPrefab",
+            &GameObject::new_with_name("TestObject"),
+            &world,
+        );
         let mut instance = prefab.Instantiate(&mut world);
 
         instance.ApplyOverride("Position.X", PrefabValue::Float(5.0));
@@ -530,7 +546,11 @@ mod tests {
     #[test]
     fn test_revert_all() {
         let mut world = World::new();
-        let prefab = Prefab::Create("TestPrefab", &GameObject::new_with_name("TestObject"), &world);
+        let prefab = Prefab::Create(
+            "TestPrefab",
+            &GameObject::new_with_name("TestObject"),
+            &world,
+        );
         let mut instance = prefab.Instantiate(&mut world);
 
         instance.ApplyOverride("A", PrefabValue::Bool(true));
@@ -548,7 +568,11 @@ mod tests {
         assert_eq!(registry.Count(), 0);
 
         let mut world = World::new();
-        let prefab = Prefab::Create("TestPrefab", &GameObject::new_with_name("TestObject"), &world);
+        let prefab = Prefab::Create(
+            "TestPrefab",
+            &GameObject::new_with_name("TestObject"),
+            &world,
+        );
         let id = registry.Register(prefab);
 
         assert_eq!(registry.Count(), 1);

@@ -1,3 +1,4 @@
+use engine_core::Component;
 use engine_core::Time;
 use engine_core::behaviour::Behaviour;
 use engine_core::context::Context;
@@ -5,7 +6,6 @@ use engine_core::event::{Event, EventBus, EventBusExt};
 use engine_core::gameobject::GameObjectHandle;
 use engine_core::monobehaviour::{MonoBehaviour, MonoBehaviourHolder};
 use engine_core::world::World;
-use engine_core::Component;
 use std::any::Any;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

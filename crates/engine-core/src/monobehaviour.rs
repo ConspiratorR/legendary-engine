@@ -24,7 +24,6 @@
 //!
 /// Invoke
 /// MonoBehaviour supports delayed method calls via `Invoke`, `InvokeRepeating`, `CancelInvoke`.
-
 use crate::behaviour::Behaviour;
 use crate::component::Component;
 use crate::context::Context;
@@ -84,6 +83,11 @@ pub trait MonoBehaviour: Behaviour {
     // ============================================================
     // Properties
     // ============================================================
+
+    /// Returns the type name of this MonoBehaviour (matches Unity's `MonoBehaviour.GetType().Name`).
+    fn TypeName(&self) -> &str {
+        std::any::type_name_of_val(self)
+    }
 
     /// Whether to use GUI layout (matches `MonoBehaviour.useGUILayout`).
     fn UseGUILayout(&self) -> bool {
@@ -234,6 +238,44 @@ pub trait MonoBehaviour: Behaviour {
     /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnTriggerStay.html>
     fn OnTriggerStay(&mut self, _context: &mut Context, _other: &TriggerData) {}
 
+    /// Called when a joint attached to the same game object broke (matches `MonoBehaviour.OnJointBreak`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnJointBreak.html>
+    fn OnJointBreak(&mut self, _breakForce: f32) {}
+
+    // ============================================================
+    // Transform Callbacks
+    // ============================================================
+
+    /// Called when the transform parent changes (matches `MonoBehaviour.OnTransformParentChanged`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnTransformParentChanged.html>
+    fn OnTransformParentChanged(&mut self) {}
+
+    /// Called after all transform children have changed (matches `MonoBehaviour.OnTransformChildrenChanged`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnTransformChildrenChanged.html>
+    fn OnTransformChildrenChanged(&mut self) {}
+
+    // ============================================================
+    // Editor Callbacks
+    // ============================================================
+
+    /// Called by the editor to validate and reload the inspector (matches `MonoBehaviour.OnValidate`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnValidate.html>
+    fn OnValidate(&mut self) {}
+
+    /// Called when the script is loaded or a value changes in the inspector (matches `MonoBehaviour.Reset`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.Reset.html>
+    fn Reset(&mut self) {}
+
     // ============================================================
     // Input Callbacks
     // ============================================================
@@ -295,6 +337,30 @@ pub trait MonoBehaviour: Behaviour {
 
     /// Called for drawing gizmos when selected (matches `MonoBehaviour.OnDrawGizmosSelected`).
     fn OnDrawGizmosSelected(&self, _context: &Context) {}
+
+    /// Called during the render loop (matches `MonoBehaviour.OnRenderObject`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnRenderObject.html>
+    fn OnRenderObject(&mut self) {}
+
+    /// Called before any camera renders the object (matches `MonoBehaviour.OnWillRenderObject`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnWillRenderObject.html>
+    fn OnWillRenderObject(&mut self) {}
+
+    /// Called before a camera renders the scene (matches `MonoBehaviour.OnPreRender`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnPreRender.html>
+    fn OnPreRender(&mut self) {}
+
+    /// Called after a camera renders the scene (matches `MonoBehaviour.OnPostRender`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnPostRender.html>
+    fn OnPostRender(&mut self) {}
 
     // ============================================================
     // Animation Callbacks
@@ -378,7 +444,10 @@ pub trait MonoBehaviour: Behaviour {
     ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.print.html>
-    fn print(message: &str) where Self: Sized {
+    fn print(message: &str)
+    where
+        Self: Sized,
+    {
         println!("{}", message);
     }
 }

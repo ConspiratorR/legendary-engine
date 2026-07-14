@@ -487,84 +487,98 @@ impl EditorState {
             entity.parent = node.parent;
             entity.children = node.children.clone();
 
-            if let Some(mat) = self.node_materials.get(&node.id) {
-                entity.material = Some(MaterialDataSer {
-                    base_color: mat.base_color,
-                    metallic: mat.metallic,
-                    roughness: mat.roughness,
-                    ao: mat.ao,
-                    emissive: mat.emissive,
-                });
-            }
-            if let Some(light) = self.node_lights.get(&node.id) {
-                entity.light = Some(LightDataSer {
-                    light_type: format!("{:?}", light.light_type).to_lowercase(),
-                    color: light.color,
-                    intensity: light.intensity,
-                    range: light.range,
-                    direction: light.direction,
-                    inner_angle: light.inner_angle,
-                    outer_angle: light.outer_angle,
-                    enabled: light.enabled,
-                });
-            }
-            if let Some(sprite) = self.node_sprites.get(&node.id) {
-                entity.sprite = Some(SpriteDataSer {
-                    texture: sprite.texture.clone(),
-                    size: sprite.size,
-                    color: sprite.color,
-                    flip_x: sprite.flip_x,
-                    flip_y: sprite.flip_y,
-                    uv_region: sprite.uv_region,
-                });
-            }
-            if let Some(particle) = self.node_particles.get(&node.id) {
-                entity.particle = Some(ParticleDataSer {
-                    emitter_type: particle.emitter_type.clone(),
-                    rate: particle.rate,
-                    lifetime: particle.lifetime,
-                    speed: particle.speed,
-                    size_start: particle.size_start,
-                    size_end: particle.size_end,
-                    color_start: particle.color_start,
-                    color_end: particle.color_end,
-                });
-            }
-            if let Some(audio) = self.node_audio.get(&node.id) {
-                entity.audio = Some(AudioDataSer {
-                    source: audio.source.clone(),
-                    volume: audio.volume,
-                    looping: audio.looping,
-                    spatial: audio.spatial,
-                    attenuation: audio.attenuation.clone(),
-                });
-            }
-            if let Some(script) = self.node_scripts.get(&node.id) {
-                entity.script = Some(ScriptDataSer {
-                    script_path: script.script_path.clone(),
-                    enabled: script.enabled,
-                    properties: script.properties.clone(),
-                });
-            }
-            if let Some(tags) = self.node_tags.get(&node.id) {
-                entity.tags = tags.clone();
-            }
-            if let Some((body, col)) = self.node_physics.get(&node.id) {
-                entity.physics = Some(PhysicsDataSer {
-                    body_type: body.clone(),
-                    collider_type: col.clone(),
-                    mass: 1.0,
-                    friction: 0.5,
-                    restitution: 0.3,
-                    is_sensor: false,
-                });
-            }
-            if let Some((mat_name, mesh_name, cast_shadow)) = self.node_render.get(&node.id) {
-                entity.render = Some(RenderDataSer {
-                    material_name: mat_name.clone(),
-                    mesh_name: mesh_name.clone(),
-                    cast_shadow: *cast_shadow,
-                });
+            // Read components from World API (source of truth)
+            if let Some(handle) = self.GetHandle(node.id) {
+                if let Some(mat) = self.world.GetComponent::<engine_core::components::Material>(handle) {
+                    entity.material = Some(MaterialDataSer {
+                        base_color: mat.base_color,
+                        metallic: mat.metallic,
+                        roughness: mat.smoothness,
+                        ao: 1.0,
+                        emissive: mat.emission_color,
+                    });
+                }
+                if let Some(light) = self.world.GetComponent::<engine_core::components::Light>(handle) {
+                    entity.light = Some(LightDataSer {
+                        light_type: format!("{:?}", light.light_type).to_lowercase(),
+                        color: light.color,
+                        intensity: light.intensity,
+                        range: light.range,
+                        direction: [0.0, 0.0, 0.0],
+                        inner_angle: light.inner_angle,
+                        outer_angle: light.outer_angle,
+                        enabled: true,
+                    });
+                }
+                if let Some(sprite) = self.world.GetComponent::<engine_core::components::SpriteRenderer>(handle) {
+                    entity.sprite = Some(SpriteDataSer {
+                        texture: sprite.sprite.clone(),
+                        size: [1.0, 1.0],
+                        color: sprite.color,
+                        flip_x: sprite.flip_x,
+                        flip_y: sprite.flip_y,
+                        uv_region: [0.0, 0.0, 1.0, 1.0],
+                    });
+                }
+                if let Some(ps) = self.world.GetComponent::<engine_core::components::ParticleSystem>(handle) {
+                    entity.particle = Some(ParticleDataSer {
+                        emitter_type: "point".into(),
+                        rate: ps.rate,
+                        lifetime: ps.lifetime,
+                        speed: ps.start_speed,
+                        size_start: ps.start_size,
+                        size_end: ps.end_size,
+                        color_start: ps.start_color,
+                        color_end: ps.end_color,
+                    });
+                }
+                if let Some(audio) = self.world.GetComponent::<engine_core::components::AudioSource>(handle) {
+                    entity.audio = Some(AudioDataSer {
+                        source: audio.clip.clone(),
+                        volume: audio.volume,
+                        looping: audio.loop_playing,
+                        spatial: audio.spatial_blend > 0.5,
+                        attenuation: "linear".into(),
+                    });
+                }
+                if let Some(script) = self.world.GetComponent::<engine_core::components::ScriptBehaviour>(handle) {
+                    entity.script = Some(ScriptDataSer {
+                        script_path: script.script_path.clone(),
+                        enabled: script.enabled,
+                        properties: script.properties.clone(),
+                    });
+                }
+                if let Some(tag) = self.world.GetComponent::<engine_core::components::Tag>(handle) {
+                    entity.tags = tag.tags.clone();
+                }
+                // Physics: read Rigidbody + collider type
+                if self.world.HasComponent::<engine_core::components::Rigidbody>(handle) {
+                    let rb = self.world.GetComponent::<engine_core::components::Rigidbody>(handle).unwrap();
+                    let collider_type = if self.world.HasComponent::<engine_core::components::BoxCollider>(handle) {
+                        "Box"
+                    } else if self.world.HasComponent::<engine_core::components::SphereCollider>(handle) {
+                        "Sphere"
+                    } else if self.world.HasComponent::<engine_core::components::CapsuleCollider>(handle) {
+                        "Capsule"
+                    } else {
+                        "None"
+                    };
+                    entity.physics = Some(PhysicsDataSer {
+                        body_type: if rb.is_kinematic { "Kinematic".into() } else { "Dynamic".into() },
+                        collider_type: collider_type.into(),
+                        mass: rb.mass,
+                        friction: 0.5,
+                        restitution: 0.3,
+                        is_sensor: false,
+                    });
+                }
+                if let Some(renderer) = self.world.GetComponent::<engine_core::components::MeshRenderer>(handle) {
+                    entity.render = Some(RenderDataSer {
+                        material_name: renderer.material.clone(),
+                        mesh_name: renderer.mesh.clone(),
+                        cast_shadow: renderer.cast_shadows,
+                    });
+                }
             }
             scene.add_entity(entity);
         }
@@ -580,17 +594,24 @@ impl EditorState {
         self.node_transforms.clear();
         self.node_materials.clear();
         self.node_lights.clear();
-        self.node_sprites.clear();
-        self.node_particles.clear();
-        self.node_audio.clear();
-        self.node_scripts.clear();
-        self.node_tags.clear();
         self.node_render.clear();
-        self.node_physics.clear();
         self.selected_nodes.clear();
+
+        // Clear the World
+        for handle in self.world.GetRootGameObjects() {
+            self.world.DestroyImmediate(handle);
+        }
+        self.node_to_handle.clear();
+        self.handle_to_node.clear();
 
         let mut next_id = 1u64;
         for entity in &scene.entities {
+            // Create GameObject in World
+            let handle = self.world.CreateGameObject(&entity.name);
+            let node_id = entity.id;
+            self.node_to_handle.insert(node_id, handle);
+            self.handle_to_node.insert(handle, node_id);
+
             let node = crate::state::TreeNode {
                 id: entity.id,
                 name: entity.name.clone(),
@@ -607,7 +628,7 @@ impl EditorState {
                 next_id = entity.id + 1;
             }
 
-            // Convert quaternion back to Euler angles (radians) for editor storage
+            // Set transform
             let quat = engine_math::Quat::from_xyzw(
                 entity.transform.rotation[0],
                 entity.transform.rotation[1],
@@ -631,7 +652,29 @@ impl EditorState {
                 ],
             );
 
+            if let Some(mut transform) = self.world.GetTransformMut(handle) {
+                transform.SetPosition(engine_math::Vec3::new(
+                    entity.transform.translation[0],
+                    entity.transform.translation[1],
+                    entity.transform.translation[2],
+                ));
+                transform.SetRotation(quat);
+                transform.SetLocalScale(engine_math::Vec3::new(
+                    entity.transform.scale[0],
+                    entity.transform.scale[1],
+                    entity.transform.scale[2],
+                ));
+            }
+
+            // Add Material component
             if let Some(ref mat) = entity.material {
+                self.world.AddComponent(handle, engine_core::components::Material {
+                    base_color: mat.base_color,
+                    metallic: mat.metallic,
+                    smoothness: mat.roughness,
+                    emission_color: mat.emissive,
+                    ..Default::default()
+                });
                 self.node_materials.insert(
                     entity.id,
                     crate::state::MaterialData {
@@ -643,8 +686,26 @@ impl EditorState {
                     },
                 );
             }
+
+            // Add Light component
             if let Some(ref light) = entity.light {
                 let lt = match light.light_type.as_str() {
+                    "directional" => engine_core::components::LightType::Directional,
+                    "point" => engine_core::components::LightType::Point,
+                    "spot" => engine_core::components::LightType::Spot,
+                    _ => engine_core::components::LightType::Directional,
+                };
+                self.world.AddComponent(handle, engine_core::components::Light {
+                    light_type: lt,
+                    color: light.color,
+                    intensity: light.intensity,
+                    range: light.range,
+                    inner_angle: light.inner_angle,
+                    outer_angle: light.outer_angle,
+                    shadows: true,
+                    ..Default::default()
+                });
+                let lt_editor = match light.light_type.as_str() {
                     "directional" => crate::state::LightType::Directional,
                     "point" => crate::state::LightType::Point,
                     "spot" => crate::state::LightType::Spot,
@@ -653,7 +714,7 @@ impl EditorState {
                 self.node_lights.insert(
                     entity.id,
                     crate::state::LightData {
-                        light_type: lt,
+                        light_type: lt_editor,
                         color: light.color,
                         intensity: light.intensity,
                         range: light.range,
@@ -664,79 +725,103 @@ impl EditorState {
                     },
                 );
             }
+
+            // Add SpriteRenderer component
             if let Some(ref sprite) = entity.sprite {
-                self.node_sprites.insert(
-                    entity.id,
-                    crate::state::SpriteData {
-                        texture: sprite.texture.clone(),
-                        size: sprite.size,
-                        color: sprite.color,
-                        flip_x: sprite.flip_x,
-                        flip_y: sprite.flip_y,
-                        uv_region: sprite.uv_region,
-                    },
-                );
+                self.world.AddComponent(handle, engine_core::components::SpriteRenderer {
+                    sprite: sprite.texture.clone(),
+                    color: sprite.color,
+                    flip_x: sprite.flip_x,
+                    flip_y: sprite.flip_y,
+                    ..Default::default()
+                });
             }
+
+            // Add ParticleSystem component
             if let Some(ref particle) = entity.particle {
-                self.node_particles.insert(
-                    entity.id,
-                    crate::state::ParticleData {
-                        emitter_type: particle.emitter_type.clone(),
-                        rate: particle.rate,
-                        lifetime: particle.lifetime,
-                        speed: particle.speed,
-                        size_start: particle.size_start,
-                        size_end: particle.size_end,
-                        color_start: particle.color_start,
-                        color_end: particle.color_end,
-                    },
-                );
+                self.world.AddComponent(handle, engine_core::components::ParticleSystem {
+                    rate: particle.rate,
+                    lifetime: particle.lifetime,
+                    start_speed: particle.speed,
+                    start_size: particle.size_start,
+                    end_size: particle.size_end,
+                    start_color: particle.color_start,
+                    end_color: particle.color_end,
+                    ..Default::default()
+                });
             }
+
+            // Add AudioSource component
             if let Some(ref audio) = entity.audio {
-                self.node_audio.insert(
-                    entity.id,
-                    crate::state::AudioData {
-                        source: audio.source.clone(),
-                        volume: audio.volume,
-                        looping: audio.looping,
-                        spatial: audio.spatial,
-                        attenuation: audio.attenuation.clone(),
-                    },
-                );
+                self.world.AddComponent(handle, engine_core::components::AudioSource {
+                    clip: audio.source.clone(),
+                    volume: audio.volume,
+                    loop_playing: audio.looping,
+                    spatial_blend: if audio.spatial { 1.0 } else { 0.0 },
+                    ..Default::default()
+                });
             }
+
+            // Add ScriptBehaviour component
             if let Some(ref script) = entity.script {
-                self.node_scripts.insert(
-                    entity.id,
-                    crate::state::ScriptData {
-                        script_path: script.script_path.clone(),
-                        enabled: script.enabled,
-                        properties: script.properties.clone(),
-                    },
-                );
+                self.world.AddComponent(handle, engine_core::components::ScriptBehaviour {
+                    script_path: script.script_path.clone(),
+                    enabled: script.enabled,
+                    properties: script.properties.clone(),
+                });
             }
+
+            // Add Tag component
             if !entity.tags.is_empty() {
-                self.node_tags.insert(entity.id, entity.tags.clone());
+                self.world.AddComponent(handle, engine_core::components::Tag {
+                    tags: entity.tags.clone(),
+                });
             }
+
+            // Add Physics components
             if let Some(ref physics) = entity.physics {
-                self.node_physics.insert(
-                    entity.id,
-                    (physics.body_type.clone(), physics.collider_type.clone()),
-                );
+                self.world.AddComponent(handle, engine_core::components::Rigidbody {
+                    mass: physics.mass,
+                    is_kinematic: physics.body_type == "Kinematic",
+                    use_gravity: physics.body_type == "Dynamic",
+                    ..Default::default()
+                });
+                match physics.collider_type.as_str() {
+                    "Box" => {
+                        self.world.AddComponent(handle, engine_core::components::BoxCollider::default());
+                    }
+                    "Sphere" => {
+                        self.world.AddComponent(handle, engine_core::components::SphereCollider::default());
+                    }
+                    "Capsule" => {
+                        self.world.AddComponent(handle, engine_core::components::CapsuleCollider::default());
+                    }
+                    _ => {}
+                }
             }
+
+            // Add MeshRenderer component
             if let Some(ref render) = entity.render {
+                self.world.AddComponent(handle, engine_core::components::MeshRenderer {
+                    mesh: render.mesh_name.clone(),
+                    material: render.material_name.clone(),
+                    cast_shadows: render.cast_shadow,
+                    ..Default::default()
+                });
                 self.node_render.insert(
                     entity.id,
-                    (
-                        render.material_name.clone(),
-                        render.mesh_name.clone(),
-                        render.cast_shadow,
-                    ),
+                    (render.material_name.clone(), render.mesh_name.clone(), render.cast_shadow),
                 );
-            } else {
-                self.node_render
-                    .insert(entity.id, ("Default".into(), "Cube".into(), true));
+            }
+
+            // Set parent
+            if let Some(parent_id) = entity.parent {
+                if let Some(&parent_handle) = self.node_to_handle.get(&parent_id) {
+                    self.world.SetParent(handle, Some(parent_handle));
+                }
             }
         }
+
         self.scene_tree.next_id = next_id;
     }
 }

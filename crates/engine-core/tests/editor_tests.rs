@@ -1,9 +1,9 @@
-use engine_core::{Component, GameObject, GameObjectHandle};
 use engine_core::prefab::{Prefab, PrefabRegistry, PrefabValue};
-use engine_core::serialization::{SceneData, SceneSerializer, SaveSceneJson, LoadSceneJson};
+use engine_core::serialization::{LoadSceneJson, SaveSceneJson, SceneData, SceneSerializer};
 use engine_core::transform::Transform;
 use engine_core::undo::{CreateObjectCommand, DestroyObjectCommand, UndoSystem};
 use engine_core::world::World;
+use engine_core::{Component, GameObject, GameObjectHandle};
 use engine_math::{Quat, Vec3};
 use std::any::Any;
 
@@ -17,8 +17,12 @@ struct TestComponent {
 }
 
 impl Component for TestComponent {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -27,8 +31,12 @@ struct HealthComponent {
 }
 
 impl Component for HealthComponent {
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 // ===========================================================================
@@ -95,7 +103,10 @@ fn prefab_workflow_overrides_and_revert() {
     assert_eq!(instance.OverrideCount(), 4);
     assert!(instance.HasOverride("Health"));
     assert!(instance.HasOverride("Damage"));
-    assert_eq!(instance.GetOverride("Health"), Some(&PrefabValue::Float(100.0)));
+    assert_eq!(
+        instance.GetOverride("Health"),
+        Some(&PrefabValue::Float(100.0))
+    );
     assert_eq!(instance.GetOverride("Damage"), Some(&PrefabValue::Int(25)));
 
     let mut paths = instance.OverridePaths();
@@ -143,7 +154,11 @@ fn prefab_workflow_hierarchy_preserved_through_instantiate() {
     let grandchild = world.CreateGameObject("Grandchild");
     world.SetParent(grandchild, Some(child1));
 
-    let prefab = Prefab::Create("HierarchyPrefab", &GameObject::new_with_name("Root"), &world);
+    let prefab = Prefab::Create(
+        "HierarchyPrefab",
+        &GameObject::new_with_name("Root"),
+        &world,
+    );
     let root_node = prefab.Root();
     assert_eq!(root_node.Name(), "Root");
 
@@ -171,9 +186,15 @@ fn prefab_workflow_override_overwrite_and_value_types() {
     instance.ApplyOverride("StrVal", PrefabValue::String("abc".into()));
 
     assert_eq!(instance.OverrideCount(), 4);
-    assert_eq!(instance.GetOverride("BoolVal"), Some(&PrefabValue::Bool(false)));
+    assert_eq!(
+        instance.GetOverride("BoolVal"),
+        Some(&PrefabValue::Bool(false))
+    );
     assert_eq!(instance.GetOverride("IntVal"), Some(&PrefabValue::Int(-1)));
-    assert_eq!(instance.GetOverride("StrVal"), Some(&PrefabValue::String("abc".into())));
+    assert_eq!(
+        instance.GetOverride("StrVal"),
+        Some(&PrefabValue::String("abc".into()))
+    );
 }
 
 // ===========================================================================
@@ -440,9 +461,15 @@ fn undo_workflow_descriptions() {
     let mut system = UndoSystem::new(50);
     assert_eq!(system.UndoDescription(), None);
     system.Execute(Box::new(CreateObjectCommand::new("Player")), &mut world);
-    assert_eq!(system.UndoDescription(), Some("Create 'Player'".to_string()));
+    assert_eq!(
+        system.UndoDescription(),
+        Some("Create 'Player'".to_string())
+    );
     system.Undo(&mut world);
-    assert_eq!(system.RedoDescription(), Some("Create 'Player'".to_string()));
+    assert_eq!(
+        system.RedoDescription(),
+        Some("Create 'Player'".to_string())
+    );
 }
 
 #[test]
