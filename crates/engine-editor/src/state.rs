@@ -43,6 +43,17 @@ pub enum ToolType {
     Terrain,
 }
 
+/// Gizmo interaction state machine.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum GizmoState {
+    /// No hover or drag active.
+    Idle,
+    /// Hovering over an axis (0=X, 1=Y, 2=Z).
+    HoverAxis(usize),
+    /// Dragging an axis (0=X, 1=Y, 2=Z).
+    DraggingAxis(usize),
+}
+
 /// Current gizmo drag interaction state.
 #[derive(Debug, Clone)]
 pub struct GizmoInteraction {
@@ -54,6 +65,14 @@ pub struct GizmoInteraction {
     pub start_mouse: Pos2,
     /// Initial value at drag start.
     pub start_value: f32,
+    /// Current state machine state.
+    pub state: GizmoState,
+    /// Screen position when drag started.
+    pub drag_start_screen: Pos2,
+    /// World position when drag started [x, y, z].
+    pub drag_start_world_pos: [f32; 3],
+    /// Which axis is being dragged (0=X, 1=Y, 2=Z).
+    pub drag_axis: usize,
 }
 
 /// A single node in the scene hierarchy tree.
@@ -691,30 +710,84 @@ impl EditorState {
         let mut next_node_id: u64 = 1;
 
         // Helper to create a node and register mappings
-        let mut create_node =
-            |world: &mut engine_core::world::World,
-             name: &str,
-             nth: &mut HashMap<u64, GameObjectHandle>,
-             htn: &mut HashMap<GameObjectHandle, u64>,
-             nid: &mut u64| -> u64 {
-                let handle = world.CreateGameObject(name);
-                let id = *nid;
-                nth.insert(id, handle);
-                htn.insert(handle, id);
-                *nid += 1;
-                id
-            };
+        let mut create_node = |world: &mut engine_core::world::World,
+                               name: &str,
+                               nth: &mut HashMap<u64, GameObjectHandle>,
+                               htn: &mut HashMap<GameObjectHandle, u64>,
+                               nid: &mut u64|
+         -> u64 {
+            let handle = world.CreateGameObject(name);
+            let id = *nid;
+            nth.insert(id, handle);
+            htn.insert(handle, id);
+            *nid += 1;
+            id
+        };
 
         // Create default scene objects using World API
-        let root_id = create_node(&mut world, "Root", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
-        let player_id = create_node(&mut world, "Player", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
-        let terrain_id = create_node(&mut world, "Terrain", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
-        let red_cube_id = create_node(&mut world, "Red Cube", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
-        let blue_sphere_id = create_node(&mut world, "Blue Sphere", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
-        let light_id = create_node(&mut world, "Point Light", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
-        let green_cylinder_id = create_node(&mut world, "Green Cylinder", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
-        let gold_sphere_id = create_node(&mut world, "Gold Sphere", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
-        let white_cube_id = create_node(&mut world, "White Cube", &mut node_to_handle, &mut handle_to_node, &mut next_node_id);
+        let root_id = create_node(
+            &mut world,
+            "Root",
+            &mut node_to_handle,
+            &mut handle_to_node,
+            &mut next_node_id,
+        );
+        let player_id = create_node(
+            &mut world,
+            "Player",
+            &mut node_to_handle,
+            &mut handle_to_node,
+            &mut next_node_id,
+        );
+        let terrain_id = create_node(
+            &mut world,
+            "Terrain",
+            &mut node_to_handle,
+            &mut handle_to_node,
+            &mut next_node_id,
+        );
+        let red_cube_id = create_node(
+            &mut world,
+            "Red Cube",
+            &mut node_to_handle,
+            &mut handle_to_node,
+            &mut next_node_id,
+        );
+        let blue_sphere_id = create_node(
+            &mut world,
+            "Blue Sphere",
+            &mut node_to_handle,
+            &mut handle_to_node,
+            &mut next_node_id,
+        );
+        let light_id = create_node(
+            &mut world,
+            "Point Light",
+            &mut node_to_handle,
+            &mut handle_to_node,
+            &mut next_node_id,
+        );
+        let green_cylinder_id = create_node(
+            &mut world,
+            "Green Cylinder",
+            &mut node_to_handle,
+            &mut handle_to_node,
+            &mut next_node_id,
+        );
+        let gold_sphere_id = create_node(
+            &mut world,
+            "Gold Sphere",
+            &mut node_to_handle,
+            &mut handle_to_node,
+            &mut next_node_id,
+        );
+        let white_cube_id = create_node(
+            &mut world,
+            "White Cube",
+            &mut node_to_handle,
+            &mut handle_to_node,
+            &mut next_node_id,
+        );
 
         // Set tags and layers using World API
         world.SetTag(node_to_handle[&player_id], "Player");
@@ -726,11 +799,23 @@ impl EditorState {
             (player_id, [-4.0, 0.5, 2.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]),
             (terrain_id, [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.0, 1.0, 20.0]),
             (red_cube_id, [0.0, 0.5, 0.0, 0.0, 0.4, 0.0, 1.0, 1.0, 1.0]),
-            (blue_sphere_id, [3.0, 0.7, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 1.4]),
+            (
+                blue_sphere_id,
+                [3.0, 0.7, 0.0, 0.0, 0.0, 0.0, 1.4, 1.4, 1.4],
+            ),
             (light_id, [0.0, 5.0, -3.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3]),
-            (green_cylinder_id, [-3.0, 0.8, -2.0, 0.0, 0.0, 0.0, 1.0, 1.6, 1.0]),
-            (gold_sphere_id, [5.0, 1.0, 3.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0]),
-            (white_cube_id, [-2.0, 0.4, -4.0, 0.0, 0.3, 0.0, 0.8, 0.8, 0.8]),
+            (
+                green_cylinder_id,
+                [-3.0, 0.8, -2.0, 0.0, 0.0, 0.0, 1.0, 1.6, 1.0],
+            ),
+            (
+                gold_sphere_id,
+                [5.0, 1.0, 3.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0],
+            ),
+            (
+                white_cube_id,
+                [-2.0, 0.4, -4.0, 0.0, 0.3, 0.0, 0.8, 0.8, 0.8],
+            ),
         ];
 
         let mut node_transforms = HashMap::new();
@@ -738,7 +823,12 @@ impl EditorState {
             node_transforms.insert(*id, *t);
             if let Some(transform) = world.GetTransformMut(node_to_handle[id]) {
                 transform.SetLocalPosition(Vec3::new(t[0], t[1], t[2]));
-                transform.SetLocalRotation(Quat::from_euler(engine_math::EulerRot::XYZ, t[3], t[4], t[5]));
+                transform.SetLocalRotation(Quat::from_euler(
+                    engine_math::EulerRot::XYZ,
+                    t[3],
+                    t[4],
+                    t[5],
+                ));
                 transform.SetLocalScale(Vec3::new(t[6], t[7], t[8]));
             }
         }
@@ -751,7 +841,10 @@ impl EditorState {
         node_render.insert(red_cube_id, ("Default".into(), "Cube".into(), true));
         node_render.insert(blue_sphere_id, ("Default".into(), "Sphere".into(), true));
         node_render.insert(light_id, ("Default".into(), "Sphere".into(), true));
-        node_render.insert(green_cylinder_id, ("Default".into(), "Cylinder".into(), true));
+        node_render.insert(
+            green_cylinder_id,
+            ("Default".into(), "Cylinder".into(), true),
+        );
         node_render.insert(gold_sphere_id, ("Default".into(), "Sphere".into(), true));
         node_render.insert(white_cube_id, ("Default".into(), "Cube".into(), true));
 
@@ -759,10 +852,42 @@ impl EditorState {
         node_lights.insert(light_id, LightData::default());
 
         let mut node_materials = HashMap::new();
-        node_materials.insert(red_cube_id, MaterialData { base_color: [0.9, 0.2, 0.2, 1.0], metallic: 0.1, roughness: 0.6, ..Default::default() });
-        node_materials.insert(blue_sphere_id, MaterialData { base_color: [0.2, 0.4, 0.9, 1.0], metallic: 0.9, roughness: 0.1, ..Default::default() });
-        node_materials.insert(green_cylinder_id, MaterialData { base_color: [0.2, 0.8, 0.3, 1.0], metallic: 0.0, roughness: 0.7, ..Default::default() });
-        node_materials.insert(gold_sphere_id, MaterialData { base_color: [1.0, 0.85, 0.0, 1.0], metallic: 1.0, roughness: 0.2, ..Default::default() });
+        node_materials.insert(
+            red_cube_id,
+            MaterialData {
+                base_color: [0.9, 0.2, 0.2, 1.0],
+                metallic: 0.1,
+                roughness: 0.6,
+                ..Default::default()
+            },
+        );
+        node_materials.insert(
+            blue_sphere_id,
+            MaterialData {
+                base_color: [0.2, 0.4, 0.9, 1.0],
+                metallic: 0.9,
+                roughness: 0.1,
+                ..Default::default()
+            },
+        );
+        node_materials.insert(
+            green_cylinder_id,
+            MaterialData {
+                base_color: [0.2, 0.8, 0.3, 1.0],
+                metallic: 0.0,
+                roughness: 0.7,
+                ..Default::default()
+            },
+        );
+        node_materials.insert(
+            gold_sphere_id,
+            MaterialData {
+                base_color: [1.0, 0.85, 0.0, 1.0],
+                metallic: 1.0,
+                roughness: 0.2,
+                ..Default::default()
+            },
+        );
         node_materials.insert(white_cube_id, MaterialData::default());
         Self {
             // Unity-style World
@@ -793,7 +918,16 @@ impl EditorState {
             show_grid: true,
             show_debug_overlay: false,
             show_camera_help: false,
-            gizmo_interaction: None,
+            gizmo_interaction: Some(GizmoInteraction {
+                axis: 0,
+                plane: None,
+                start_mouse: Pos2::ZERO,
+                start_value: 0.0,
+                state: GizmoState::Idle,
+                drag_start_screen: Pos2::ZERO,
+                drag_start_world_pos: [0.0; 3],
+                drag_axis: 0,
+            }),
             gizmo_size: 60.0,
             hierarchy_search: String::new(),
             node_transforms,
@@ -1014,7 +1148,10 @@ impl EditorState {
 
             // Add RigidBody from World API
             if let Some(handle) = self.GetHandle(node.id) {
-                if let Some(rb) = self.world.GetComponent::<engine_core::components::Rigidbody>(handle) {
+                if let Some(rb) = self
+                    .world
+                    .GetComponent::<engine_core::components::Rigidbody>(handle)
+                {
                     let physics_rb = if rb.is_kinematic {
                         engine_physics::RigidBody::new_kinematic()
                     } else if rb.use_gravity {

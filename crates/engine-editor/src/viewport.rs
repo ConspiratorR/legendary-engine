@@ -455,10 +455,15 @@ fn draw_single_viewport(
                 }
                 if let Some(t) = state.node_transforms.get(&node.id) {
                     let pos = [t[0], t[1], t[2]];
-                    let is_dynamic = state.GetHandle(node.id)
+                    let is_dynamic = state
+                        .GetHandle(node.id)
                         .map(|h| {
-                            state.world.HasComponent::<engine_core::components::Rigidbody>(h)
-                                && state.world.GetComponent::<engine_core::components::Rigidbody>(h)
+                            state
+                                .world
+                                .HasComponent::<engine_core::components::Rigidbody>(h)
+                                && state
+                                    .world
+                                    .GetComponent::<engine_core::components::Rigidbody>(h)
                                     .map(|rb| !rb.is_kinematic && rb.mass > 0.0)
                                     .unwrap_or(false)
                         })
@@ -481,11 +486,20 @@ fn draw_single_viewport(
                     // Show collider type label position in Physics tab
                     if state.active_viewport_tab == 2 {
                         if let Some(handle) = state.GetHandle(node.id) {
-                            let collider_type = if state.world.HasComponent::<engine_core::components::BoxCollider>(handle) {
+                            let collider_type = if state
+                                .world
+                                .HasComponent::<engine_core::components::BoxCollider>(handle)
+                            {
                                 "Box"
-                            } else if state.world.HasComponent::<engine_core::components::SphereCollider>(handle) {
+                            } else if state
+                                .world
+                                .HasComponent::<engine_core::components::SphereCollider>(handle)
+                            {
                                 "Sphere"
-                            } else if state.world.HasComponent::<engine_core::components::CapsuleCollider>(handle) {
+                            } else if state
+                                .world
+                                .HasComponent::<engine_core::components::CapsuleCollider>(handle)
+                            {
                                 "Capsule"
                             } else {
                                 ""
@@ -563,6 +577,10 @@ fn draw_single_viewport(
     }
 
     draw_transform_overlay(state, &painter, canvas_rect, h_scale, w_scale);
+
+    // Draw 2D screen-space gizmo overlay with hover feedback
+    let mouse_pos = gui.ui.input(|i| i.pointer.hover_pos());
+    crate::gizmo::draw(state, &painter, canvas_rect, h_scale, w_scale, mouse_pos);
 
     // Viewport info overlay (top-right corner)
     let info_font = FontId::proportional(10.0 * h_scale);
@@ -740,81 +758,105 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         let primary_down = ctx.input(|i| i.pointer.primary_down());
         let pointer_pos = ctx.pointer_interact_pos().unwrap_or(Pos2::ZERO);
 
+        // Compute h_scale from screen height (same formula used in draw_single_viewport)
+        let screen_h = ctx.screen_rect().height();
+        let h_scale = screen_h / 1080.0;
+        let (gizmo_center, gizmo_size) = crate::gizmo::gizmo_metrics(canvas_rect, h_scale);
+
         if primary_down && canvas_rect.contains(pointer_pos) {
             if state.gizmo_drag_axis.is_none() {
-                // Start gizmo drag
-                state.gizmo_drag_axis = Some(0);
-                state.gizmo_drag_start_screen = Some((pointer_pos.x, pointer_pos.y));
-                // Use Unity-style World API to get start transform
-                let first_id = state.selected_nodes[0];
-                if let Some(handle) = state.GetHandle(first_id) {
-                    if let Some(t) = state.world.GetTransform(handle) {
-                        let pos = t.Position();
-                        let rot = t.Rotation();
-                        let scale = t.LossyScale();
-                        state.gizmo_drag_start_pos = Some([
-                            pos.x, pos.y, pos.z,
-                            rot.to_euler(engine_math::EulerRot::XYZ).0.to_degrees(),
-                            rot.to_euler(engine_math::EulerRot::XYZ).1.to_degrees(),
-                            rot.to_euler(engine_math::EulerRot::XYZ).2.to_degrees(),
-                            scale.x, scale.y, scale.z,
-                        ]);
+                // Check if clicking on a gizmo axis
+                if let Some(axis) =
+                    crate::gizmo::detect_hover(state, pointer_pos, gizmo_center, gizmo_size)
+                {
+                    crate::gizmo::start_drag(state, axis, pointer_pos);
+                } else {
+                    // Start generic drag (no axis selected)
+                    state.gizmo_drag_axis = Some(0);
+                    state.gizmo_drag_start_screen = Some((pointer_pos.x, pointer_pos.y));
+                    let first_id = state.selected_nodes[0];
+                    if let Some(handle) = state.GetHandle(first_id) {
+                        if let Some(t) = state.world.GetTransform(handle) {
+                            let pos = t.Position();
+                            let rot = t.Rotation();
+                            let scale = t.LossyScale();
+                            state.gizmo_drag_start_pos = Some([
+                                pos.x,
+                                pos.y,
+                                pos.z,
+                                rot.to_euler(engine_math::EulerRot::XYZ).0.to_degrees(),
+                                rot.to_euler(engine_math::EulerRot::XYZ).1.to_degrees(),
+                                rot.to_euler(engine_math::EulerRot::XYZ).2.to_degrees(),
+                                scale.x,
+                                scale.y,
+                                scale.z,
+                            ]);
+                        }
                     }
                 }
-            } else if let (Some((sx, sy)), Some(start_pos)) =
-                (state.gizmo_drag_start_screen, state.gizmo_drag_start_pos)
-            {
-                let dx = pointer_pos.x - sx;
-                let dy = pointer_pos.y - sy;
-                let sensitivity = state.camera.distance * 0.003;
+            } else {
+                // Already dragging — update using the gizmo module's update_drag
+                // Only use axis-specific drag if we have a gizmo interaction with a specific axis
+                let has_axis_drag = state
+                    .gizmo_interaction
+                    .as_ref()
+                    .map(|i| matches!(i.state, crate::state::GizmoState::DraggingAxis(_)))
+                    .unwrap_or(false);
 
-                // Use Unity-style World API for transform manipulation
-                let first_id = state.selected_nodes[0];
-                if let Some(handle) = state.GetHandle(first_id) {
-                    if let Some(t) = state.world.GetTransformMut(handle) {
-                        match state.active_tool {
-                            crate::state::ToolType::Translate => {
-                                let world_dx = dx * sensitivity;
-                                let world_dz = dy * sensitivity;
-                                t.SetPosition(engine_math::Vec3::new(
-                                    start_pos[0] + world_dx,
-                                    start_pos[1],
-                                    start_pos[2] + world_dz,
-                                ));
+                if has_axis_drag {
+                    crate::gizmo::update_drag(state, pointer_pos, gizmo_center, gizmo_size);
+                } else if let (Some((sx, sy)), Some(start_pos)) =
+                    (state.gizmo_drag_start_screen, state.gizmo_drag_start_pos)
+                {
+                    let dx = pointer_pos.x - sx;
+                    let dy = pointer_pos.y - sy;
+                    let sensitivity = state.camera.distance * 0.003;
+
+                    let first_id = state.selected_nodes[0];
+                    if let Some(handle) = state.GetHandle(first_id) {
+                        if let Some(t) = state.world.GetTransformMut(handle) {
+                            match state.active_tool {
+                                crate::state::ToolType::Translate => {
+                                    let world_dx = dx * sensitivity;
+                                    let world_dz = dy * sensitivity;
+                                    t.SetPosition(engine_math::Vec3::new(
+                                        start_pos[0] + world_dx,
+                                        start_pos[1],
+                                        start_pos[2] + world_dz,
+                                    ));
+                                }
+                                crate::state::ToolType::Rotate => {
+                                    let rot_sensitivity = 0.01;
+                                    let new_euler = engine_math::Vec3::new(
+                                        start_pos[3] + dy * rot_sensitivity,
+                                        start_pos[4] + dx * rot_sensitivity,
+                                        start_pos[5],
+                                    );
+                                    t.SetRotation(engine_math::Quat::from_euler(
+                                        engine_math::EulerRot::XYZ,
+                                        new_euler.x.to_radians(),
+                                        new_euler.y.to_radians(),
+                                        new_euler.z.to_radians(),
+                                    ));
+                                }
+                                crate::state::ToolType::Scale => {
+                                    let scale_sensitivity = 0.005;
+                                    let scale_factor = 1.0 + dy * scale_sensitivity;
+                                    t.SetLocalScale(engine_math::Vec3::new(
+                                        (start_pos[6] * scale_factor).max(0.01),
+                                        (start_pos[7] * scale_factor).max(0.01),
+                                        (start_pos[8] * scale_factor).max(0.01),
+                                    ));
+                                }
+                                _ => {}
                             }
-                            crate::state::ToolType::Rotate => {
-                                let rot_sensitivity = 0.01;
-                                let new_euler = engine_math::Vec3::new(
-                                    start_pos[3] + dy * rot_sensitivity,
-                                    start_pos[4] + dx * rot_sensitivity,
-                                    start_pos[5],
-                                );
-                                t.SetRotation(engine_math::Quat::from_euler(
-                                    engine_math::EulerRot::XYZ,
-                                    new_euler.x.to_radians(),
-                                    new_euler.y.to_radians(),
-                                    new_euler.z.to_radians(),
-                                ));
-                            }
-                            crate::state::ToolType::Scale => {
-                                let scale_sensitivity = 0.005;
-                                let scale_factor = 1.0 + dy * scale_sensitivity;
-                                t.SetLocalScale(engine_math::Vec3::new(
-                                    (start_pos[6] * scale_factor).max(0.01),
-                                    (start_pos[7] * scale_factor).max(0.01),
-                                    (start_pos[8] * scale_factor).max(0.01),
-                                ));
-                            }
-                            _ => {}
                         }
                     }
                 }
             }
         } else if state.gizmo_drag_axis.is_some() {
             // Release gizmo drag
-            state.gizmo_drag_axis = None;
-            state.gizmo_drag_start_screen = None;
-            state.gizmo_drag_start_pos = None;
+            crate::gizmo::end_drag(state);
         }
     }
 
