@@ -45,6 +45,12 @@ impl InspectorPanel {
         self.selected = ids;
     }
 
+    /// Resets the inspector panel state.
+    pub fn reset(&mut self) {
+        self.search_text.clear();
+        self.selected.clear();
+    }
+
     /// Render the entire inspector panel.
     pub fn render(&mut self, state: &mut EditorState, gui: &mut Gui, rect: egui::Rect) {
         let h_scale = gui.ui.ctx().screen_rect().height() / 1080.0;
@@ -299,9 +305,7 @@ impl InspectorPanel {
                     Self::section_separator(gui);
                     Self::section_header(gui, "变换");
 
-                    let (mut px, mut py, mut pz) = (
-                        old_pos.x, old_pos.y, old_pos.z,
-                    );
+                    let (mut px, mut py, mut pz) = (old_pos.x, old_pos.y, old_pos.z);
                     Self::vec3_row(gui, "位置", &mut px, &mut py, &mut pz);
                     t.SetLocalPosition(engine_math::Vec3::new(px, py, pz));
 
@@ -318,9 +322,7 @@ impl InspectorPanel {
                         rz.to_radians(),
                     ));
 
-                    let (mut sx, mut sy, mut sz) = (
-                        old_scale.x, old_scale.y, old_scale.z,
-                    );
+                    let (mut sx, mut sy, mut sz) = (old_scale.x, old_scale.y, old_scale.z);
                     Self::vec3_row(gui, "缩放", &mut sx, &mut sy, &mut sz);
                     t.SetLocalScale(engine_math::Vec3::new(sx, sy, sz));
                 }
@@ -328,10 +330,16 @@ impl InspectorPanel {
         }
 
         // ── Material (PBR) ──
-        if Self::section_matches("材质 pbr material 基础颜色 金属度 粗糙度", search_lower) {
+        if Self::section_matches("材质 pbr material 基础颜色 金属度 粗糙度", search_lower)
+        {
             // Try World API first, fallback to legacy HashMap
-            let has_material_in_world = state.GetHandle(id)
-                .map(|h| state.world.HasComponent::<engine_core::components::Material>(h))
+            let has_material_in_world = state
+                .GetHandle(id)
+                .map(|h| {
+                    state
+                        .world
+                        .HasComponent::<engine_core::components::Material>(h)
+                })
                 .unwrap_or(false);
             let has_material_in_map = state.node_materials.contains_key(&id);
 
@@ -340,10 +348,12 @@ impl InspectorPanel {
                 Self::section_header(gui, "材质 (PBR)");
 
                 if let Some(handle) = state.GetHandle(id) {
-                    if let Some(mat) = state.world.GetComponentMut::<engine_core::components::Material>(handle) {
-                        let (mut r, mut g, mut b) = (
-                            mat.base_color[0], mat.base_color[1], mat.base_color[2],
-                        );
+                    if let Some(mat) = state
+                        .world
+                        .GetComponentMut::<engine_core::components::Material>(handle)
+                    {
+                        let (mut r, mut g, mut b) =
+                            (mat.base_color[0], mat.base_color[1], mat.base_color[2]);
                         Self::vec3_row(gui, "基础颜色", &mut r, &mut g, &mut b);
                         mat.base_color[0] = r;
                         mat.base_color[1] = g;
@@ -380,7 +390,8 @@ impl InspectorPanel {
                     }
                 } else if let Some(mat) = state.node_materials.get_mut(&id) {
                     // Fallback: read from legacy HashMap
-                    let (mut r, mut g, mut b) = (mat.base_color[0], mat.base_color[1], mat.base_color[2]);
+                    let (mut r, mut g, mut b) =
+                        (mat.base_color[0], mat.base_color[1], mat.base_color[2]);
                     Self::vec3_row(gui, "基础颜色", &mut r, &mut g, &mut b);
                     mat.base_color[0] = r;
                     mat.base_color[1] = g;
@@ -404,8 +415,13 @@ impl InspectorPanel {
         // ── Render (MeshRenderer) ──
         if Self::section_matches("渲染 render 材质 网格 阴影 shadow mesh", search_lower) {
             // Try World API first, fallback to legacy HashMap
-            let has_mesh_in_world = state.GetHandle(id)
-                .map(|h| state.world.HasComponent::<engine_core::components::MeshRenderer>(h))
+            let has_mesh_in_world = state
+                .GetHandle(id)
+                .map(|h| {
+                    state
+                        .world
+                        .HasComponent::<engine_core::components::MeshRenderer>(h)
+                })
                 .unwrap_or(false);
             let has_mesh_in_map = state.node_render.contains_key(&id);
 
@@ -414,7 +430,10 @@ impl InspectorPanel {
                 Self::section_header(gui, "渲染");
 
                 if let Some(handle) = state.GetHandle(id) {
-                    if let Some(renderer) = state.world.GetComponentMut::<engine_core::components::MeshRenderer>(handle) {
+                    if let Some(renderer) = state
+                        .world
+                        .GetComponentMut::<engine_core::components::MeshRenderer>(handle)
+                    {
                         Self::read_only_row(gui, "材质", &renderer.material);
 
                         // Mesh combo
@@ -476,8 +495,13 @@ impl InspectorPanel {
             search_lower,
         ) {
             // Try World API first, fallback to legacy HashMap
-            let has_light_in_world = state.GetHandle(id)
-                .map(|h| state.world.HasComponent::<engine_core::components::Light>(h))
+            let has_light_in_world = state
+                .GetHandle(id)
+                .map(|h| {
+                    state
+                        .world
+                        .HasComponent::<engine_core::components::Light>(h)
+                })
                 .unwrap_or(false);
             let has_light_in_map = state.node_lights.contains_key(&id);
 
@@ -485,7 +509,10 @@ impl InspectorPanel {
                 Self::section_separator(gui);
 
                 if let Some(handle) = state.GetHandle(id) {
-                    if let Some(light) = state.world.GetComponentMut::<engine_core::components::Light>(handle) {
+                    if let Some(light) = state
+                        .world
+                        .GetComponentMut::<engine_core::components::Light>(handle)
+                    {
                         let type_label = match light.light_type {
                             engine_core::components::LightType::Directional => "光照 (方向光)",
                             engine_core::components::LightType::Point => "光照 (点光源)",
@@ -493,7 +520,8 @@ impl InspectorPanel {
                         };
                         Self::section_header(gui, type_label);
 
-                        let (mut lr, mut lg, mut lb) = (light.color[0], light.color[1], light.color[2]);
+                        let (mut lr, mut lg, mut lb) =
+                            (light.color[0], light.color[1], light.color[2]);
                         Self::vec3_row(gui, "颜色", &mut lr, &mut lg, &mut lb);
                         light.color[0] = lr;
                         light.color[1] = lg;
@@ -564,22 +592,37 @@ impl InspectorPanel {
         // ── Physics ──
         if Self::section_matches("物理 physics 刚体 碰撞 rigidbody collider", search_lower) {
             if let Some(handle) = state.GetHandle(id) {
-                if state.world.HasComponent::<engine_core::components::Rigidbody>(handle) {
+                if state
+                    .world
+                    .HasComponent::<engine_core::components::Rigidbody>(handle)
+                {
                     Self::section_separator(gui);
                     Self::section_header(gui, "物理");
 
                     // Query collider info before mutable borrow
-                    let collider_name = if state.world.HasComponent::<engine_core::components::BoxCollider>(handle) {
+                    let collider_name = if state
+                        .world
+                        .HasComponent::<engine_core::components::BoxCollider>(handle)
+                    {
                         "BoxCollider".to_string()
-                    } else if state.world.HasComponent::<engine_core::components::SphereCollider>(handle) {
+                    } else if state
+                        .world
+                        .HasComponent::<engine_core::components::SphereCollider>(handle)
+                    {
                         "SphereCollider".to_string()
-                    } else if state.world.HasComponent::<engine_core::components::CapsuleCollider>(handle) {
+                    } else if state
+                        .world
+                        .HasComponent::<engine_core::components::CapsuleCollider>(handle)
+                    {
                         "CapsuleCollider".to_string()
                     } else {
                         "无".to_string()
                     };
 
-                    if let Some(rb) = state.world.GetComponentMut::<engine_core::components::Rigidbody>(handle) {
+                    if let Some(rb) = state
+                        .world
+                        .GetComponentMut::<engine_core::components::Rigidbody>(handle)
+                    {
                         Self::slider_row(gui, "质量", &mut rb.mass, 0.01, 100.0);
                         Self::slider_row(gui, "阻力", &mut rb.drag, 0.0, 10.0);
                         Self::slider_row(gui, "角阻力", &mut rb.angular_drag, 0.0, 10.0);
@@ -595,7 +638,10 @@ impl InspectorPanel {
         // ── Sprite ──
         if Self::section_matches("精灵 sprite 纹理 翻转", search_lower) {
             if let Some(handle) = state.GetHandle(id) {
-                if let Some(sprite) = state.world.GetComponentMut::<engine_core::components::SpriteRenderer>(handle) {
+                if let Some(sprite) = state
+                    .world
+                    .GetComponentMut::<engine_core::components::SpriteRenderer>(handle)
+                {
                     Self::section_separator(gui);
                     Self::section_header(gui, "精灵");
 
@@ -616,7 +662,10 @@ impl InspectorPanel {
         // ── Particle ──
         if Self::section_matches("粒子 particle 发射器 粒子系统", search_lower) {
             if let Some(handle) = state.GetHandle(id) {
-                if let Some(ps) = state.world.GetComponentMut::<engine_core::components::ParticleSystem>(handle) {
+                if let Some(ps) = state
+                    .world
+                    .GetComponentMut::<engine_core::components::ParticleSystem>(handle)
+                {
                     Self::section_separator(gui);
                     Self::section_header(gui, "粒子系统");
 
@@ -634,7 +683,10 @@ impl InspectorPanel {
         // ── Audio ──
         if Self::section_matches("音频 audio 声音 音量", search_lower) {
             if let Some(handle) = state.GetHandle(id) {
-                if let Some(audio) = state.world.GetComponentMut::<engine_core::components::AudioSource>(handle) {
+                if let Some(audio) = state
+                    .world
+                    .GetComponentMut::<engine_core::components::AudioSource>(handle)
+                {
                     Self::section_separator(gui);
                     Self::section_header(gui, "音频");
 
@@ -652,7 +704,10 @@ impl InspectorPanel {
         // ── Script ──
         if Self::section_matches("脚本 script lua wasm", search_lower) {
             if let Some(handle) = state.GetHandle(id) {
-                if let Some(script) = state.world.GetComponentMut::<engine_core::components::ScriptBehaviour>(handle) {
+                if let Some(script) = state
+                    .world
+                    .GetComponentMut::<engine_core::components::ScriptBehaviour>(handle)
+                {
                     Self::section_separator(gui);
                     Self::section_header(gui, "脚本");
 
@@ -665,7 +720,10 @@ impl InspectorPanel {
         // ── Tags ──
         if Self::section_matches("标签 tags tag", search_lower) {
             if let Some(handle) = state.GetHandle(id) {
-                if let Some(tag_comp) = state.world.GetComponentMut::<engine_core::components::Tag>(handle) {
+                if let Some(tag_comp) = state
+                    .world
+                    .GetComponentMut::<engine_core::components::Tag>(handle)
+                {
                     Self::section_separator(gui);
                     Self::section_header(gui, "标签");
 
@@ -749,18 +807,92 @@ impl InspectorPanel {
             // Check World API for component existence
             let wh = state.GetHandle(id);
             let existing_components: Vec<(&str, bool)> = vec![
-                ("材质 (PBR)", wh.map(|h| state.world.HasComponent::<engine_core::components::Material>(h)).unwrap_or(false)),
-                ("渲染", wh.map(|h| state.world.HasComponent::<engine_core::components::MeshRenderer>(h)).unwrap_or(false)),
-                ("光照", wh.map(|h| state.world.HasComponent::<engine_core::components::Light>(h)).unwrap_or(false)),
-                ("物理", wh.map(|h| state.world.HasComponent::<engine_core::components::Rigidbody>(h)
-                    || state.world.HasComponent::<engine_core::components::BoxCollider>(h)
-                    || state.world.HasComponent::<engine_core::components::SphereCollider>(h)
-                    || state.world.HasComponent::<engine_core::components::CapsuleCollider>(h)).unwrap_or(false)),
-                ("精灵", wh.map(|h| state.world.HasComponent::<engine_core::components::SpriteRenderer>(h)).unwrap_or(false)),
-                ("粒子系统", wh.map(|h| state.world.HasComponent::<engine_core::components::ParticleSystem>(h)).unwrap_or(false)),
-                ("音频", wh.map(|h| state.world.HasComponent::<engine_core::components::AudioSource>(h)).unwrap_or(false)),
-                ("脚本", wh.map(|h| state.world.HasComponent::<engine_core::components::ScriptBehaviour>(h)).unwrap_or(false)),
-                ("标签", wh.map(|h| state.world.HasComponent::<engine_core::components::Tag>(h)).unwrap_or(false)),
+                (
+                    "材质 (PBR)",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::Material>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "渲染",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::MeshRenderer>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "光照",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::Light>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "物理",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::Rigidbody>(h)
+                            || state
+                                .world
+                                .HasComponent::<engine_core::components::BoxCollider>(h)
+                            || state
+                                .world
+                                .HasComponent::<engine_core::components::SphereCollider>(h)
+                            || state
+                                .world
+                                .HasComponent::<engine_core::components::CapsuleCollider>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "精灵",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::SpriteRenderer>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "粒子系统",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::ParticleSystem>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "音频",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::AudioSource>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "脚本",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::ScriptBehaviour>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "标签",
+                    wh.map(|h| state.world.HasComponent::<engine_core::components::Tag>(h))
+                        .unwrap_or(false),
+                ),
             ];
             let comp_types = [
                 "material", "render", "light", "physics", "sprite", "particle", "audio", "script",
@@ -877,34 +1009,58 @@ impl InspectorPanel {
         if let Some(handle) = state.GetHandle(id) {
             match comp_type {
                 "material" => {
-                    state.world.RemoveComponent::<engine_core::components::Material>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::Material>(handle);
                 }
                 "render" => {
-                    state.world.RemoveComponent::<engine_core::components::MeshRenderer>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::MeshRenderer>(handle);
                 }
                 "light" => {
-                    state.world.RemoveComponent::<engine_core::components::Light>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::Light>(handle);
                 }
                 "physics" => {
-                    state.world.RemoveComponent::<engine_core::components::Rigidbody>(handle);
-                    state.world.RemoveComponent::<engine_core::components::BoxCollider>(handle);
-                    state.world.RemoveComponent::<engine_core::components::SphereCollider>(handle);
-                    state.world.RemoveComponent::<engine_core::components::CapsuleCollider>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::Rigidbody>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::BoxCollider>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::SphereCollider>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::CapsuleCollider>(handle);
                 }
                 "sprite" => {
-                    state.world.RemoveComponent::<engine_core::components::SpriteRenderer>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::SpriteRenderer>(handle);
                 }
                 "particle" => {
-                    state.world.RemoveComponent::<engine_core::components::ParticleSystem>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::ParticleSystem>(handle);
                 }
                 "audio" => {
-                    state.world.RemoveComponent::<engine_core::components::AudioSource>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::AudioSource>(handle);
                 }
                 "script" => {
-                    state.world.RemoveComponent::<engine_core::components::ScriptBehaviour>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::ScriptBehaviour>(handle);
                 }
                 "tags" => {
-                    state.world.RemoveComponent::<engine_core::components::Tag>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::Tag>(handle);
                 }
                 _ => {}
             }
@@ -916,51 +1072,104 @@ impl InspectorPanel {
         if let Some(handle) = state.GetHandle(node_id) {
             match comp_type {
                 "material" => {
-                    if !state.world.HasComponent::<engine_core::components::Material>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::Material::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::Material>(handle)
+                    {
+                        state
+                            .world
+                            .AddComponent(handle, engine_core::components::Material::default());
                     }
                 }
                 "render" => {
-                    if !state.world.HasComponent::<engine_core::components::MeshRenderer>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::MeshRenderer::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::MeshRenderer>(handle)
+                    {
+                        state
+                            .world
+                            .AddComponent(handle, engine_core::components::MeshRenderer::default());
                     }
                 }
                 "light" => {
-                    if !state.world.HasComponent::<engine_core::components::Light>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::Light::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::Light>(handle)
+                    {
+                        state
+                            .world
+                            .AddComponent(handle, engine_core::components::Light::default());
                     }
                 }
                 "physics" => {
-                    if !state.world.HasComponent::<engine_core::components::Rigidbody>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::Rigidbody::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::Rigidbody>(handle)
+                    {
+                        state
+                            .world
+                            .AddComponent(handle, engine_core::components::Rigidbody::default());
                     }
-                    if !state.world.HasComponent::<engine_core::components::BoxCollider>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::BoxCollider::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::BoxCollider>(handle)
+                    {
+                        state
+                            .world
+                            .AddComponent(handle, engine_core::components::BoxCollider::default());
                     }
                 }
                 "sprite" => {
-                    if !state.world.HasComponent::<engine_core::components::SpriteRenderer>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::SpriteRenderer::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::SpriteRenderer>(handle)
+                    {
+                        state.world.AddComponent(
+                            handle,
+                            engine_core::components::SpriteRenderer::default(),
+                        );
                     }
                 }
                 "particle" => {
-                    if !state.world.HasComponent::<engine_core::components::ParticleSystem>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::ParticleSystem::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::ParticleSystem>(handle)
+                    {
+                        state.world.AddComponent(
+                            handle,
+                            engine_core::components::ParticleSystem::default(),
+                        );
                     }
                 }
                 "audio" => {
-                    if !state.world.HasComponent::<engine_core::components::AudioSource>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::AudioSource::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::AudioSource>(handle)
+                    {
+                        state
+                            .world
+                            .AddComponent(handle, engine_core::components::AudioSource::default());
                     }
                 }
                 "script" => {
-                    if !state.world.HasComponent::<engine_core::components::ScriptBehaviour>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::ScriptBehaviour::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::ScriptBehaviour>(handle)
+                    {
+                        state.world.AddComponent(
+                            handle,
+                            engine_core::components::ScriptBehaviour::default(),
+                        );
                     }
                 }
                 "tags" => {
-                    if !state.world.HasComponent::<engine_core::components::Tag>(handle) {
-                        state.world.AddComponent(handle, engine_core::components::Tag::default());
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::Tag>(handle)
+                    {
+                        state
+                            .world
+                            .AddComponent(handle, engine_core::components::Tag::default());
                     }
                 }
                 _ => {}
@@ -971,9 +1180,9 @@ impl InspectorPanel {
 
 /// Backward-compatible draw function using the panel.
 pub fn draw(state: &mut EditorState, gui: &mut Gui, rect: egui::Rect) {
-    let mut panel = InspectorPanel::new();
-    panel.selected = state.selected_nodes.clone();
-    panel.search_text = state.inspector_search.clone();
+    let selected = state.selected_nodes.clone();
+    let mut panel = std::mem::take(&mut state.inspector_panel);
+    panel.selected = selected;
     panel.render(state, gui, rect);
-    state.inspector_search = panel.search_text;
+    state.inspector_panel = panel;
 }

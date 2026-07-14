@@ -380,6 +380,7 @@ impl Default for EditorCamera {
 
 use crate::animation_editor::AnimationEditorState;
 use crate::commands::CommandManager;
+use crate::inspector::InspectorPanel;
 use crate::material_editor::MaterialEditorState;
 use crate::node_graph::NodeGraphState;
 use crate::performance_overlay::PerformanceOverlay;
@@ -646,8 +647,8 @@ pub struct EditorState {
     pub clipboard: Vec<([f32; 9], Option<MaterialData>)>,
     /// Log messages for the console panel.
     pub log_messages: Vec<LogEntry>,
-    /// Inspector search filter text.
-    pub inspector_search: String,
+    /// Persistent inspector panel state (preserves search, selection across frames).
+    pub inspector_panel: InspectorPanel,
     /// Gizmo drag state (axis index 0=X, 1=Y, 2=Z, None=not dragging).
     pub gizmo_drag_axis: Option<u8>,
     /// Screen position where gizmo drag started.
@@ -969,7 +970,7 @@ impl EditorState {
             pending_transform_edit: None,
             clipboard: Vec::new(),
             log_messages: Vec::new(),
-            inspector_search: String::new(),
+            inspector_panel: InspectorPanel::new(),
             show_add_component_menu: false,
             show_remove_component_menu: false,
             sky_color: [0.15, 0.20, 0.30],
