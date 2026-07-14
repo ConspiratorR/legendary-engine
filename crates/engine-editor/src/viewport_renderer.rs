@@ -56,6 +56,8 @@ impl Default for OrthoCamera {
 struct ViewportTarget {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
+    depth_texture: wgpu::Texture,
+    depth_view: wgpu::TextureView,
     width: u32,
     height: u32,
     egui_texture_id: Option<egui::TextureId>,
@@ -161,12 +163,29 @@ impl ViewportRenderer {
                 view_formats: &[],
             });
             let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let depth_texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(&format!("ViewportDepth_{:?}", viewport)),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth32Float,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+            let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
             self.targets.insert(
                 viewport,
                 ViewportTarget {
                     texture,
                     view,
+                    depth_texture,
+                    depth_view,
                     width,
                     height,
                     egui_texture_id: None,
@@ -183,6 +202,11 @@ impl ViewportRenderer {
     /// Returns the (width, height) of a viewport target, if it exists.
     pub fn target_size(&self, viewport: ViewportType) -> Option<(u32, u32)> {
         self.targets.get(&viewport).map(|t| (t.width, t.height))
+    }
+
+    /// Returns the depth texture view for a viewport, if it exists.
+    pub fn depth_view(&self, viewport: ViewportType) -> Option<&wgpu::TextureView> {
+        self.targets.get(&viewport).map(|t| &t.depth_view)
     }
 
     /// Returns the cached egui texture ID for a viewport, if registered.
@@ -241,7 +265,14 @@ impl ViewportRenderer {
                             store: wgpu::StoreOp::Store,
                         },
                     })],
-                    depth_stencil_attachment: None,
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &target.depth_view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 });
