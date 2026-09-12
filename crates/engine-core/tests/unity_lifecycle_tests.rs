@@ -215,6 +215,80 @@ fn test_coroutine_set_active_via_lifecycle() {
 }
 
 #[test]
+fn test_set_active_immediate_dispatches_now() {
+    #[derive(Debug, Default)]
+    struct EnProbe {
+        enables: Arc<AtomicU32>,
+        disables: Arc<AtomicU32>,
+    }
+
+    impl Component for EnProbe {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+    }
+    impl Behaviour for EnProbe {
+        fn Enabled(&self) -> bool {
+            true
+        }
+        fn SetEnabled(&mut self, _e: bool) {}
+        fn IsActiveAndEnabled(&self) -> bool {
+            true
+        }
+        fn set_gameobject(&mut self, _h: GameObjectHandle) {}
+        fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+            None
+        }
+    }
+    impl MonoBehaviour for EnProbe {
+        fn OnEnable(&mut self, _ctx: &mut Context) {
+            self.enables.fetch_add(1, Ordering::SeqCst);
+        }
+        fn OnDisable(&mut self, _ctx: &mut Context) {
+            self.disables.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    let mut world = World::new();
+    let obj = world.CreateGameObject("Toggle");
+    let enables = Arc::new(AtomicU32::new(0));
+    let disables = Arc::new(AtomicU32::new(0));
+    world.AddMonoBehaviour(
+        obj,
+        EnProbe {
+            enables: enables.clone(),
+            disables: disables.clone(),
+        },
+    );
+
+    let time = Time::default();
+    let mut events = engine_core::event::EventBus::new();
+    world.SetActiveImmediate(obj, false, time.clone(), 0, &mut events);
+    assert_eq!(disables.load(Ordering::SeqCst), 1);
+    assert_eq!(world.pending_enable_disable_count(), 0);
+
+    world.SetActiveImmediate(obj, true, time, 1, &mut events);
+    assert_eq!(enables.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_get_component_finds_monobehaviour() {
+    let mut world = World::new();
+    let obj = world.CreateGameObject("Scripted");
+    world.AddMonoBehaviour(
+        obj,
+        Probe {
+            counters: Counters::new(),
+        },
+    );
+    assert!(world.GetComponent::<Probe>(obj).is_some());
+    assert!(world.HasComponent::<Probe>(obj));
+}
+
+#[test]
 fn test_full_frame_pipeline_with_scene_runtime_plugin() {
     let mut builder = AppBuilder::new();
     builder.add_plugin(SceneRuntimePlugin);

@@ -481,6 +481,17 @@ impl MonoBehaviourHolder {
         &mut *self.inner
     }
 
+    /// Upcast the inner MonoBehaviour to `dyn Component` (for GetComponent).
+    pub fn AsComponent(&self) -> &dyn Component {
+        // Trait upcast: MonoBehaviour: Behaviour: Component
+        &*self.inner
+    }
+
+    /// Mutable upcast to `dyn Component`.
+    pub fn AsComponentMut(&mut self) -> &mut dyn Component {
+        &mut *self.inner
+    }
+
     /// Check if the holder is enabled.
     pub fn Enabled(&self) -> bool {
         self.enabled && self.inner.Enabled()

@@ -620,6 +620,9 @@ impl World {
 
     /// Get a component from a GameObject (matches `GameObject.GetComponent<T>()`).
     ///
+    /// Also searches attached MonoBehaviours (scripts), matching Unity where
+    /// scripts are components.
+    ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/GameObject.GetComponent.html>
     pub fn GetComponent<T: Component + 'static>(&self, handle: GameObjectHandle) -> Option<&T> {
@@ -627,11 +630,18 @@ impl World {
 
         if let Some(go) = self.gameobject_data.get(index) {
             if let Some(go) = go {
-                return go.GetComponent::<T>();
+                if let Some(c) = go.GetComponent::<T>() {
+                    return Some(c);
+                }
             }
         }
 
-        None
+        // Search MonoBehaviour scripts (Unity: scripts are components)
+        self.monobehaviours
+            .get(index)?
+            .as_ref()?
+            .iter()
+            .find_map(|m| m.AsComponent().as_any().downcast_ref::<T>())
     }
 
     /// Get a mutable component (matches `GameObject.GetComponent<T>()` with write access).
@@ -643,11 +653,17 @@ impl World {
 
         if let Some(go) = self.gameobject_data.get_mut(index) {
             if let Some(go) = go {
-                return go.GetComponentMut::<T>();
+                if let Some(c) = go.GetComponentMut::<T>() {
+                    return Some(c);
+                }
             }
         }
 
-        None
+        self.monobehaviours
+            .get_mut(index)?
+            .as_mut()?
+            .iter_mut()
+            .find_map(|m| m.AsComponentMut().as_any_mut().downcast_mut::<T>())
     }
 
     /// Check if a GameObject has a component (matches `GameObject.GetComponent<T>() != null`).
@@ -927,6 +943,23 @@ impl World {
         // Queue OnEnable/OnDisable for this object and descendants whose
         // effective active state flipped.
         self.queue_enable_disable_cascade(handle, now_in_hierarchy);
+    }
+
+    /// Set active state and immediately dispatch OnEnable/OnDisable.
+    ///
+    /// Prefer [`SetActive`](Self::SetActive) (deferred, Unity-like end-of-frame).
+    /// Use this when callbacks must run before the current call returns
+    /// (e.g. editor tools, tests).
+    pub fn SetActiveImmediate(
+        &mut self,
+        handle: GameObjectHandle,
+        active: bool,
+        time: Time,
+        frame: u64,
+        events: &mut crate::event::EventBus,
+    ) {
+        self.SetActive(handle, active);
+        self.flush_enable_disable(time, frame, events);
     }
 
     fn queue_enable_disable_cascade(&mut self, handle: GameObjectHandle, enable: bool) {

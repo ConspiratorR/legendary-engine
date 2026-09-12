@@ -158,10 +158,15 @@ world.AddMonoBehaviour(player, Player { speed: 5.0 });
 world.SetActive(handle, false);
 // OnEnable/OnDisable 入队，在下一次 lifecycle tick（帧末）统一 flush
 assert_eq!(world.pending_enable_disable_count(), 1);
+
+// 需要当场回调时（编辑器/测试）：
+world.SetActiveImmediate(handle, false, time, frame, &mut events);
+assert_eq!(world.pending_enable_disable_count(), 0);
 ```
 
 - 父物体 `SetActive(false)` 会使子物体 `activeInHierarchy == false` 并级联 OnDisable。
 - 子物体 `activeSelf` 保持不变，符合 Unity 语义。
+- `AddMonoBehaviour` 的脚本可通过 `GetComponent::<T>()` / `HasComponent::<T>()` 访问（与 Unity「脚本即组件」一致）。
 
 ### Destroy
 
