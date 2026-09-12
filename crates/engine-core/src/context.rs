@@ -71,6 +71,31 @@ impl<'a> Context<'a> {
     pub fn Frame(&self) -> u64 {
         self.frame
     }
+
+    /// Start a coroutine on a GameObject from script code (matches `StartCoroutine`).
+    pub fn StartCoroutine(
+        &mut self,
+        owner: crate::gameobject::GameObjectHandle,
+        name: impl Into<String>,
+        steps: Vec<crate::coroutine::CoroutineStep>,
+    ) -> crate::coroutine::CoroutineId {
+        self.world.StartCoroutine(owner, name, steps)
+    }
+
+    /// Stop a coroutine started via Context.
+    pub fn StopCoroutine(&mut self, id: crate::coroutine::CoroutineId) -> bool {
+        self.world.StopCoroutine(id)
+    }
+
+    /// Stop all coroutines on a GameObject.
+    pub fn StopAllCoroutines(&mut self, owner: crate::gameobject::GameObjectHandle) {
+        self.world.StopAllCoroutines(owner);
+    }
+
+    /// Send a message to MonoBehaviours on a GameObject.
+    pub fn SendMessage(&mut self, owner: crate::gameobject::GameObjectHandle, method: &str) {
+        self.world.SendMessage(owner, method);
+    }
 }
 
 #[cfg(test)]

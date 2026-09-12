@@ -1163,29 +1163,50 @@ impl World {
 
     /// Send message to all components on a GameObject (matches `GameObject.SendMessage`).
     ///
+    /// Dispatches to each attached MonoBehaviour via [`MonoBehaviour::on_message`].
+    ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/GameObject.SendMessage.html>
     pub fn SendMessage(&mut self, handle: GameObjectHandle, method: &str) {
-        self.SendMessageWithValue(handle, method, &());
+        self.dispatch_message(handle, method, None);
     }
 
-    /// Send message with a value (matches `GameObject.SendMessage(methodName, value)`).
+    /// Send message with an optional payload (matches `SendMessage(methodName, value)`).
     pub fn SendMessageWithValue(
         &mut self,
         handle: GameObjectHandle,
         method: &str,
-        _value: &dyn Any,
+        value: &dyn Any,
     ) {
-        let index = handle.index() as usize;
+        self.dispatch_message(handle, method, Some(value));
+    }
 
-        if let Some(go) = self.gameobject_data.get_mut(index) {
-            if let Some(go) = go {
-                // SendMessage dispatches to MonoBehaviour components
-                // For now, this is a placeholder - the actual implementation
-                // would use reflection or a message registry
-                let _ = method;
+    fn dispatch_message(
+        &mut self,
+        handle: GameObjectHandle,
+        method: &str,
+        value: Option<&dyn Any>,
+    ) {
+        if !self.is_valid(handle) {
+            return;
+        }
+        let index = handle.index() as usize;
+        let Some(mut monos) = self.monobehaviours[index].take() else {
+            return;
+        };
+        {
+            // Minimal context for message handlers
+            let time = Time::default();
+            let mut events = crate::event::EventBus::new();
+            let mut ctx = Context::new(self, time, 0, &mut events);
+            for mono in monos.iter_mut() {
+                if !mono.Enabled() {
+                    continue;
+                }
+                mono.GetMut().on_message(method, value, &mut ctx);
             }
         }
+        self.monobehaviours[index] = Some(monos);
     }
 
     /// Send message to this and all parents (matches `GameObject.SendMessageUpwards`).

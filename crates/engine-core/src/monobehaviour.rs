@@ -176,6 +176,17 @@ pub trait MonoBehaviour: Behaviour {
     /// Called on the last frame before the object is removed from the scene.
     fn OnDestroy(&mut self, _context: &mut Context) {}
 
+    /// Message handler for `SendMessage` / `Invoke` / coroutine `Call` (matches Unity's string dispatch).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/GameObject.SendMessage.html>
+    ///
+    /// `method` is the message name; `value` is an optional payload.
+    /// Override to handle messages. Default is a no-op.
+    fn on_message(&mut self, method: &str, value: Option<&dyn Any>, _context: &mut Context) {
+        let _ = (method, value);
+    }
+
     // ============================================================
     // Application Callbacks
     // ============================================================

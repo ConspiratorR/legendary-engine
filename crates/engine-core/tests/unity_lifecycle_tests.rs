@@ -350,3 +350,231 @@ fn test_destroy_end_of_frame_calls_destroy_sequence() {
     assert_eq!(&*log.lock().unwrap(), &["OnDisable", "OnDestroy"]);
     assert!(!world.is_valid(obj));
 }
+
+#[test]
+fn test_wait_until_condition() {
+    use engine_core::coroutine::CoroutineStep;
+    use std::sync::atomic::AtomicBool;
+
+    let mut world = World::new();
+    let obj = world.CreateGameObject("Waiter");
+    let flag = Arc::new(AtomicBool::new(false));
+    let flag2 = flag.clone();
+
+    let done = Arc::new(AtomicU32::new(0));
+    let done2 = done.clone();
+
+    world.StartCoroutine(
+        obj,
+        "Until",
+        vec![
+            CoroutineStep::WaitUntil(Arc::new(move |_w, _o| flag2.load(Ordering::SeqCst))),
+            CoroutineStep::Action(Arc::new(move |_w, _o| {
+                done2.fetch_add(1, Ordering::SeqCst);
+            })),
+        ],
+    );
+
+    // Condition false → still waiting
+    world.tick_coroutines(0.016, false);
+    assert_eq!(done.load(Ordering::SeqCst), 0);
+    assert_eq!(world.CoroutineCount(), 1);
+
+    // Flip condition → next tick completes
+    flag.store(true, Ordering::SeqCst);
+    world.tick_coroutines(0.016, false);
+    assert_eq!(done.load(Ordering::SeqCst), 1);
+    assert_eq!(world.CoroutineCount(), 0);
+}
+
+#[test]
+fn test_wait_while_condition() {
+    use engine_core::coroutine::CoroutineStep;
+    use std::sync::atomic::AtomicBool;
+
+    let mut world = World::new();
+    let obj = world.CreateGameObject("While");
+    let busy = Arc::new(AtomicBool::new(true));
+    let busy2 = busy.clone();
+
+    let after = Arc::new(AtomicU32::new(0));
+    let after2 = after.clone();
+
+    world.StartCoroutine(
+        obj,
+        "While",
+        vec![
+            CoroutineStep::WaitWhile(Arc::new(move |_w, _o| busy2.load(Ordering::SeqCst))),
+            CoroutineStep::Action(Arc::new(move |_w, _o| {
+                after2.fetch_add(1, Ordering::SeqCst);
+            })),
+        ],
+    );
+
+    world.tick_coroutines(0.016, false);
+    assert_eq!(after.load(Ordering::SeqCst), 0);
+
+    busy.store(false, Ordering::SeqCst);
+    world.tick_coroutines(0.016, false);
+    assert_eq!(after.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_send_message_dispatches_to_on_message() {
+    #[derive(Debug, Default)]
+    struct MsgProbe {
+        log: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl Component for MsgProbe {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+    }
+    impl Behaviour for MsgProbe {
+        fn Enabled(&self) -> bool {
+            true
+        }
+        fn SetEnabled(&mut self, _e: bool) {}
+        fn IsActiveAndEnabled(&self) -> bool {
+            true
+        }
+        fn set_gameobject(&mut self, _h: GameObjectHandle) {}
+        fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+            None
+        }
+    }
+    impl MonoBehaviour for MsgProbe {
+        fn on_message(&mut self, method: &str, value: Option<&dyn Any>, _ctx: &mut Context) {
+            let extra = value
+                .and_then(|v| v.downcast_ref::<i32>())
+                .map(|n| format!(":{n}"))
+                .unwrap_or_default();
+            self.log.lock().unwrap().push(format!("{method}{extra}"));
+        }
+    }
+
+    let mut world = World::new();
+    let obj = world.CreateGameObject("Receiver");
+    let log = Arc::new(Mutex::new(Vec::new()));
+    world.AddMonoBehaviour(obj, MsgProbe { log: log.clone() });
+
+    world.SendMessage(obj, "Explode");
+    world.SendMessageWithValue(obj, "Hit", &5i32);
+
+    assert_eq!(
+        &*log.lock().unwrap(),
+        &["Explode".to_string(), "Hit:5".to_string()]
+    );
+}
+
+#[test]
+fn test_invoke_calls_on_message() {
+    #[derive(Debug, Default)]
+    struct InvProbe {
+        hits: Arc<AtomicU32>,
+    }
+
+    impl Component for InvProbe {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+    }
+    impl Behaviour for InvProbe {
+        fn Enabled(&self) -> bool {
+            true
+        }
+        fn SetEnabled(&mut self, _e: bool) {}
+        fn IsActiveAndEnabled(&self) -> bool {
+            true
+        }
+        fn set_gameobject(&mut self, _h: GameObjectHandle) {}
+        fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+            None
+        }
+    }
+    impl MonoBehaviour for InvProbe {
+        fn on_message(&mut self, method: &str, _v: Option<&dyn Any>, _ctx: &mut Context) {
+            if method == "Boom" {
+                self.hits.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+    }
+
+    let mut world = World::new();
+    let obj = world.CreateGameObject("Bomb");
+    let hits = Arc::new(AtomicU32::new(0));
+    world.AddMonoBehaviour(obj, InvProbe { hits: hits.clone() });
+
+    world.Invoke(obj, "Boom", 0.05);
+    world.tick_invokes(0.06);
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_context_start_coroutine() {
+    use engine_core::coroutine::CoroutineStep;
+
+    let mut world = World::new();
+    let obj = world.CreateGameObject("ViaCtx");
+    let fired = Arc::new(AtomicU32::new(0));
+    let fired2 = fired.clone();
+
+    {
+        let time = Time::default();
+        let mut events = engine_core::event::EventBus::new();
+        let mut ctx = Context::new(&mut world, time, 0, &mut events);
+        let id = ctx.StartCoroutine(
+            obj,
+            "FromContext",
+            vec![CoroutineStep::Action(Arc::new(move |_w, _o| {
+                fired2.fetch_add(1, Ordering::SeqCst);
+            }))],
+        );
+        assert_ne!(id, engine_core::CoroutineId::INVALID);
+    }
+
+    world.tick_coroutines(0.016, false);
+    assert_eq!(fired.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn test_scene_unload_stops_coroutines() {
+    use engine_core::coroutine::CoroutineStep;
+
+    let mut builder = AppBuilder::new();
+    builder.add_plugin(CorePlugins);
+    let mut app = builder.build();
+
+    let (scene_handle, keeper) = {
+        let rt = app.scene_runtime_mut().unwrap();
+        let keeper = rt.spawn("Persistent");
+        rt.world.DontDestroyOnLoad(keeper);
+        rt.world
+            .StartCoroutine(keeper, "Keep", vec![CoroutineStep::Wait(99.0)]);
+
+        let temp = rt.spawn("TempRoot");
+        rt.world
+            .StartCoroutine(temp, "Die", vec![CoroutineStep::Wait(99.0)]);
+
+        let handle = rt.scenes.register_loaded_scene("Level", vec![temp]);
+        assert_eq!(rt.world.CoroutineCount(), 2);
+        (handle, keeper)
+    };
+
+    app.scene_runtime_mut()
+        .unwrap()
+        .unload_scene(scene_handle)
+        .unwrap();
+
+    let rt = app.scene_runtime().unwrap();
+    // TempRoot destroyed → its coroutine stopped; Persistent still running
+    assert_eq!(rt.world.CoroutineCount(), 1);
+    assert!(rt.world.is_valid(keeper));
+}

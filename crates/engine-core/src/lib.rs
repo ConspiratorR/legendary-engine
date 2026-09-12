@@ -163,7 +163,7 @@ pub use app::AppBuilder;
 pub use behaviour::{Behaviour, BehaviourState};
 pub use component::Component;
 pub use context::Context;
-pub use coroutine::{CoroutineId, CoroutineStep};
+pub use coroutine::{CoroutineId, CoroutinePredicate, CoroutineStep};
 pub use event::{Event, EventBus, EventBusExt, EventHandler};
 pub use events::*;
 pub use gameobject::{GameObject, GameObjectHandle};

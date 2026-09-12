@@ -41,6 +41,10 @@ impl CoroutineId {
     pub const INVALID: Self = Self(u64::MAX);
 }
 
+/// Predicate for WaitUntil / WaitWhile (World + owner handle).
+pub type CoroutinePredicate =
+    std::sync::Arc<dyn Fn(&crate::world::World, GameObjectHandle) -> bool + Send + Sync>;
+
 /// One step of a coroutine.
 ///
 /// Steps run in order. `Wait` pauses the routine for N seconds (scaled by
@@ -53,6 +57,10 @@ pub enum CoroutineStep {
     WaitEndOfFrame,
     /// Wait until next FixedUpdate (matches `WaitForFixedUpdate`).
     WaitFixedUpdate,
+    /// Wait until predicate is true (matches `yield return new WaitUntil(cond)`).
+    WaitUntil(CoroutinePredicate),
+    /// Wait while predicate is true (matches `yield return new WaitWhile(cond)`).
+    WaitWhile(CoroutinePredicate),
     /// Set the owner GameObject's active state.
     SetActive(bool),
     /// Send a message to the owner (method name on MonoBehaviours).
@@ -67,6 +75,8 @@ impl std::fmt::Debug for CoroutineStep {
             CoroutineStep::Wait(s) => write!(f, "Wait({s})"),
             CoroutineStep::WaitEndOfFrame => write!(f, "WaitEndOfFrame"),
             CoroutineStep::WaitFixedUpdate => write!(f, "WaitFixedUpdate"),
+            CoroutineStep::WaitUntil(_) => write!(f, "WaitUntil(..)"),
+            CoroutineStep::WaitWhile(_) => write!(f, "WaitWhile(..)"),
             CoroutineStep::SetActive(a) => write!(f, "SetActive({a})"),
             CoroutineStep::Call(m) => write!(f, "Call({m})"),
             CoroutineStep::Action(_) => write!(f, "Action(..)"),
@@ -86,6 +96,10 @@ pub struct Coroutine {
     wait_end_of_frame: bool,
     /// Waiting for FixedUpdate phase.
     wait_fixed: bool,
+    /// Active WaitUntil predicate.
+    wait_until: Option<CoroutinePredicate>,
+    /// Active WaitWhile predicate.
+    wait_while: Option<CoroutinePredicate>,
     finished: bool,
 }
 
@@ -133,6 +147,30 @@ impl Coroutine {
             }
             self.wait_fixed = false;
         }
+        if self.wait_until.is_some() {
+            let owner = self.owner;
+            let done = self
+                .wait_until
+                .as_ref()
+                .map(|pred| pred(world, owner))
+                .unwrap_or(true);
+            if !done {
+                return true;
+            }
+            self.wait_until = None;
+        }
+        if self.wait_while.is_some() {
+            let owner = self.owner;
+            let still = self
+                .wait_while
+                .as_ref()
+                .map(|pred| pred(world, owner))
+                .unwrap_or(false);
+            if still {
+                return true;
+            }
+            self.wait_while = None;
+        }
 
         // Run steps until we hit a wait or finish
         while let Some(step) = self.steps.front() {
@@ -160,6 +198,27 @@ impl Coroutine {
                     self.wait_fixed = true;
                     return true;
                 }
+                CoroutineStep::WaitUntil(pred) => {
+                    let pred = pred.clone();
+                    self.steps.pop_front();
+                    let owner = self.owner;
+                    if pred(world, owner) {
+                        // already true; continue
+                    } else {
+                        self.wait_until = Some(pred);
+                        return true;
+                    }
+                }
+                CoroutineStep::WaitWhile(pred) => {
+                    let pred = pred.clone();
+                    self.steps.pop_front();
+                    let owner = self.owner;
+                    if pred(world, owner) {
+                        self.wait_while = Some(pred);
+                        return true;
+                    }
+                    // already false; continue
+                }
                 _ => {
                     let step = self.steps.pop_front().unwrap();
                     self.execute_step(world, step);
@@ -186,7 +245,9 @@ impl Coroutine {
             // handled in advance()
             CoroutineStep::Wait(_)
             | CoroutineStep::WaitEndOfFrame
-            | CoroutineStep::WaitFixedUpdate => {}
+            | CoroutineStep::WaitFixedUpdate
+            | CoroutineStep::WaitUntil(_)
+            | CoroutineStep::WaitWhile(_) => {}
         }
     }
 }
@@ -220,6 +281,8 @@ impl CoroutineRunner {
             wait_remaining: None,
             wait_end_of_frame: false,
             wait_fixed: false,
+            wait_until: None,
+            wait_while: None,
             finished: false,
         });
         id

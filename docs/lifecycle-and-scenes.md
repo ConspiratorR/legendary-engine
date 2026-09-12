@@ -231,9 +231,42 @@ world.StopAllCoroutines(obj);
 | `Wait(n)` | `yield return new WaitForSeconds(n)` |
 | `WaitEndOfFrame` | `yield return null` |
 | `WaitFixedUpdate` | `yield return new WaitForFixedUpdate()` |
+| `WaitUntil(pred)` | `yield return new WaitUntil(pred)` |
+| `WaitWhile(pred)` | `yield return new WaitWhile(pred)` |
 | `SetActive(b)` | 脚本内改 active |
 | `Call(name)` | `SendMessage` |
 | `Action(f)` | 自定义闭包 |
+
+脚本内可通过 `Context` 启动协程：
+
+```rust
+impl MonoBehaviour for Player {
+    fn Start(&mut self, ctx: &mut Context) {
+        let me = self.gameobject_handle().unwrap();
+        ctx.StartCoroutine(me, "Regen", vec![
+            CoroutineStep::Wait(1.0),
+            CoroutineStep::Call("Heal".into()),
+        ]);
+    }
+}
+```
+
+### SendMessage
+
+```rust
+impl MonoBehaviour for Enemy {
+    fn on_message(&mut self, method: &str, value: Option<&dyn Any>, _ctx: &mut Context) {
+        match method {
+            "Hit" => { /* value.downcast_ref::<i32>() */ }
+            _ => {}
+        }
+    }
+}
+
+world.SendMessage(obj, "Hit");
+world.SendMessageWithValue(obj, "Hit", &10i32);
+// Invoke / Coroutine::Call 也走 on_message
+```
 
 ## Prefab Variant
 
