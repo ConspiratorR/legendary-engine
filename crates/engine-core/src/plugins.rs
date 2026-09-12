@@ -3,6 +3,7 @@ use crate::logger::Logger;
 use crate::memory::MemoryTracker;
 use crate::plugin::Plugin;
 use crate::profiler::Profiler;
+use crate::scene_runtime::SceneRuntime;
 use crate::time::Time;
 use engine_input::action::ActionMap;
 
@@ -15,6 +16,32 @@ pub struct ActionPlugin;
 impl Plugin for ActionPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.insert_resource(ActionMap::new());
+    }
+}
+
+/// Plugin that registers a [`SceneRuntime`] resource.
+///
+/// Hosts the Unity-style World (GameObjects, MonoBehaviours, SceneManager)
+/// inside the ECS App so `App::run_with_lifecycle` can dispatch lifecycle
+/// callbacks. Add this before gameplay plugins that spawn GameObjects.
+///
+/// # Example
+///
+/// ```rust
+/// use engine_core::app::AppBuilder;
+/// use engine_core::plugins::{CorePlugins, SceneRuntimePlugin};
+///
+/// let mut app = AppBuilder::new();
+/// app.add_plugin(CorePlugins);
+/// app.add_plugin(SceneRuntimePlugin);
+/// ```
+pub struct SceneRuntimePlugin;
+
+impl Plugin for SceneRuntimePlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        if app.world_mut().get_resource::<SceneRuntime>().is_none() {
+            app.insert_resource(SceneRuntime::new());
+        }
     }
 }
 
@@ -98,6 +125,7 @@ impl Plugin for CorePlugins {
     fn build(&self, app: &mut AppBuilder) {
         app.add_plugin(TimePlugin);
         app.add_plugin(ActionPlugin);
+        app.add_plugin(SceneRuntimePlugin);
         // InputManager is already added by AppBuilder::new()
     }
 }

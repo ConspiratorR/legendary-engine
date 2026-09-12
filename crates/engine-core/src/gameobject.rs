@@ -92,6 +92,11 @@ impl GameObject {
         Self::new("")
     }
 
+    /// Alias for [`GameObject::new`] (test/API convenience).
+    pub fn new_with_name(name: &str) -> Self {
+        Self::new(name)
+    }
+
     /// Create a new GameObject with components (matches `new GameObject("name", typeof(T1), typeof(T2))`).
     pub fn new_with_components(name: &str, components: Vec<Box<dyn Component>>) -> Self {
         Self {

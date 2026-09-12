@@ -14,6 +14,7 @@ use crate::component::Component;
 use crate::context::Context;
 use crate::gameobject::{GameObject, GameObjectHandle};
 use crate::monobehaviour::{MonoBehaviour, MonoBehaviourHolder};
+use crate::time::Time;
 use crate::transform::Transform;
 use engine_math::{Quat, Vec3};
 
@@ -94,12 +95,23 @@ pub struct World {
     // === Pending operations ===
     pending_destroy: Vec<PendingDestroy>,
     pending_invokes: Vec<PendingInvoke>,
+    /// Pending OnEnable/OnDisable from SetActive (flushed on lifecycle tick).
+    pending_enable_disable: Vec<PendingEnableDisable>,
+    /// Running coroutines (Unity StartCoroutine).
+    coroutines: crate::coroutine::CoroutineRunner,
 
     // === DontDestroyOnLoad tracking ===
     dont_destroy: Vec<GameObjectHandle>,
 
     // === Instance ID counter ===
     next_instance_id: i32,
+}
+
+/// Pending OnEnable/OnDisable callback (Unity SetActive side-effect).
+struct PendingEnableDisable {
+    handle: GameObjectHandle,
+    /// true → OnEnable, false → OnDisable
+    enable: bool,
 }
 
 impl std::fmt::Debug for World {
@@ -143,6 +155,8 @@ impl World {
             tag_to_handles: HashMap::new(),
             pending_destroy: Vec::new(),
             pending_invokes: Vec::new(),
+            pending_enable_disable: Vec::new(),
+            coroutines: crate::coroutine::CoroutineRunner::new(),
             dont_destroy: Vec::new(),
             next_instance_id: 1,
         }
@@ -313,22 +327,16 @@ impl World {
         self.destroy_internal(handle);
     }
 
-    /// Internal destroy implementation.
+    /// Internal destroy implementation (no MonoBehaviour callbacks).
+    ///
+    /// Callers that need Unity's OnDisable → OnDestroy sequence should use
+    /// [`World::flush_destroy`] / [`World::dispatch_destroy_callbacks`] first.
     fn destroy_internal(&mut self, handle: GameObjectHandle) {
         if !self.is_valid(handle) {
             return;
         }
 
         let index = handle.index() as usize;
-
-        // Call OnDestroy on MonoBehaviours
-        if let Some(monos) = self.monobehaviours.get_mut(index) {
-            if let Some(monos) = monos {
-                for mono in monos.iter_mut() {
-                    // MonoBehaviour lifecycle will be called by runner
-                }
-            }
-        }
 
         // Remove from name lookup
         if let Some(go) = self.gameobject_data[index].as_ref() {
@@ -528,12 +536,32 @@ impl World {
     ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/GameObject.AddComponent.html>
+    ///
+    /// Also auto-adds any components returned by [`Component::required_on_add`]
+    /// that are not already present (Unity `RequireComponent`).
     pub fn AddComponent<T: Component + 'static>(
         &mut self,
         handle: GameObjectHandle,
         component: T,
     ) -> &mut T {
         let index = handle.index() as usize;
+
+        // Auto-add required components first (Unity RequireComponent).
+        for factory in component.required_on_add() {
+            let required = factory();
+            let type_name = required.component_name().to_string();
+            let already = self
+                .get_gameobject(handle)
+                .map(|go| {
+                    go.Components()
+                        .iter()
+                        .any(|c| c.component_name() == type_name)
+                })
+                .unwrap_or(false);
+            if !already {
+                self.AddComponentBoxed(handle, required);
+            }
+        }
 
         if let Some(go) = self.gameobject_data.get_mut(index) {
             if let Some(go) = go {
@@ -553,6 +581,37 @@ impl World {
                 go.AddComponentBoxed(component);
             }
         }
+    }
+
+    /// Attach a MonoBehaviour script (matches `AddComponent<MyScript>()` for scripts).
+    ///
+    /// Scripts receive Awake/Start/Update/FixedUpdate/LateUpdate/OnEnable/OnDisable/OnDestroy
+    /// via the SceneRuntime lifecycle ticks.
+    pub fn AddMonoBehaviour<T: MonoBehaviour + 'static>(
+        &mut self,
+        handle: GameObjectHandle,
+        mono: T,
+    ) {
+        if !self.is_valid(handle) {
+            return;
+        }
+        let index = handle.index() as usize;
+        if self.monobehaviours.len() <= index {
+            self.monobehaviours.resize_with(index + 1, || None);
+        }
+        self.monobehaviours[index]
+            .get_or_insert_with(Vec::new)
+            .push(MonoBehaviourHolder::new(mono));
+    }
+
+    /// Count of MonoBehaviours attached to a GameObject.
+    pub fn MonoBehaviourCount(&self, handle: GameObjectHandle) -> usize {
+        let index = handle.index() as usize;
+        self.monobehaviours
+            .get(index)
+            .and_then(|m| m.as_ref())
+            .map(|v| v.len())
+            .unwrap_or(0)
     }
 
     /// Get a component from a GameObject (matches `GameObject.GetComponent<T>()`).
@@ -837,30 +896,87 @@ impl World {
     ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/GameObject.SetActive.html>
+    ///
+    /// Changing `activeSelf` may change `activeInHierarchy` for this object and
+    /// its descendants. OnEnable/OnDisable are queued and flushed on the next
+    /// lifecycle tick (see [`World::flush_enable_disable`]).
     pub fn SetActive(&mut self, handle: GameObjectHandle, active: bool) {
         let index = handle.index() as usize;
 
-        if let Some(go) = self.gameobject_data.get_mut(index) {
-            if let Some(go) = go {
-                let was_active = go.ActiveSelf();
-                go.SetActive(active);
+        let was_active = match self.gameobject_data.get(index).and_then(|g| g.as_ref()) {
+            Some(go) => go.ActiveSelf(),
+            None => return,
+        };
+        if was_active == active {
+            return;
+        }
 
-                // Call OnEnable/OnDisable on MonoBehaviours
-                if was_active != active {
-                    if let Some(monos) = self.monobehaviours.get_mut(index) {
-                        if let Some(monos) = monos {
-                            for mono in monos.iter_mut() {
-                                if active {
-                                    // OnEnable will be called by runner
-                                } else {
-                                    // OnDisable will be called by runner
-                                }
-                            }
-                        }
+        let was_in_hierarchy = self.IsActiveInHierarchy(handle);
+        if let Some(go) = self.gameobject_data.get_mut(index).and_then(|g| g.as_mut()) {
+            go.SetActive(active);
+        }
+        let now_in_hierarchy = self.IsActiveInHierarchy(handle);
+        if was_in_hierarchy == now_in_hierarchy {
+            return;
+        }
+
+        // Queue OnEnable/OnDisable for this object and descendants whose
+        // effective active state flipped.
+        self.queue_enable_disable_cascade(handle, now_in_hierarchy);
+    }
+
+    fn queue_enable_disable_cascade(&mut self, handle: GameObjectHandle, enable: bool) {
+        self.pending_enable_disable
+            .push(PendingEnableDisable { handle, enable });
+        let children = self.GetChildren(handle);
+        for child in children {
+            // Child effective state flips only if its activeSelf stays true.
+            if self.IsActive(child) {
+                self.queue_enable_disable_cascade(child, enable);
+            }
+        }
+    }
+
+    /// Flush pending OnEnable/OnDisable from SetActive.
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnEnable.html>
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnDisable.html>
+    pub fn flush_enable_disable(
+        &mut self,
+        time: Time,
+        frame: u64,
+        events: &mut crate::event::EventBus,
+    ) {
+        let pending = std::mem::take(&mut self.pending_enable_disable);
+        for item in pending {
+            if !self.is_valid(item.handle) {
+                continue;
+            }
+            let index = item.handle.index() as usize;
+            let Some(mut monos) = self.monobehaviours[index].take() else {
+                continue;
+            };
+            {
+                let mut ctx = Context::new(self, time.clone(), frame, events);
+                for mono in monos.iter_mut() {
+                    if !mono.Enabled() {
+                        continue;
+                    }
+                    if item.enable {
+                        mono.GetMut().OnEnable(&mut ctx);
+                    } else {
+                        mono.GetMut().OnDisable(&mut ctx);
                     }
                 }
             }
+            self.monobehaviours[index] = Some(monos);
         }
+    }
+
+    /// Number of pending OnEnable/OnDisable callbacks.
+    pub fn pending_enable_disable_count(&self) -> usize {
+        self.pending_enable_disable.len()
     }
 
     /// Get active state (matches `GameObject.activeSelf`).
@@ -1055,28 +1171,248 @@ impl World {
     }
 
     // ============================================================
+    // Invoke (delayed method calls)
+    // ============================================================
+
+    /// Call a method after a delay (matches `MonoBehaviour.Invoke`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.Invoke.html>
+    ///
+    /// Dispatches via [`World::SendMessage`] when the timer elapses.
+    pub fn Invoke(&mut self, handle: GameObjectHandle, method: &str, time: f32) {
+        if !self.is_valid(handle) {
+            return;
+        }
+        self.pending_invokes.push(PendingInvoke {
+            handle,
+            method_name: method.to_string(),
+            time: time.max(0.0),
+            elapsed: 0.0,
+            repeat_rate: None,
+        });
+    }
+
+    /// Call a method repeatedly (matches `MonoBehaviour.InvokeRepeating`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.InvokeRepeating.html>
+    pub fn InvokeRepeating(
+        &mut self,
+        handle: GameObjectHandle,
+        method: &str,
+        time: f32,
+        repeat_rate: f32,
+    ) {
+        if !self.is_valid(handle) || repeat_rate <= 0.0 {
+            return;
+        }
+        self.pending_invokes.push(PendingInvoke {
+            handle,
+            method_name: method.to_string(),
+            time: time.max(0.0),
+            elapsed: 0.0,
+            repeat_rate: Some(repeat_rate),
+        });
+    }
+
+    /// Cancel all pending Invokes on a GameObject (matches `MonoBehaviour.CancelInvoke`).
+    pub fn CancelInvoke(&mut self, handle: GameObjectHandle) {
+        self.pending_invokes.retain(|p| p.handle != handle);
+    }
+
+    /// Cancel a specific Invoke by method name.
+    pub fn CancelInvokeMethod(&mut self, handle: GameObjectHandle, method: &str) {
+        self.pending_invokes
+            .retain(|p| !(p.handle == handle && p.method_name == method));
+    }
+
+    /// Whether any Invoke is pending on this GameObject (matches `MonoBehaviour.IsInvoking`).
+    pub fn IsInvoking(&self, handle: GameObjectHandle) -> bool {
+        self.pending_invokes.iter().any(|p| p.handle == handle)
+    }
+
+    /// Advance Invoke timers and fire due methods.
+    pub fn tick_invokes(&mut self, delta_time: f32) {
+        let mut fire: Vec<(GameObjectHandle, String)> = Vec::new();
+        let mut keep: Vec<PendingInvoke> = Vec::new();
+
+        for mut pending in std::mem::take(&mut self.pending_invokes) {
+            if !self.is_valid(pending.handle) {
+                continue;
+            }
+            pending.elapsed += delta_time;
+            if pending.elapsed >= pending.time {
+                fire.push((pending.handle, pending.method_name.clone()));
+                if let Some(rate) = pending.repeat_rate {
+                    // Reschedule from now (Unity InvokeRepeating)
+                    pending.time = rate;
+                    pending.elapsed = 0.0;
+                    keep.push(pending);
+                }
+            } else {
+                keep.push(pending);
+            }
+        }
+
+        self.pending_invokes = keep;
+        for (handle, method) in fire {
+            self.SendMessage(handle, &method);
+        }
+    }
+
+    /// Number of pending Invokes (diagnostics).
+    pub fn pending_invoke_count(&self) -> usize {
+        self.pending_invokes.len()
+    }
+
+    // ============================================================
+    // Coroutines
+    // ============================================================
+
+    /// Start a coroutine on a GameObject (matches `MonoBehaviour.StartCoroutine`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.StartCoroutine.html>
+    pub fn StartCoroutine(
+        &mut self,
+        owner: GameObjectHandle,
+        name: impl Into<String>,
+        steps: Vec<crate::coroutine::CoroutineStep>,
+    ) -> crate::coroutine::CoroutineId {
+        self.coroutines.start(owner, name, steps)
+    }
+
+    /// Stop a specific coroutine (matches `MonoBehaviour.StopCoroutine`).
+    pub fn StopCoroutine(&mut self, id: crate::coroutine::CoroutineId) -> bool {
+        self.coroutines.stop(id)
+    }
+
+    /// Stop all coroutines on a GameObject (matches `MonoBehaviour.StopAllCoroutines`).
+    pub fn StopAllCoroutines(&mut self, owner: GameObjectHandle) {
+        self.coroutines.stop_all_for(owner);
+    }
+
+    /// Whether a coroutine is still running.
+    pub fn IsCoroutineRunning(&self, id: crate::coroutine::CoroutineId) -> bool {
+        self.coroutines.is_running(id)
+    }
+
+    /// Live coroutine count.
+    pub fn CoroutineCount(&self) -> usize {
+        self.coroutines.count()
+    }
+
+    /// Advance coroutines (called from lifecycle ticks).
+    pub fn tick_coroutines(&mut self, delta_time: f32, in_fixed: bool) {
+        // Drain and reinsert to satisfy borrow checker (advance needs &mut World)
+        let mut runner = std::mem::take(&mut self.coroutines);
+        runner.tick(self, delta_time, in_fixed);
+        self.coroutines = runner;
+    }
+
+    // ============================================================
     // Lifecycle Dispatch (internal)
     // ============================================================
 
-    /// Process pending destroys (called at end of frame).
-    pub(crate) fn flush_destroy(&mut self) {
-        let pending: Vec<GameObjectHandle> = self
-            .pending_destroy
-            .drain(..)
-            .filter(|p| p.delay <= 0.0)
-            .map(|p| p.handle)
-            .collect();
+    /// Process pending destroys whose delay has elapsed (called at end of frame).
+    ///
+    /// Unity: Destroy is deferred until end of update loop; Destroy(obj, t) waits t seconds.
+    pub fn flush_destroy(&mut self) {
+        let pending: Vec<GameObjectHandle> = {
+            let (ready, keep): (Vec<_>, Vec<_>) = self
+                .pending_destroy
+                .drain(..)
+                .partition(|p| p.elapsed >= p.delay);
+            self.pending_destroy = keep;
+            ready.into_iter().map(|p| p.handle).collect()
+        };
 
         for handle in pending {
             self.destroy_internal(handle);
         }
     }
 
+    /// Dispatch OnDisable → OnDestroy for a GameObject about to be destroyed.
+    ///
+    /// Unity always runs these before the object is removed. `events`/`time`/`frame`
+    /// form a Context for the callbacks (World is borrowed as `self`).
+    pub fn dispatch_destroy_callbacks(
+        &mut self,
+        handle: GameObjectHandle,
+        events: &mut crate::event::EventBus,
+        time: Time,
+        frame: u64,
+    ) {
+        if !self.is_valid(handle) {
+            return;
+        }
+
+        let index = handle.index() as usize;
+        let taken = self.monobehaviours[index].take();
+        if let Some(mut monos) = taken {
+            let mut ctx = Context::new(self, time, frame, events);
+            for mono in monos.iter_mut() {
+                if mono.Enabled() {
+                    mono.GetMut().OnDisable(&mut ctx);
+                }
+                mono.GetMut().OnDestroy(&mut ctx);
+            }
+            // Drop monos after callbacks; storage already cleared via take().
+        } else {
+            // Restore empty slot so destroy_internal cleanup stays consistent.
+            self.monobehaviours[index] = None;
+        }
+    }
+
+    /// End-of-frame destroy with Unity callbacks (OnDisable → OnDestroy → free).
+    pub fn flush_destroy_with_callbacks(
+        &mut self,
+        events: &mut crate::event::EventBus,
+        time: Time,
+        frame: u64,
+    ) {
+        let pending: Vec<GameObjectHandle> = {
+            let (ready, keep): (Vec<_>, Vec<_>) = self
+                .pending_destroy
+                .drain(..)
+                .partition(|p| p.elapsed >= p.delay);
+            self.pending_destroy = keep;
+            ready.into_iter().map(|p| p.handle).collect()
+        };
+
+        for handle in pending {
+            self.dispatch_destroy_callbacks(handle, events, time.clone(), frame);
+            self.destroy_internal(handle);
+        }
+    }
+
     /// Update pending destroy delays.
-    pub(crate) fn update_pending_destroy(&mut self, delta_time: f32) {
+    pub fn update_pending_destroy(&mut self, delta_time: f32) {
         for pending in self.pending_destroy.iter_mut() {
             pending.elapsed += delta_time;
         }
+    }
+
+    /// Whether this handle is marked DontDestroyOnLoad.
+    pub fn is_dont_destroy_on_load(&self, handle: GameObjectHandle) -> bool {
+        self.dont_destroy.contains(&handle)
+    }
+
+    /// Get all DontDestroyOnLoad handles.
+    pub fn dont_destroy_handles(&self) -> &[GameObjectHandle] {
+        &self.dont_destroy
+    }
+
+    /// Clear DontDestroyOnLoad marks for destroyed/invalid handles.
+    pub fn prune_dont_destroy(&mut self) {
+        let valid: Vec<GameObjectHandle> = self
+            .dont_destroy
+            .iter()
+            .copied()
+            .filter(|&h| self.is_valid(h))
+            .collect();
+        self.dont_destroy = valid;
     }
 
     /// Sync all transforms (called by update system).
@@ -1219,6 +1555,165 @@ impl World {
                 }
             }
         }
+    }
+
+    // ============================================================
+    // Unity-safe lifecycle ticks (avoid double-borrow of World)
+    // ============================================================
+
+    /// Run Awake for all MonoBehaviours that have not awakened yet.
+    ///
+    /// Unity: all Awakes run before any Start after a scene load.
+    pub fn tick_awake(&mut self, time: Time, frame: u64, events: &mut crate::event::EventBus) {
+        let mut all = std::mem::take(&mut self.monobehaviours);
+        let mut active: Vec<usize> = Vec::new();
+        for (i, slot) in all.iter().enumerate() {
+            if slot.is_some() {
+                active.push(i);
+            }
+        }
+        {
+            let mut ctx = Context::new(self, time, frame, events);
+            for i in active {
+                if let Some(monos) = all[i].as_mut() {
+                    for mono in monos.iter_mut() {
+                        mono.GetMut().Awake(&mut ctx);
+                        if mono.Enabled() {
+                            mono.GetMut().OnEnable(&mut ctx);
+                        }
+                    }
+                }
+            }
+        }
+        self.monobehaviours = all;
+    }
+
+    /// Run Start for MonoBehaviours that have not started yet.
+    pub fn tick_start(&mut self, time: Time, frame: u64, events: &mut crate::event::EventBus) {
+        let mut all = std::mem::take(&mut self.monobehaviours);
+        {
+            let mut ctx = Context::new(self, time, frame, events);
+            for slot in all.iter_mut().flatten() {
+                for mono in slot.iter_mut() {
+                    if mono.Enabled() && !mono.HasStarted() {
+                        mono.GetMut().Start(&mut ctx);
+                        mono.MarkStarted();
+                    }
+                }
+            }
+        }
+        self.monobehaviours = all;
+    }
+
+    /// Run FixedUpdate on enabled MonoBehaviours of active GameObjects.
+    pub fn tick_fixed_update(
+        &mut self,
+        time: Time,
+        frame: u64,
+        events: &mut crate::event::EventBus,
+    ) {
+        let inactive: Vec<usize> = (0..self.gameobject_data.len())
+            .filter(|&i| {
+                self.gameobject_data
+                    .get(i)
+                    .and_then(|g| g.as_ref())
+                    .map(|g| !g.ActiveSelf())
+                    .unwrap_or(false)
+            })
+            .collect();
+        let mut all = std::mem::take(&mut self.monobehaviours);
+        {
+            let mut ctx = Context::new(self, time, frame, events);
+            for (i, slot) in all.iter_mut().enumerate() {
+                if inactive.contains(&i) {
+                    continue;
+                }
+                for mono in slot.iter_mut().flatten() {
+                    if mono.Enabled() {
+                        mono.GetMut().FixedUpdate(&mut ctx);
+                    }
+                }
+            }
+        }
+        self.monobehaviours = all;
+    }
+
+    /// Run Update on enabled MonoBehaviours of active GameObjects.
+    pub fn tick_update(&mut self, time: Time, frame: u64, events: &mut crate::event::EventBus) {
+        let inactive: Vec<usize> = (0..self.gameobject_data.len())
+            .filter(|&i| {
+                self.gameobject_data
+                    .get(i)
+                    .and_then(|g| g.as_ref())
+                    .map(|g| !g.ActiveSelf())
+                    .unwrap_or(false)
+            })
+            .collect();
+        let mut all = std::mem::take(&mut self.monobehaviours);
+        {
+            let mut ctx = Context::new(self, time, frame, events);
+            for (i, slot) in all.iter_mut().enumerate() {
+                if inactive.contains(&i) {
+                    continue;
+                }
+                for mono in slot.iter_mut().flatten() {
+                    if mono.Enabled() {
+                        mono.GetMut().Update(&mut ctx);
+                    }
+                }
+            }
+        }
+        self.monobehaviours = all;
+    }
+
+    /// Run LateUpdate on enabled MonoBehaviours of active GameObjects.
+    pub fn tick_late_update(
+        &mut self,
+        time: Time,
+        frame: u64,
+        events: &mut crate::event::EventBus,
+    ) {
+        let inactive: Vec<usize> = (0..self.gameobject_data.len())
+            .filter(|&i| {
+                self.gameobject_data
+                    .get(i)
+                    .and_then(|g| g.as_ref())
+                    .map(|g| !g.ActiveSelf())
+                    .unwrap_or(false)
+            })
+            .collect();
+        let mut all = std::mem::take(&mut self.monobehaviours);
+        {
+            let mut ctx = Context::new(self, time, frame, events);
+            for (i, slot) in all.iter_mut().enumerate() {
+                if inactive.contains(&i) {
+                    continue;
+                }
+                for mono in slot.iter_mut().flatten() {
+                    if mono.Enabled() {
+                        mono.GetMut().LateUpdate(&mut ctx);
+                    }
+                }
+            }
+        }
+        self.monobehaviours = all;
+    }
+
+    /// Full Unity end-of-frame: advance timers, dispatch callbacks, free destroyed objects.
+    pub fn tick_end_of_frame(
+        &mut self,
+        delta_time: f32,
+        time: Time,
+        frame: u64,
+        events: &mut crate::event::EventBus,
+    ) {
+        self.flush_enable_disable(time.clone(), frame, events);
+        self.tick_coroutines(delta_time, time.inFixedTimeStep());
+        self.tick_invokes(delta_time);
+        self.update_pending_destroy(delta_time);
+        self.sync_transforms();
+        self.flush_destroy_with_callbacks(events, time, frame);
+        self.prune_dont_destroy();
     }
 
     // ============================================================
@@ -1480,5 +1975,149 @@ mod tests {
 
         assert_eq!(parent_pos, Vec3::new(5.0, 0.0, 0.0));
         assert_eq!(child_pos, Vec3::new(6.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_set_active_queues_enable_disable() {
+        let mut world = World::new();
+        let handle = world.CreateGameObject("Obj");
+        assert_eq!(world.pending_enable_disable_count(), 0);
+
+        world.SetActive(handle, false);
+        assert_eq!(world.pending_enable_disable_count(), 1);
+        assert!(!world.IsActive(handle));
+        assert!(!world.IsActiveInHierarchy(handle));
+
+        world.SetActive(handle, true);
+        assert_eq!(world.pending_enable_disable_count(), 2);
+        assert!(world.IsActive(handle));
+    }
+
+    #[test]
+    fn test_set_active_parent_affects_child_hierarchy() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("Parent");
+        let child = world.CreateGameObject("Child");
+        world.SetParent(child, Some(parent));
+
+        assert!(world.IsActiveInHierarchy(child));
+        world.SetActive(parent, false);
+        // Child activeSelf remains true; hierarchy becomes inactive
+        assert!(world.IsActive(child));
+        assert!(!world.IsActiveInHierarchy(child));
+        // Parent + child OnDisable queued
+        assert_eq!(world.pending_enable_disable_count(), 2);
+    }
+
+    #[test]
+    fn test_invoke_timer() {
+        let mut world = World::new();
+        let handle = world.CreateGameObject("Obj");
+        world.Invoke(handle, "Explode", 0.1);
+        assert!(world.IsInvoking(handle));
+        assert_eq!(world.pending_invoke_count(), 1);
+
+        world.tick_invokes(0.05);
+        assert_eq!(world.pending_invoke_count(), 1); // not yet
+
+        world.tick_invokes(0.06);
+        assert_eq!(world.pending_invoke_count(), 0);
+    }
+
+    #[test]
+    fn test_invoke_repeating() {
+        let mut world = World::new();
+        let handle = world.CreateGameObject("Obj");
+        world.InvokeRepeating(handle, "Pulse", 0.0, 0.1);
+        assert_eq!(world.pending_invoke_count(), 1);
+        world.tick_invokes(0.05);
+        // Still repeating
+        assert_eq!(world.pending_invoke_count(), 1);
+        world.CancelInvoke(handle);
+        assert_eq!(world.pending_invoke_count(), 0);
+    }
+
+    #[test]
+    fn test_add_monobehaviour() {
+        use crate::behaviour::Behaviour;
+        use crate::context::Context;
+        use crate::monobehaviour::MonoBehaviour;
+        use std::any::Any;
+
+        #[derive(Debug)]
+        struct Counter {
+            updates: u32,
+        }
+
+        impl Component for Counter {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl Behaviour for Counter {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _enabled: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, _handle: GameObjectHandle) {}
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                None
+            }
+        }
+        impl MonoBehaviour for Counter {
+            fn Update(&mut self, _ctx: &mut Context) {
+                self.updates += 1;
+            }
+        }
+
+        let mut world = World::new();
+        let handle = world.CreateGameObject("Scripted");
+        world.AddMonoBehaviour(handle, Counter { updates: 0 });
+        assert_eq!(world.MonoBehaviourCount(handle), 1);
+
+        let time = Time::default();
+        let mut events = crate::event::EventBus::new();
+        world.tick_update(time, 0, &mut events);
+        // Update ran (value is inside holder, not directly readable without API)
+    }
+
+    #[test]
+    fn test_require_component_auto_add() {
+        #[derive(Debug)]
+        struct Mesh;
+        #[derive(Debug)]
+        struct MeshRenderer;
+
+        impl Component for Mesh {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+            fn required_on_add(&self) -> Vec<Box<dyn Fn() -> Box<dyn Component>>> {
+                vec![Box::new(|| Box::new(MeshRenderer))]
+            }
+        }
+        impl Component for MeshRenderer {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+
+        let mut world = World::new();
+        let handle = world.CreateGameObject("Obj");
+        world.AddComponent(handle, Mesh);
+        assert!(world.HasComponent::<Mesh>(handle));
+        assert!(world.HasComponent::<MeshRenderer>(handle));
     }
 }

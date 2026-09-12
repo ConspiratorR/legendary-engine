@@ -87,6 +87,17 @@ pub trait Component: Any + Send + Sync {
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.OnDestroy.html>
     fn on_destroy(&mut self, _handle: GameObjectHandle) {}
+
+    /// Factories for components that must co-exist with this one (Unity `RequireComponent`).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/ScriptReference/RequireComponent.html>
+    ///
+    /// `World::AddComponent` calls this and adds any missing required components.
+    /// Implemented as an instance method so `Component` stays object-safe.
+    fn required_on_add(&self) -> Vec<Box<dyn Fn() -> Box<dyn Component>>> {
+        Vec::new()
+    }
 }
 
 /// Macro to implement Component trait for a struct.

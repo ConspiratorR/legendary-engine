@@ -118,6 +118,30 @@ impl PlayerLoop {
         }
     }
 
+    /// Execute only one phase's systems (Unity-like fine-grained PlayerLoop).
+    pub fn run_phase(&mut self, phase: Phase, context: &mut Context) {
+        let idx = phase.index();
+        // Split borrow: take systems out so Context can hold &mut World.
+        let mut systems = std::mem::take(&mut self.phase_systems[idx]);
+        for system in &mut systems {
+            system.run(context);
+        }
+        self.phase_systems[idx] = systems;
+    }
+
+    /// Run startup systems once (if not already done).
+    pub fn run_startup(&mut self, context: &mut Context) {
+        if self.startup_done {
+            return;
+        }
+        let mut systems = std::mem::take(&mut self.startup_systems);
+        for system in &mut systems {
+            system.run(context);
+        }
+        self.startup_systems = systems;
+        self.startup_done = true;
+    }
+
     /// Get the total number of registered (non-startup) systems.
     pub fn system_count(&self) -> usize {
         self.phase_systems.iter().map(|v| v.len()).sum()

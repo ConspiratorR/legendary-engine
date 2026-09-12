@@ -14,14 +14,45 @@ pub struct PrefabId(pub u64);
 /// Prefabs define a hierarchy of GameObjects with components that can be
 /// instantiated multiple times. Instances can have overrides that modify
 /// properties without changing the original prefab definition.
+///
+/// # Prefab Variants
+/// A prefab can be a **variant** of another prefab (`base`). The variant
+/// inherits the base hierarchy and stores node-level overrides applied on
+/// instantiate (Unity Prefab Variant model).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Prefab {
     /// Unique identifier for this prefab.
     id: PrefabId,
     /// Name of the prefab.
     name: String,
-    /// The root GameObject definition.
+    /// The root GameObject definition (already merged if this is a variant).
     root: PrefabNode,
+    /// Base prefab ID if this is a variant (None for a regular prefab).
+    #[serde(default)]
+    base: Option<PrefabId>,
+    /// Node path → overrides applied on top of the inherited hierarchy.
+    #[serde(default)]
+    node_overrides: HashMap<String, PrefabNodeOverride>,
+}
+
+/// Property overrides for a single prefab node (variant or instance).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PrefabNodeOverride {
+    /// Override GameObject name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Override tag.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
+    /// Override layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<i32>,
+    /// Override active state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<bool>,
+    /// Extra component type names to add.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub add_components: Vec<String>,
 }
 
 /// A node in the prefab hierarchy, representing a GameObject template.
@@ -69,12 +100,93 @@ impl Prefab {
             id,
             name: name.to_string(),
             root: PrefabNode::FromGameObject(root, world),
+            base: None,
+            node_overrides: HashMap::new(),
         }
     }
 
     /// Create a new prefab (snake_case alias for Create).
     pub fn create(name: &str, root: &GameObject, world: &World) -> Self {
         Self::Create(name, root, world)
+    }
+
+    /// Create a prefab from an explicit node tree (no World snapshot).
+    pub fn from_node(name: &str, root: PrefabNode) -> Self {
+        Self {
+            id: PrefabId(rand_id()),
+            name: name.to_string(),
+            root,
+            base: None,
+            node_overrides: HashMap::new(),
+        }
+    }
+
+    /// Create a **variant** of `base` (Unity Prefab Variant).
+    ///
+    /// # Unity Documentation
+    /// <https://docs.unity3d.com/Manual/PrefabVariants.html>
+    ///
+    /// The variant starts as a copy of the base hierarchy. Call
+    /// [`Prefab::override_node`] to record differences, then
+    /// [`Prefab::apply_overrides`] (or `Instantiate`, which applies them)
+    /// to merge into the root tree.
+    pub fn CreateVariant(name: &str, base: &Prefab) -> Self {
+        let mut root = base.root.clone();
+        // Merge any overrides already applied on the base variant
+        let merged = base.merged_root();
+        root = merged;
+        Self {
+            id: PrefabId(rand_id()),
+            name: name.to_string(),
+            root,
+            base: Some(base.id),
+            node_overrides: HashMap::new(),
+        }
+    }
+
+    /// Snake_case alias for CreateVariant.
+    pub fn create_variant(name: &str, base: &Prefab) -> Self {
+        Self::CreateVariant(name, base)
+    }
+
+    /// Whether this prefab is a variant of another.
+    pub fn is_variant(&self) -> bool {
+        self.base.is_some()
+    }
+
+    /// Base prefab ID, if this is a variant.
+    pub fn base_id(&self) -> Option<PrefabId> {
+        self.base
+    }
+
+    /// Record a node override by path (e.g. `"Root/Weapon"` or `""` for root).
+    ///
+    /// Paths use `/` separators from the prefab root (root itself is `""`).
+    pub fn override_node(&mut self, path: &str, ov: PrefabNodeOverride) {
+        self.node_overrides.insert(path.to_string(), ov);
+    }
+
+    /// All node override paths.
+    pub fn override_paths(&self) -> Vec<&str> {
+        self.node_overrides.keys().map(|s| s.as_str()).collect()
+    }
+
+    /// Get an override by path.
+    pub fn get_node_override(&self, path: &str) -> Option<&PrefabNodeOverride> {
+        self.node_overrides.get(path)
+    }
+
+    /// Merge overrides into a copy of the root tree (does not mutate `self`).
+    pub fn merged_root(&self) -> PrefabNode {
+        let mut root = self.root.clone();
+        apply_node_overrides(&mut root, "", &self.node_overrides);
+        root
+    }
+
+    /// Apply overrides into `self.root` (materialize variant onto stored tree).
+    pub fn apply_overrides(&mut self) {
+        let overrides = std::mem::take(&mut self.node_overrides);
+        apply_node_overrides(&mut self.root, "", &overrides);
     }
 
     /// Get the prefab ID.
@@ -97,7 +209,7 @@ impl Prefab {
         self.Name()
     }
 
-    /// Get the root node.
+    /// Get the root node (raw stored tree, without pending overrides).
     pub fn Root(&self) -> &PrefabNode {
         &self.root
     }
@@ -108,8 +220,11 @@ impl Prefab {
     }
 
     /// Instantiate this prefab, creating a new GameObject hierarchy in the World.
+    ///
+    /// Variant overrides are applied on a merged copy before spawning.
     pub fn Instantiate(&self, world: &mut World) -> PrefabInstance {
-        let handle = self.root.ToGameObject(world);
+        let root = self.merged_root();
+        let handle = root.ToGameObject(world);
         PrefabInstance {
             prefab_id: self.id,
             game_object: handle,
@@ -120,6 +235,41 @@ impl Prefab {
     /// Instantiate this prefab (snake_case alias for Instantiate).
     pub fn instantiate(&self, world: &mut World) -> PrefabInstance {
         self.Instantiate(world)
+    }
+}
+
+/// Recursively apply node overrides using `/`-separated paths from root.
+fn apply_node_overrides(
+    node: &mut PrefabNode,
+    path: &str,
+    overrides: &HashMap<String, PrefabNodeOverride>,
+) {
+    if let Some(ov) = overrides.get(path) {
+        if let Some(name) = &ov.name {
+            node.name = name.clone();
+        }
+        if let Some(tag) = &ov.tag {
+            node.tag = tag.clone();
+        }
+        if let Some(layer) = ov.layer {
+            node.layer = layer;
+        }
+        if let Some(active) = ov.active {
+            node.active = active;
+        }
+        for c in &ov.add_components {
+            if !node.components.contains(c) {
+                node.components.push(c.clone());
+            }
+        }
+    }
+    for child in node.children.iter_mut() {
+        let child_path = if path.is_empty() {
+            child.name.clone()
+        } else {
+            format!("{path}/{}", child.name)
+        };
+        apply_node_overrides(child, &child_path, overrides);
     }
 }
 
@@ -684,5 +834,78 @@ mod tests {
                 .iter()
                 .any(|c| c.contains("HealthComponent"))
         );
+    }
+
+    #[test]
+    fn test_prefab_variant_inherits_base() {
+        let mut world = World::new();
+        let mut root_go = GameObject::new_with_name("Enemy");
+        root_go.SetTag("Enemy");
+        let base = Prefab::Create("EnemyBase", &root_go, &world);
+        assert!(!base.is_variant());
+
+        let variant = Prefab::CreateVariant("EnemyRed", &base);
+        assert!(variant.is_variant());
+        assert_eq!(variant.base_id(), Some(base.id()));
+        assert_eq!(variant.Root().Name(), "Enemy");
+        assert_eq!(variant.Root().Tag(), "Enemy");
+    }
+
+    #[test]
+    fn test_prefab_variant_override_tag() {
+        let mut world = World::new();
+        let go = GameObject::new_with_name("Enemy");
+        let base = Prefab::Create("EnemyBase", &go, &world);
+
+        let mut variant = Prefab::CreateVariant("EnemyBoss", &base);
+        variant.override_node(
+            "",
+            PrefabNodeOverride {
+                tag: Some("Boss".into()),
+                layer: Some(3),
+                ..Default::default()
+            },
+        );
+
+        let merged = variant.merged_root();
+        assert_eq!(merged.Tag(), "Boss");
+        assert_eq!(merged.Layer(), 3);
+        assert_eq!(merged.Name(), "Enemy");
+
+        // Instantiating applies overrides
+        let inst = variant.Instantiate(&mut world);
+        let handle = inst.GameObjectHandle();
+        assert_eq!(world.GetTag(handle), "Boss");
+        assert_eq!(world.GetLayer(handle), 3);
+    }
+
+    #[test]
+    fn test_prefab_variant_child_override() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("Root");
+        let child = world.CreateGameObject("Weapon");
+        world.SetParent(child, Some(parent));
+
+        // Snapshot hierarchy: FromGameObject doesn't fill children; build manually
+        let mut root_node = PrefabNode::FromGameObject(&GameObject::new_with_name("Root"), &world);
+        root_node.children.push(PrefabNode::FromGameObject(
+            &GameObject::new_with_name("Weapon"),
+            &world,
+        ));
+        let base = Prefab::from_node("Char", root_node);
+
+        let mut variant = Prefab::CreateVariant("CharArmed", &base);
+        variant.override_node(
+            "Weapon",
+            PrefabNodeOverride {
+                name: Some("Sword".into()),
+                add_components: vec!["Blade".into()],
+                ..Default::default()
+            },
+        );
+
+        let merged = variant.merged_root();
+        assert_eq!(merged.children[0].Name(), "Sword");
+        assert!(merged.children[0].Components().iter().any(|c| c == "Blade"));
     }
 }

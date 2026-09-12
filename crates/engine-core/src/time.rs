@@ -17,6 +17,10 @@ pub struct Time {
     max_delta_time: f32,
     /// Time at the last FixedUpdate step (for fixedUnscaledTime).
     last_fixed_time: f32,
+    /// Accumulator for fixed-timestep FixedUpdate (Unity PlayerLoop).
+    fixed_accumulator: f32,
+    /// Maximum FixedUpdate steps per rendered frame (spiral-of-death guard).
+    max_fixed_steps: u32,
 }
 
 impl Default for Time {
@@ -30,6 +34,8 @@ impl Default for Time {
             in_fixed_update: false,
             max_delta_time: 0.33333334, // ~3 FPS minimum
             last_fixed_time: 0.0,
+            fixed_accumulator: 0.0,
+            max_fixed_steps: 8,
         }
     }
 }
@@ -111,17 +117,58 @@ impl Time {
     }
 
     /// Update time for a new frame (called by engine).
+    ///
+    /// Also advances the FixedUpdate accumulator by the scaled delta, matching
+    /// Unity's PlayerLoop: FixedUpdate runs 0+ times per rendered frame.
     pub fn update(&mut self, delta: f32) {
         self.delta_time = delta.min(self.max_delta_time);
         self.elapsed_time += self.deltaTime();
         self.frame_count += 1;
         self.in_fixed_update = false;
+        // Accumulate scaled time for FixedUpdate (Unity uses Time.deltaTime).
+        self.fixed_accumulator += self.deltaTime();
+    }
+
+    /// How many FixedUpdate steps should run this frame (Unity: 0+ times).
+    ///
+    /// Does not consume the accumulator — call [`Time::begin_fixed_update`] /
+    /// [`Time::end_fixed_update`] around each step.
+    pub fn pending_fixed_steps(&self) -> u32 {
+        let step = self.fixed_delta_time.max(f32::EPSILON);
+        let steps = (self.fixed_accumulator / step).floor() as i64;
+        steps.clamp(0, self.max_fixed_steps as i64) as u32
+    }
+
+    /// Enter FixedUpdate for one fixed step (called by engine before FixedUpdate).
+    pub fn begin_fixed_update(&mut self) {
+        self.in_fixed_update = true;
+        self.last_fixed_time = self.elapsed_time;
+    }
+
+    /// Leave FixedUpdate and consume one fixed step from the accumulator.
+    pub fn end_fixed_update(&mut self) {
+        self.fixed_accumulator = (self.fixed_accumulator - self.fixed_delta_time).max(0.0);
+        self.in_fixed_update = false;
     }
 
     /// Update time for a fixed update step (called by engine).
     pub fn update_fixed(&mut self) {
-        self.in_fixed_update = true;
-        self.last_fixed_time = self.elapsed_time;
+        self.begin_fixed_update();
+    }
+
+    /// Get current FixedUpdate accumulator remaining (debug/diagnostics).
+    pub fn fixed_accumulator(&self) -> f32 {
+        self.fixed_accumulator
+    }
+
+    /// Set maximum FixedUpdate steps per rendered frame (default 8).
+    pub fn set_max_fixed_steps(&mut self, max: u32) {
+        self.max_fixed_steps = max.max(1);
+    }
+
+    /// Get maximum FixedUpdate steps per rendered frame.
+    pub fn max_fixed_steps(&self) -> u32 {
+        self.max_fixed_steps
     }
 
     /// Reset time (for new level, etc.).
@@ -131,6 +178,7 @@ impl Time {
         self.frame_count = 0;
         self.in_fixed_update = false;
         self.last_fixed_time = 0.0;
+        self.fixed_accumulator = 0.0;
     }
 
     // Backward-compatible snake_case methods for existing code
@@ -237,6 +285,45 @@ mod tests {
         time.update_fixed();
         assert!(time.inFixedTimeStep());
         assert_eq!(time.stepDeltaTime(), time.fixedDeltaTime());
+    }
+
+    #[test]
+    fn test_fixed_accumulator_zero_or_more_steps() {
+        let mut time = Time::default(); // fixed_delta = 0.02
+
+        // Small frame: 0.01s scaled → 0 FixedUpdate steps
+        time.update(0.01);
+        assert_eq!(time.pending_fixed_steps(), 0);
+
+        // Another small frame: accumulator = 0.02 → 1 step
+        time.update(0.01);
+        assert_eq!(time.pending_fixed_steps(), 1);
+
+        time.begin_fixed_update();
+        time.end_fixed_update();
+        assert!((time.fixed_accumulator() - 0.0).abs() < 1e-6);
+
+        // Large frame: 0.05 → 2 steps (0.05 / 0.02 = 2.5 → 2)
+        time.update(0.05);
+        assert_eq!(time.pending_fixed_steps(), 2);
+    }
+
+    #[test]
+    fn test_fixed_accumulator_capped() {
+        let mut time = Time::default();
+        time.set_max_fixed_steps(3);
+        // Huge hitch clamped by maximumDeltaTime first (0.333), then step cap
+        time.update(10.0);
+        assert!(time.pending_fixed_steps() <= 3);
+    }
+
+    #[test]
+    fn test_fixed_accumulator_time_scale() {
+        let mut time = Time::default();
+        time.set_timeScale(0.0);
+        time.update(0.05);
+        // Paused: scaled delta is 0, no FixedUpdate steps
+        assert_eq!(time.pending_fixed_steps(), 0);
     }
 
     #[test]

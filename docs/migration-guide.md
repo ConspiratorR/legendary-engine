@@ -19,11 +19,18 @@ This guide helps developers migrating from other game engines to RustEngine.
 | `Project Settings` | `EngineConfig` | Runtime configuration |
 | `Player Loop` | `Schedule` | Ordered system execution |
 | `ScriptableObject` | `ScriptableObject` trait | Serializable data assets with lifecycle |
+| `.asset` + `.meta` GUID | `scriptable_asset` + `AssetDatabase` | Disk-backed ScriptableObjects |
+| `AssetDatabase` | `AssetDatabase` | Name + GUID index, save/load/scan |
 | `EventSystem` | `EventBus` | Type-safe event dispatch |
 | `SendMessage` | `EventBus::send` | Type-safe alternative to string-based messaging |
 | `Physics` | `PhysicsPlugin` | Rigid bodies, colliders, joints |
 | `AudioSource` | `SpatialAudioSource` | 3D positional audio |
 | `Canvas` | egui UI | Immediate mode UI |
+| `RequireComponent` | `Component::required_on_add` | Auto-add missing dependencies |
+| `Invoke` | `World::Invoke` | Delayed method dispatch |
+| `StartCoroutine` / `WaitForSeconds` | `World::StartCoroutine` + `CoroutineStep` | Explicit step list |
+| Prefab Variant | `Prefab::CreateVariant` | Base + node overrides |
+| `SceneManager` | `SceneManager` + `SceneRuntime` | See [lifecycle-and-scenes.md](lifecycle-and-scenes.md) |
 
 ### GameObject API
 

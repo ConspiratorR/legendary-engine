@@ -59,7 +59,7 @@ impl<'a> Context<'a> {
 
     /// Get fixed delta time (matches `Time.fixedDeltaTime`).
     pub fn FixedDeltaTime(&self) -> f32 {
-        self.time.delta_seconds() // Use delta_seconds as fallback
+        self.time.fixedDeltaTime()
     }
 
     /// Get elapsed time (matches `Time.time`).

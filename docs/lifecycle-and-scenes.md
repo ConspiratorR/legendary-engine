@@ -1,0 +1,326 @@
+# Unity 对齐：生命周期与场景系统
+
+本文档描述 RustEngine 如何对齐 Unity 的核心运行时契约（参考本地 `UnityDocumentation/`），
+以及游戏代码应如何使用这些 API。
+
+## 架构分层
+
+```
+App (ECS world + schedule + Time + EventBus)
+ └── SceneRuntime 资源
+      ├── World          — Unity 风格 GameObject / Transform / MonoBehaviour
+      └── SceneManager   — 场景加载 / 卸载 / DontDestroyOnLoad
+```
+
+- **ECS World**（`engine_ecs`）：系统调度、渲染/物理等数据密集型组件。
+- **Unity World**（`engine_core::world::World`）：脚本与场景图，挂在 `SceneRuntime` 资源上。
+- 两套 World 并存是过渡方案；编辑器与脚本 API 走 Unity World，高性能系统走 ECS。
+
+## 帧生命周期（对齐 Unity PlayerLoop）
+
+`App::run_with_lifecycle(delta)` 每帧执行：
+
+```
+1. Time::update(delta)              // 填充 FixedUpdate 累加器
+2. InputManager::update_frame()
+3. pre-update hooks
+4. FixedUpdate × N                  // N = pending_fixed_steps()，默认上限 8
+   - begin_fixed_update
+   - PlayerLoop FixedUpdate 相位
+   - MonoBehaviour.FixedUpdate
+   - end_fixed_update
+5. Update
+   - PlayerLoop Update 相位
+   - ECS schedule
+   - MonoBehaviour.Start (首次) + Update
+6. LateUpdate
+   - PlayerLoop LateUpdate 相位
+   - MonoBehaviour.LateUpdate
+7. End of frame
+   - flush OnEnable/OnDisable（来自 SetActive）
+   - tick_invokes
+   - update_pending_destroy
+   - sync_transforms
+   - flush_destroy（OnDisable → OnDestroy → 释放）
+8. post-update hooks
+```
+
+对应 Unity 文档：
+- [Execution Order](https://docs.unity3d.com/Manual/ExecutionOrder.html)
+- [Time / fixedDeltaTime](https://docs.unity3d.com/ScriptReference/Time.html)
+
+### 固定步长
+
+```rust
+use engine_core::time::Time;
+
+let mut time = Time::default(); // fixedDeltaTime = 0.02 (50 Hz)
+time.update(0.016);             // 一帧
+assert_eq!(time.pending_fixed_steps(), 0); // 累加不足一步
+
+time.update(0.01);
+assert_eq!(time.pending_fixed_steps(), 1); // 可跑一次 FixedUpdate
+```
+
+- `timeScale = 0` 时 FixedUpdate 步数为 0（暂停）。
+- `maximumDeltaTime` 钳制单帧 delta；`max_fixed_steps`（默认 8）防止螺旋死亡。
+
+## 场景管理
+
+```rust
+use engine_core::{SceneRuntime, LoadSceneMode};
+use engine_core::plugins::{CorePlugins, SceneRuntimePlugin};
+
+// CorePlugins 已包含 SceneRuntimePlugin
+app.add_plugin(CorePlugins);
+
+// 运行时
+let rt = app.scene_runtime_mut().unwrap();
+let handle = rt.load_scene_json("Level1", json, LoadSceneMode::Additive)?;
+rt.unload_scene(handle)?;
+```
+
+| Unity API | RustEngine |
+|-----------|------------|
+| `SceneManager.LoadScene` | `SceneManager::LoadSceneJson` / `LoadSceneFromFile` |
+| `LoadSceneMode.Single/Additive` | `LoadSceneMode::{Single, Additive}` |
+| `SceneManager.UnloadScene` | `UnloadSceneWithWorld`（销毁场景根） |
+| `Object.DontDestroyOnLoad` | `World::DontDestroyOnLoad`，卸载时跳过 |
+
+场景 JSON 使用 glam 数组格式：
+
+```json
+{
+  "name": "Level",
+  "version": 1,
+  "game_objects": [{
+    "name": "Player",
+    "tag": "Player",
+    "layer": 0,
+    "active": true,
+    "transform": {
+      "local_position": [1.0, 2.0, 3.0],
+      "local_rotation": [0.0, 0.0, 0.0, 1.0],
+      "local_scale": [1.0, 1.0, 1.0]
+    },
+    "components": [],
+    "children": []
+  }]
+}
+```
+
+## GameObject 与生命周期回调
+
+```rust
+use engine_core::world::World;
+use engine_core::{MonoBehaviour, Behaviour, Component, Context};
+use std::any::Any;
+
+struct Player { speed: f32 }
+
+impl Component for Player {
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+}
+
+impl Behaviour for Player {
+    fn Enabled(&self) -> bool { true }
+    fn SetEnabled(&mut self, _e: bool) {}
+    fn IsActiveAndEnabled(&self) -> bool { true }
+    fn set_gameobject(&mut self, _h: GameObjectHandle) {}
+    fn gameobject_handle(&self) -> Option<GameObjectHandle> { None }
+}
+
+impl MonoBehaviour for Player {
+    fn Start(&mut self, _ctx: &mut Context) {
+        // Unity Start
+    }
+    fn Update(&mut self, ctx: &mut Context) {
+        let dt = ctx.DeltaTime();
+        // 移动逻辑
+    }
+    fn FixedUpdate(&mut self, _ctx: &mut Context) {
+        // 物理相关
+    }
+}
+
+let mut world = World::new();
+let player = world.CreateGameObject("Player");
+world.AddMonoBehaviour(player, Player { speed: 5.0 });
+```
+
+### SetActive / OnEnable / OnDisable
+
+```rust
+world.SetActive(handle, false);
+// OnEnable/OnDisable 入队，在下一次 lifecycle tick（帧末）统一 flush
+assert_eq!(world.pending_enable_disable_count(), 1);
+```
+
+- 父物体 `SetActive(false)` 会使子物体 `activeInHierarchy == false` 并级联 OnDisable。
+- 子物体 `activeSelf` 保持不变，符合 Unity 语义。
+
+### Destroy
+
+```rust
+world.Destroy(handle);              // 帧末销毁
+world.DestroyDelayed(handle, 2.0);  // 2 秒后销毁
+world.DestroyImmediate(handle);     // 立即销毁（编辑器/场景卸载）
+```
+
+帧末会调用 OnDisable → OnDestroy，再释放句柄。
+
+### RequireComponent
+
+```rust
+impl Component for Mesh {
+    fn as_any(&self) -> &dyn Any { self }
+    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn required_on_add(&self) -> Vec<Box<dyn Fn() -> Box<dyn Component>>> {
+        vec![Box::new(|| Box::new(MeshRenderer))]
+    }
+}
+
+world.AddComponent(handle, Mesh); // 自动补上 MeshRenderer
+```
+
+### Invoke
+
+```rust
+world.Invoke(handle, "Explode", 1.5);
+world.InvokeRepeating(handle, "Pulse", 0.0, 0.5);
+world.CancelInvoke(handle);
+world.CancelInvokeMethod(handle, "Pulse");
+world.IsInvoking(handle);
+```
+
+到时通过 `SendMessage` 分发。
+
+## Coroutine
+
+Rust 无稳定版生成器，协程建模为显式步进列表：
+
+```rust
+use engine_core::{CoroutineStep, World};
+
+let mut world = World::new();
+let obj = world.CreateGameObject("Flash");
+
+let id = world.StartCoroutine(obj, "Blink", vec![
+    CoroutineStep::Wait(0.25),
+    CoroutineStep::SetActive(false),
+    CoroutineStep::Wait(0.25),
+    CoroutineStep::SetActive(true),
+]);
+
+// 每帧由 lifecycle tick 自动推进
+world.StopCoroutine(id);
+world.StopAllCoroutines(obj);
+```
+
+| Step | 对应 Unity |
+|------|------------|
+| `Wait(n)` | `yield return new WaitForSeconds(n)` |
+| `WaitEndOfFrame` | `yield return null` |
+| `WaitFixedUpdate` | `yield return new WaitForFixedUpdate()` |
+| `SetActive(b)` | 脚本内改 active |
+| `Call(name)` | `SendMessage` |
+| `Action(f)` | 自定义闭包 |
+
+## Prefab Variant
+
+```rust
+use engine_core::prefab::{Prefab, PrefabNodeOverride};
+
+let base = Prefab::Create("EnemyBase", &go, &world);
+let mut variant = Prefab::CreateVariant("EnemyBoss", &base);
+variant.override_node("", PrefabNodeOverride {
+    tag: Some("Boss".into()),
+    layer: Some(3),
+    ..Default::default()
+});
+variant.override_node("Weapon", PrefabNodeOverride {
+    name: Some("Sword".into()),
+    add_components: vec!["Blade".into()],
+    ..Default::default()
+});
+
+let instance = variant.Instantiate(&mut world);
+```
+
+- 路径从根节点子级起算：根为 `""`，子节点为其名字，更深为 `Parent/Child`。
+- `Instantiate` / `merged_root()` 自动合并 override；`apply_overrides()` 可物化到存储树。
+
+## ScriptableObject 资产文件
+
+Unity 的 `.asset` + `.meta`（GUID）模型：
+
+```text
+Assets/
+  Goblin.asset          # 序列化载荷
+  Goblin.asset.meta     # 稳定 GUID
+```
+
+```rust
+use engine_core::asset_database::AssetDatabase;
+use engine_core::scriptable_asset::{save_scriptable_object, load_scriptable_object};
+
+// 底层 API
+let meta = save_scriptable_object(path, "Goblin", &data)?;
+let data: EnemyData = load_scriptable_object(path)?;
+
+// AssetDatabase 集成
+let mut db = AssetDatabase::new();
+db.set_assets_root("Assets");
+db.save_asset_to_disk(None, "Goblin", &data)?;
+db.scan_assets_root()?;
+let handle = db.load_asset_by_guid::<EnemyData>(&meta.guid)?;
+```
+
+- 重复保存会 **保留原 GUID**（文件移动/重写不丢引用）。
+- 目录扫描自动为缺失的 `.meta` 补发 GUID。
+
+## 与 Unity 的对应关系
+
+| Unity | RustEngine |
+|-------|------------|
+| `GameObject` | `engine_core::gameobject::GameObject` + `GameObjectHandle` |
+| `Transform` | `engine_core::transform::Transform`（每个 GO 内置） |
+| `MonoBehaviour` | `engine_core::monobehaviour::MonoBehaviour` trait |
+| `Time.deltaTime` | `Time::deltaTime()` / `Context::DeltaTime()` |
+| `Time.fixedDeltaTime` | `Time::fixedDeltaTime()` |
+| `Time.timeScale` | `Time::timeScale()` |
+| `Object.Destroy` | `World::Destroy` / `DestroyDelayed` |
+| `Object.DontDestroyOnLoad` | `World::DontDestroyOnLoad` |
+| `RequireComponent` | `Component::required_on_add` |
+| `Invoke` | `World::Invoke` |
+| `StartCoroutine` | `World::StartCoroutine` + `CoroutineStep` |
+| `WaitForSeconds` | `CoroutineStep::Wait` |
+| Prefab Variant | `Prefab::CreateVariant` + `override_node` |
+| `ScriptableObject` 资产 | `.asset` + `.meta` GUID（`scriptable_asset`） |
+| `AssetDatabase` | `engine_core::asset_database::AssetDatabase` |
+| `SceneManager` | `engine_core::scene_management::SceneManager` |
+| PlayerLoop | `App::run_with_lifecycle` + `PlayerLoop` 相位 |
+
+## 后续路线（未完成）
+
+1. **双 World 收敛** — 以 Unity World 为唯一对外 API，ECS 作为内部存储
+2. **SetActive 立即回调** — 当前在帧末 flush；可选改为 SetActive 当场派发
+3. **Coroutine yield 表达式** — 目前为步进列表，可再封装更接近 IEnumerator 的 API
+4. **Asset 热重载** — 监听 `.asset` 变更并刷新内存句柄
+
+## 相关源码
+
+| 模块 | 路径 |
+|------|------|
+| Time | `crates/engine-core/src/time.rs` |
+| App 主循环 | `crates/engine-core/src/app.rs` |
+| Unity World | `crates/engine-core/src/world.rs` |
+| SceneRuntime | `crates/engine-core/src/scene_runtime.rs` |
+| SceneManager | `crates/engine-core/src/scene_management.rs` |
+| MonoBehaviour | `crates/engine-core/src/monobehaviour.rs` |
+| Coroutine | `crates/engine-core/src/coroutine.rs` |
+| Prefab / Variant | `crates/engine-core/src/prefab.rs` |
+| ScriptableObject 资产 | `crates/engine-core/src/scriptable_asset.rs` |
+| AssetDatabase | `crates/engine-core/src/asset_database.rs` |
+| PlayerLoop | `crates/engine-core/src/player_loop.rs` |

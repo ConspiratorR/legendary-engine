@@ -12,6 +12,27 @@ RustEngine includes a Unity-inspired API for game object management, component s
 - **Transform**: Local/world transform synchronization
 - **PlayerLoop**: Phase-based execution matching Unity's execution order
 - **EventBus**: Type-safe event system for decoupled communication
+- **SceneRuntime**: Resource hosting the Unity `World` + `SceneManager` inside the ECS `App`
+- **Fixed timestep**: `Time` accumulates scaled delta; `FixedUpdate` runs 0+ times per frame (capped)
+
+### Frame lifecycle (`App::run_with_lifecycle`)
+
+```
+Time::update(delta)                 // fills FixedUpdate accumulator
+InputManager::update_frame()
+pre-update hooks
+FixedUpdate × pending_fixed_steps() // begin → PlayerLoop FixedUpdate → MonoBehaviour FixedUpdate → end
+Update phase                        // PlayerLoop + ECS schedule + MonoBehaviour Update
+LateUpdate phase                    // PlayerLoop + MonoBehaviour LateUpdate
+End of frame                        // sync transforms, delayed Destroy (OnDisable → OnDestroy)
+post-update hooks
+```
+
+Scene load/unload goes through `SceneManager::LoadSceneJson` / `UnloadSceneWithWorld`.
+Objects marked `DontDestroyOnLoad` survive scene unload.
+
+See [lifecycle-and-scenes.md](lifecycle-and-scenes.md) for the full Unity-aligned
+runtime guide (Time, SceneManager, SetActive, RequireComponent, Invoke).
 
 ## Validated Dependency Layers
 

@@ -52,6 +52,8 @@ pub fn run_default(mut app_builder: AppBuilder) -> Result<(), EngineError> {
     use winit::event::{ElementState, Event, MouseButton, WindowEvent};
     use winit::event_loop::ControlFlow;
 
+    let mut last_frame = std::time::Instant::now();
+
     event_loop
         .run(move |event, elwt| {
             elwt.set_control_flow(ControlFlow::Poll);
@@ -105,8 +107,11 @@ pub fn run_default(mut app_builder: AppBuilder) -> Result<(), EngineError> {
                 _ => {}
             }
             if let Event::AboutToWait = event {
-                // Unity-like frame lifecycle
-                app.run_with_lifecycle();
+                // Unity-like frame lifecycle with real wall-clock delta
+                let now = std::time::Instant::now();
+                let delta = (now - last_frame).as_secs_f32();
+                last_frame = now;
+                app.run_with_lifecycle(delta);
 
                 // Run post-render hooks (for user extensions)
                 if !app.post_render_hooks.is_empty() {

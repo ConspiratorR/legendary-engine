@@ -347,45 +347,166 @@ impl App {
     /// Run a single frame with Unity-like MonoBehaviour lifecycle.
     ///
     /// This method includes the full MonoBehaviour lifecycle:
-    /// - FixedUpdate (called 0+ times per frame based on fixed time step)
+    /// - FixedUpdate (called 0+ times per frame based on fixed accumulator)
     /// - Update
     /// - LateUpdate
     /// - Sync transforms
-    /// - Flush destroy
-    pub fn run_with_lifecycle(&mut self) {
-        let delta = self.time.delta_seconds();
-
-        // 1. FixedUpdate (Unity-like: called 0+ times per frame)
-        // Physics and fixed-rate logic happens here
-        self.time.update_fixed();
-
-        // 2. Update
-        // Regular frame update
+    /// - Flush destroy (OnDisable → OnDestroy)
+    ///
+    /// Pass the wall-clock `delta` for this frame (seconds). Time is updated
+    /// first so FixedUpdate steps match Unity's PlayerLoop.
+    pub fn run_with_lifecycle(&mut self, delta: f32) {
+        // 1. Advance Time (also fills FixedUpdate accumulator)
         self.time.update(delta);
         self.frame += 1;
 
-        // Execute systems (ECS schedule)
+        // 2. Input frame advance
+        if let Some(input) = self.world.get_resource_mut::<InputManager>() {
+            input.update_frame();
+        }
+
+        // 3. Pre-update hooks
+        let mut pre_hooks = std::mem::take(&mut self.pre_update_hooks);
+        for hook in &mut pre_hooks {
+            hook(self);
+        }
+        self.pre_update_hooks = pre_hooks;
+
+        // 4. FixedUpdate 0+ times (Unity fixed timestep)
+        let fixed_steps = self.time.pending_fixed_steps();
+        for _ in 0..fixed_steps {
+            self.time.begin_fixed_update();
+
+            // FixedUpdate PlayerLoop phase systems (ECS)
+            self.run_player_loop_phase(crate::player_loop::Phase::FixedUpdate);
+
+            // MonoBehaviour FixedUpdate (if SceneRuntime present)
+            self.dispatch_scene_fixed();
+
+            self.time.end_fixed_update();
+        }
+
+        // 5. Update phase
+        self.run_player_loop_phase(crate::player_loop::Phase::Update);
         if let Some(ref mut ps) = self.parallel_schedule {
             ps.run(&mut self.world);
         } else {
             self.schedule.run(&mut self.world);
         }
+        self.dispatch_scene_update();
 
-        // MonoBehaviour lifecycle dispatch
-        // Note: This requires engine_core::world::World which wraps engine_ecs::world::World
-        // The full integration would call:
-        // - MonoBehaviourRunner::run_fixed_update()
-        // - MonoBehaviourRunner::run_update()
-        // - MonoBehaviourRunner::run_late_update()
-        // For now, the ECS schedule handles system execution
+        // 6. LateUpdate phase
+        self.run_player_loop_phase(crate::player_loop::Phase::LateUpdate);
+        self.dispatch_scene_late_update();
 
-        // 3. Sync transforms
-        // Update world transforms from local transforms
-        // crate::hierarchy::sync_transforms would be called here
+        // 7. End-of-frame: sync transforms + delayed destroy with callbacks
+        self.dispatch_scene_end_of_frame();
 
-        // 4. Flush destroy
-        // Process pending destroys
-        // self.world.flush_destroy() would be called here
+        // 8. Post-update hooks
+        let mut post_hooks = std::mem::take(&mut self.post_update_hooks);
+        for hook in &mut post_hooks {
+            hook(self);
+        }
+        self.post_update_hooks = post_hooks;
+    }
+
+    /// Back-compat wrapper: uses last frame's delta (prefer `run_with_lifecycle(delta)`).
+    pub fn run_with_lifecycle_auto(&mut self) {
+        let delta = self.time.unscaledDeltaTime();
+        self.run_with_lifecycle(delta);
+    }
+
+    /// Run PlayerLoop systems for a single phase, borrowing Unity World from SceneRuntime.
+    fn run_player_loop_phase(&mut self, phase: crate::player_loop::Phase) {
+        // PlayerLoop systems use Context which needs a Unity World.
+        // If SceneRuntime exists, use it; otherwise skip phase systems.
+        let Some(mut runtime) = self
+            .world
+            .remove_resource::<crate::scene_runtime::SceneRuntime>()
+        else {
+            return;
+        };
+        {
+            let time = self.time.clone();
+            let frame = self.frame;
+            let mut ctx =
+                crate::context::Context::new(&mut runtime.world, time, frame, &mut self.events);
+            self.player_loop.run_phase(phase, &mut ctx);
+        }
+        self.world
+            .insert_resource::<crate::scene_runtime::SceneRuntime>(runtime);
+    }
+
+    fn dispatch_scene_fixed(&mut self) {
+        let Some(mut runtime) = self
+            .world
+            .remove_resource::<crate::scene_runtime::SceneRuntime>()
+        else {
+            return;
+        };
+        let time = self.time.clone();
+        let frame = self.frame;
+        runtime.tick_fixed_only(&time, frame, &mut self.events);
+        self.world
+            .insert_resource::<crate::scene_runtime::SceneRuntime>(runtime);
+    }
+
+    fn dispatch_scene_update(&mut self) {
+        let Some(mut runtime) = self
+            .world
+            .remove_resource::<crate::scene_runtime::SceneRuntime>()
+        else {
+            return;
+        };
+        let time = self.time.clone();
+        let frame = self.frame;
+        runtime.tick_variable_only_partial(&time, frame, &mut self.events);
+        self.world
+            .insert_resource::<crate::scene_runtime::SceneRuntime>(runtime);
+    }
+
+    fn dispatch_scene_late_update(&mut self) {
+        let Some(mut runtime) = self
+            .world
+            .remove_resource::<crate::scene_runtime::SceneRuntime>()
+        else {
+            return;
+        };
+        let time = self.time.clone();
+        let frame = self.frame;
+        runtime
+            .world
+            .tick_late_update(time, frame, &mut self.events);
+        self.world
+            .insert_resource::<crate::scene_runtime::SceneRuntime>(runtime);
+    }
+
+    fn dispatch_scene_end_of_frame(&mut self) {
+        let Some(mut runtime) = self
+            .world
+            .remove_resource::<crate::scene_runtime::SceneRuntime>()
+        else {
+            return;
+        };
+        let time = self.time.clone();
+        let frame = self.frame;
+        runtime
+            .world
+            .tick_end_of_frame(time.deltaTime(), time, frame, &mut self.events);
+        self.world
+            .insert_resource::<crate::scene_runtime::SceneRuntime>(runtime);
+    }
+
+    /// Access the Unity-style SceneRuntime resource, if registered.
+    pub fn scene_runtime(&self) -> Option<&crate::scene_runtime::SceneRuntime> {
+        self.world
+            .get_resource::<crate::scene_runtime::SceneRuntime>()
+    }
+
+    /// Mutable access to the Unity-style SceneRuntime resource.
+    pub fn scene_runtime_mut(&mut self) -> Option<&mut crate::scene_runtime::SceneRuntime> {
+        self.world
+            .get_resource_mut::<crate::scene_runtime::SceneRuntime>()
     }
 
     /// Run a single frame (alias for [`run`](Self::run)).

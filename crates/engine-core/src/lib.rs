@@ -100,8 +100,14 @@ pub mod hierarchy;
 /// Scene management (matches Unity's SceneManager).
 pub mod scene_management;
 
+/// Scene runtime resource (Unity World hosted in ECS App).
+pub mod scene_runtime;
+
 /// MonoBehaviour lifecycle runner.
 pub mod monobehaviour_runner;
+
+/// Coroutine system (Wait / Call / Action steps).
+pub mod coroutine;
 
 // ============================================================
 // Existing modules (to be refactored in later phases)
@@ -128,6 +134,7 @@ pub mod plugins;
 pub mod prefab;
 pub mod profiler;
 pub mod resource;
+pub mod scriptable_asset;
 pub mod serialization;
 pub mod system;
 pub mod time;
@@ -153,6 +160,7 @@ pub use app::AppBuilder;
 pub use behaviour::{Behaviour, BehaviourState};
 pub use component::Component;
 pub use context::Context;
+pub use coroutine::{CoroutineId, CoroutineStep};
 pub use event::{Event, EventBus, EventBusExt, EventHandler};
 pub use events::*;
 pub use gameobject::{GameObject, GameObjectHandle};
@@ -161,6 +169,9 @@ pub use monobehaviour::{CoroutineHandle, MonoBehaviour, MonoBehaviourHolder};
 pub use monobehaviour_runner::MonoBehaviourRunner;
 pub use object::{Object, ObjectUtil};
 pub use player_loop::{Phase, PlayerLoop};
+pub use scene_management::{LoadSceneMode, SceneHandle, SceneManager};
+pub use scene_runtime::SceneRuntime;
+pub use scriptable_asset::{AssetMeta, GuidIndex, new_guid};
 pub use scriptable_object::ScriptableObject;
 pub use system::System;
 pub use time::Time;

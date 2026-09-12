@@ -1,13 +1,18 @@
 use std::any::Any;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use crate::asset_handle::AssetHandle;
+use crate::scriptable_asset::{
+    self, AssetMeta, GuidIndex, SoAssetError, load_scriptable_object, save_scriptable_object,
+};
 use crate::scriptable_object::ScriptableObject;
 
 /// A centralized asset database for managing ScriptableObject assets.
 ///
 /// Assets are stored by name and type, providing a simple registry
 /// for creating, querying, and managing assets at runtime.
+/// Disk-backed assets also get a stable GUID via `.meta` sidecars.
 ///
 /// # Examples
 ///
@@ -22,6 +27,10 @@ use crate::scriptable_object::ScriptableObject;
 pub struct AssetDatabase {
     /// Stores assets as type-erased trait objects keyed by name.
     entries: HashMap<String, Box<dyn Any + Send + Sync>>,
+    /// GUID → (path, meta) for assets saved or scanned from disk.
+    guid_index: GuidIndex,
+    /// Default directory for `save_asset_to_disk` / `scan_directory`.
+    assets_root: Option<PathBuf>,
 }
 
 impl Default for AssetDatabase {
@@ -35,6 +44,8 @@ impl AssetDatabase {
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
+            guid_index: GuidIndex::new(),
+            assets_root: None,
         }
     }
 
@@ -42,7 +53,24 @@ impl AssetDatabase {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             entries: HashMap::with_capacity(capacity),
+            guid_index: GuidIndex::new(),
+            assets_root: None,
         }
+    }
+
+    /// Set the root directory used for disk save/load/scan.
+    pub fn set_assets_root(&mut self, root: impl Into<PathBuf>) {
+        self.assets_root = Some(root.into());
+    }
+
+    /// Get the assets root directory, if set.
+    pub fn assets_root(&self) -> Option<&Path> {
+        self.assets_root.as_deref()
+    }
+
+    /// GUID index (path lookups for disk-backed assets).
+    pub fn guid_index(&self) -> &GuidIndex {
+        &self.guid_index
     }
 
     /// Create an asset instance and register it in the database.
@@ -113,6 +141,90 @@ impl AssetDatabase {
     /// Remove all assets from the database.
     pub fn clear(&mut self) {
         self.entries.clear();
+        self.guid_index = GuidIndex::new();
+    }
+
+    // ============================================================
+    // Disk-backed ScriptableObject assets (Unity .asset + .meta)
+    // ============================================================
+
+    /// Save an in-memory asset to disk and index it by GUID.
+    ///
+    /// Writes `name.asset` + `name.asset.meta` under `dir` (or `assets_root`).
+    pub fn save_asset_to_disk<T: ScriptableObject + Clone + 'static>(
+        &mut self,
+        dir: Option<&Path>,
+        name: &str,
+        asset: &T,
+    ) -> Result<AssetMeta, SoAssetError> {
+        let root = dir
+            .map(|p| p.to_path_buf())
+            .or_else(|| self.assets_root.clone())
+            .ok_or_else(|| SoAssetError::InvalidPath("no assets root or dir set".into()))?;
+        let path = root.join(format!("{name}.asset"));
+        let meta = save_scriptable_object(&path, name, asset)?;
+        self.guid_index.insert(path, meta.clone());
+        // Also keep a runtime copy
+        let _ = self.create_asset(name, asset.clone());
+        Ok(meta)
+    }
+
+    /// Load a ScriptableObject from disk by file path and register it.
+    pub fn load_asset_from_path<T: ScriptableObject + Clone + 'static>(
+        &mut self,
+        path: &Path,
+        name: &str,
+    ) -> Result<AssetHandle<T>, SoAssetError> {
+        let data: T = load_scriptable_object(path)?;
+        if let Some(meta) = scriptable_asset::load_asset_meta(path)? {
+            self.guid_index.insert(path.to_path_buf(), meta);
+        }
+        Ok(self.create_asset(name, data))
+    }
+
+    /// Load an asset by GUID (must have been saved/scanned so the index knows the path).
+    pub fn load_asset_by_guid<T: ScriptableObject + Clone + 'static>(
+        &mut self,
+        guid: &str,
+    ) -> Result<AssetHandle<T>, SoAssetError> {
+        let (path, meta) = self
+            .guid_index
+            .get_by_guid(guid)
+            .map(|(p, m)| (p.clone(), m.clone()))
+            .ok_or_else(|| SoAssetError::NotFound(format!("guid {guid}")))?;
+        let data: T = load_scriptable_object(&path)?;
+        Ok(self.create_asset(&meta.name, data))
+    }
+
+    /// Scan a directory for `*.asset` files and index their GUIDs.
+    ///
+    /// Does not load payloads into memory; use [`load_asset_by_guid`] after.
+    pub fn scan_directory(&mut self, dir: &Path) -> Result<usize, SoAssetError> {
+        let found = scriptable_asset::scan_asset_directory(dir)?;
+        let n = found.len();
+        for (path, meta) in found {
+            self.guid_index.insert(path, meta);
+        }
+        Ok(n)
+    }
+
+    /// Scan the configured assets root (if any).
+    pub fn scan_assets_root(&mut self) -> Result<usize, SoAssetError> {
+        let root = self
+            .assets_root
+            .clone()
+            .ok_or_else(|| SoAssetError::InvalidPath("assets_root not set".into()))?;
+        self.scan_directory(&root)
+    }
+
+    /// Resolve a name to a GUID via the index.
+    pub fn guid_for_name(&self, name: &str) -> Option<&str> {
+        self.guid_index.guid_for_name(name)
+    }
+
+    /// Get the disk path for a GUID.
+    pub fn path_for_guid(&self, guid: &str) -> Option<&Path> {
+        self.guid_index.get_by_guid(guid).map(|(p, _)| p.as_path())
     }
 }
 
@@ -329,5 +441,39 @@ mod tests {
     fn test_with_capacity() {
         let db = AssetDatabase::with_capacity(100);
         assert_eq!(db.asset_count(), 0);
+    }
+
+    #[test]
+    fn test_save_and_load_by_guid() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = AssetDatabase::new();
+        db.set_assets_root(dir.path());
+
+        let asset = make_test_asset("Goblin", 80);
+        let meta = db.save_asset_to_disk(None, "Goblin", &asset).unwrap();
+        assert_eq!(meta.name, "Goblin");
+        assert!(db.has_asset("Goblin"));
+        assert_eq!(db.guid_for_name("Goblin"), Some(meta.guid.as_str()));
+
+        // Fresh database, load by GUID
+        let mut db2 = AssetDatabase::new();
+        let n = db2.scan_directory(dir.path()).unwrap();
+        assert_eq!(n, 1);
+        let handle = db2.load_asset_by_guid::<TestAsset>(&meta.guid).unwrap();
+        assert_eq!(handle.get().value, 80);
+        assert!(db2.path_for_guid(&meta.guid).is_some());
+    }
+
+    #[test]
+    fn test_load_asset_from_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Hero.asset");
+        let asset = make_test_asset("Hero", 100);
+        crate::scriptable_asset::save_scriptable_object(&path, "Hero", &asset).unwrap();
+
+        let mut db = AssetDatabase::new();
+        let handle = db.load_asset_from_path::<TestAsset>(&path, "Hero").unwrap();
+        assert_eq!(handle.get().value, 100);
+        assert!(db.guid_for_name("Hero").is_some());
     }
 }
