@@ -1453,7 +1453,7 @@ impl World {
     }
 
     /// Sync all transforms (called by update system).
-    pub(crate) fn sync_transforms(&mut self) {
+    pub fn sync_transforms(&mut self) {
         let roots = self.GetRootGameObjects();
         for root in roots {
             self.sync_transform_recursive(root, true);

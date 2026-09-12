@@ -5,6 +5,7 @@
 //! GameObject/MonoBehaviour World lives here as a resource so plugins and
 //! lifecycle ticks can share it without merging storage models yet.
 
+use crate::identity_bridge::IdentityBridge;
 use crate::scene_management::{LoadSceneMode, SceneManager};
 use crate::time::Time;
 use crate::world::World;
@@ -15,6 +16,8 @@ pub struct SceneRuntime {
     pub world: World,
     /// Scene manager for load/unload.
     pub scenes: SceneManager,
+    /// GameObject ↔ ECS Entity map.
+    pub bridge: IdentityBridge,
     /// Whether Awake has been run for newly spawned objects.
     awake_started: bool,
 }
@@ -31,6 +34,7 @@ impl SceneRuntime {
         Self {
             world: World::new(),
             scenes: SceneManager::new(),
+            bridge: IdentityBridge::new(),
             awake_started: false,
         }
     }
@@ -38,6 +42,50 @@ impl SceneRuntime {
     /// Spawn a named GameObject in the Unity world.
     pub fn spawn(&mut self, name: &str) -> crate::gameobject::GameObjectHandle {
         self.world.CreateGameObject(name)
+    }
+
+    /// Spawn a GameObject and link it to a new ECS Entity (identity bridge).
+    pub fn spawn_linked(
+        &mut self,
+        ecs: &mut engine_ecs::world::World,
+        name: &str,
+    ) -> (
+        crate::gameobject::GameObjectHandle,
+        engine_ecs::entity::Entity,
+    ) {
+        let handle = self.world.CreateGameObject(name);
+        let entity = self.bridge.ensure_entity(handle, ecs);
+        (handle, entity)
+    }
+
+    /// Link an existing GameObject to its ECS entity (spawn entity if needed).
+    pub fn link_to_ecs(
+        &mut self,
+        handle: crate::gameobject::GameObjectHandle,
+        ecs: &mut engine_ecs::world::World,
+    ) -> engine_ecs::entity::Entity {
+        self.bridge.ensure_entity(handle, ecs)
+    }
+
+    /// Resolve ECS Entity for a GameObject.
+    pub fn entity_for(
+        &self,
+        handle: crate::gameobject::GameObjectHandle,
+    ) -> Option<engine_ecs::entity::Entity> {
+        self.bridge.entity_for(handle)
+    }
+
+    /// Resolve GameObject for an ECS Entity.
+    pub fn gameobject_for(
+        &self,
+        entity: engine_ecs::entity::Entity,
+    ) -> Option<crate::gameobject::GameObjectHandle> {
+        self.bridge.gameobject_for(entity)
+    }
+
+    /// Sync Unity World state into ECS proxies (transforms + render).
+    pub fn sync_bridge(&mut self, ecs: &mut engine_ecs::world::World) {
+        self.bridge.sync_all(&self.world, ecs);
     }
 
     /// Load a scene from JSON (Single or Additive).

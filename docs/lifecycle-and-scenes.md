@@ -288,6 +288,31 @@ let handle = db.load_asset_by_guid::<EnemyData>(&meta.guid)?;
 - 重复保存会 **保留原 GUID**（文件移动/重写不丢引用）。
 - 目录扫描自动为缺失的 `.meta` 补发 GUID。
 
+## 身份桥（GameObject ↔ Entity）
+
+编辑器/脚本用 `GameObjectHandle`，渲染/物理用 ECS `Entity`。身份桥在**不合并存储**的前提下建立双向映射：
+
+```rust
+// 创建并登记
+let (go, entity) = app.spawn_linked("Player")?;
+
+// 查询
+app.entity_for_gameobject(go);
+app.gameobject_for_entity(entity);
+
+// 每帧由 run_with_lifecycle 自动 sync；也可手动：
+app.sync_identity_bridge();
+```
+
+同步结果（ECS 组件）：
+
+| 组件 | 来源 |
+|------|------|
+| `TransformProxy` | Unity Transform 世界位姿 |
+| `RenderProxy` | Material / SpriteRenderer（color、sprite 路径、flip） |
+
+模块：`engine_core::identity_bridge`（`IdentityBridge`, `TransformProxy`, `RenderProxy`）。
+
 ## 与 Unity 的对应关系
 
 | Unity | RustEngine |

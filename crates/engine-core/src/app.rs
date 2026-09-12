@@ -431,6 +431,9 @@ impl App {
         self.run_player_loop_phase(crate::player_loop::Phase::LateUpdate);
         self.dispatch_scene_late_update();
 
+        // Sync identity bridge: Unity World → ECS TransformProxy / RenderProxy
+        self.sync_identity_bridge();
+
         // 7. End-of-frame: sync transforms + delayed destroy with callbacks
         self.dispatch_scene_end_of_frame();
 
@@ -539,6 +542,64 @@ impl App {
     pub fn scene_runtime_mut(&mut self) -> Option<&mut crate::scene_runtime::SceneRuntime> {
         self.world
             .get_resource_mut::<crate::scene_runtime::SceneRuntime>()
+    }
+
+    /// Mutable access to the Unity World (primary game-object API).
+    ///
+    /// Returns `None` if `SceneRuntimePlugin` was not added.
+    pub fn unity_world(&mut self) -> Option<&mut crate::world::World> {
+        self.world
+            .get_resource_mut::<crate::scene_runtime::SceneRuntime>()
+            .map(|rt| &mut rt.world)
+    }
+
+    /// Spawn a Unity GameObject linked to an ECS Entity (identity bridge).
+    pub fn spawn_linked(
+        &mut self,
+        name: &str,
+    ) -> Option<(
+        crate::gameobject::GameObjectHandle,
+        engine_ecs::entity::Entity,
+    )> {
+        // Split borrow: take SceneRuntime, spawn, put back
+        let mut rt = self
+            .world
+            .remove_resource::<crate::scene_runtime::SceneRuntime>()?;
+        let result = rt.spawn_linked(&mut self.world, name);
+        self.world
+            .insert_resource::<crate::scene_runtime::SceneRuntime>(rt);
+        Some(result)
+    }
+
+    /// Resolve ECS Entity for a GameObject handle.
+    pub fn entity_for_gameobject(
+        &self,
+        handle: crate::gameobject::GameObjectHandle,
+    ) -> Option<engine_ecs::entity::Entity> {
+        self.scene_runtime()?.entity_for(handle)
+    }
+
+    /// Resolve GameObject for an ECS Entity.
+    pub fn gameobject_for_entity(
+        &self,
+        entity: engine_ecs::entity::Entity,
+    ) -> Option<crate::gameobject::GameObjectHandle> {
+        self.scene_runtime()?.gameobject_for(entity)
+    }
+
+    /// Sync identity bridge: Unity transforms/materials → ECS proxies.
+    ///
+    /// Call once per frame after Update (before render) when using linked objects.
+    pub fn sync_identity_bridge(&mut self) {
+        let Some(mut rt) = self
+            .world
+            .remove_resource::<crate::scene_runtime::SceneRuntime>()
+        else {
+            return;
+        };
+        rt.sync_bridge(&mut self.world);
+        self.world
+            .insert_resource::<crate::scene_runtime::SceneRuntime>(rt);
     }
 
     /// Run a single frame (alias for [`run`](Self::run)).
