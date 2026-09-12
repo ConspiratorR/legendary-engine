@@ -1063,6 +1063,117 @@ impl EditorState {
     }
 
     // ============================================================
+    // SceneRuntime / engine-core SceneData bridge
+    // ============================================================
+
+    /// Export the editor World as runtime-compatible `SceneData`
+    /// (same format as `SceneRuntime` / `SceneManager::LoadSceneJson`).
+    pub fn to_core_scene_data(&self, name: &str) -> engine_core::serialization::SceneData {
+        let serializer = engine_core::serialization::SceneSerializer::new();
+        serializer.Save(&self.world, name)
+    }
+
+    /// Export as pretty JSON for the runtime scene pipeline.
+    pub fn export_core_scene_json(&self, name: &str) -> Result<String, String> {
+        engine_core::serialization::SaveSceneJson(&self.world, name).map_err(|e| e.to_string())
+    }
+
+    /// Import runtime `SceneData` into the editor World and rebuild the hierarchy tree.
+    ///
+    /// Clears existing root GameObjects first (like loading a scene).
+    pub fn import_core_scene_data(&mut self, data: &engine_core::serialization::SceneData) {
+        // Clear World roots
+        let roots = self.world.GetRootGameObjects();
+        for handle in roots {
+            self.world.DestroyImmediate(handle);
+        }
+        self.node_to_handle.clear();
+        self.handle_to_node.clear();
+        self.scene_tree.nodes.clear();
+        self.scene_tree.root_ids.clear();
+        self.selected_nodes.clear();
+
+        let serializer = engine_core::serialization::SceneSerializer::new();
+        let handles = serializer.Load(data, &mut self.world);
+
+        // Rebuild editor tree mappings from spawned roots
+        self.next_node_id = 1;
+        for handle in handles {
+            self.register_world_subtree(handle, None);
+        }
+    }
+
+    /// Import runtime scene JSON string.
+    pub fn import_core_scene_json(&mut self, json: &str) -> Result<(), String> {
+        let data: engine_core::serialization::SceneData =
+            serde_json::from_str(json).map_err(|e| e.to_string())?;
+        self.import_core_scene_data(&data);
+        Ok(())
+    }
+
+    /// Load a runtime `.scene.json` file into the editor.
+    pub fn load_core_scene_file(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let json = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+        self.import_core_scene_json(&json)
+    }
+
+    /// Recursively register a World subtree into editor node maps + scene tree.
+    fn register_world_subtree(
+        &mut self,
+        handle: GameObjectHandle,
+        parent_node: Option<u64>,
+    ) -> u64 {
+        let name = self.world.GetName(handle).to_string();
+        let node_id = self.next_node_id;
+        self.next_node_id += 1;
+        self.node_to_handle.insert(node_id, handle);
+        self.handle_to_node.insert(handle, node_id);
+
+        let parent_id = parent_node.unwrap_or(0);
+        let children: Vec<u64> = self
+            .world
+            .GetChildren(handle)
+            .iter()
+            .map(|&child| self.register_world_subtree(child, Some(node_id)))
+            .collect();
+
+        let node = crate::state::TreeNode {
+            id: node_id,
+            name: name.clone(),
+            icon: "📦".into(),
+            expanded: false,
+            parent: parent_node,
+            children: children.clone(),
+        };
+        self.scene_tree.nodes.push(node);
+        if parent_node.is_none() {
+            self.scene_tree.root_ids.push(node_id);
+        } else {
+            // parent children already filled by recursive call above
+            let _ = parent_id;
+        }
+
+        // Sync transform snapshot from World
+        let (pos, rot, scale) = self
+            .world
+            .GetTransform(handle)
+            .map(|t| (t.LocalPosition(), t.LocalRotation(), t.LocalScale()))
+            .unwrap_or((
+                engine_math::Vec3::ZERO,
+                engine_math::Quat::IDENTITY,
+                engine_math::Vec3::ONE,
+            ));
+        let (rx, ry, rz) = rot.to_euler(engine_math::EulerRot::XYZ);
+        self.node_transforms.insert(
+            node_id,
+            [pos.x, pos.y, pos.z, rx, ry, rz, scale.x, scale.y, scale.z],
+        );
+
+        node_id
+    }
+
+    // ============================================================
     // End Unity-style World API Helpers
     // ============================================================
 

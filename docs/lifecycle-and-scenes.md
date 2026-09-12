@@ -340,3 +340,15 @@ let handle = db.load_asset_by_guid::<EnemyData>(&meta.guid)?;
 | ScriptableObject 资产 | `crates/engine-core/src/scriptable_asset.rs` |
 | AssetDatabase | `crates/engine-core/src/asset_database.rs` |
 | PlayerLoop | `crates/engine-core/src/player_loop.rs` |
+| 编辑器 Scene 桥 | `EditorState::to_core_scene_data` / `import_core_scene_json`（`engine-editor/src/state.rs`） |
+
+编辑器与运行时共用同一套 `SceneData` JSON：
+
+```rust
+// 编辑器导出 → 运行时加载
+let json = editor.export_core_scene_json("Level1")?;
+runtime.load_scene_json("Level1", &json, LoadSceneMode::Single)?;
+
+// 运行时场景 JSON → 编辑器打开
+editor.load_core_scene_file(Path::new("Assets/Level1.scene.json"))?;
+```
