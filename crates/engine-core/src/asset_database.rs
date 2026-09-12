@@ -1,12 +1,27 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use crate::asset_handle::AssetHandle;
 use crate::scriptable_asset::{
-    self, AssetMeta, GuidIndex, SoAssetError, load_scriptable_object, save_scriptable_object,
+    self, AssetMeta, AssetRef, AssetReloadEvent, GuidIndex, SoAssetError, load_scriptable_object,
+    save_scriptable_object,
 };
 use crate::scriptable_object::ScriptableObject;
+
+/// Loader used to re-materialize a typed asset from disk during hot-reload.
+type ReloadFn =
+    Box<dyn Fn(&Path) -> Result<Box<dyn Any + Send + Sync>, SoAssetError> + Send + Sync>;
+
+/// A watched disk asset for hot-reload.
+struct AssetWatch {
+    path: PathBuf,
+    guid: String,
+    name: String,
+    mtime: Option<SystemTime>,
+    reload: ReloadFn,
+}
 
 /// A centralized asset database for managing ScriptableObject assets.
 ///
@@ -31,6 +46,10 @@ pub struct AssetDatabase {
     guid_index: GuidIndex,
     /// Default directory for `save_asset_to_disk` / `scan_directory`.
     assets_root: Option<PathBuf>,
+    /// Hot-reload watches keyed by GUID.
+    watches: HashMap<String, AssetWatch>,
+    /// Events from the last [`poll_hot_reload`](Self::poll_hot_reload).
+    pending_reload_events: Vec<AssetReloadEvent>,
 }
 
 impl Default for AssetDatabase {
@@ -46,6 +65,8 @@ impl AssetDatabase {
             entries: HashMap::new(),
             guid_index: GuidIndex::new(),
             assets_root: None,
+            watches: HashMap::new(),
+            pending_reload_events: Vec::new(),
         }
     }
 
@@ -55,6 +76,8 @@ impl AssetDatabase {
             entries: HashMap::with_capacity(capacity),
             guid_index: GuidIndex::new(),
             assets_root: None,
+            watches: HashMap::new(),
+            pending_reload_events: Vec::new(),
         }
     }
 
@@ -142,16 +165,42 @@ impl AssetDatabase {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.guid_index = GuidIndex::new();
+        self.watches.clear();
+        self.pending_reload_events.clear();
     }
 
     // ============================================================
     // Disk-backed ScriptableObject assets (Unity .asset + .meta)
     // ============================================================
 
+    fn register_watch<T: ScriptableObject + Clone + Send + Sync + 'static>(
+        &mut self,
+        path: PathBuf,
+        guid: String,
+        name: String,
+    ) {
+        let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        self.watches.insert(
+            guid.clone(),
+            AssetWatch {
+                path,
+                guid,
+                name,
+                mtime,
+                reload: Box::new(|p| {
+                    let data: T = load_scriptable_object(p)?;
+                    // Database entries are AssetHandle<T> (same as create_asset)
+                    Ok(Box::new(AssetHandle::new(data)) as Box<dyn Any + Send + Sync>)
+                }),
+            },
+        );
+    }
+
     /// Save an in-memory asset to disk and index it by GUID.
     ///
     /// Writes `name.asset` + `name.asset.meta` under `dir` (or `assets_root`).
-    pub fn save_asset_to_disk<T: ScriptableObject + Clone + 'static>(
+    /// Registers a hot-reload watch for this asset.
+    pub fn save_asset_to_disk<T: ScriptableObject + Clone + Send + Sync + 'static>(
         &mut self,
         dir: Option<&Path>,
         name: &str,
@@ -163,27 +212,40 @@ impl AssetDatabase {
             .ok_or_else(|| SoAssetError::InvalidPath("no assets root or dir set".into()))?;
         let path = root.join(format!("{name}.asset"));
         let meta = save_scriptable_object(&path, name, asset)?;
-        self.guid_index.insert(path, meta.clone());
+        self.guid_index.insert(path.clone(), meta.clone());
         // Also keep a runtime copy
         let _ = self.create_asset(name, asset.clone());
+        self.register_watch::<T>(path, meta.guid.clone(), name.to_string());
         Ok(meta)
     }
 
     /// Load a ScriptableObject from disk by file path and register it.
-    pub fn load_asset_from_path<T: ScriptableObject + Clone + 'static>(
+    pub fn load_asset_from_path<T: ScriptableObject + Clone + Send + Sync + 'static>(
         &mut self,
         path: &Path,
         name: &str,
     ) -> Result<AssetHandle<T>, SoAssetError> {
         let data: T = load_scriptable_object(path)?;
-        if let Some(meta) = scriptable_asset::load_asset_meta(path)? {
-            self.guid_index.insert(path.to_path_buf(), meta);
-        }
+        let meta = if let Some(meta) = scriptable_asset::load_asset_meta(path)? {
+            self.guid_index.insert(path.to_path_buf(), meta.clone());
+            meta
+        } else {
+            let meta = AssetMeta::new(
+                std::any::type_name::<T>()
+                    .rsplit("::")
+                    .next()
+                    .unwrap_or("Unknown"),
+                name,
+            );
+            self.guid_index.insert(path.to_path_buf(), meta.clone());
+            meta
+        };
+        self.register_watch::<T>(path.to_path_buf(), meta.guid.clone(), name.to_string());
         Ok(self.create_asset(name, data))
     }
 
     /// Load an asset by GUID (must have been saved/scanned so the index knows the path).
-    pub fn load_asset_by_guid<T: ScriptableObject + Clone + 'static>(
+    pub fn load_asset_by_guid<T: ScriptableObject + Clone + Send + Sync + 'static>(
         &mut self,
         guid: &str,
     ) -> Result<AssetHandle<T>, SoAssetError> {
@@ -193,6 +255,7 @@ impl AssetDatabase {
             .map(|(p, m)| (p.clone(), m.clone()))
             .ok_or_else(|| SoAssetError::NotFound(format!("guid {guid}")))?;
         let data: T = load_scriptable_object(&path)?;
+        self.register_watch::<T>(path, meta.guid.clone(), meta.name.clone());
         Ok(self.create_asset(&meta.name, data))
     }
 
@@ -225,6 +288,99 @@ impl AssetDatabase {
     /// Get the disk path for a GUID.
     pub fn path_for_guid(&self, guid: &str) -> Option<&Path> {
         self.guid_index.get_by_guid(guid).map(|(p, _)| p.as_path())
+    }
+
+    /// Create an [`AssetRef`] for a named asset (null if unknown).
+    pub fn asset_ref(&self, name: &str) -> AssetRef {
+        match self.guid_for_name(name) {
+            Some(g) => AssetRef::from_guid(g),
+            None => AssetRef::null(),
+        }
+    }
+
+    /// Resolve an [`AssetRef`] to a typed handle.
+    pub fn resolve_ref<T: ScriptableObject + Clone + Send + Sync + 'static>(
+        &mut self,
+        r: &AssetRef,
+    ) -> Result<AssetHandle<T>, SoAssetError> {
+        if r.is_null() {
+            return Err(SoAssetError::NotFound("null AssetRef".into()));
+        }
+        // Already in memory?
+        if let Some(meta) = self.guid_index.get_by_guid(&r.guid).map(|(_, m)| m.clone()) {
+            if let Some(h) = self.get_asset::<T>(&meta.name) {
+                return Ok(h.clone());
+            }
+            return self.load_asset_by_guid::<T>(&r.guid);
+        }
+        self.load_asset_by_guid::<T>(&r.guid)
+    }
+
+    // ============================================================
+    // Hot-reload
+    // ============================================================
+
+    /// Poll watched files for mtime changes; reload dirty assets into memory.
+    ///
+    /// Returns events for each successfully reloaded asset. Call once per frame
+    /// or on a timer. Without a background `notify` watcher this is cheap
+    /// (stat per watched file).
+    pub fn poll_hot_reload(&mut self) -> Vec<AssetReloadEvent> {
+        let mut dirty: Vec<(String, PathBuf, String)> = Vec::new(); // guid, path, name
+
+        for (guid, watch) in self.watches.iter() {
+            let Ok(meta) = std::fs::metadata(&watch.path) else {
+                continue;
+            };
+            let Ok(mtime) = meta.modified() else {
+                continue;
+            };
+            if watch.mtime.map(|old| mtime > old).unwrap_or(true) {
+                // First poll after watch or file newer
+                if watch.mtime.is_some() {
+                    dirty.push((guid.clone(), watch.path.clone(), watch.name.clone()));
+                }
+            }
+        }
+
+        let mut events = Vec::new();
+        for (guid, path, name) in dirty {
+            let Some(watch) = self.watches.get(&guid) else {
+                continue;
+            };
+            let reload = &watch.reload;
+            match reload(&path) {
+                Ok(payload) => {
+                    if let Some(w) = self.watches.get_mut(&guid) {
+                        w.mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+                    }
+                    self.entries.insert(name.clone(), payload);
+                    events.push(AssetReloadEvent { guid, name, path });
+                }
+                Err(_) => {
+                    // Keep old data; still bump mtime so we don't spin
+                    if let Some(w) = self.watches.get_mut(&guid) {
+                        w.mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+                    }
+                }
+            }
+        }
+        events
+    }
+
+    /// Number of watched assets (hot-reload).
+    pub fn watch_count(&self) -> usize {
+        self.watches.len()
+    }
+
+    /// Whether a GUID is watched.
+    pub fn is_watched(&self, guid: &str) -> bool {
+        self.watches.contains_key(guid)
+    }
+
+    /// Stop watching a GUID.
+    pub fn unwatch(&mut self, guid: &str) -> bool {
+        self.watches.remove(guid).is_some()
     }
 }
 
@@ -475,5 +631,90 @@ mod tests {
         let handle = db.load_asset_from_path::<TestAsset>(&path, "Hero").unwrap();
         assert_eq!(handle.get().value, 100);
         assert!(db.guid_for_name("Hero").is_some());
+    }
+
+    #[test]
+    fn test_asset_ref_and_resolve() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = AssetDatabase::new();
+        db.set_assets_root(dir.path());
+        let meta = db
+            .save_asset_to_disk(None, "Goblin", &make_test_asset("Goblin", 55))
+            .unwrap();
+
+        let r = db.asset_ref("Goblin");
+        assert!(!r.is_null());
+        assert_eq!(r.guid(), meta.guid);
+
+        let handle = db.resolve_ref::<TestAsset>(&r).unwrap();
+        assert_eq!(handle.get().value, 55);
+
+        assert!(AssetRef::null().is_null());
+        assert!(db.resolve_ref::<TestAsset>(&AssetRef::null()).is_err());
+    }
+
+    #[test]
+    fn test_asset_ref_serde() {
+        let r = AssetRef::from_guid("abc123");
+        let json = serde_json::to_string(&r).unwrap();
+        assert_eq!(json, "\"abc123\"");
+        let back: AssetRef = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.guid(), "abc123");
+    }
+
+    #[test]
+    fn test_hot_reload_on_mtime_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = AssetDatabase::new();
+        db.set_assets_root(dir.path());
+
+        let meta = db
+            .save_asset_to_disk(None, "Live", &make_test_asset("Live", 1))
+            .unwrap();
+        assert_eq!(db.watch_count(), 1);
+        assert!(db.is_watched(&meta.guid));
+
+        // No change → no events
+        let events = db.poll_hot_reload();
+        assert!(events.is_empty());
+
+        // Ensure mtime moves forward (filesystem may have coarse resolution)
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let updated = make_test_asset("Live", 99);
+        crate::scriptable_asset::save_scriptable_object(
+            &dir.path().join("Live.asset"),
+            "Live",
+            &updated,
+        )
+        .unwrap();
+        // Force mtime forward via FileTimes (portable)
+        let file = std::fs::File::options()
+            .write(true)
+            .open(dir.path().join("Live.asset"))
+            .unwrap();
+        let times = std::fs::FileTimes::new()
+            .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(2));
+        file.set_times(times).unwrap();
+        drop(file);
+
+        let events = db.poll_hot_reload();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].guid, meta.guid);
+        assert_eq!(events[0].name, "Live");
+
+        let handle = db.get_asset::<TestAsset>("Live").unwrap();
+        assert_eq!(handle.get().value, 99);
+    }
+
+    #[test]
+    fn test_unwatch() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = AssetDatabase::new();
+        db.set_assets_root(dir.path());
+        let meta = db
+            .save_asset_to_disk(None, "X", &make_test_asset("X", 0))
+            .unwrap();
+        assert!(db.unwatch(&meta.guid));
+        assert!(!db.is_watched(&meta.guid));
     }
 }

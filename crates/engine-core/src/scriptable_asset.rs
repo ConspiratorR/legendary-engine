@@ -245,6 +245,68 @@ pub fn scan_asset_directory(dir: &Path) -> Result<Vec<(PathBuf, AssetMeta)>, SoA
     Ok(out)
 }
 
+/// Stable reference to a ScriptableObject by GUID (Unity asset reference).
+///
+/// Serializes as a plain GUID string in scene/component fields, so references
+/// survive file moves when `.meta` is preserved.
+///
+/// ```json
+/// { "guid": "9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c" }
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(transparent)]
+pub struct AssetRef {
+    /// Empty string = null reference.
+    pub guid: String,
+}
+
+impl AssetRef {
+    /// Null reference (Unity `null` object reference).
+    pub fn null() -> Self {
+        Self {
+            guid: String::new(),
+        }
+    }
+
+    /// Reference by GUID.
+    pub fn from_guid(guid: impl Into<String>) -> Self {
+        Self { guid: guid.into() }
+    }
+
+    /// From a meta sidecar.
+    pub fn from_meta(meta: &AssetMeta) -> Self {
+        Self {
+            guid: meta.guid.clone(),
+        }
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.guid.is_empty()
+    }
+
+    pub fn guid(&self) -> &str {
+        &self.guid
+    }
+}
+
+impl std::fmt::Display for AssetRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_null() {
+            write!(f, "AssetRef(null)")
+        } else {
+            write!(f, "AssetRef({})", self.guid)
+        }
+    }
+}
+
+/// A ScriptableObject asset was reloaded from disk (hot-reload).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssetReloadEvent {
+    pub guid: String,
+    pub name: String,
+    pub path: PathBuf,
+}
+
 /// In-memory index: GUID → (path, meta). Used by AssetDatabase.
 #[derive(Debug, Default, Clone)]
 pub struct GuidIndex {

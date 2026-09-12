@@ -288,6 +288,38 @@ let handle = db.load_asset_by_guid::<EnemyData>(&meta.guid)?;
 - 重复保存会 **保留原 GUID**（文件移动/重写不丢引用）。
 - 目录扫描自动为缺失的 `.meta` 补发 GUID。
 
+### AssetRef（GUID 引用）
+
+组件/场景字段里存对另一资产的引用，序列化为 GUID 字符串：
+
+```rust
+use engine_core::AssetRef;
+
+// 从数据库取引用
+let r: AssetRef = db.asset_ref("Goblin");
+
+// 解析回句柄
+let handle = db.resolve_ref::<EnemyData>(&r)?;
+
+// 序列化：\"9f8a7b...\"
+```
+
+空 GUID 表示 null 引用（Unity `null`）。
+
+### 热重载
+
+`save` / `load` 会自动登记 watch。每帧或定时调用：
+
+```rust
+let events = db.poll_hot_reload();
+for e in events {
+    // e.guid, e.name, e.path — 资产已从磁盘重新载入 entries
+}
+```
+
+- 基于 mtime 比较，无后台线程；文件被外部修改后下次 poll 生效。
+- 内存中旧的 `Arc` 句柄仍指向旧数据；新的 `get_asset` / `resolve_ref` 得到新数据。
+
 ## 身份桥（GameObject ↔ Entity）
 
 编辑器/脚本用 `GameObjectHandle`，渲染/物理用 ECS `Entity`。身份桥在**不合并存储**的前提下建立双向映射：
@@ -332,6 +364,8 @@ app.sync_identity_bridge();
 | Prefab Variant | `Prefab::CreateVariant` + `override_node` |
 | `ScriptableObject` 资产 | `.asset` + `.meta` GUID（`scriptable_asset`） |
 | `AssetDatabase` | `engine_core::asset_database::AssetDatabase` |
+| 资产引用 | `AssetRef`（GUID） |
+| 资产热重载 | `AssetDatabase::poll_hot_reload` |
 | `SceneManager` | `engine_core::scene_management::SceneManager` |
 | PlayerLoop | `App::run_with_lifecycle` + `PlayerLoop` 相位 |
 
@@ -339,9 +373,9 @@ app.sync_identity_bridge();
 
 详细分阶段执行计划见 [unity-alignment-roadmap.md](unity-alignment-roadmap.md)。
 
-1. **P1 运行时硬化** — SetActive 即时模式、物理 FixedUpdate、编辑器 SceneRuntime 桥
-2. **P2 双 World 收敛** — 身份桥 → 存储合并
-3. **P3 资产深化** — 热重载、AssetRef
+1. **P1 运行时硬化** — ✅
+2. **P2.a 身份桥** — ✅（存储合并 P2.b 未做）
+3. **P3 资产深化** — ✅ 热重载、AssetRef
 4. **P4 脚本体验** — WaitUntil、MonoBehaviour 协程桥
 5. **P5 验收合并**
 

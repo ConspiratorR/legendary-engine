@@ -175,7 +175,7 @@ pub use object::{Object, ObjectUtil};
 pub use player_loop::{Phase, PlayerLoop};
 pub use scene_management::{LoadSceneMode, SceneHandle, SceneManager};
 pub use scene_runtime::SceneRuntime;
-pub use scriptable_asset::{AssetMeta, GuidIndex, new_guid};
+pub use scriptable_asset::{AssetMeta, AssetRef, AssetReloadEvent, GuidIndex, new_guid};
 pub use scriptable_object::ScriptableObject;
 pub use system::System;
 pub use time::Time;
