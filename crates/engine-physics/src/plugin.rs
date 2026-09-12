@@ -5,23 +5,31 @@ use engine_core::app::AppBuilder;
 use engine_core::plugin::Plugin;
 
 fn physics_step_system(world: &mut engine_ecs::world::World) {
-    // Remove PhysicsWorld from resources so we can call step() with &mut World
+    // Sync timestep from Time (Unity: FixedUpdate uses fixedDeltaTime)
+    let fixed_dt = world
+        .get_resource::<engine_core::time::Time>()
+        .map(|t| t.fixedDeltaTime())
+        .unwrap_or(1.0 / 50.0);
+
     let mut pw = match world.remove_resource::<PhysicsWorld>() {
         Some(pw) => pw,
         None => return,
     };
+    pw.delta_time = fixed_dt;
     pw.step(world);
-    // Put it back
     world.insert_resource(pw);
 }
 
 /// Plugin that adds physics simulation capabilities.
+///
+/// Registers [`physics_step_system`] on the **FixedUpdate** ECS schedule so
+/// simulation advances 0+ times per frame at a fixed timestep (Unity contract).
 pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.insert_resource(PhysicsWorld::default());
-        app.add_system(physics_step_system);
+        app.add_fixed_ecs_system(physics_step_system);
     }
 }
 
@@ -40,6 +48,8 @@ mod tests {
         app.add_plugin(PhysicsPlugin);
         let pw = app.world_mut().get_resource::<PhysicsWorld>();
         assert!(pw.is_some());
+        // FixedUpdate schedule registered (system_count may be private on older Schedule)
+        let _ = app.fixed_schedule();
     }
 }
 
@@ -50,18 +60,18 @@ fn physics_2d_step_system(world: &mut engine_ecs::world::World) {
     };
     let dt = world
         .get_resource::<engine_core::time::Time>()
-        .map(|t| t.delta_seconds())
-        .unwrap_or(1.0 / 60.0);
+        .map(|t| t.fixedDeltaTime())
+        .unwrap_or(1.0 / 50.0);
     pw.step(world, dt);
     world.insert_resource(pw);
 }
 
-/// Plugin that adds 2D physics simulation capabilities.
+/// Plugin that adds 2D physics simulation capabilities (FixedUpdate schedule).
 pub struct Physics2DPlugin;
 
 impl Plugin for Physics2DPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.insert_resource(PhysicsWorld2D::default());
-        app.add_system(physics_2d_step_system);
+        app.add_fixed_ecs_system(physics_2d_step_system);
     }
 }

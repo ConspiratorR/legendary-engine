@@ -22,6 +22,8 @@ type Hook = Box<dyn FnMut(&mut App)>;
 pub struct AppBuilder {
     world: World,
     schedule: Schedule,
+    /// ECS systems that run once per FixedUpdate step (Unity fixed timestep).
+    fixed_schedule: Schedule,
     parallel_schedule: Option<ParallelSchedule>,
     resources: ResourceRegistry,
     asset_database: AssetDatabase,
@@ -48,6 +50,7 @@ impl AppBuilder {
         Self {
             world,
             schedule: Schedule::new(),
+            fixed_schedule: Schedule::new(),
             parallel_schedule: None,
             resources: ResourceRegistry::new(),
             asset_database: AssetDatabase::new(),
@@ -118,6 +121,23 @@ impl AppBuilder {
             self.schedule.add_system(system.system());
         }
         self
+    }
+
+    /// Add an ECS system that runs **once per FixedUpdate step** (Unity fixed timestep).
+    ///
+    /// Use for physics and other fixed-rate simulation. Systems run against the
+    /// ECS world during `App::run_with_lifecycle`'s FixedUpdate loop.
+    pub fn add_fixed_ecs_system(
+        &mut self,
+        system: impl engine_ecs::system::IntoSystem + 'static,
+    ) -> &mut Self {
+        self.fixed_schedule.add_system(system.system());
+        self
+    }
+
+    /// Shared access to the FixedUpdate ECS schedule.
+    pub fn fixed_schedule(&self) -> &Schedule {
+        &self.fixed_schedule
     }
 
     /// Insert a global resource into the ECS world.
@@ -256,6 +276,8 @@ pub struct App {
     pub world: World,
     /// The system schedule (used when parallel schedule is not set).
     pub schedule: Schedule,
+    /// ECS systems run once per FixedUpdate step.
+    pub fixed_schedule: Schedule,
     /// The parallel schedule (if enabled).
     pub parallel_schedule: Option<ParallelSchedule>,
     /// The resource registry.
@@ -293,6 +315,7 @@ impl App {
         Self {
             world,
             schedule: Schedule::new(),
+            fixed_schedule: Schedule::new(),
             parallel_schedule: None,
             resources: ResourceRegistry::new(),
             renderer: None,
@@ -372,18 +395,27 @@ impl App {
         }
         self.pre_update_hooks = pre_hooks;
 
+        // App.time is authoritative in lifecycle mode; overwrite any ECS Time
+        // updated by TimePlugin's wall-clock hook so fixed-step counts match.
+        self.world.insert_resource(self.time.clone());
+
         // 4. FixedUpdate 0+ times (Unity fixed timestep)
         let fixed_steps = self.time.pending_fixed_steps();
         for _ in 0..fixed_steps {
             self.time.begin_fixed_update();
+            self.world.insert_resource(self.time.clone());
 
-            // FixedUpdate PlayerLoop phase systems (ECS)
+            // Fixed ECS systems (physics, fixed-rate simulation)
+            self.fixed_schedule.run(&mut self.world);
+
+            // FixedUpdate PlayerLoop phase systems (Unity World Context)
             self.run_player_loop_phase(crate::player_loop::Phase::FixedUpdate);
 
             // MonoBehaviour FixedUpdate (if SceneRuntime present)
             self.dispatch_scene_fixed();
 
             self.time.end_fixed_update();
+            self.world.insert_resource(self.time.clone());
         }
 
         // 5. Update phase
@@ -720,6 +752,7 @@ impl From<AppBuilder> for App {
         Self {
             world: b.world,
             schedule: b.schedule,
+            fixed_schedule: b.fixed_schedule,
             parallel_schedule: b.parallel_schedule,
             resources: b.resources,
             renderer: None,

@@ -24,8 +24,9 @@ App (ECS world + schedule + Time + EventBus)
 1. Time::update(delta)              // 填充 FixedUpdate 累加器
 2. InputManager::update_frame()
 3. pre-update hooks
-4. FixedUpdate × N                  // N = pending_fixed_steps()，默认上限 8
+4. FixedUpdate 0+ times
    - begin_fixed_update
+   - **fixed ECS schedule**（物理等，`add_fixed_ecs_system`）
    - PlayerLoop FixedUpdate 相位
    - MonoBehaviour.FixedUpdate
    - end_fixed_update
@@ -38,12 +39,14 @@ App (ECS world + schedule + Time + EventBus)
    - MonoBehaviour.LateUpdate
 7. End of frame
    - flush OnEnable/OnDisable（来自 SetActive）
-   - tick_invokes
+   - tick_coroutines / tick_invokes
    - update_pending_destroy
    - sync_transforms
-   - flush_destroy（OnDisable → OnDestroy → 释放）
+   - flush_destroy（OnDisable → OnDestroy → 释放；并取消该对象 Invoke/Coroutine）
 8. post-update hooks
 ```
+
+物理请用 `AppBuilder::add_fixed_ecs_system` 注册，每步 FixedUpdate 以 `Time.fixedDeltaTime` 推进。
 
 对应 Unity 文档：
 - [Execution Order](https://docs.unity3d.com/Manual/ExecutionOrder.html)
@@ -304,10 +307,18 @@ let handle = db.load_asset_by_guid::<EnemyData>(&meta.guid)?;
 
 ## 后续路线（未完成）
 
-1. **双 World 收敛** — 以 Unity World 为唯一对外 API，ECS 作为内部存储
-2. **SetActive 立即回调** — 当前在帧末 flush；可选改为 SetActive 当场派发
-3. **Coroutine yield 表达式** — 目前为步进列表，可再封装更接近 IEnumerator 的 API
-4. **Asset 热重载** — 监听 `.asset` 变更并刷新内存句柄
+详细分阶段执行计划见 [unity-alignment-roadmap.md](unity-alignment-roadmap.md)。
+
+1. **P1 运行时硬化** — SetActive 即时模式、物理 FixedUpdate、编辑器 SceneRuntime 桥
+2. **P2 双 World 收敛** — 身份桥 → 存储合并
+3. **P3 资产深化** — 热重载、AssetRef
+4. **P4 脚本体验** — WaitUntil、MonoBehaviour 协程桥
+5. **P5 验收合并**
+
+历史清单（部分已在 roadmap 细化）：
+- SetActive 立即回调（可选模式）
+- Coroutine yield 表达式
+- Asset 热重载
 
 ## 相关源码
 

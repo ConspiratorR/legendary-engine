@@ -338,6 +338,10 @@ impl World {
 
         let index = handle.index() as usize;
 
+        // Cancel pending Invoke and coroutines owned by this object
+        self.CancelInvoke(handle);
+        self.StopAllCoroutines(handle);
+
         // Remove from name lookup
         if let Some(go) = self.gameobject_data[index].as_ref() {
             let name = go.Name().to_string();
