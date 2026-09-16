@@ -84,7 +84,8 @@
 - **示例** — `coroutine_demo`：`cargo run -p engine-core --example coroutine_demo`
 - **身份桥** — 全量 auto-link、`TransformProxy`/`RenderProxy`、`require_unity_world`、render_phase 消费
 - **编辑器 Play** — `UnityPlayHost` 克隆场景进 SceneRuntime，驱动 MonoBehaviour 生命周期
-- **端到端** — SceneData Material/Sprite 往返；`runtime_scene_demo`；双资产系统双轨文档
+- **端到端** — SceneData Material/Sprite 往返；`runtime_scene_demo`；`unity_gameplay_demo`（纯 Unity World）
+- **AddMonoBehaviour** — 挂载时写入 `gameobject` 句柄（Unity AddComponent 语义）
 - **内置序列化** — Material / SpriteRenderer / Rigidbody / AudioSource / Light / Camera
 - **so_asset CLI** — `pack` / `list` 递归补 `.meta`
 

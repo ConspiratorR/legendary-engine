@@ -115,9 +115,9 @@ engine-scene       → 自己的 Node/Transform (第三套)
 3. **禁止** 同时改渲染 Pass 内部；只改「数据从哪来」
 
 ### 退出条件
-- [ ] 示例游戏只调用 Unity World API
-- [ ] Editor 与运行时同一套 World 类型
-- [ ] 渲染帧数据来自桥接，无第三套 Transform
+- [x] 示例游戏只调用 Unity World API（`unity_gameplay_demo`）
+- [x] Editor 与运行时同一套 World 类型（Play 克隆 SceneRuntime World）
+- [ ] 渲染帧数据来自桥接（render_phase 已消费代理；编辑器 3D 视口仍走 engine-scene）
 
 ### 提交建议
 `refactor(engine-core): bridge Unity World to ECS entities` → `refactor: converge dual worlds behind unity-world-primary`

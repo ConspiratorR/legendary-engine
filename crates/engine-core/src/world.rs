@@ -603,9 +603,11 @@ impl World {
         if self.monobehaviours.len() <= index {
             self.monobehaviours.resize_with(index + 1, || None);
         }
+        let mut holder = MonoBehaviourHolder::new(mono);
+        holder.GetMut().set_gameobject(handle);
         self.monobehaviours[index]
             .get_or_insert_with(Vec::new)
-            .push(MonoBehaviourHolder::new(mono));
+            .push(holder);
     }
 
     /// Count of MonoBehaviours attached to a GameObject.
