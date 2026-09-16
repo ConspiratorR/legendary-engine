@@ -596,6 +596,15 @@ impl World {
         handle: GameObjectHandle,
         mono: T,
     ) {
+        self.AddMonoBehaviourBoxed(handle, Box::new(mono));
+    }
+
+    /// Attach a type-erased MonoBehaviour (used by SceneData restore / registry).
+    pub fn AddMonoBehaviourBoxed(
+        &mut self,
+        handle: GameObjectHandle,
+        mono: Box<dyn MonoBehaviour>,
+    ) {
         if !self.is_valid(handle) {
             return;
         }
@@ -603,7 +612,7 @@ impl World {
         if self.monobehaviours.len() <= index {
             self.monobehaviours.resize_with(index + 1, || None);
         }
-        let mut holder = MonoBehaviourHolder::new(mono);
+        let mut holder = MonoBehaviourHolder::from_boxed(mono);
         holder.GetMut().set_gameobject(handle);
         self.monobehaviours[index]
             .get_or_insert_with(Vec::new)
@@ -618,6 +627,63 @@ impl World {
             .and_then(|m| m.as_ref())
             .map(|v| v.len())
             .unwrap_or(0)
+    }
+
+    /// Collect MonoBehaviour metadata for SceneData: `(TypeName, enabled, props)`.
+    pub fn CollectMonoBehaviours(
+        &self,
+        handle: GameObjectHandle,
+    ) -> Vec<(String, bool, Option<serde_json::Value>)> {
+        let index = handle.index() as usize;
+        let Some(Some(monos)) = self.monobehaviours.get(index) else {
+            return Vec::new();
+        };
+        monos
+            .iter()
+            .map(|m| {
+                let inner = m.Get();
+                (
+                    inner.TypeName().to_string(),
+                    m.Enabled(),
+                    inner.SerializeProps(),
+                )
+            })
+            .collect()
+    }
+
+    /// Restore MonoBehaviours from SceneData using the global type registry.
+    ///
+    /// Unknown type names are skipped. Props are applied when the factory type supports them.
+    pub fn RestoreMonoBehaviours(
+        &mut self,
+        handle: GameObjectHandle,
+        scripts: &[(String, bool, Option<serde_json::Value>)],
+    ) {
+        for (type_name, enabled, props) in scripts {
+            let Some(mut mono) = crate::monobehaviour::MonoBehaviourRegistry::global()
+                .lock()
+                .expect("MonoBehaviourRegistry")
+                .create(type_name)
+            else {
+                log::warn!("RestoreMonoBehaviours: unregistered type {type_name}");
+                continue;
+            };
+            if let Some(p) = props {
+                mono.DeserializeProps(p);
+            }
+            if !enabled {
+                mono.SetEnabled(false);
+            }
+            self.AddMonoBehaviourBoxed(handle, mono);
+            if !enabled {
+                // AddMonoBehaviour enables by default via holder; force off last slot
+                if let Some(Some(list)) = self.monobehaviours.get_mut(handle.index() as usize)
+                    && let Some(last) = list.last_mut()
+                {
+                    last.SetEnabled(false);
+                }
+            }
+        }
     }
 
     /// Get a component from a GameObject (matches `GameObject.GetComponent<T>()`).

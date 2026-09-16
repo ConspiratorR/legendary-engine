@@ -169,7 +169,10 @@ pub use events::*;
 pub use gameobject::{GameObject, GameObjectHandle};
 pub use hierarchy::{get_ancestors, get_depth, get_root, is_ancestor, sync_transforms};
 pub use identity_bridge::{IdentityBridge, RenderProxy, TransformProxy, collect_proxy_sprites};
-pub use monobehaviour::{CoroutineHandle, MonoBehaviour, MonoBehaviourHolder};
+pub use monobehaviour::{
+    CoroutineHandle, MonoBehaviour, MonoBehaviourHolder, MonoBehaviourRegistry,
+    register_mono_behaviour,
+};
 pub use monobehaviour_runner::MonoBehaviourRunner;
 pub use object::{Object, ObjectUtil};
 pub use player_loop::{Phase, PlayerLoop};

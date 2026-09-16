@@ -36,6 +36,10 @@ pub struct UnityPlayHost {
     pub runtime: engine_core::SceneRuntime,
     pub time: engine_core::time::Time,
     pub events: engine_core::event::EventBus,
+    /// ECS world holding physics RigidBody/Collider/Transform mirrors.
+    pub ecs: engine_ecs::world::World,
+    /// Physics simulation stepped on FixedUpdate.
+    pub physics: engine_physics::world::PhysicsWorld,
 }
 
 /// Active transform tool in the viewport toolbar.
@@ -115,6 +119,15 @@ pub struct SceneTree {
 }
 
 impl SceneTree {
+    /// Empty scene tree (no demo nodes). Use for New Scene.
+    pub fn empty() -> Self {
+        Self {
+            nodes: Vec::new(),
+            root_ids: Vec::new(),
+            next_id: 1,
+        }
+    }
+
     /// Creates a new scene tree with a default hierarchy (Root + 5 child nodes).
     pub fn new() -> Self {
         let root_id = 1;
@@ -1323,6 +1336,7 @@ impl EditorState {
     pub fn build_unity_play_host(&self) -> UnityPlayHost {
         use engine_core::event::EventBus;
         use engine_core::time::Time;
+        use engine_physics::world::PhysicsWorld;
 
         let mut runtime = engine_core::SceneRuntime::new();
         for root in self.world.GetRootGameObjects() {
@@ -1330,32 +1344,254 @@ impl EditorState {
         }
         runtime.mark_needs_awake();
 
-        UnityPlayHost {
+        let mut host = UnityPlayHost {
             runtime,
             time: Time::new(),
             events: EventBus::new(),
-        }
+            ecs: engine_ecs::world::World::new(),
+            physics: PhysicsWorld::default(),
+        };
+        // Identity-bridge every GO so physics can key off Entity.
+        host.runtime
+            .bridge
+            .ensure_all_linked(&host.runtime.world, &mut host.ecs);
+        host
     }
 
     /// Advance the Unity play host one frame (FixedUpdate 0+ → Start → Update → …).
     pub fn tick_unity_play_host(&mut self, host: &mut UnityPlayHost, dt: f32) {
         host.time.update(dt);
+
+        // Physics steps on FixedUpdate (Unity contract). Use pending_fixed_steps
+        // because SceneRuntime.tick does not call begin/end_fixed_update itself.
+        let fixed_steps = host.time.pending_fixed_steps();
+        for _ in 0..fixed_steps {
+            host.time.begin_fixed_update();
+            host.physics.delta_time = host.time.fixedDeltaTime();
+            Self::sync_physics_from_unity(host);
+            host.physics.step(&mut host.ecs);
+            Self::sync_physics_to_unity(host);
+            host.runtime.world.sync_transforms();
+            host.time.end_fixed_update();
+        }
+
         let frame = host.time.frameCount();
         host.runtime.tick(&host.time, frame, &mut host.events);
 
-        // Mirror active-object transforms back into the editor World for viewport.
-        // (Only roots: children inherit via hierarchy sync when needed.)
-        for root in host.runtime.world.GetRootGameObjects() {
-            let name = host.runtime.world.GetName(root).to_string();
-            if let Some(editor_go) = self.world.Find(&name) {
-                if let (Some(rt), Some(et)) = (
-                    host.runtime.world.GetTransform(root),
-                    self.world.GetTransformMut(editor_go),
-                ) {
-                    *et = rt.clone();
-                }
-                self.world.sync_transforms();
+        // Mirror runtime hierarchy transforms → editor World (viewport / inspector).
+        let runtime_roots = host.runtime.world.GetRootGameObjects();
+        for root in runtime_roots {
+            Self::mirror_transforms_recursive(&host.runtime.world, root, &mut self.world, None);
+        }
+        self.world.sync_transforms();
+        self.sync_node_transforms_from_world();
+    }
+
+    /// Copy Unity Rigidbody / Transform / colliders into the physics ECS mirror.
+    fn sync_physics_from_unity(host: &mut UnityPlayHost) {
+        use engine_core::components::{BoxCollider, Rigidbody, SphereCollider};
+        use engine_core::transform::Transform as CoreTransform;
+        use engine_physics::{Collider, RigidBody};
+        use std::collections::HashMap;
+
+        host.runtime.world.sync_transforms();
+        let handles: Vec<_> = {
+            let unity = &host.runtime.world;
+            unity
+                .GetRootGameObjects()
+                .into_iter()
+                .flat_map(|root| {
+                    let mut stack = vec![root];
+                    let mut out = vec![];
+                    while let Some(h) = stack.pop() {
+                        out.push(h);
+                        stack.extend(unity.GetChildren(h));
+                    }
+                    out
+                })
+                .collect()
+        };
+
+        let mut go_to_entity: HashMap<GameObjectHandle, engine_ecs::entity::Entity> =
+            HashMap::new();
+        for &go in &handles {
+            if let Some(e) = host.runtime.bridge.entity_for(go) {
+                go_to_entity.insert(go, e);
+            } else {
+                let e = host.runtime.link_to_ecs(go, &mut host.ecs);
+                go_to_entity.insert(go, e);
             }
+        }
+
+        for (&go, &entity) in &go_to_entity {
+            let Some(unity_rb) = host.runtime.world.GetComponent::<Rigidbody>(go) else {
+                continue;
+            };
+
+            // Transform mirror (world pose for integration)
+            if let Some(t) = host.runtime.world.GetTransform(go) {
+                let pos = t.Position();
+                let rot = t.Rotation();
+                let scale = t.LossyScale();
+                let proxy = CoreTransform::from_position_rotation_scale(pos, rot, scale);
+                if host.ecs.get::<CoreTransform>(entity).is_some() {
+                    *host.ecs.get_mut::<CoreTransform>(entity).unwrap() = proxy;
+                } else {
+                    host.ecs.add_component(entity, proxy);
+                }
+            }
+
+            let mut body = if host.ecs.get::<RigidBody>(entity).is_some() {
+                host.ecs.get_mut::<RigidBody>(entity).unwrap().clone()
+            } else if unity_rb.is_kinematic {
+                RigidBody::new_kinematic()
+            } else if unity_rb.use_gravity {
+                RigidBody::new_dynamic()
+            } else {
+                RigidBody::new_static()
+            };
+            body.mass = unity_rb.mass.max(0.001);
+            body.linear_velocity = unity_rb.velocity;
+            body.angular_velocity = unity_rb.angular_velocity;
+            body.linear_damping = unity_rb.drag;
+            body.angular_damping = unity_rb.angular_drag;
+            if host.ecs.get::<RigidBody>(entity).is_some() {
+                *host.ecs.get_mut::<RigidBody>(entity).unwrap() = body;
+            } else {
+                host.ecs.add_component(entity, body);
+            }
+
+            if let Some(sc) = host.runtime.world.GetComponent::<SphereCollider>(go) {
+                let col = Collider::sphere(sc.radius.max(0.01));
+                if host.ecs.get::<Collider>(entity).is_some() {
+                    *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
+                } else {
+                    host.ecs.add_component(entity, col);
+                }
+            } else if let Some(bc) = host.runtime.world.GetComponent::<BoxCollider>(go) {
+                let h = bc.size * 0.5;
+                let col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
+                if host.ecs.get::<Collider>(entity).is_some() {
+                    *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
+                } else {
+                    host.ecs.add_component(entity, col);
+                }
+            }
+        }
+    }
+
+    /// Write simulated Transform positions back onto Unity GameObjects.
+    fn sync_physics_to_unity(host: &mut UnityPlayHost) {
+        use engine_core::transform::Transform as CoreTransform;
+
+        let pairs: Vec<_> = {
+            let mut out = Vec::new();
+            for go in Self::all_handles(&host.runtime.world) {
+                if let Some(e) = host.runtime.bridge.entity_for(go) {
+                    out.push((go, e));
+                }
+            }
+            out
+        };
+
+        for (go, entity) in pairs {
+            let Some(ecs_t) = host.ecs.get::<CoreTransform>(entity) else {
+                continue;
+            };
+            // Only overwrite if this GO had a simulated Rigidbody.
+            if host.ecs.get::<engine_physics::RigidBody>(entity).is_none() {
+                continue;
+            }
+            let pos = ecs_t.Position();
+            // Write local position so the next World::sync_transforms rebuilds world space.
+            if let Some(t) = host.runtime.world.GetTransformMut(go) {
+                t.SetLocalPosition(pos);
+            }
+        }
+    }
+
+    fn all_handles(world: &engine_core::world::World) -> Vec<GameObjectHandle> {
+        let mut out = Vec::new();
+        let mut stack: Vec<GameObjectHandle> = world.GetRootGameObjects();
+        while let Some(h) = stack.pop() {
+            out.push(h);
+            stack.extend(world.GetChildren(h));
+        }
+        out
+    }
+
+    /// Copy local transforms from `src` GO into matching `dst` GO (matched by path name).
+    fn mirror_transforms_recursive(
+        src: &engine_core::world::World,
+        src_handle: GameObjectHandle,
+        dst: &mut engine_core::world::World,
+        parent_dst: Option<GameObjectHandle>,
+    ) {
+        let name = src.GetName(src_handle).to_string();
+        let dst_handle = match parent_dst {
+            Some(parent) => {
+                // Prefer child of parent with same name
+                dst.GetChildren(parent)
+                    .into_iter()
+                    .find(|&c| dst.GetName(c) == name)
+                    .or_else(|| dst.Find(&name))
+            }
+            None => dst.Find(&name),
+        };
+        let Some(dst_handle) = dst_handle else { return };
+
+        if let (Some(st), Some(dt)) = (
+            src.GetTransform(src_handle),
+            dst.GetTransformMut(dst_handle),
+        ) {
+            *dt = st.clone();
+        }
+
+        for child in src.GetChildren(src_handle) {
+            Self::mirror_transforms_recursive(src, child, dst, Some(dst_handle));
+        }
+    }
+
+    /// Apply a `node_transforms` snapshot `[pos3, rot_quat_xyzw, scale3]` onto the Unity World.
+    ///
+    /// Call after gizmo / undo commands that still write the array form.
+    pub fn apply_node_transform_to_world(&mut self, node_id: u64) {
+        let Some(handle) = self.GetHandle(node_id) else {
+            return;
+        };
+        let Some(t) = self.node_transforms.get(&node_id).copied() else {
+            return;
+        };
+        if let Some(wt) = self.world.GetTransformMut(handle) {
+            wt.SetLocalPosition(engine_math::Vec3::new(t[0], t[1], t[2]));
+            wt.SetLocalRotation(engine_math::Quat::from_euler(
+                engine_math::EulerRot::XYZ,
+                t[3],
+                t[4],
+                t[5],
+            ));
+            wt.SetLocalScale(engine_math::Vec3::new(t[6], t[7], t[8]));
+        }
+    }
+
+    /// Write Unity World local transforms into `node_transforms` for the 3D viewport.
+    ///
+    /// World is the authority; `node_transforms` is a mirror for `build_scene`.
+    pub fn sync_node_transforms_from_world(&mut self) {
+        let pairs: Vec<(u64, GameObjectHandle)> =
+            self.handle_to_node.iter().map(|(&h, &n)| (n, h)).collect();
+        for (node_id, handle) in pairs {
+            let Some(t) = self.world.GetTransform(handle) else {
+                continue;
+            };
+            let pos = t.LocalPosition();
+            let rot = t.LocalRotation();
+            let scale = t.LocalScale();
+            let (rx, ry, rz) = rot.to_euler(engine_math::EulerRot::XYZ);
+            self.node_transforms.insert(
+                node_id,
+                [pos.x, pos.y, pos.z, rx, ry, rz, scale.x, scale.y, scale.z],
+            );
         }
     }
 
@@ -1554,8 +1790,7 @@ impl EditorState {
                 self.status_message = Some("请使用文件菜单加载场景".into());
             }
             EditorAction::NewScene => {
-                self.scene_manager.create_scene("Untitled".into());
-                self.status_message = Some("新场景已创建".into());
+                self.new_scene();
             }
             EditorAction::Undo => {
                 self.undo();
@@ -2040,10 +2275,17 @@ impl EditorState {
             if node.parent.is_none() {
                 continue;
             }
+            // Prefer live Unity World transform (P2.6 authority); fall back to snapshot.
             let t = self
-                .node_transforms
-                .get(&node.id)
-                .copied()
+                .GetHandle(node.id)
+                .and_then(|h| self.world.GetTransform(h))
+                .map(|tr| {
+                    let pos = tr.LocalPosition();
+                    let (rx, ry, rz) = tr.LocalRotation().to_euler(engine_math::EulerRot::XYZ);
+                    let scale = tr.LocalScale();
+                    [pos.x, pos.y, pos.z, rx, ry, rz, scale.x, scale.y, scale.z]
+                })
+                .or_else(|| self.node_transforms.get(&node.id).copied())
                 .unwrap_or([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
 
             // Check if this node has a material override
@@ -2081,10 +2323,10 @@ impl EditorState {
                 idx
             };
 
-            // Build transform matrix from [pos, rot, scale]
+            // Build transform matrix from [pos3, rot_euler_xyz, scale3]
             let pos = Vec3::new(t[0], t[1], t[2]);
-            let rot = engine_math::Quat::from_xyzw(t[3], t[4], t[5], t[6]);
-            let scale = Vec3::new(t[7], t[8], 1.0); // 2D scale for now
+            let rot = engine_math::Quat::from_euler(engine_math::EulerRot::XYZ, t[3], t[4], t[5]);
+            let scale = Vec3::new(t[6], t[7], t[8]);
             let transform = Mat4::from_scale_rotation_translation(scale, rot, pos);
             batches[batch_idx].push(transform);
         }
@@ -2184,9 +2426,20 @@ impl EditorState {
     }
 
     /// Reset editor state to a blank new scene.
+    ///
+    /// Clears the Unity World (all roots) and editor node maps so World and
+    /// hierarchy stay one source of truth (P2.6).
     pub fn new_scene(&mut self) {
-        self.scene_tree = SceneTree::new();
+        let roots = self.world.GetRootGameObjects();
+        for handle in roots {
+            self.world.DestroyImmediate(handle);
+        }
+        self.world.sync_transforms();
+
+        self.scene_tree = SceneTree::empty();
         self.selected_nodes.clear();
+        self.node_to_handle.clear();
+        self.handle_to_node.clear();
         self.node_transforms.clear();
         self.node_render.clear();
         self.node_lights.clear();

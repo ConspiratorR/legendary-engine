@@ -102,12 +102,12 @@ engine-scene       → 自己的 Node/Transform (第三套)
 |----|------|------|
 | P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | 保持 Unity API 不变 — **延后**（大重写） |
 | P2.5 | 弃用 `engine-scene` 中重复 Transform | 全局变换只在 core World 计算 — **延后** |
-| P2.6 | Editor 只依赖 `engine_core::world::World` | 编辑器已持有 `state.world: engine_core::World`；菜单仍另有 ECS `scene_manager` 路径 |
+| P2.6 | Editor 只依赖 `engine_core::world::World` | 视口以 World 为准；命令回写 World；`new_scene` 清空 World + 句柄映射；菜单仍另有 ECS `scene_manager` | 部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
 | P2.8 | 统一 App 入口 | `unity_world` / `unity_world_ref` / `require_unity_world` / `link_unity_scene` ✅ |
 | P2.9 | 渲染消费身份桥 | `render_phase` 合并 `TransformProxy`+`RenderProxy` → `Sprite`（白纹理兜底） ✅ |
 | P2.10 | 编辑器双写场景 | `save_scene_bundle`：编辑器 Scene + `.runtime.json`（SceneData）；`open_scene_file` 优先 SceneData ✅ |
-| P2.11 | 编辑器 Play → SceneRuntime | `UnityPlayHost`：进入 Play 克隆层级，每帧 `SceneRuntime.tick`；停止时销毁 ✅ |
+| P2.11 | 编辑器 Play → SceneRuntime | `UnityPlayHost`：克隆层级 + FixedUpdate 物理步进（Rigidbody→PhysicsWorld）✅ |
 
 ### 风险控制
 1. 全程用 feature flag：`unity-world-primary`（默认 off）
@@ -220,13 +220,13 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 | 9 | Scene 可加载/叠加边界 | ✅ | 编辑器双写 + Play 克隆加载 |
 | 10 | 共享数据资产 | ✅ | `.asset`+GUID、热重载、SceneData AssetRef |
 
-**本分支验收（2026-09）**
+**验收（2026-09）**
 
 - `cargo test -p engine-core` / `cargo test -p engine-editor --test editor_tests` 全绿  
 - 示例：`coroutine_demo`、`runtime_scene_demo`、`unity_gameplay_demo`、`so_asset`  
-- 分支相对 `main` 领先约 17 个提交；合 main 时在仓库根目录执行：  
-  `git checkout main && git merge --no-ff unity-lifecycle-refactor`  
-  （会话沙箱不允许本 agent 切换 main）
+- Unity 主路径：`main`（`unity-lifecycle-refactor` 已合入远程）  
+- 视口权威后续：`p2-viewport-unity-source`  
+- 合视口分支：`git checkout main && git merge --no-ff p2-viewport-unity-source`
 
 ### PR 描述草稿（P5.6，合并时用）
 

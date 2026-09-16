@@ -158,18 +158,21 @@ impl Command for TransformEntityCommand {
         if let Some(t) = state.node_transforms.get_mut(&self.entity_id) {
             *t = self.new_transform;
         }
+        state.apply_node_transform_to_world(self.entity_id);
     }
 
     fn undo(&mut self, state: &mut EditorState) {
         if let Some(t) = state.node_transforms.get_mut(&self.entity_id) {
             *t = self.old_transform;
         }
+        state.apply_node_transform_to_world(self.entity_id);
     }
 
     fn redo(&mut self, state: &mut EditorState) {
         if let Some(t) = state.node_transforms.get_mut(&self.entity_id) {
             *t = self.new_transform;
         }
+        state.apply_node_transform_to_world(self.entity_id);
     }
 
     fn description(&self) -> String {

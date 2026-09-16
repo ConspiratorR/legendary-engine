@@ -418,6 +418,8 @@ app.sync_identity_bridge();
 
 编辑器保存：`EditorState::save_scene_bundle` 写出编辑器 Scene + `<path>.runtime.json`（`SceneData`）；`open_scene_file` 优先识别 `game_objects` 字段。
 
+MonoBehaviour 可进 SceneData：实现 `SerializeProps` / `DeserializeProps`，并 `register_mono_behaviour::<T>()`；保存写 `script_type` + props，加载经全局注册表还原。
+
 编辑器 Play：进入运行时 `build_unity_play_host` 从编辑器 World 克隆层级到 `SceneRuntime`，每帧 `tick_unity_play_host` 走 Unity 生命周期；停止时丢弃。
 
 ## 与 Unity 的对应关系
@@ -452,7 +454,7 @@ app.sync_identity_bridge();
 2. **P2.a 身份桥** — ✅；**P2.b 第一切片**：全量自动链接 + App 统一入口 ✅（完整存储合并仍延后）
 3. **P3 资产深化** — ✅ 热重载（App/编辑器轮询）、AssetRef 场景引用
 4. **P4 脚本体验** — ✅ WaitUntil / WaitRealtime / StopCoroutineByName / coroutine_demo / unity_gameplay_demo
-5. **P5 验收合并** — 分支验收已过；合 main 待用户指令
+5. **P5 验收合并** — Unity 主路径已在 main；视口权威见 `p2-viewport-unity-source`
 
 历史清单（部分已在 roadmap 细化）：
 - SetActive 立即回调（可选模式）
@@ -476,7 +478,7 @@ app.sync_identity_bridge();
 | PlayerLoop | `crates/engine-core/src/player_loop.rs` |
 | 编辑器 Scene 桥 | `EditorState::to_core_scene_data` / `import_core_scene_json`（`engine-editor/src/state.rs`） |
 
-编辑器与运行时共用同一套 `SceneData` JSON：
+编辑器 3D 视口：`build_scene` 优先读 Unity World 的 Transform；Play 时 `tick_unity_play_host` 全层级镜像回编辑器 World，并 `sync_node_transforms_from_world` 更新快照。
 
 ```rust
 // 编辑器导出 → 运行时加载

@@ -30,6 +30,80 @@ use crate::context::Context;
 use crate::events::*;
 use crate::gameobject::GameObjectHandle;
 use std::any::Any;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+/// Short scene-facing type name (last path segment), e.g. `Player` for `my_crate::Player`.
+pub fn short_type_name<T: ?Sized>(full: &str) -> String {
+    let _ = std::any::type_name::<T>();
+    full.rsplit("::").next().unwrap_or(full).to_string()
+}
+
+type MonoFactory = Box<dyn Fn() -> Box<dyn MonoBehaviour> + Send + Sync>;
+
+/// Process-wide registry mapping scene type names → MonoBehaviour factories.
+///
+/// Used by SceneData save/load so scripts can round-trip without inventing
+/// a full reflection system (Unity: script class name on the component).
+pub struct MonoBehaviourRegistry {
+    factories: HashMap<String, MonoFactory>,
+}
+
+impl Default for MonoBehaviourRegistry {
+    fn default() -> Self {
+        Self {
+            factories: HashMap::new(),
+        }
+    }
+}
+
+impl MonoBehaviourRegistry {
+    pub fn global() -> &'static Mutex<MonoBehaviourRegistry> {
+        static REG: OnceLock<Mutex<MonoBehaviourRegistry>> = OnceLock::new();
+        REG.get_or_init(|| Mutex::new(MonoBehaviourRegistry::default()))
+    }
+
+    /// Register a script type under `name` (prefer the short class name).
+    pub fn register<N, F>(&mut self, name: N, factory: F)
+    where
+        N: Into<String>,
+        F: Fn() -> Box<dyn MonoBehaviour> + Send + Sync + 'static,
+    {
+        self.factories.insert(name.into(), Box::new(factory));
+    }
+
+    pub fn create(&self, name: &str) -> Option<Box<dyn MonoBehaviour>> {
+        self.factories.get(name).map(|f| f())
+    }
+
+    pub fn contains(&self, name: &str) -> bool {
+        self.factories.contains_key(name)
+    }
+
+    pub fn len(&self) -> usize {
+        self.factories.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.factories.is_empty()
+    }
+}
+
+/// Register a MonoBehaviour type in the global registry (`T: Default`).
+///
+/// Keyed by [`std::any::type_name`] so SceneData `type_name` matches save/load.
+pub fn register_mono_behaviour<T>()
+where
+    T: MonoBehaviour + Default + 'static,
+{
+    let name = std::any::type_name::<T>().to_string();
+    MonoBehaviourRegistry::global()
+        .lock()
+        .expect("MonoBehaviourRegistry")
+        .register(name, || -> Box<dyn MonoBehaviour> {
+            Box::new(T::default())
+        });
+}
 
 /// Handle to a running coroutine (matches Unity's `Coroutine` class).
 ///
@@ -88,6 +162,25 @@ pub trait MonoBehaviour: Behaviour {
     fn TypeName(&self) -> &str {
         std::any::type_name_of_val(self)
     }
+
+    /// Short name used in SceneData (last path segment of [`MonoBehaviour::TypeName`]).
+    fn SceneName(&self) -> &str {
+        // type_name_of_val is a full path; we cannot return a temporary String from
+        // a &str API, so split in place is impossible — override for stable names.
+        // Default uses a leaked-free approach: store nothing; callers use
+        // [`short_type_name`] via SceneNameFrom helper below when needed.
+        // For trait default we fall back to TypeName (full path) which is
+        // still stable across loads in the same binary.
+        self.TypeName()
+    }
+
+    /// Optional JSON properties for SceneData save (default: none).
+    fn SerializeProps(&self) -> Option<serde_json::Value> {
+        None
+    }
+
+    /// Restore properties from SceneData (default: no-op).
+    fn DeserializeProps(&mut self, _props: &serde_json::Value) {}
 
     /// Whether to use GUI layout (matches `MonoBehaviour.useGUILayout`).
     fn UseGUILayout(&self) -> bool {
@@ -481,8 +574,13 @@ pub struct MonoBehaviourHolder {
 impl MonoBehaviourHolder {
     /// Create a new holder wrapping a MonoBehaviour.
     pub fn new(mono: impl MonoBehaviour + 'static) -> Self {
+        Self::from_boxed(Box::new(mono))
+    }
+
+    /// Create a holder from a boxed trait object.
+    pub fn from_boxed(mono: Box<dyn MonoBehaviour>) -> Self {
         Self {
-            inner: Box::new(mono),
+            inner: mono,
             enabled: true,
             started: false,
         }

@@ -29,6 +29,115 @@ fn unity_play_host_clones_hierarchy_and_ticks() {
 }
 
 #[test]
+fn sync_node_transforms_from_world_updates_snapshots() {
+    use engine_core::transform::Transform;
+
+    let mut state = EditorState::new();
+    let root = state.world.GetRootGameObjects()[0];
+    // Ensure handle maps exist for the demo hierarchy
+    assert!(state.GetNodeId(root).is_some());
+
+    if let Some(t) = state.world.GetTransformMut(root) {
+        t.SetLocalPosition(engine_math::Vec3::new(42.0, 7.0, 1.5));
+    }
+    state.sync_node_transforms_from_world();
+
+    let node_id = state.GetNodeId(root).expect("node id");
+    let t = state.node_transforms.get(&node_id).expect("snapshot");
+    assert!((t[0] - 42.0).abs() < 1e-4);
+    assert!((t[1] - 7.0).abs() < 1e-4);
+    assert!((t[2] - 1.5).abs() < 1e-4);
+
+    // build_scene path: World wins over stale snapshot
+    if let Some(handle) = state.GetHandle(node_id) {
+        if let Some(wt) = state.world.GetTransform(handle) {
+            assert!((wt.LocalPosition().x - 42.0).abs() < 1e-4);
+        }
+    }
+    let _ = Transform::default();
+}
+
+#[test]
+fn apply_node_transform_to_world_writes_local_pose() {
+    let mut state = EditorState::new();
+    let root = state.world.GetRootGameObjects()[0];
+    let node_id = state.GetNodeId(root).expect("node id");
+
+    // Snapshot layout: [pos3, rot_euler_xyz, scale3]
+    let new_t = [3.0, 4.0, 5.0, 0.0, 0.0, 0.0, 2.0, 3.0, 4.0];
+    state.node_transforms.insert(node_id, new_t);
+    state.apply_node_transform_to_world(node_id);
+
+    let wt = state.world.GetTransform(root).unwrap();
+    let p = wt.LocalPosition();
+    assert!((p.x - 3.0).abs() < 1e-4);
+    assert!((p.y - 4.0).abs() < 1e-4);
+    assert!((p.z - 5.0).abs() < 1e-4);
+    let s = wt.LocalScale();
+    assert!((s.x - 2.0).abs() < 1e-4);
+    assert!((s.y - 3.0).abs() < 1e-4);
+    assert!((s.z - 4.0).abs() < 1e-4);
+}
+
+#[test]
+fn new_scene_clears_unity_world_and_maps() {
+    let mut state = EditorState::new();
+    assert!(!state.world.GetRootGameObjects().is_empty());
+
+    state.new_scene();
+
+    assert!(state.world.GetRootGameObjects().is_empty());
+    assert!(state.scene_tree.nodes.is_empty());
+    assert!(state.node_to_handle.is_empty());
+    assert!(state.handle_to_node.is_empty());
+    assert!(state.node_transforms.is_empty());
+}
+
+#[test]
+fn unity_play_host_physics_falls_with_gravity() {
+    use engine_core::components::{Rigidbody, SphereCollider};
+
+    let mut state = EditorState::new();
+    state.new_scene();
+    let ball = state.world.CreateGameObject("Ball");
+    state.world.AddComponent(
+        ball,
+        Rigidbody {
+            mass: 1.0,
+            use_gravity: true,
+            is_kinematic: false,
+            ..Default::default()
+        },
+    );
+    state.world.AddComponent(ball, SphereCollider::default());
+    if let Some(t) = state.world.GetTransformMut(ball) {
+        t.SetLocalPosition(engine_math::Vec3::new(0.0, 10.0, 0.0));
+    }
+    state.world.sync_transforms();
+
+    let mut host = state.build_unity_play_host();
+    // Run several frames with enough delta for FixedUpdate steps (fixed=0.02)
+    for _ in 0..30 {
+        state.tick_unity_play_host(&mut host, 0.05);
+    }
+
+    let runtime_ball = host.runtime.world.Find("Ball").expect("Ball in play world");
+    let y = host
+        .runtime
+        .world
+        .GetTransform(runtime_ball)
+        .unwrap()
+        .Position()
+        .y;
+    assert!(
+        y < 10.0,
+        "gravity should lower ball y; got {y} (body_count={})",
+        host.physics.body_count
+    );
+    assert!(host.physics.body_count >= 1);
+}
+
+#[test]
 fn unity_play_host_clones_common_components() {
     use engine_core::components::{AudioSource, Light, LightType, Rigidbody, ScriptBehaviour};
 
