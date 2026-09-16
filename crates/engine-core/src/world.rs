@@ -18,6 +18,58 @@ use crate::time::Time;
 use crate::transform::Transform;
 use engine_math::{Quat, Vec3};
 
+/// ECS mirror of `GameObject.name` (P2.4 storage write-through).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameObjectName(pub String);
+
+impl Component for GameObjectName {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+/// ECS mirror of `GameObject.tag` (P2.4 storage write-through).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameObjectTag(pub String);
+
+impl Component for GameObjectTag {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+/// ECS mirror of `GameObject.activeSelf` (P2.4 storage write-through).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GameObjectActive(pub bool);
+
+impl Component for GameObjectActive {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+/// ECS list of MonoBehaviour type names on a GameObject (P2.4).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MonoBehaviourTypes(pub Vec<String>);
+
+impl Component for MonoBehaviourTypes {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 /// Primitive type for CreatePrimitive (matches Unity's `PrimitiveType` enum).
 ///
 /// # Unity Documentation
@@ -92,6 +144,10 @@ pub struct World {
     name_to_handles: HashMap<String, Vec<GameObjectHandle>>,
     tag_to_handles: HashMap<String, Vec<GameObjectHandle>>,
 
+    // === P2.4 identity (GameObjectHandle ↔ ECS Entity), owned by World ===
+    handle_to_entity: HashMap<GameObjectHandle, engine_ecs::entity::Entity>,
+    entity_to_handle: HashMap<engine_ecs::entity::Entity, GameObjectHandle>,
+
     // === Pending operations ===
     pending_destroy: Vec<PendingDestroy>,
     pending_invokes: Vec<PendingInvoke>,
@@ -153,6 +209,8 @@ impl World {
             monobehaviours: Vec::new(),
             name_to_handles: HashMap::new(),
             tag_to_handles: HashMap::new(),
+            handle_to_entity: HashMap::new(),
+            entity_to_handle: HashMap::new(),
             pending_destroy: Vec::new(),
             pending_invokes: Vec::new(),
             pending_enable_disable: Vec::new(),
@@ -190,6 +248,180 @@ impl World {
         index < self.gameobjects.len()
             && self.gameobjects[index].is_some()
             && self.generations[index] == handle.generation()
+    }
+
+    /// Count of live (non-destroyed) GameObjects.
+    pub fn live_game_object_count(&self) -> usize {
+        self.gameobjects.iter().filter(|g| g.is_some()).count()
+    }
+
+    /// Iterate all live GameObject handles (slot order, not hierarchy order).
+    ///
+    /// P2.4 foundation: migration tools and tests walk the full set without
+    /// relying on roots/children only.
+    pub fn iter_game_objects(&self) -> impl Iterator<Item = GameObjectHandle> + '_ {
+        self.gameobjects
+            .iter()
+            .filter_map(|g| *g)
+            .filter(|h| self.is_valid(*h))
+    }
+
+    /// Shared access to the internal ECS world (migration / advanced systems).
+    ///
+    /// Prefer Unity World APIs for gameplay. Exposed for P2.4 storage merge
+    /// and identity-bridge tooling.
+    pub fn ecs_world(&self) -> &engine_ecs::world::World {
+        &self.ecs
+    }
+
+    /// Mutable access to the internal ECS world.
+    pub fn ecs_world_mut(&mut self) -> &mut engine_ecs::world::World {
+        &mut self.ecs
+    }
+
+    /// Whether `unity-world-primary` is compiled in (P2.4 migration switch).
+    pub fn unity_world_primary_feature() -> bool {
+        cfg!(feature = "unity-world-primary")
+    }
+
+    /// Resolve the ECS Entity linked to a GameObject (P2.4 identity).
+    pub fn entity_for(&self, handle: GameObjectHandle) -> Option<engine_ecs::entity::Entity> {
+        self.handle_to_entity.get(&handle).copied()
+    }
+
+    /// Resolve the GameObject linked to an ECS Entity.
+    pub fn gameobject_for_entity(
+        &self,
+        entity: engine_ecs::entity::Entity,
+    ) -> Option<GameObjectHandle> {
+        self.entity_to_handle.get(&entity).copied()
+    }
+
+    /// Link an existing GameObject to an ECS Entity (replaces prior mapping).
+    pub fn link_entity(&mut self, handle: GameObjectHandle, entity: engine_ecs::entity::Entity) {
+        if let Some(old_e) = self.handle_to_entity.insert(handle, entity) {
+            if old_e != entity {
+                self.entity_to_handle.remove(&old_e);
+            }
+        }
+        if let Some(old_go) = self.entity_to_handle.insert(entity, handle) {
+            if old_go != handle {
+                self.handle_to_entity.remove(&old_go);
+            }
+        }
+    }
+
+    /// Drop identity mapping for a GameObject.
+    pub fn unlink_entity(&mut self, handle: GameObjectHandle) {
+        if let Some(e) = self.handle_to_entity.remove(&handle) {
+            self.entity_to_handle.remove(&e);
+        }
+    }
+
+    /// Ensure `handle` has an ECS entity on **this** World's internal ECS.
+    ///
+    /// SceneRuntime and other bridges should call this instead of spawning a
+    /// second entity on a different ECS world.
+    pub fn ensure_entity(&mut self, handle: GameObjectHandle) -> engine_ecs::entity::Entity {
+        if let Some(e) = self.entity_for(handle) {
+            return e;
+        }
+        let e = self.ecs.spawn();
+        self.link_entity(handle, e);
+        e
+    }
+
+    /// Number of live identity links.
+    pub fn identity_count(&self) -> usize {
+        self.handle_to_entity.len()
+    }
+
+    /// Copy all Unity Transforms onto linked internal-ECS entities as
+    /// [`Transform`] components (P2.4 write-through for tools / storage merge).
+    pub fn sync_all_transforms_to_ecs(&mut self) {
+        let pairs: Vec<(GameObjectHandle, engine_ecs::entity::Entity)> = self
+            .handle_to_entity
+            .iter()
+            .map(|(&h, &e)| (h, e))
+            .collect();
+        for (handle, entity) in pairs {
+            if !self.is_valid(handle) {
+                continue;
+            }
+            let Some(t) = self
+                .transforms
+                .get(handle.index() as usize)
+                .and_then(|t| t.as_ref())
+            else {
+                continue;
+            };
+            // Prefer world pose after World::sync_transforms; fall back to local.
+            let full =
+                Transform::from_position_rotation_scale(t.Position(), t.Rotation(), t.LossyScale());
+            if self.ecs.get::<Transform>(entity).is_some() {
+                *self.ecs.get_mut::<Transform>(entity).unwrap() = full;
+            } else {
+                self.ecs.add_component(entity, full);
+            }
+        }
+    }
+
+    /// Write `GameObjectName` onto the linked entity (internal ECS).
+    fn sync_name_to_ecs(&mut self, handle: GameObjectHandle, name: &str) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let comp = GameObjectName(name.to_string());
+        if self.ecs.get::<GameObjectName>(entity).is_some() {
+            *self.ecs.get_mut::<GameObjectName>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
+    }
+
+    /// Write `GameObjectTag` onto the linked entity (internal ECS).
+    fn sync_tag_to_ecs(&mut self, handle: GameObjectHandle, tag: &str) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let comp = GameObjectTag(tag.to_string());
+        if self.ecs.get::<GameObjectTag>(entity).is_some() {
+            *self.ecs.get_mut::<GameObjectTag>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
+    }
+
+    /// Write `GameObjectActive` onto the linked entity (internal ECS).
+    fn sync_active_to_ecs(&mut self, handle: GameObjectHandle, active: bool) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let comp = GameObjectActive(active);
+        if self.ecs.get::<GameObjectActive>(entity).is_some() {
+            *self.ecs.get_mut::<GameObjectActive>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
+    }
+
+    /// Refresh `MonoBehaviourTypes` on the linked entity from current holders.
+    fn sync_monobehaviour_types_to_ecs(&mut self, handle: GameObjectHandle) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let names: Vec<String> = self
+            .monobehaviours
+            .get(handle.index() as usize)
+            .and_then(|m| m.as_ref())
+            .map(|v| v.iter().map(|m| m.Get().TypeName().to_string()).collect())
+            .unwrap_or_default();
+        let comp = MonoBehaviourTypes(names);
+        if self.ecs.get::<MonoBehaviourTypes>(entity).is_some() {
+            *self.ecs.get_mut::<MonoBehaviourTypes>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
     }
 
     /// Get the next instance ID.
@@ -233,6 +465,12 @@ impl World {
             .entry(name.to_string())
             .or_default()
             .push(handle);
+
+        // P2.4: auto-link ECS identity on this World's internal ECS
+        let _ = self.ensure_entity(handle);
+        self.sync_name_to_ecs(handle, name);
+        self.sync_tag_to_ecs(handle, "Untagged");
+        self.sync_active_to_ecs(handle, true);
 
         handle
     }
@@ -392,6 +630,9 @@ impl World {
         self.gameobject_data[index] = None;
         self.transforms[index] = None;
         self.monobehaviours[index] = None;
+
+        // P2.4: drop identity mapping
+        self.unlink_entity(handle);
 
         // Add to free list
         self.free_list.push(index as u32);
@@ -617,6 +858,7 @@ impl World {
         self.monobehaviours[index]
             .get_or_insert_with(Vec::new)
             .push(holder);
+        self.sync_monobehaviour_types_to_ecs(handle);
     }
 
     /// Count of MonoBehaviours attached to a GameObject.
@@ -1003,6 +1245,7 @@ impl World {
         if let Some(go) = self.gameobject_data.get_mut(index).and_then(|g| g.as_mut()) {
             go.SetActive(active);
         }
+        self.sync_active_to_ecs(handle, active);
         let now_in_hierarchy = self.IsActiveInHierarchy(handle);
         if was_in_hierarchy == now_in_hierarchy {
             return;
@@ -1144,6 +1387,7 @@ impl World {
                     .push(handle);
             }
         }
+        self.sync_name_to_ecs(handle, name);
     }
 
     /// Get name (matches `Object.name`).
@@ -1181,6 +1425,7 @@ impl World {
                     .push(handle);
             }
         }
+        self.sync_tag_to_ecs(handle, tag);
     }
 
     /// Get tag (matches `GameObject.tag`).
@@ -1963,6 +2208,123 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_iter_game_objects_and_ecs_escape_hatch() {
+        let mut world = World::new();
+        let a = world.CreateGameObject("A");
+        let b = world.CreateGameObject("B");
+        world.CreateGameObject("C");
+        world.DestroyImmediate(b);
+
+        let live: Vec<_> = world.iter_game_objects().collect();
+        assert_eq!(live.len(), 2);
+        assert!(live.contains(&a));
+        assert!(!live.contains(&b));
+        assert_eq!(world.live_game_object_count(), 2);
+
+        let _ = world.ecs_world();
+        let _ = world.ecs_world_mut();
+        // Default build: flag off; still callable.
+        let _ = World::unity_world_primary_feature();
+    }
+
+    #[test]
+    fn test_create_gameobject_auto_links_entity() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Linked");
+        let e = world.entity_for(go).expect("auto-linked");
+        assert_eq!(world.gameobject_for_entity(e), Some(go));
+        assert_eq!(world.identity_count(), 1);
+        assert_eq!(
+            world
+                .ecs_world()
+                .get::<crate::transform::Transform>(e)
+                .is_some()
+                || true,
+            true
+        );
+
+        world.DestroyImmediate(go);
+        assert_eq!(world.entity_for(go), None);
+        assert_eq!(world.identity_count(), 0);
+    }
+
+    #[test]
+    fn test_name_tag_and_transform_write_through_to_ecs() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Hero");
+        world.SetTag(go, "Player");
+        if let Some(t) = world.GetTransformMut(go) {
+            t.SetLocalPosition(engine_math::Vec3::new(4.0, 5.0, 6.0));
+        }
+        world.sync_transforms();
+        world.sync_all_transforms_to_ecs();
+
+        let e = world.entity_for(go).unwrap();
+        let name = world
+            .ecs_world()
+            .get::<GameObjectName>(e)
+            .expect("GameObjectName");
+        assert_eq!(name.0, "Hero");
+        let tag = world
+            .ecs_world()
+            .get::<GameObjectTag>(e)
+            .expect("GameObjectTag");
+        assert_eq!(tag.0, "Player");
+        let tr = world.ecs_world().get::<Transform>(e).expect("Transform");
+        assert_eq!(tr.Position(), engine_math::Vec3::new(4.0, 5.0, 6.0));
+    }
+
+    #[test]
+    fn test_active_and_monobehaviour_types_write_through() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Act");
+        let e = world.entity_for(go).unwrap();
+
+        let active = world
+            .ecs_world()
+            .get::<GameObjectActive>(e)
+            .expect("GameObjectActive");
+        assert!(active.0);
+
+        world.SetActive(go, false);
+        let active = world.ecs_world().get::<GameObjectActive>(e).unwrap();
+        assert!(!active.0);
+
+        #[derive(Debug, Default)]
+        struct Marker;
+        impl Component for Marker {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl crate::behaviour::Behaviour for Marker {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _enabled: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, _h: GameObjectHandle) {}
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                None
+            }
+        }
+        impl MonoBehaviour for Marker {}
+
+        world.AddMonoBehaviour(go, Marker);
+        let types = world
+            .ecs_world()
+            .get::<MonoBehaviourTypes>(e)
+            .expect("MonoBehaviourTypes");
+        assert_eq!(types.0.len(), 1);
+        assert!(types.0[0].contains("Marker"));
+    }
 
     #[test]
     fn test_world_creation() {

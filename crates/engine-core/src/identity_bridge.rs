@@ -25,6 +25,7 @@ use engine_render::sprite::Sprite;
 
 use crate::components::{Material, SpriteRenderer};
 use crate::gameobject::GameObjectHandle;
+use crate::transform::Transform as CoreTransform;
 use crate::world::World as UnityWorld;
 
 /// ECS proxy of a Unity object's transform (updated by [`IdentityBridge::sync_transforms`]).
@@ -160,7 +161,12 @@ impl IdentityBridge {
         }
     }
 
-    /// Copy Unity Transform into ECS `TransformProxy` for each linked pair.
+    /// Copy Unity Transform into ECS `TransformProxy` + full [`CoreTransform`]
+    /// for each linked pair.
+    ///
+    /// Physics and other ECS systems consume `Transform` (world pose after
+    /// `World::sync_transforms`). `TransformProxy` remains the lightweight
+    /// render-facing view (P2.4 write-through).
     pub fn sync_transforms(&self, unity: &UnityWorld, ecs: &mut EcsWorld) {
         for (&go, &entity) in &self.go_to_entity {
             if !unity.is_valid(go) {
@@ -169,16 +175,28 @@ impl IdentityBridge {
             let Some(t) = unity.GetTransform(go) else {
                 continue;
             };
+            let world_pos = t.Position();
+            let world_rot = t.Rotation();
+            let world_scale = t.LossyScale();
+
             let proxy = TransformProxy {
-                position: t.Position(),
-                rotation: t.Rotation(),
-                scale: t.LossyScale(),
+                position: world_pos,
+                rotation: world_rot,
+                scale: world_scale,
             };
-            // add or update
             if ecs.get::<TransformProxy>(entity).is_some() {
                 *ecs.get_mut::<TransformProxy>(entity).unwrap() = proxy;
             } else {
                 ecs.add_component(entity, proxy);
+            }
+
+            // Full Transform for physics / gameplay systems on the ECS side.
+            let full =
+                CoreTransform::from_position_rotation_scale(world_pos, world_rot, world_scale);
+            if ecs.get::<CoreTransform>(entity).is_some() {
+                *ecs.get_mut::<CoreTransform>(entity).unwrap() = full;
+            } else {
+                ecs.add_component(entity, full);
             }
         }
     }
@@ -375,6 +393,28 @@ mod tests {
             ecs.get::<TransformProxy>(bridge.entity_for(go).unwrap())
                 .is_some()
         );
+    }
+
+    #[test]
+    fn test_sync_writes_full_transform_for_physics() {
+        let mut unity = UnityWorld::new();
+        let go = unity.CreateGameObject("Body");
+        if let Some(t) = unity.GetTransformMut(go) {
+            t.SetLocalPosition(engine_math::Vec3::new(1.0, 2.0, 3.0));
+        }
+        unity.sync_transforms();
+
+        let mut ecs = EcsWorld::new();
+        let mut bridge = IdentityBridge::new();
+        bridge.sync_all(&unity, &mut ecs);
+
+        let e = bridge.entity_for(go).unwrap();
+        let full = ecs
+            .get::<crate::transform::Transform>(e)
+            .expect("Transform");
+        assert_eq!(full.Position(), engine_math::Vec3::new(1.0, 2.0, 3.0));
+        let proxy = ecs.get::<TransformProxy>(e).unwrap();
+        assert_eq!(proxy.position, engine_math::Vec3::new(1.0, 2.0, 3.0));
     }
 
     #[test]
