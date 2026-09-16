@@ -100,7 +100,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 **P2.b — 存储合并（后做，大）**
 | ID | 任务 | 说明 |
 |----|------|------|
-| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | 切片：feature flag + 枚举/ECS 访问器；身份桥 **写入完整 Transform**（物理可消费）；完整存储迁移仍后续 |
+| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | 切片：flag+枚举；World 自持 handle↔entity（创建/销毁自动链）；身份桥写完整 Transform；存储数组迁移仍后续 |
 | P2.5 | 弃用 `engine-scene` 中重复 Transform | 全局变换只在 core World 计算 — **延后** |
 | P2.6 | Editor 只依赖 `engine_core::world::World` | 视口以 World 为准；命令回写 World；`new_scene` 清空 World + 句柄映射；菜单仍另有 ECS `scene_manager` | 部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |

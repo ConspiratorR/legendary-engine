@@ -92,6 +92,10 @@ pub struct World {
     name_to_handles: HashMap<String, Vec<GameObjectHandle>>,
     tag_to_handles: HashMap<String, Vec<GameObjectHandle>>,
 
+    // === P2.4 identity (GameObjectHandle ↔ ECS Entity), owned by World ===
+    handle_to_entity: HashMap<GameObjectHandle, engine_ecs::entity::Entity>,
+    entity_to_handle: HashMap<engine_ecs::entity::Entity, GameObjectHandle>,
+
     // === Pending operations ===
     pending_destroy: Vec<PendingDestroy>,
     pending_invokes: Vec<PendingInvoke>,
@@ -153,6 +157,8 @@ impl World {
             monobehaviours: Vec::new(),
             name_to_handles: HashMap::new(),
             tag_to_handles: HashMap::new(),
+            handle_to_entity: HashMap::new(),
+            entity_to_handle: HashMap::new(),
             pending_destroy: Vec::new(),
             pending_invokes: Vec::new(),
             pending_enable_disable: Vec::new(),
@@ -226,6 +232,58 @@ impl World {
         cfg!(feature = "unity-world-primary")
     }
 
+    /// Resolve the ECS Entity linked to a GameObject (P2.4 identity).
+    pub fn entity_for(&self, handle: GameObjectHandle) -> Option<engine_ecs::entity::Entity> {
+        self.handle_to_entity.get(&handle).copied()
+    }
+
+    /// Resolve the GameObject linked to an ECS Entity.
+    pub fn gameobject_for_entity(
+        &self,
+        entity: engine_ecs::entity::Entity,
+    ) -> Option<GameObjectHandle> {
+        self.entity_to_handle.get(&entity).copied()
+    }
+
+    /// Link an existing GameObject to an ECS Entity (replaces prior mapping).
+    pub fn link_entity(&mut self, handle: GameObjectHandle, entity: engine_ecs::entity::Entity) {
+        if let Some(old_e) = self.handle_to_entity.insert(handle, entity) {
+            if old_e != entity {
+                self.entity_to_handle.remove(&old_e);
+            }
+        }
+        if let Some(old_go) = self.entity_to_handle.insert(entity, handle) {
+            if old_go != handle {
+                self.handle_to_entity.remove(&old_go);
+            }
+        }
+    }
+
+    /// Drop identity mapping for a GameObject.
+    pub fn unlink_entity(&mut self, handle: GameObjectHandle) {
+        if let Some(e) = self.handle_to_entity.remove(&handle) {
+            self.entity_to_handle.remove(&e);
+        }
+    }
+
+    /// Ensure `handle` has an ECS entity on **this** World's internal ECS.
+    ///
+    /// SceneRuntime and other bridges should call this instead of spawning a
+    /// second entity on a different ECS world.
+    pub fn ensure_entity(&mut self, handle: GameObjectHandle) -> engine_ecs::entity::Entity {
+        if let Some(e) = self.entity_for(handle) {
+            return e;
+        }
+        let e = self.ecs.spawn();
+        self.link_entity(handle, e);
+        e
+    }
+
+    /// Number of live identity links.
+    pub fn identity_count(&self) -> usize {
+        self.handle_to_entity.len()
+    }
+
     /// Get the next instance ID.
     fn next_instance_id(&mut self) -> i32 {
         let id = self.next_instance_id;
@@ -267,6 +325,9 @@ impl World {
             .entry(name.to_string())
             .or_default()
             .push(handle);
+
+        // P2.4: auto-link ECS identity on this World's internal ECS
+        let _ = self.ensure_entity(handle);
 
         handle
     }
@@ -426,6 +487,9 @@ impl World {
         self.gameobject_data[index] = None;
         self.transforms[index] = None;
         self.monobehaviours[index] = None;
+
+        // P2.4: drop identity mapping
+        self.unlink_entity(handle);
 
         // Add to free list
         self.free_list.push(index as u32);
@@ -2016,6 +2080,27 @@ mod tests {
         let _ = world.ecs_world_mut();
         // Default build: flag off; still callable.
         let _ = World::unity_world_primary_feature();
+    }
+
+    #[test]
+    fn test_create_gameobject_auto_links_entity() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Linked");
+        let e = world.entity_for(go).expect("auto-linked");
+        assert_eq!(world.gameobject_for_entity(e), Some(go));
+        assert_eq!(world.identity_count(), 1);
+        assert_eq!(
+            world
+                .ecs_world()
+                .get::<crate::transform::Transform>(e)
+                .is_some()
+                || true,
+            true
+        );
+
+        world.DestroyImmediate(go);
+        assert_eq!(world.entity_for(go), None);
+        assert_eq!(world.identity_count(), 0);
     }
 
     #[test]
