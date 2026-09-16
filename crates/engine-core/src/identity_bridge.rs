@@ -139,6 +139,23 @@ impl IdentityBridge {
         }
     }
 
+    /// Link every valid GameObject in the Unity hierarchy that is not yet mapped.
+    ///
+    /// Walks roots and all descendants so scene loads / editor trees become
+    /// bridge-visible without calling `spawn_linked` per object.
+    pub fn ensure_all_linked(&mut self, unity: &UnityWorld, ecs: &mut EcsWorld) {
+        let mut stack: Vec<GameObjectHandle> = unity.GetRootGameObjects();
+        while let Some(go) = stack.pop() {
+            if !unity.is_valid(go) {
+                continue;
+            }
+            if !self.is_linked(go) {
+                self.ensure_entity(go, ecs);
+            }
+            stack.extend(unity.GetChildren(go));
+        }
+    }
+
     /// Copy Unity Transform into ECS `TransformProxy` for each linked pair.
     pub fn sync_transforms(&self, unity: &UnityWorld, ecs: &mut EcsWorld) {
         for (&go, &entity) in &self.go_to_entity {
@@ -191,9 +208,10 @@ impl IdentityBridge {
         }
     }
 
-    /// Run all sync steps (prune + transforms + render proxies).
+    /// Run all sync steps (prune + auto-link + transforms + render proxies).
     pub fn sync_all(&mut self, unity: &UnityWorld, ecs: &mut EcsWorld) {
         self.prune_invalid(unity);
+        self.ensure_all_linked(unity, ecs);
         self.sync_transforms(unity, ecs);
         self.sync_render_proxies(unity, ecs);
     }
@@ -281,5 +299,42 @@ mod tests {
         unity.DestroyImmediate(go);
         bridge.prune_invalid(&unity);
         assert!(bridge.is_empty());
+    }
+
+    #[test]
+    fn test_ensure_all_linked_walks_hierarchy() {
+        let mut unity = UnityWorld::new();
+        let mut ecs = EcsWorld::new();
+        let mut bridge = IdentityBridge::new();
+
+        let root = unity.CreateGameObject("Root");
+        let child = unity.CreateGameObject("Child");
+        unity.SetParent(child, Some(root));
+        let orphan = unity.CreateGameObject("Orphan");
+
+        bridge.ensure_all_linked(&unity, &mut ecs);
+        assert_eq!(bridge.len(), 3);
+        assert!(bridge.entity_for(root).is_some());
+        assert!(bridge.entity_for(child).is_some());
+        assert!(bridge.entity_for(orphan).is_some());
+
+        bridge.ensure_all_linked(&unity, &mut ecs);
+        assert_eq!(bridge.len(), 3);
+    }
+
+    #[test]
+    fn test_sync_all_auto_links_unlinked() {
+        let mut unity = UnityWorld::new();
+        let mut ecs = EcsWorld::new();
+        let mut bridge = IdentityBridge::new();
+
+        let go = unity.CreateGameObject("Auto");
+        assert!(bridge.is_empty());
+        bridge.sync_all(&unity, &mut ecs);
+        assert!(bridge.is_linked(go));
+        assert!(
+            ecs.get::<TransformProxy>(bridge.entity_for(go).unwrap())
+                .is_some()
+        );
     }
 }

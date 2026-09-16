@@ -117,3 +117,45 @@ fn test_scene_runtime_plugin_includes_bridge() {
     assert!(app.scene_runtime().is_some());
     assert!(app.unity_world().is_some());
 }
+
+#[test]
+fn test_run_with_lifecycle_auto_links_create_gameobject() {
+    let mut builder = AppBuilder::new();
+    builder.add_plugin(CorePlugins);
+    let mut app = builder.build();
+
+    // Create without spawn_linked — sync should still link
+    let go = app.unity_world().unwrap().CreateGameObject("Unlinked");
+    assert_eq!(app.entity_for_gameobject(go), None);
+
+    app.run_with_lifecycle(0.016);
+
+    let entity = app.entity_for_gameobject(go).expect("auto-linked");
+    assert_eq!(app.gameobject_for_entity(entity), Some(go));
+    let proxy = app.world.get::<TransformProxy>(entity).unwrap();
+    assert_eq!(proxy.position, engine_math::Vec3::ZERO);
+}
+
+#[test]
+fn test_link_unity_scene_after_bulk_create() {
+    let mut builder = AppBuilder::new();
+    builder.add_plugin(CorePlugins);
+    let mut app = builder.build();
+
+    {
+        let world = app.unity_world().unwrap();
+        let a = world.CreateGameObject("A");
+        let b = world.CreateGameObject("B");
+        world.SetParent(b, Some(a));
+    }
+    app.link_unity_scene();
+    assert_eq!(app.scene_runtime().unwrap().bridge.len(), 2);
+}
+
+#[test]
+fn test_require_unity_world_error_without_plugin() {
+    let mut app = AppBuilder::new().build();
+    let err = app.require_unity_world().unwrap_err();
+    assert!(err.contains("SceneRuntime"));
+    assert!(app.unity_world_ref().is_none());
+}

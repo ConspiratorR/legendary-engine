@@ -82,6 +82,7 @@
 - **协程** — `Wait` / `WaitRealtime` / `WaitFixedUpdate` / `WaitUntil` / `WaitWhile`；按 id 或名停止
 - **ScriptableObject 资产** — `.asset` + `.meta` GUID、热重载、`AssetRef`
 - **示例** — `coroutine_demo`：`cargo run -p engine-core --example coroutine_demo`
+- **身份桥** — 全量 auto-link、`TransformProxy`/`RenderProxy`、`require_unity_world`
 
 ### 9. 发布 & 生态 (阶段 9)
 - **CI/CD** — GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵)

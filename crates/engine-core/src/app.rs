@@ -553,6 +553,30 @@ impl App {
             .map(|rt| &mut rt.world)
     }
 
+    /// Shared reference to the Unity World (primary game-object API).
+    pub fn unity_world_ref(&self) -> Option<&crate::world::World> {
+        self.world
+            .get_resource::<crate::scene_runtime::SceneRuntime>()
+            .map(|rt| &rt.world)
+    }
+
+    /// Mutable Unity World, or a clear error if SceneRuntime is missing.
+    ///
+    /// Preferred over `expect` in gameplay / editor bridges.
+    pub fn require_unity_world(&mut self) -> Result<&mut crate::world::World, String> {
+        if self
+            .world
+            .get_resource::<crate::scene_runtime::SceneRuntime>()
+            .is_none()
+        {
+            return Err(
+                "SceneRuntime missing — add CorePlugins (or SceneRuntimePlugin) before require_unity_world"
+                    .into(),
+            );
+        }
+        Ok(self.unity_world().expect("SceneRuntime checked above"))
+    }
+
     /// Spawn a Unity GameObject linked to an ECS Entity (identity bridge).
     pub fn spawn_linked(
         &mut self,
@@ -587,9 +611,11 @@ impl App {
         self.scene_runtime()?.gameobject_for(entity)
     }
 
-    /// Sync identity bridge: Unity transforms/materials → ECS proxies.
+    /// Sync identity bridge: auto-link all Unity GameObjects, then copy
+    /// transforms/materials → ECS proxies.
     ///
-    /// Call once per frame after Update (before render) when using linked objects.
+    /// Call once per frame after Update (before render). `run_with_lifecycle`
+    /// already does this.
     pub fn sync_identity_bridge(&mut self) {
         let Some(mut rt) = self
             .world
@@ -598,6 +624,20 @@ impl App {
             return;
         };
         rt.sync_bridge(&mut self.world);
+        self.world
+            .insert_resource::<crate::scene_runtime::SceneRuntime>(rt);
+    }
+
+    /// Ensure every Unity GameObject has an ECS entity (no proxy sync).
+    /// Useful after `import_core_scene_data` / bulk spawn before the next frame.
+    pub fn link_unity_scene(&mut self) {
+        let Some(mut rt) = self
+            .world
+            .remove_resource::<crate::scene_runtime::SceneRuntime>()
+        else {
+            return;
+        };
+        rt.bridge.ensure_all_linked(&rt.world, &mut self.world);
         self.world
             .insert_resource::<crate::scene_runtime::SceneRuntime>(rt);
     }

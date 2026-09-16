@@ -100,9 +100,11 @@ engine-scene       → 自己的 Node/Transform (第三套)
 **P2.b — 存储合并（后做，大）**
 | ID | 任务 | 说明 |
 |----|------|------|
-| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | 保持 Unity API 不变 |
-| P2.5 | 弃用 `engine-scene` 中重复 Transform | 全局变换只在 core World 计算 |
-| P2.6 | Editor 只依赖 `engine_core::world::World` | 删除 editor 自有 handle 映射 |
+| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | 保持 Unity API 不变 — **延后**（大重写） |
+| P2.5 | 弃用 `engine-scene` 中重复 Transform | 全局变换只在 core World 计算 — **延后** |
+| P2.6 | Editor 只依赖 `engine_core::world::World` | 编辑器已持有 `state.world: engine_core::World`；菜单仍另有 ECS `scene_manager` 路径 |
+| P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
+| P2.8 | 统一 App 入口 | `unity_world` / `unity_world_ref` / `require_unity_world` / `link_unity_scene` ✅ |
 
 ### 风险控制
 1. 全程用 feature flag：`unity-world-primary`（默认 off）

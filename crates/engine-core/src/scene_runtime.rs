@@ -40,6 +40,10 @@ impl SceneRuntime {
     }
 
     /// Spawn a named GameObject in the Unity world.
+    ///
+    /// ECS entity is linked on the next [`SceneRuntime::sync_bridge`] /
+    /// `App::run_with_lifecycle` (auto-adopt). Use [`SceneRuntime::spawn_linked`]
+    /// when the Entity handle is needed immediately.
     pub fn spawn(&mut self, name: &str) -> crate::gameobject::GameObjectHandle {
         self.world.CreateGameObject(name)
     }

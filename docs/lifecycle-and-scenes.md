@@ -370,14 +370,20 @@ for e in events {
 编辑器/脚本用 `GameObjectHandle`，渲染/物理用 ECS `Entity`。身份桥在**不合并存储**的前提下建立双向映射：
 
 ```rust
-// 创建并登记
+// 创建并立即登记
 let (go, entity) = app.spawn_linked("Player")?;
+
+// 普通 spawn 也会在下一帧 sync 时被自动 adopt
+let go = app.unity_world().unwrap().CreateGameObject("Later");
+app.link_unity_scene(); // 或等 run_with_lifecycle
 
 // 查询
 app.entity_for_gameobject(go);
 app.gameobject_for_entity(entity);
+app.unity_world_ref();
+app.require_unity_world()?; // SceneRuntime 缺失时返回 Err
 
-// 每帧由 run_with_lifecycle 自动 sync；也可手动：
+// 每帧由 run_with_lifecycle 自动 sync（prune + 全量 adopt + 代理同步）
 app.sync_identity_bridge();
 ```
 
@@ -419,10 +425,10 @@ app.sync_identity_bridge();
 详细分阶段执行计划见 [unity-alignment-roadmap.md](unity-alignment-roadmap.md)。
 
 1. **P1 运行时硬化** — ✅
-2. **P2.a 身份桥** — ✅（存储合并 P2.b 未做）
+2. **P2.a 身份桥** — ✅；**P2.b 第一切片**：全量自动链接 + App 统一入口 ✅（完整存储合并仍延后）
 3. **P3 资产深化** — ✅ 热重载、AssetRef
-4. **P4 脚本体验** — WaitUntil、MonoBehaviour 协程桥
-5. **P5 验收合并**
+4. **P4 脚本体验** — ✅ WaitUntil / WaitRealtime / StopCoroutineByName / coroutine_demo
+5. **P5 验收合并** — 分支验收已过；合 main 待用户指令
 
 历史清单（部分已在 roadmap 细化）：
 - SetActive 立即回调（可选模式）
