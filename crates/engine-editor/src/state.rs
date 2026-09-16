@@ -28,6 +28,16 @@ pub enum PlayState {
     Paused,
 }
 
+/// Unity-style play host: SceneRuntime + Time driven while Play is active.
+///
+/// Cloned from the editor World on enter Play so MonoBehaviour / SceneManager
+/// lifecycle matches the runtime (`run_with_lifecycle` contract).
+pub struct UnityPlayHost {
+    pub runtime: engine_core::SceneRuntime,
+    pub time: engine_core::time::Time,
+    pub events: engine_core::event::EventBus,
+}
+
 /// Active transform tool in the viewport toolbar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolType {
@@ -1284,6 +1294,85 @@ impl EditorState {
         self.status_message = Some("Stopped".into());
         self.log_info("运行模式已停止");
         true
+    }
+
+    /// Build a Unity-style [`UnityPlayHost`] by cloning the editor World hierarchy.
+    ///
+    /// Copies name/tag/layer/active/transform plus common render components so
+    /// Play mode can run MonoBehaviour Awake/Start/Update without the ECS path.
+    pub fn build_unity_play_host(&self) -> UnityPlayHost {
+        use engine_core::event::EventBus;
+        use engine_core::time::Time;
+
+        let mut runtime = engine_core::SceneRuntime::new();
+        for root in self.world.GetRootGameObjects() {
+            Self::clone_go_recursive(&self.world, &mut runtime.world, root, None);
+        }
+        runtime.mark_needs_awake();
+
+        UnityPlayHost {
+            runtime,
+            time: Time::new(),
+            events: EventBus::new(),
+        }
+    }
+
+    /// Advance the Unity play host one frame (FixedUpdate 0+ → Start → Update → …).
+    pub fn tick_unity_play_host(&mut self, host: &mut UnityPlayHost, dt: f32) {
+        host.time.update(dt);
+        let frame = host.time.frameCount();
+        host.runtime.tick(&host.time, frame, &mut host.events);
+
+        // Mirror active-object transforms back into the editor World for viewport.
+        // (Only roots: children inherit via hierarchy sync when needed.)
+        for root in host.runtime.world.GetRootGameObjects() {
+            let name = host.runtime.world.GetName(root).to_string();
+            if let Some(editor_go) = self.world.Find(&name) {
+                if let (Some(rt), Some(et)) = (
+                    host.runtime.world.GetTransform(root),
+                    self.world.GetTransformMut(editor_go),
+                ) {
+                    *et = rt.clone();
+                }
+                self.world.sync_transforms();
+            }
+        }
+    }
+
+    fn clone_go_recursive(
+        src: &engine_core::world::World,
+        dst: &mut engine_core::world::World,
+        handle: GameObjectHandle,
+        parent: Option<GameObjectHandle>,
+    ) {
+        use engine_core::components::{Material, SpriteRenderer};
+
+        let name = src.GetName(handle).to_string();
+        let new_handle = dst.CreateGameObject(&name);
+        dst.SetTag(new_handle, &src.GetTag(handle));
+        dst.SetLayer(new_handle, src.GetLayer(handle));
+        dst.SetActive(new_handle, src.IsActive(handle));
+
+        if let (Some(st), Some(dt)) = (src.GetTransform(handle), dst.GetTransformMut(new_handle)) {
+            dt.SetLocalPosition(st.LocalPosition());
+            dt.SetLocalRotation(st.LocalRotation());
+            dt.SetLocalScale(st.LocalScale());
+        }
+
+        if let Some(mat) = src.GetComponent::<Material>(handle) {
+            dst.AddComponent(new_handle, mat.clone());
+        }
+        if let Some(sr) = src.GetComponent::<SpriteRenderer>(handle) {
+            dst.AddComponent(new_handle, sr.clone());
+        }
+
+        if let Some(parent) = parent {
+            dst.SetParent(new_handle, Some(parent));
+        }
+
+        for child in src.GetChildren(handle) {
+            Self::clone_go_recursive(src, dst, child, Some(new_handle));
+        }
     }
 
     /// Build a runtime ECS World from the current scene tree.

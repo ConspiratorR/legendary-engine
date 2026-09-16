@@ -15,6 +15,35 @@ fn editor_state_new_has_default_tree() {
 }
 
 #[test]
+fn unity_play_host_clones_hierarchy_and_ticks() {
+    let mut state = EditorState::new();
+    let root_count = state.world.GetRootGameObjects().len();
+    assert!(root_count >= 1);
+
+    let mut host = state.build_unity_play_host();
+    assert_eq!(host.runtime.world.GetRootGameObjects().len(), root_count);
+
+    // Awake should have been scheduled; first tick runs Awake/Start
+    state.tick_unity_play_host(&mut host, 0.016);
+    assert!(host.time.frameCount() >= 1);
+}
+
+#[test]
+fn save_scene_bundle_writes_runtime_twin() {
+    let mut state = EditorState::new();
+    let dir = std::env::temp_dir().join(format!("rustengine_editor_test_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("test.scene.json");
+    state.save_scene_bundle(&path).unwrap();
+    assert!(path.exists());
+    let runtime = EditorState::runtime_scene_path_for(&path);
+    assert!(runtime.exists());
+    let json = std::fs::read_to_string(&runtime).unwrap();
+    assert!(json.contains("\"game_objects\""));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn editor_state_default_tool_is_translate() {
     let state = EditorState::new();
     assert_eq!(state.active_tool, ToolType::Translate);

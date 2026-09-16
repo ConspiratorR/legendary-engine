@@ -41,6 +41,7 @@ fn main() -> anyhow::Result<()> {
     let mut hot_reload_opt = None;
     let mut editor_state = EditorState::new();
     let mut runtime_world: Option<engine_ecs::world::World> = None;
+    let mut unity_play: Option<engine_editor::state::UnityPlayHost> = None;
     let mut _runtime_audio: Option<engine_audio::audio_manager::AudioManager> = None;
     #[cfg(feature = "scripting")]
     let mut runtime_scripts: Vec<engine_script::system::ScriptSystem> = Vec::new();
@@ -128,6 +129,11 @@ fn main() -> anyhow::Result<()> {
                                 {
                                     editor_state.step_runtime(world, dt as f32);
 
+                                    // Unity-style MonoBehaviour / SceneManager tick
+                                    if let Some(ref mut host) = unity_play {
+                                        editor_state.tick_unity_play_host(host, dt as f32);
+                                    }
+
                                     #[cfg(feature = "scripting")]
                                     {
                                         // Step script systems
@@ -204,9 +210,13 @@ fn main() -> anyhow::Result<()> {
                                 use engine_editor::state::PlayState;
                                 match (prev_play_state, editor_state.play_state) {
                                     (PlayState::Editing, PlayState::Playing) => {
-                                        // Entering play mode: create runtime world
+                                        // Entering play mode: create runtime world + Unity SceneRuntime
                                         runtime_world =
                                             Some(editor_state.build_runtime_world());
+                                        unity_play = Some(editor_state.build_unity_play_host());
+                                        editor_state.log_info(
+                                            "Unity SceneRuntime 已创建（MonoBehaviour 生命周期启用）",
+                                        );
                                         // Create audio manager for runtime
                                         match engine_audio::audio_manager::AudioManager::new() {
                                             Ok(mut am) => {
@@ -328,6 +338,7 @@ fn main() -> anyhow::Result<()> {
                                     (_, PlayState::Editing) if prev_play_state != PlayState::Editing => {
                                         // Leaving play mode: destroy runtime world, audio, scripts, and blueprints
                                         runtime_world = None;
+                                        unity_play = None;
                                         _runtime_audio = None;
                                         #[cfg(feature = "scripting")]
                                         {
