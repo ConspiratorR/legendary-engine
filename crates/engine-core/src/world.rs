@@ -44,6 +44,32 @@ impl Component for GameObjectTag {
     }
 }
 
+/// ECS mirror of `GameObject.activeSelf` (P2.4 storage write-through).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GameObjectActive(pub bool);
+
+impl Component for GameObjectActive {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+/// ECS list of MonoBehaviour type names on a GameObject (P2.4).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MonoBehaviourTypes(pub Vec<String>);
+
+impl Component for MonoBehaviourTypes {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 /// Primitive type for CreatePrimitive (matches Unity's `PrimitiveType` enum).
 ///
 /// # Unity Documentation
@@ -366,6 +392,38 @@ impl World {
         }
     }
 
+    /// Write `GameObjectActive` onto the linked entity (internal ECS).
+    fn sync_active_to_ecs(&mut self, handle: GameObjectHandle, active: bool) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let comp = GameObjectActive(active);
+        if self.ecs.get::<GameObjectActive>(entity).is_some() {
+            *self.ecs.get_mut::<GameObjectActive>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
+    }
+
+    /// Refresh `MonoBehaviourTypes` on the linked entity from current holders.
+    fn sync_monobehaviour_types_to_ecs(&mut self, handle: GameObjectHandle) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let names: Vec<String> = self
+            .monobehaviours
+            .get(handle.index() as usize)
+            .and_then(|m| m.as_ref())
+            .map(|v| v.iter().map(|m| m.Get().TypeName().to_string()).collect())
+            .unwrap_or_default();
+        let comp = MonoBehaviourTypes(names);
+        if self.ecs.get::<MonoBehaviourTypes>(entity).is_some() {
+            *self.ecs.get_mut::<MonoBehaviourTypes>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
+    }
+
     /// Get the next instance ID.
     fn next_instance_id(&mut self) -> i32 {
         let id = self.next_instance_id;
@@ -412,6 +470,7 @@ impl World {
         let _ = self.ensure_entity(handle);
         self.sync_name_to_ecs(handle, name);
         self.sync_tag_to_ecs(handle, "Untagged");
+        self.sync_active_to_ecs(handle, true);
 
         handle
     }
@@ -799,6 +858,7 @@ impl World {
         self.monobehaviours[index]
             .get_or_insert_with(Vec::new)
             .push(holder);
+        self.sync_monobehaviour_types_to_ecs(handle);
     }
 
     /// Count of MonoBehaviours attached to a GameObject.
@@ -1185,6 +1245,7 @@ impl World {
         if let Some(go) = self.gameobject_data.get_mut(index).and_then(|g| g.as_mut()) {
             go.SetActive(active);
         }
+        self.sync_active_to_ecs(handle, active);
         let now_in_hierarchy = self.IsActiveInHierarchy(handle);
         if was_in_hierarchy == now_in_hierarchy {
             return;
@@ -2213,6 +2274,56 @@ mod tests {
         assert_eq!(tag.0, "Player");
         let tr = world.ecs_world().get::<Transform>(e).expect("Transform");
         assert_eq!(tr.Position(), engine_math::Vec3::new(4.0, 5.0, 6.0));
+    }
+
+    #[test]
+    fn test_active_and_monobehaviour_types_write_through() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Act");
+        let e = world.entity_for(go).unwrap();
+
+        let active = world
+            .ecs_world()
+            .get::<GameObjectActive>(e)
+            .expect("GameObjectActive");
+        assert!(active.0);
+
+        world.SetActive(go, false);
+        let active = world.ecs_world().get::<GameObjectActive>(e).unwrap();
+        assert!(!active.0);
+
+        #[derive(Debug, Default)]
+        struct Marker;
+        impl Component for Marker {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl crate::behaviour::Behaviour for Marker {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _enabled: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, _h: GameObjectHandle) {}
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                None
+            }
+        }
+        impl MonoBehaviour for Marker {}
+
+        world.AddMonoBehaviour(go, Marker);
+        let types = world
+            .ecs_world()
+            .get::<MonoBehaviourTypes>(e)
+            .expect("MonoBehaviourTypes");
+        assert_eq!(types.0.len(), 1);
+        assert!(types.0[0].contains("Marker"));
     }
 
     #[test]
