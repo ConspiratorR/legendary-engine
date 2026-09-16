@@ -18,6 +18,32 @@ use crate::time::Time;
 use crate::transform::Transform;
 use engine_math::{Quat, Vec3};
 
+/// ECS mirror of `GameObject.name` (P2.4 storage write-through).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameObjectName(pub String);
+
+impl Component for GameObjectName {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+/// ECS mirror of `GameObject.tag` (P2.4 storage write-through).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameObjectTag(pub String);
+
+impl Component for GameObjectTag {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 /// Primitive type for CreatePrimitive (matches Unity's `PrimitiveType` enum).
 ///
 /// # Unity Documentation
@@ -284,6 +310,62 @@ impl World {
         self.handle_to_entity.len()
     }
 
+    /// Copy all Unity Transforms onto linked internal-ECS entities as
+    /// [`Transform`] components (P2.4 write-through for tools / storage merge).
+    pub fn sync_all_transforms_to_ecs(&mut self) {
+        let pairs: Vec<(GameObjectHandle, engine_ecs::entity::Entity)> = self
+            .handle_to_entity
+            .iter()
+            .map(|(&h, &e)| (h, e))
+            .collect();
+        for (handle, entity) in pairs {
+            if !self.is_valid(handle) {
+                continue;
+            }
+            let Some(t) = self
+                .transforms
+                .get(handle.index() as usize)
+                .and_then(|t| t.as_ref())
+            else {
+                continue;
+            };
+            // Prefer world pose after World::sync_transforms; fall back to local.
+            let full =
+                Transform::from_position_rotation_scale(t.Position(), t.Rotation(), t.LossyScale());
+            if self.ecs.get::<Transform>(entity).is_some() {
+                *self.ecs.get_mut::<Transform>(entity).unwrap() = full;
+            } else {
+                self.ecs.add_component(entity, full);
+            }
+        }
+    }
+
+    /// Write `GameObjectName` onto the linked entity (internal ECS).
+    fn sync_name_to_ecs(&mut self, handle: GameObjectHandle, name: &str) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let comp = GameObjectName(name.to_string());
+        if self.ecs.get::<GameObjectName>(entity).is_some() {
+            *self.ecs.get_mut::<GameObjectName>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
+    }
+
+    /// Write `GameObjectTag` onto the linked entity (internal ECS).
+    fn sync_tag_to_ecs(&mut self, handle: GameObjectHandle, tag: &str) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let comp = GameObjectTag(tag.to_string());
+        if self.ecs.get::<GameObjectTag>(entity).is_some() {
+            *self.ecs.get_mut::<GameObjectTag>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
+    }
+
     /// Get the next instance ID.
     fn next_instance_id(&mut self) -> i32 {
         let id = self.next_instance_id;
@@ -328,6 +410,8 @@ impl World {
 
         // P2.4: auto-link ECS identity on this World's internal ECS
         let _ = self.ensure_entity(handle);
+        self.sync_name_to_ecs(handle, name);
+        self.sync_tag_to_ecs(handle, "Untagged");
 
         handle
     }
@@ -1242,6 +1326,7 @@ impl World {
                     .push(handle);
             }
         }
+        self.sync_name_to_ecs(handle, name);
     }
 
     /// Get name (matches `Object.name`).
@@ -1279,6 +1364,7 @@ impl World {
                     .push(handle);
             }
         }
+        self.sync_tag_to_ecs(handle, tag);
     }
 
     /// Get tag (matches `GameObject.tag`).
@@ -2101,6 +2187,32 @@ mod tests {
         world.DestroyImmediate(go);
         assert_eq!(world.entity_for(go), None);
         assert_eq!(world.identity_count(), 0);
+    }
+
+    #[test]
+    fn test_name_tag_and_transform_write_through_to_ecs() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Hero");
+        world.SetTag(go, "Player");
+        if let Some(t) = world.GetTransformMut(go) {
+            t.SetLocalPosition(engine_math::Vec3::new(4.0, 5.0, 6.0));
+        }
+        world.sync_transforms();
+        world.sync_all_transforms_to_ecs();
+
+        let e = world.entity_for(go).unwrap();
+        let name = world
+            .ecs_world()
+            .get::<GameObjectName>(e)
+            .expect("GameObjectName");
+        assert_eq!(name.0, "Hero");
+        let tag = world
+            .ecs_world()
+            .get::<GameObjectTag>(e)
+            .expect("GameObjectTag");
+        assert_eq!(tag.0, "Player");
+        let tr = world.ecs_world().get::<Transform>(e).expect("Transform");
+        assert_eq!(tr.Position(), engine_math::Vec3::new(4.0, 5.0, 6.0));
     }
 
     #[test]

@@ -183,7 +183,7 @@ pub use scriptable_object::ScriptableObject;
 pub use system::System;
 pub use time::Time;
 pub use transform::{Space, Transform};
-pub use world::World;
+pub use world::{GameObjectName, GameObjectTag, World};
 
 // Re-export macros - impl_component is defined in component.rs with #[macro_export]
 // It's automatically available at crate root
