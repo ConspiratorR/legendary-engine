@@ -13,6 +13,9 @@ pub struct Time {
     frame_count: u64,
     /// Whether we're in FixedUpdate.
     in_fixed_update: bool,
+    /// Whether any FixedUpdate step ran since the last `Time::update`.
+    /// Used by WaitForFixedUpdate to resume at end-of-frame.
+    fixed_steps_ran: bool,
     /// Maximum allowed delta time (maximumDeltaTime).
     max_delta_time: f32,
     /// Time at the last FixedUpdate step (for fixedUnscaledTime).
@@ -32,6 +35,7 @@ impl Default for Time {
             time_scale: 1.0,
             frame_count: 0,
             in_fixed_update: false,
+            fixed_steps_ran: false,
             max_delta_time: 0.33333334, // ~3 FPS minimum
             last_fixed_time: 0.0,
             fixed_accumulator: 0.0,
@@ -107,6 +111,11 @@ impl Time {
         self.in_fixed_update
     }
 
+    /// Whether any FixedUpdate step ran this frame (after `begin_fixed_update` / `end_fixed_update`).
+    pub fn fixed_steps_ran(&self) -> bool {
+        self.fixed_steps_ran
+    }
+
     /// Get delta time for the current step (fixed or regular).
     pub fn stepDeltaTime(&self) -> f32 {
         if self.in_fixed_update {
@@ -125,6 +134,7 @@ impl Time {
         self.elapsed_time += self.deltaTime();
         self.frame_count += 1;
         self.in_fixed_update = false;
+        self.fixed_steps_ran = false;
         // Accumulate scaled time for FixedUpdate (Unity uses Time.deltaTime).
         self.fixed_accumulator += self.deltaTime();
     }
@@ -149,6 +159,7 @@ impl Time {
     pub fn end_fixed_update(&mut self) {
         self.fixed_accumulator = (self.fixed_accumulator - self.fixed_delta_time).max(0.0);
         self.in_fixed_update = false;
+        self.fixed_steps_ran = true;
     }
 
     /// Update time for a fixed update step (called by engine).
@@ -177,6 +188,7 @@ impl Time {
         self.elapsed_time = 0.0;
         self.frame_count = 0;
         self.in_fixed_update = false;
+        self.fixed_steps_ran = false;
         self.last_fixed_time = 0.0;
         self.fixed_accumulator = 0.0;
     }

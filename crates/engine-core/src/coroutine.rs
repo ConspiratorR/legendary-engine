@@ -51,8 +51,12 @@ pub type CoroutinePredicate =
 /// `Time.timeScale`); other steps complete in a single frame.
 #[derive(Clone)]
 pub enum CoroutineStep {
-    /// Pause for N seconds (matches `yield return new WaitForSeconds(n)`).
+    /// Pause for N seconds, scaled by `Time.timeScale`
+    /// (matches `yield return new WaitForSeconds(n)`).
     Wait(f32),
+    /// Pause for N real seconds, ignoring `Time.timeScale`
+    /// (matches `yield return new WaitForSecondsRealtime(n)`).
+    WaitRealtime(f32),
     /// Wait until end of current frame (matches `yield return null` / `WaitForEndOfFrame`).
     WaitEndOfFrame,
     /// Wait until next FixedUpdate (matches `WaitForFixedUpdate`).
@@ -73,6 +77,7 @@ impl std::fmt::Debug for CoroutineStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CoroutineStep::Wait(s) => write!(f, "Wait({s})"),
+            CoroutineStep::WaitRealtime(s) => write!(f, "WaitRealtime({s})"),
             CoroutineStep::WaitEndOfFrame => write!(f, "WaitEndOfFrame"),
             CoroutineStep::WaitFixedUpdate => write!(f, "WaitFixedUpdate"),
             CoroutineStep::WaitUntil(_) => write!(f, "WaitUntil(..)"),
@@ -92,6 +97,8 @@ pub struct Coroutine {
     steps: VecDeque<CoroutineStep>,
     /// Remaining wait time (seconds), if currently waiting on Wait.
     wait_remaining: Option<f32>,
+    /// Remaining real wait time (seconds), if currently waiting on WaitRealtime.
+    wait_realtime_remaining: Option<f32>,
     /// Waiting for end of frame (resumes next tick).
     wait_end_of_frame: bool,
     /// Waiting for FixedUpdate phase.
@@ -121,7 +128,17 @@ impl Coroutine {
     }
 
     /// Advance this coroutine. Returns true if still running.
-    fn advance(&mut self, world: &mut crate::world::World, dt: f32, in_fixed: bool) -> bool {
+    ///
+    /// `dt` is scaled delta (Time.deltaTime); `unscaled_dt` ignores timeScale
+    /// (for [`CoroutineStep::WaitRealtime`]). `fixed_ran` is true when at least
+    /// one FixedUpdate step ran this frame (or we are inside FixedUpdate).
+    fn advance(
+        &mut self,
+        world: &mut crate::world::World,
+        dt: f32,
+        unscaled_dt: f32,
+        fixed_ran: bool,
+    ) -> bool {
         if self.finished || !world.is_valid(self.owner) {
             self.finished = true;
             return false;
@@ -136,13 +153,20 @@ impl Coroutine {
             }
             // Wait finished; fall through to run next steps this frame
         }
+        if let Some(remaining) = self.wait_realtime_remaining.take() {
+            let left = remaining - unscaled_dt;
+            if left > 0.0 {
+                self.wait_realtime_remaining = Some(left);
+                return true;
+            }
+        }
         if self.wait_end_of_frame {
             self.wait_end_of_frame = false;
             // continue to run steps after end-of-frame yield
         }
         if self.wait_fixed {
-            if !in_fixed {
-                self.wait_fixed = true;
+            // Unity: resume after the next FixedUpdate has run this frame.
+            if !fixed_ran {
                 return true;
             }
             self.wait_fixed = false;
@@ -186,6 +210,17 @@ impl Coroutine {
                             return true;
                         }
                         // wait fully consumed this frame; continue
+                    }
+                }
+                CoroutineStep::WaitRealtime(secs) => {
+                    let secs = *secs;
+                    self.steps.pop_front();
+                    if secs > 0.0 {
+                        let left = secs - unscaled_dt;
+                        if left > 0.0 {
+                            self.wait_realtime_remaining = Some(left);
+                            return true;
+                        }
                     }
                 }
                 CoroutineStep::WaitEndOfFrame => {
@@ -244,6 +279,7 @@ impl Coroutine {
             }
             // handled in advance()
             CoroutineStep::Wait(_)
+            | CoroutineStep::WaitRealtime(_)
             | CoroutineStep::WaitEndOfFrame
             | CoroutineStep::WaitFixedUpdate
             | CoroutineStep::WaitUntil(_)
@@ -279,6 +315,7 @@ impl CoroutineRunner {
             name: name.into(),
             steps: steps.into(),
             wait_remaining: None,
+            wait_realtime_remaining: None,
             wait_end_of_frame: false,
             wait_fixed: false,
             wait_until: None,
@@ -292,6 +329,15 @@ impl CoroutineRunner {
     pub fn stop(&mut self, id: CoroutineId) -> bool {
         let before = self.coroutines.len();
         self.coroutines.retain(|c| c.id != id);
+        before != self.coroutines.len()
+    }
+
+    /// Stop the first running coroutine named `name` owned by `owner`
+    /// (matches Unity's `StopCoroutine(string methodName)`).
+    pub fn stop_named(&mut self, owner: GameObjectHandle, name: &str) -> bool {
+        let before = self.coroutines.len();
+        self.coroutines
+            .retain(|c| !(c.owner == owner && c.name == name));
         before != self.coroutines.len()
     }
 
@@ -316,10 +362,19 @@ impl CoroutineRunner {
     }
 
     /// Tick all coroutines (called once per frame from World).
-    pub fn tick(&mut self, world: &mut crate::world::World, dt: f32, in_fixed: bool) {
+    ///
+    /// `dt` is scaled; `unscaled_dt` is for WaitRealtime; `fixed_ran` resumes
+    /// WaitForFixedUpdate.
+    pub fn tick(
+        &mut self,
+        world: &mut crate::world::World,
+        dt: f32,
+        unscaled_dt: f32,
+        fixed_ran: bool,
+    ) {
         let mut list = std::mem::take(&mut self.coroutines);
         for mut co in list.drain(..) {
-            if co.advance(world, dt, in_fixed) {
+            if co.advance(world, dt, unscaled_dt, fixed_ran) {
                 self.coroutines.push(co);
             }
         }
@@ -341,10 +396,10 @@ mod tests {
         let id = runner.start(obj, "Test", vec![CoroutineStep::Wait(0.1)]);
         assert_eq!(runner.count(), 1);
 
-        runner.tick(&mut world, 0.05, false);
+        runner.tick(&mut world, 0.05, 0.05, false);
         assert!(runner.is_running(id));
 
-        runner.tick(&mut world, 0.06, false);
+        runner.tick(&mut world, 0.06, 0.06, false);
         assert!(!runner.is_running(id));
         assert_eq!(runner.count(), 0);
     }
@@ -363,7 +418,7 @@ mod tests {
                 hits2.fetch_add(1, Ordering::Relaxed);
             }))],
         );
-        runner.tick(&mut world, 0.016, false);
+        runner.tick(&mut world, 0.016, 0.016, false);
         assert_eq!(hits.load(Ordering::Relaxed), 1);
         assert_eq!(runner.count(), 0);
     }
@@ -374,7 +429,7 @@ mod tests {
         let obj = world.CreateGameObject("Obj");
         let mut runner = CoroutineRunner::new();
         runner.start(obj, "Hide", vec![CoroutineStep::SetActive(false)]);
-        runner.tick(&mut world, 0.016, false);
+        runner.tick(&mut world, 0.016, 0.016, false);
         assert!(!world.IsActive(obj));
     }
 
@@ -399,5 +454,59 @@ mod tests {
         runner.start(other, "C", vec![CoroutineStep::Wait(1.0)]);
         runner.stop_all_for(obj);
         assert_eq!(runner.count(), 1);
+    }
+
+    #[test]
+    fn test_wait_realtime_ignores_zero_timescale() {
+        let mut world = World::new();
+        let obj = world.CreateGameObject("Real");
+        let mut runner = CoroutineRunner::new();
+        runner.start(obj, "Tick", vec![CoroutineStep::WaitRealtime(0.05)]);
+        // Scaled dt is 0 (paused), but realtime still advances
+        runner.tick(&mut world, 0.0, 0.06, false);
+        assert_eq!(runner.count(), 0);
+    }
+
+    #[test]
+    fn test_wait_fixed_update_resumes_when_fixed_ran() {
+        let mut world = World::new();
+        let obj = world.CreateGameObject("Fixed");
+        let hits = Arc::new(AtomicU32::new(0));
+        let hits2 = hits.clone();
+        let mut runner = CoroutineRunner::new();
+        runner.start(
+            obj,
+            "AfterFixed",
+            vec![
+                CoroutineStep::WaitFixedUpdate,
+                CoroutineStep::Action(Arc::new(move |_w, _o| {
+                    hits2.fetch_add(1, Ordering::Relaxed);
+                })),
+            ],
+        );
+
+        // No fixed step this frame → still waiting
+        runner.tick(&mut world, 0.016, 0.016, false);
+        assert_eq!(hits.load(Ordering::Relaxed), 0);
+        assert_eq!(runner.count(), 1);
+
+        // Fixed ran → resume
+        runner.tick(&mut world, 0.02, 0.02, true);
+        assert_eq!(hits.load(Ordering::Relaxed), 1);
+        assert_eq!(runner.count(), 0);
+    }
+
+    #[test]
+    fn test_stop_named() {
+        let mut world = World::new();
+        let obj = world.CreateGameObject("Named");
+        let other = world.CreateGameObject("Other");
+        let mut runner = CoroutineRunner::new();
+        runner.start(obj, "Blink", vec![CoroutineStep::Wait(10.0)]);
+        runner.start(obj, "Spin", vec![CoroutineStep::Wait(10.0)]);
+        runner.start(other, "Blink", vec![CoroutineStep::Wait(10.0)]);
+        assert!(runner.stop_named(obj, "Blink"));
+        assert_eq!(runner.count(), 2);
+        assert!(!runner.stop_named(obj, "Missing"));
     }
 }

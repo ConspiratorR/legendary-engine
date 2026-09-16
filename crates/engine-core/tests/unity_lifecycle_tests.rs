@@ -578,3 +578,44 @@ fn test_scene_unload_stops_coroutines() {
     assert_eq!(rt.world.CoroutineCount(), 1);
     assert!(rt.world.is_valid(keeper));
 }
+
+#[test]
+fn test_wait_realtime_advances_when_paused() {
+    use engine_core::coroutine::CoroutineStep;
+
+    let mut world = World::new();
+    let obj = world.CreateGameObject("PausedUI");
+    let done = Arc::new(AtomicU32::new(0));
+    let done2 = done.clone();
+
+    world.StartCoroutine(
+        obj,
+        "Intro",
+        vec![
+            CoroutineStep::WaitRealtime(0.05),
+            CoroutineStep::Action(Arc::new(move |_w, _o| {
+                done2.fetch_add(1, Ordering::SeqCst);
+            })),
+        ],
+    );
+
+    // timeScale=0 → scaled Wait would freeze; WaitRealtime still ticks with unscaled dt
+    world.tick_coroutines_full(0.0, 0.06, false);
+    assert_eq!(done.load(Ordering::SeqCst), 1);
+    assert_eq!(world.CoroutineCount(), 0);
+}
+
+#[test]
+fn test_stop_coroutine_by_name() {
+    use engine_core::coroutine::CoroutineStep;
+
+    let mut world = World::new();
+    let obj = world.CreateGameObject("NamedCo");
+    world.StartCoroutine(obj, "Blink", vec![CoroutineStep::Wait(10.0)]);
+    world.StartCoroutine(obj, "Spin", vec![CoroutineStep::Wait(10.0)]);
+    assert_eq!(world.CoroutineCount(), 2);
+
+    assert!(world.StopCoroutineByName(obj, "Blink"));
+    assert_eq!(world.CoroutineCount(), 1);
+    assert!(!world.StopCoroutineByName(obj, "Blink"));
+}

@@ -1341,9 +1341,15 @@ impl World {
         self.coroutines.start(owner, name, steps)
     }
 
-    /// Stop a specific coroutine (matches `MonoBehaviour.StopCoroutine`).
+    /// Stop a specific coroutine (matches `MonoBehaviour.StopCoroutine` with a Coroutine ref).
     pub fn StopCoroutine(&mut self, id: crate::coroutine::CoroutineId) -> bool {
         self.coroutines.stop(id)
+    }
+
+    /// Stop the first coroutine named `name` on a GameObject
+    /// (matches Unity's `StopCoroutine(string methodName)`).
+    pub fn StopCoroutineByName(&mut self, owner: GameObjectHandle, name: &str) -> bool {
+        self.coroutines.stop_named(owner, name)
     }
 
     /// Stop all coroutines on a GameObject (matches `MonoBehaviour.StopAllCoroutines`).
@@ -1362,10 +1368,23 @@ impl World {
     }
 
     /// Advance coroutines (called from lifecycle ticks).
-    pub fn tick_coroutines(&mut self, delta_time: f32, in_fixed: bool) {
+    ///
+    /// `delta_time` is scaled (Time.deltaTime); `fixed_ran` resumes WaitForFixedUpdate.
+    /// Realtime waits use `delta_time` as unscaled when only one dt is known.
+    pub fn tick_coroutines(&mut self, delta_time: f32, fixed_ran: bool) {
+        self.tick_coroutines_full(delta_time, delta_time, fixed_ran);
+    }
+
+    /// Advance coroutines with separate scaled / unscaled deltas.
+    pub fn tick_coroutines_full(
+        &mut self,
+        delta_time: f32,
+        unscaled_delta_time: f32,
+        fixed_ran: bool,
+    ) {
         // Drain and reinsert to satisfy borrow checker (advance needs &mut World)
         let mut runner = std::mem::take(&mut self.coroutines);
-        runner.tick(self, delta_time, in_fixed);
+        runner.tick(self, delta_time, unscaled_delta_time, fixed_ran);
         self.coroutines = runner;
     }
 
@@ -1766,7 +1785,16 @@ impl World {
         events: &mut crate::event::EventBus,
     ) {
         self.flush_enable_disable(time.clone(), frame, events);
-        self.tick_coroutines(delta_time, time.inFixedTimeStep());
+        let unscaled = if time.inFixedTimeStep() {
+            time.fixedDeltaTime()
+        } else {
+            time.unscaledDeltaTime()
+        };
+        self.tick_coroutines_full(
+            delta_time,
+            unscaled,
+            time.fixed_steps_ran() || time.inFixedTimeStep(),
+        );
         self.tick_invokes(delta_time);
         self.update_pending_destroy(delta_time);
         self.sync_transforms();

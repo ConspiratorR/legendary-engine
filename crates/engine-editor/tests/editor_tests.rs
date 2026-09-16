@@ -183,9 +183,11 @@ fn editor_state_has_node_lights() {
 }
 
 #[test]
-fn editor_state_has_node_physics() {
+fn editor_state_has_no_node_physics_map() {
+    // Physics lives on World components (Rigidbody/Collider), not a side map.
     let state = EditorState::new();
-    assert_eq!(state.node_physics.len(), 9);
+    // Default scene still has the demo hierarchy.
+    assert!(state.node_to_handle.len() >= 8);
 }
 
 #[test]

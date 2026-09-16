@@ -28,7 +28,12 @@ This guide helps developers migrating from other game engines to RustEngine.
 | `Canvas` | egui UI | Immediate mode UI |
 | `RequireComponent` | `Component::required_on_add` | Auto-add missing dependencies |
 | `Invoke` | `World::Invoke` | Delayed method dispatch |
-| `StartCoroutine` / `WaitForSeconds` | `World::StartCoroutine` + `CoroutineStep` | Explicit step list |
+| `StartCoroutine` / `WaitForSeconds` | `World::StartCoroutine` + `CoroutineStep::Wait` | Explicit step list |
+| `WaitForSecondsRealtime` | `CoroutineStep::WaitRealtime` | Ignores `timeScale` |
+| `WaitUntil` / `WaitWhile` | `CoroutineStep::WaitUntil` / `WaitWhile` | Predicate closures |
+| `WaitForFixedUpdate` | `CoroutineStep::WaitFixedUpdate` | Resumes after a FixedUpdate this or next frame |
+| `StopCoroutine(string)` | `World::StopCoroutineByName` | First matching name on owner |
+| `StopAllCoroutines` | `World::StopAllCoroutines` | Stops all on the GameObject |
 | Prefab Variant | `Prefab::CreateVariant` | Base + node overrides |
 | `SceneManager` | `SceneManager` + `SceneRuntime` | See [lifecycle-and-scenes.md](lifecycle-and-scenes.md) |
 

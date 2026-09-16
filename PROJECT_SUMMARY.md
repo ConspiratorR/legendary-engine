@@ -76,6 +76,13 @@
 - **WASM 脚本** — wasmtime 集成、沙盒执行
 - **蓝图执行** — BlueprintComponent、begin_play + tick
 
+### 8b. Unity 对齐运行时（分支 `unity-lifecycle-refactor`）
+- **PlayerLoop / MonoBehaviour 生命周期** — Fixed→Update→Late→EoF，SetActive/Destroy/Invoke
+- **SceneRuntime** — Unity World 挂 ECS App；SceneManager 加载/卸载/DDOL
+- **协程** — `Wait` / `WaitRealtime` / `WaitFixedUpdate` / `WaitUntil` / `WaitWhile`；按 id 或名停止
+- **ScriptableObject 资产** — `.asset` + `.meta` GUID、热重载、`AssetRef`
+- **示例** — `coroutine_demo`：`cargo run -p engine-core --example coroutine_demo`
+
 ### 9. 发布 & 生态 (阶段 9)
 - **CI/CD** — GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵)
 - **跨平台构建** — justfile、CI 矩阵 (Ubuntu/Windows/macOS)

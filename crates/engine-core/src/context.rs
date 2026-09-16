@@ -87,6 +87,16 @@ impl<'a> Context<'a> {
         self.world.StopCoroutine(id)
     }
 
+    /// Stop the first coroutine named `name` on a GameObject
+    /// (matches Unity `StopCoroutine(string)`).
+    pub fn StopCoroutineByName(
+        &mut self,
+        owner: crate::gameobject::GameObjectHandle,
+        name: &str,
+    ) -> bool {
+        self.world.StopCoroutineByName(owner, name)
+    }
+
     /// Stop all coroutines on a GameObject.
     pub fn StopAllCoroutines(&mut self, owner: crate::gameobject::GameObjectHandle) {
         self.world.StopAllCoroutines(owner);

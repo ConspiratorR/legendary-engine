@@ -228,16 +228,17 @@ world.StopAllCoroutines(obj);
 
 | Step | 对应 Unity |
 |------|------------|
-| `Wait(n)` | `yield return new WaitForSeconds(n)` |
-| `WaitEndOfFrame` | `yield return null` |
-| `WaitFixedUpdate` | `yield return new WaitForFixedUpdate()` |
+| `Wait(n)` | `yield return new WaitForSeconds(n)`（受 `timeScale` 影响） |
+| `WaitRealtime(n)` | `yield return new WaitForSecondsRealtime(n)`（忽略 `timeScale`） |
+| `WaitEndOfFrame` | `yield return null` / `WaitForEndOfFrame` |
+| `WaitFixedUpdate` | `yield return new WaitForFixedUpdate()`（本帧有 FixedUpdate 则恢复） |
 | `WaitUntil(pred)` | `yield return new WaitUntil(pred)` |
 | `WaitWhile(pred)` | `yield return new WaitWhile(pred)` |
 | `SetActive(b)` | 脚本内改 active |
 | `Call(name)` | `SendMessage` |
 | `Action(f)` | 自定义闭包 |
 
-脚本内可通过 `Context` 启动协程：
+脚本内可通过 `Context` 启动/停止协程（对应 `MonoBehaviour.StartCoroutine` / `StopCoroutine`）：
 
 ```rust
 impl MonoBehaviour for Player {
@@ -250,6 +251,17 @@ impl MonoBehaviour for Player {
     }
 }
 ```
+
+停止：
+
+```rust
+world.StopCoroutine(id);                 // Coroutine 句柄
+world.StopCoroutineByName(obj, "Blink"); // Unity StopCoroutine(string)
+world.StopAllCoroutines(obj);            // MonoBehaviour.StopAllCoroutines
+```
+
+场景卸载时会 `Destroy` 非 DDOL 根节点，其协程随之停止；`DontDestroyOnLoad` 对象的协程继续运行。
+可运行示例：`cargo run -p engine-core --example coroutine_demo`
 
 ### SendMessage
 

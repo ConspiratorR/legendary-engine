@@ -144,14 +144,15 @@ engine-scene       → 自己的 Node/Transform (第三套)
 
 | ID | 任务 | 验收 |
 |----|------|------|
-| P4.1 | `MonoBehaviour::StartCoroutine` 默认转发到 World | 脚本内可 `ctx.world.StartCoroutine` |
-| P4.2 | `WaitUntil` / `WaitWhile` 条件等待 | 闭包或消息条件 |
-| P4.3 | 协程与 DontDestroyOnLoad | 场景卸载时停止非持久对象协程 |
-| P4.4 | 示例 `coroutine_demo` | 可运行 example |
-| P4.5 | SendMessage 真分发 | MonoBehaviour 上按方法名表或 `fn on_message`；Invoke/Coroutine::Call 可达 |
+| P4.1 | `MonoBehaviour::StartCoroutine` 默认转发到 World | 脚本内可 `ctx.world.StartCoroutine` | ✅ Context 转发 |
+| P4.2 | `WaitUntil` / `WaitWhile` 条件等待 | 闭包或消息条件 | ✅ |
+| P4.3 | 协程与 DontDestroyOnLoad | 场景卸载时停止非持久对象协程 | ✅ |
+| P4.4 | 示例 `coroutine_demo` | 可运行 example | ✅ |
+| P4.5 | SendMessage 真分发 | MonoBehaviour 上按方法名表或 `fn on_message`；Invoke/Coroutine::Call 可达 | ✅ |
+| P4.6 | `WaitForSecondsRealtime` + `StopCoroutine(string)` | `WaitRealtime`；`StopCoroutineByName` | ✅ |
 
 ### 提交建议
-`feat(script): WaitUntil and MonoBehaviour coroutine bridge`
+`feat(script): WaitRealtime, StopCoroutineByName, WaitFixedUpdate, coroutine_demo`
 
 ---
 
@@ -159,13 +160,13 @@ engine-scene       → 自己的 Node/Transform (第三套)
 
 | ID | 任务 |
 |----|------|
-| P5.1 | 全量：`cargo fmt && cargo clippy -p engine-core -- -D warnings`（允许既有 warning 则记录基线） |
+| P5.1 | 全量：`cargo fmt && cargo clippy -p engine-core`（既有 non_snake_case 警告保留基线） |
 | P5.2 | `cargo test -p engine-core`（lib + 全部 tests） |
 | P5.3 | `cargo test -p engine-editor --test editor_tests`（修复既有 `new_with_name` 若仍失败） |
 | P5.4 | 更新 `README.md` 开发路线图勾选状态 |
 | P5.5 | 更新 `PROJECT_SUMMARY.md` |
 | P5.6 | PR 描述：对照 Unity 十条契约的覆盖表 |
-| P5.7 | 合并策略：squash 或 merge commit 到 `main`（按仓库习惯） |
+| P5.7 | 合并策略：squash 或 merge commit 到 `main`（**本迭代不合并**） |
 
 ---
 

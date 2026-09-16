@@ -392,7 +392,9 @@ pub trait MonoBehaviour: Behaviour {
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.StartCoroutine.html>
     ///
-    /// Returns a handle that can be passed to `StopCoroutine`.
+    /// Prefer [`Context::StartCoroutine`](crate::context::Context::StartCoroutine)
+    /// inside lifecycle callbacks — that path forwards to the World. This trait
+    /// method is a hook for custom wrappers; default is a no-op handle.
     fn StartCoroutine(&mut self, _routine: &str) -> CoroutineHandle {
         CoroutineHandle(0)
     }
@@ -401,12 +403,16 @@ pub trait MonoBehaviour: Behaviour {
     ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.StopCoroutine.html>
+    ///
+    /// Prefer `Context::StopCoroutine` / `Context::StopCoroutineByName`.
     fn StopCoroutine(&mut self, _routine: &str) {}
 
     /// Stop all coroutines (matches `MonoBehaviour.StopAllCoroutines`).
     ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/MonoBehaviour.StopAllCoroutines.html>
+    ///
+    /// Prefer `Context::StopAllCoroutines`.
     fn StopAllCoroutines(&mut self) {}
 
     // ============================================================
