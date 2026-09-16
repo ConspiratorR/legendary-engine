@@ -58,6 +58,28 @@ fn sync_node_transforms_from_world_updates_snapshots() {
 }
 
 #[test]
+fn apply_node_transform_to_world_writes_local_pose() {
+    let mut state = EditorState::new();
+    let root = state.world.GetRootGameObjects()[0];
+    let node_id = state.GetNodeId(root).expect("node id");
+
+    // Snapshot layout: [pos3, rot_euler_xyz, scale3]
+    let new_t = [3.0, 4.0, 5.0, 0.0, 0.0, 0.0, 2.0, 3.0, 4.0];
+    state.node_transforms.insert(node_id, new_t);
+    state.apply_node_transform_to_world(node_id);
+
+    let wt = state.world.GetTransform(root).unwrap();
+    let p = wt.LocalPosition();
+    assert!((p.x - 3.0).abs() < 1e-4);
+    assert!((p.y - 4.0).abs() < 1e-4);
+    assert!((p.z - 5.0).abs() < 1e-4);
+    let s = wt.LocalScale();
+    assert!((s.x - 2.0).abs() < 1e-4);
+    assert!((s.y - 3.0).abs() < 1e-4);
+    assert!((s.z - 4.0).abs() < 1e-4);
+}
+
+#[test]
 fn unity_play_host_clones_common_components() {
     use engine_core::components::{AudioSource, Light, LightType, Rigidbody, ScriptBehaviour};
 

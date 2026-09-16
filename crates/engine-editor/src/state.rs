@@ -1384,6 +1384,28 @@ impl EditorState {
         }
     }
 
+    /// Apply a `node_transforms` snapshot `[pos3, rot_quat_xyzw, scale3]` onto the Unity World.
+    ///
+    /// Call after gizmo / undo commands that still write the array form.
+    pub fn apply_node_transform_to_world(&mut self, node_id: u64) {
+        let Some(handle) = self.GetHandle(node_id) else {
+            return;
+        };
+        let Some(t) = self.node_transforms.get(&node_id).copied() else {
+            return;
+        };
+        if let Some(wt) = self.world.GetTransformMut(handle) {
+            wt.SetLocalPosition(engine_math::Vec3::new(t[0], t[1], t[2]));
+            wt.SetLocalRotation(engine_math::Quat::from_euler(
+                engine_math::EulerRot::XYZ,
+                t[3],
+                t[4],
+                t[5],
+            ));
+            wt.SetLocalScale(engine_math::Vec3::new(t[6], t[7], t[8]));
+        }
+    }
+
     /// Write Unity World local transforms into `node_transforms` for the 3D viewport.
     ///
     /// World is the authority; `node_transforms` is a mirror for `build_scene`.
@@ -2134,10 +2156,10 @@ impl EditorState {
                 idx
             };
 
-            // Build transform matrix from [pos, rot, scale]
+            // Build transform matrix from [pos3, rot_euler_xyz, scale3]
             let pos = Vec3::new(t[0], t[1], t[2]);
-            let rot = engine_math::Quat::from_xyzw(t[3], t[4], t[5], t[6]);
-            let scale = Vec3::new(t[7], t[8], 1.0); // 2D scale for now
+            let rot = engine_math::Quat::from_euler(engine_math::EulerRot::XYZ, t[3], t[4], t[5]);
+            let scale = Vec3::new(t[6], t[7], t[8]);
             let transform = Mat4::from_scale_rotation_translation(scale, rot, pos);
             batches[batch_idx].push(transform);
         }
