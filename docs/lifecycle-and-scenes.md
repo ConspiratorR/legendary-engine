@@ -452,7 +452,7 @@ app.sync_identity_bridge();
 2. **P2.a 身份桥** — ✅；**P2.b 第一切片**：全量自动链接 + App 统一入口 ✅（完整存储合并仍延后）
 3. **P3 资产深化** — ✅ 热重载（App/编辑器轮询）、AssetRef 场景引用
 4. **P4 脚本体验** — ✅ WaitUntil / WaitRealtime / StopCoroutineByName / coroutine_demo / unity_gameplay_demo
-5. **P5 验收合并** — 分支验收已过；合 main 待用户指令
+5. **P5 验收合并** — Unity 主路径已在 main；视口权威见 `p2-viewport-unity-source`
 
 历史清单（部分已在 roadmap 细化）：
 - SetActive 立即回调（可选模式）

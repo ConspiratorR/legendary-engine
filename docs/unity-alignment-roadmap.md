@@ -220,13 +220,13 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 | 9 | Scene 可加载/叠加边界 | ✅ | 编辑器双写 + Play 克隆加载 |
 | 10 | 共享数据资产 | ✅ | `.asset`+GUID、热重载、SceneData AssetRef |
 
-**本分支验收（2026-09）**
+**验收（2026-09）**
 
 - `cargo test -p engine-core` / `cargo test -p engine-editor --test editor_tests` 全绿  
 - 示例：`coroutine_demo`、`runtime_scene_demo`、`unity_gameplay_demo`、`so_asset`  
-- 分支相对 `main` 领先约 17 个提交；合 main 时在仓库根目录执行：  
-  `git checkout main && git merge --no-ff unity-lifecycle-refactor`  
-  （会话沙箱不允许本 agent 切换 main）
+- Unity 主路径：`main`（`unity-lifecycle-refactor` 已合入远程）  
+- 视口权威后续：`p2-viewport-unity-source`  
+- 合视口分支：`git checkout main && git merge --no-ff p2-viewport-unity-source`
 
 ### PR 描述草稿（P5.6，合并时用）
 

@@ -361,7 +361,9 @@ fn my_system(app: &App) {
 | **示例游戏** | ✅ | game_flow_demo — 完整游戏流程（菜单→游戏→暂停→结束）+ ECS/物理/渲染/音频演示 |
 | **WASM/Web 支持** | ✅ | 浏览器运行 (实验性) — wgpu WebGPU/WebGL2、feature flags、cfg-gating |
 
-### 阶段 10 — Unity 对齐运行时（分支 `unity-lifecycle-refactor`）
+### 阶段 10 — Unity 对齐运行时
+
+主路径已在 `main`（及后续 `p2-viewport-unity-source` 等分支迭代）。
 
 | 项目 | 状态 | 说明 |
 |------|------|------|
@@ -369,8 +371,9 @@ fn my_system(app: &App) {
 | **SceneRuntime** | ✅ | Unity World 挂 ECS App；SceneManager 加载/卸载/DDOL |
 | **身份桥** | ✅ | GameObject↔Entity auto-link；TransformProxy/RenderProxy；render_phase 消费 |
 | **编辑器 Play** | ✅ | UnityPlayHost 克隆场景进 SceneRuntime，驱动生命周期 |
-| **场景序列化** | ✅ | Material/SpriteRenderer 内置；`.runtime.json` SceneData；AssetRef 属性 |
-| **ScriptableObject** | ✅ | `.asset`+GUID 热重载、AssetRef |
+| **编辑器视口** | ✅ | `build_scene` 优先 Unity World 位姿；命令回写 World；`new_scene` 清空 World |
+| **场景序列化** | ✅ | Material/Sprite/Rigidbody/Audio/Light/Camera/ScriptBehaviour；`.runtime.json`；AssetRef |
+| **ScriptableObject** | ✅ | `.asset`+GUID 热重载（App/编辑器轮询）、AssetRef |
 | **双 World 存储合并** | 🔗 | P2.4/P2.5 完整迁移 — 下迭代 |
 
 详见 [docs/unity-alignment-roadmap.md](docs/unity-alignment-roadmap.md) 与 [docs/lifecycle-and-scenes.md](docs/lifecycle-and-scenes.md)。
