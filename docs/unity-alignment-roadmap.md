@@ -137,8 +137,8 @@ engine-scene       → 自己的 Node/Transform (第三套)
 | P3.5 | 工具：`so_asset pack/unpack` | `src/bin/so_asset.rs` | 递归扫描生成 meta；`pack` / `list` | ✅ |
 
 ### 退出条件
-- [ ] 改磁盘 `.asset` 后（可选 watcher）内存值可刷新
-- [ ] 场景里可引用共享 EnemyData 而不复制
+- [x] 改磁盘 `.asset` 后内存值可刷新（`poll_hot_reload`；编辑器每帧 / `run_with_lifecycle` 轮询）
+- [x] 场景里可引用共享 EnemyData 而不复制（SceneData `AssetRef` + `resolve_ref` 测试）
 
 ### 提交建议
 `feat(asset): hot-reload ScriptableObjects and asset references`

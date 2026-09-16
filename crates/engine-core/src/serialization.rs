@@ -65,6 +65,16 @@ pub struct TransformData {
     pub local_scale: Vec3,
 }
 
+impl Default for TransformData {
+    fn default() -> Self {
+        Self {
+            local_position: Vec3::ZERO,
+            local_rotation: Quat::IDENTITY,
+            local_scale: Vec3::ONE,
+        }
+    }
+}
+
 /// Serialized GameObject data.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameObjectData {

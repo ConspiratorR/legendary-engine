@@ -645,6 +645,8 @@ pub struct EditorState {
     >,
     /// Loaded prefab definitions: name → PrefabDef
     pub prefabs: std::collections::HashMap<String, engine_scene::prefab::PrefabDef>,
+    /// ScriptableObject asset database (`.asset` + GUID + hot-reload watches).
+    pub asset_database: engine_core::asset_database::AssetDatabase,
     /// Node currently being dragged in hierarchy (for reparent).
     pub drag_source: Option<u64>,
     /// Node being hovered during drag (drop target).
@@ -950,6 +952,7 @@ impl EditorState {
             node_materials,
             resource_browser: ResourceBrowser::new(),
             scene_manager: SceneManager::new(),
+            asset_database: engine_core::asset_database::AssetDatabase::new(),
             status_message: None,
             node_graph_state: NodeGraphState::default(),
             material_editor: MaterialEditorState::new(),
@@ -1253,6 +1256,7 @@ impl EditorState {
         vp_renderer: &mut crate::viewport_renderer::ViewportRenderer,
         egui_state: &mut engine_ui::EguiState,
     ) {
+        self.poll_asset_hot_reload();
         crate::layout::frame(self, ctx, skin, renderer, vp_renderer, egui_state);
     }
 
@@ -1294,6 +1298,22 @@ impl EditorState {
         self.status_message = Some("Stopped".into());
         self.log_info("运行模式已停止");
         true
+    }
+
+    /// Poll ScriptableObject `.asset` mtime changes and log reloads (P3).
+    ///
+    /// Call once per editor frame. Returns how many assets were reloaded.
+    pub fn poll_asset_hot_reload(&mut self) -> usize {
+        let events = self.asset_database.poll_hot_reload();
+        for e in &events {
+            self.log_info(&format!(
+                "资产热重载: {} ({}) → {}",
+                e.name,
+                e.guid,
+                e.path.display()
+            ));
+        }
+        events.len()
     }
 
     /// Build a Unity-style [`UnityPlayHost`] by cloning the editor World hierarchy.

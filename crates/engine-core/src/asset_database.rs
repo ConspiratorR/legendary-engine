@@ -52,6 +52,17 @@ pub struct AssetDatabase {
     pending_reload_events: Vec<AssetReloadEvent>,
 }
 
+impl std::fmt::Debug for AssetDatabase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AssetDatabase")
+            .field("entry_count", &self.entries.len())
+            .field("guid_count", &self.guid_index.len())
+            .field("assets_root", &self.assets_root)
+            .field("watch_count", &self.watches.len())
+            .finish()
+    }
+}
+
 impl Default for AssetDatabase {
     fn default() -> Self {
         Self::new()

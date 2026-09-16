@@ -834,3 +834,64 @@ fn test_database_serde_roundtrip_asset() {
     assert_eq!(deserialized.max_health, 300);
     assert_eq!(deserialized.regen_rate, 5.0);
 }
+
+#[test]
+fn test_scene_asset_ref_resolves_shared_data_without_copy() {
+    use engine_core::scriptable_asset::AssetRef;
+    use engine_core::serialization::{ComponentData, SceneData, SceneSerializer};
+    use engine_core::world::World;
+    use tempfile::tempdir;
+
+    let dir = tempdir().unwrap();
+    let mut db = AssetDatabase::new();
+    db.set_assets_root(dir.path());
+
+    // Shared EnemyData on disk (GUID via .meta)
+    let meta = db
+        .save_asset_to_disk(
+            None,
+            "Goblin",
+            &HealthData {
+                name: "Goblin".into(),
+                asset_path: None,
+                max_health: 40,
+                regen_rate: 0.5,
+            },
+        )
+        .unwrap();
+    let shared: AssetRef = db.asset_ref("Goblin");
+    assert_eq!(shared.guid(), meta.guid.as_str());
+
+    // Scene stores only the GUID — not a copy of the health numbers
+    let mut cd = ComponentData::new("EnemyBrain");
+    cd.insert_asset_ref("data", &shared);
+    let scene = SceneData {
+        name: "Arena".into(),
+        version: 1,
+        game_objects: vec![engine_core::serialization::GameObjectData {
+            name: "GoblinRoot".into(),
+            tag: "Enemy".into(),
+            layer: 0,
+            active: true,
+            transform: Default::default(),
+            components: vec![cd],
+            children: vec![],
+        }],
+    };
+    let json = serde_json::to_string_pretty(&scene).unwrap();
+    assert!(json.contains(&meta.guid));
+    assert!(!json.contains("40"), "max_health should not be inlined");
+
+    // Load scene → read AssetRef → resolve from database (shared instance)
+    let loaded: SceneData = serde_json::from_str(&json).unwrap();
+    let r = loaded.game_objects[0].components[0]
+        .get_asset_ref("data")
+        .unwrap();
+    assert_eq!(r.guid(), meta.guid.as_str());
+    let handle = db.resolve_ref::<HealthData>(&r).unwrap();
+    assert_eq!(handle.get().max_health, 40);
+
+    let mut world = World::new();
+    SceneSerializer::new().Load(&loaded, &mut world);
+    assert!(world.Find("GoblinRoot").is_some());
+}

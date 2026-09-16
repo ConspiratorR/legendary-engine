@@ -86,6 +86,7 @@
 - **编辑器 Play** — `UnityPlayHost` 克隆场景进 SceneRuntime，驱动 MonoBehaviour 生命周期
 - **端到端** — SceneData Material/Sprite 往返；`runtime_scene_demo`；`unity_gameplay_demo`（纯 Unity World）
 - **AddMonoBehaviour** — 挂载时写入 `gameobject` 句柄（Unity AddComponent 语义）
+- **热重载** — App lifecycle / 编辑器每帧 `poll_hot_reload`；场景 AssetRef 只存 GUID
 - **内置序列化** — Material / SpriteRenderer / Rigidbody / AudioSource / Light / Camera
 - **so_asset CLI** — `pack` / `list` 递归补 `.meta`
 

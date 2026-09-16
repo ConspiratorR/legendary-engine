@@ -437,6 +437,9 @@ impl App {
         // Sync identity bridge: Unity World → ECS TransformProxy / RenderProxy
         self.sync_identity_bridge();
 
+        // Hot-reload ScriptableObjects (mtime poll; no background thread)
+        let _reloaded = self.asset_database.poll_hot_reload();
+
         // 7. End-of-frame: sync transforms + delayed destroy with callbacks
         self.dispatch_scene_end_of_frame();
 
