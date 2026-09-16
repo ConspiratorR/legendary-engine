@@ -376,6 +376,13 @@ for e in events {
 
 两套系统可并行：场景里用 `AssetRef` 指向共享数值资产；渲染用 `engine_asset` 贴图。桥接（Handle ↔ GUID）标为后续 Phase，不在本迭代强并。
 
+CLI（P3.5）：
+
+```bash
+cargo run -p engine-core --bin so_asset -- pack Assets   # 递归补 .meta
+cargo run -p engine-core --bin so_asset -- list Assets   # path / name / guid
+```
+
 ## 身份桥（GameObject ↔ Entity）
 
 编辑器/脚本用 `GameObjectHandle`，渲染/物理用 ECS `Entity`。身份桥在**不合并存储**的前提下建立双向映射：

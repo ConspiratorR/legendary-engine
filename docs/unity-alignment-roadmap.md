@@ -134,7 +134,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 | P3.2 | 引用字段 | 资产内 `AssetRef { guid }` | 序列化稳定；加载时解析到 Handle | ✅ |
 | P3.3 | 场景引用资产 | `serialization.rs` | SceneData 组件属性支持 guid；Material/SpriteRenderer 内置序列化 | ✅ |
 | P3.4 | 与 engine-asset 对齐 | 调研 `engine-asset` 的 Handle/GUID | 文档写清两套资产系统关系；能共存则桥，不能则标为 Phase 6 | 双轨共存 |
-| P3.5 | 工具：`so_asset pack/unpack` | 可选 bin | CLI 批量扫描生成 meta | 可选延后 |
+| P3.5 | 工具：`so_asset pack/unpack` | `src/bin/so_asset.rs` | 递归扫描生成 meta；`pack` / `list` | ✅ |
 
 ### 退出条件
 - [ ] 改磁盘 `.asset` 后（可选 watcher）内存值可刷新

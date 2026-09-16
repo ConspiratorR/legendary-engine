@@ -112,8 +112,16 @@ impl SceneSerializer {
         };
         s.AddFormatter(Box::new(MaterialFormatter));
         s.AddFormatter(Box::new(SpriteRendererFormatter));
+        s.AddFormatter(Box::new(RigidbodyFormatter));
+        s.AddFormatter(Box::new(AudioSourceFormatter));
+        s.AddFormatter(Box::new(LightFormatter));
+        s.AddFormatter(Box::new(CameraFormatter));
         s.AddDeserializer(Box::new(MaterialDeserializer));
         s.AddDeserializer(Box::new(SpriteRendererDeserializer));
+        s.AddDeserializer(Box::new(RigidbodyDeserializer));
+        s.AddDeserializer(Box::new(AudioSourceDeserializer));
+        s.AddDeserializer(Box::new(LightDeserializer));
+        s.AddDeserializer(Box::new(CameraDeserializer));
         s
     }
 
@@ -377,6 +385,298 @@ impl ComponentDeserializer for SpriteRendererDeserializer {
     }
 }
 
+/// Built-in formatter for [`crate::components::Rigidbody`].
+struct RigidbodyFormatter;
+
+impl ComponentFormatter for RigidbodyFormatter {
+    fn type_name(&self) -> &str {
+        "Rigidbody"
+    }
+
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let rb = component
+            .as_any()
+            .downcast_ref::<crate::components::Rigidbody>()?;
+        let mut data = ComponentData::new("Rigidbody");
+        data.properties
+            .insert("mass".into(), serde_json::json!(rb.mass));
+        data.properties
+            .insert("drag".into(), serde_json::json!(rb.drag));
+        data.properties
+            .insert("angular_drag".into(), serde_json::json!(rb.angular_drag));
+        data.properties
+            .insert("use_gravity".into(), serde_json::json!(rb.use_gravity));
+        data.properties
+            .insert("is_kinematic".into(), serde_json::json!(rb.is_kinematic));
+        data.properties.insert(
+            "velocity".into(),
+            serde_json::json!([rb.velocity.x, rb.velocity.y, rb.velocity.z]),
+        );
+        data.properties.insert(
+            "angular_velocity".into(),
+            serde_json::json!([
+                rb.angular_velocity.x,
+                rb.angular_velocity.y,
+                rb.angular_velocity.z
+            ]),
+        );
+        Some(data)
+    }
+}
+
+struct RigidbodyDeserializer;
+
+impl ComponentDeserializer for RigidbodyDeserializer {
+    fn type_name(&self) -> &str {
+        "Rigidbody"
+    }
+
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        let mut rb = crate::components::Rigidbody::default();
+        if let Some(v) = data.properties.get("mass").and_then(|v| v.as_f64()) {
+            rb.mass = v as f32;
+        }
+        if let Some(v) = data.properties.get("drag").and_then(|v| v.as_f64()) {
+            rb.drag = v as f32;
+        }
+        if let Some(v) = data.properties.get("angular_drag").and_then(|v| v.as_f64()) {
+            rb.angular_drag = v as f32;
+        }
+        if let Some(v) = data.properties.get("use_gravity").and_then(|v| v.as_bool()) {
+            rb.use_gravity = v;
+        }
+        if let Some(v) = data
+            .properties
+            .get("is_kinematic")
+            .and_then(|v| v.as_bool())
+        {
+            rb.is_kinematic = v;
+        }
+        if let Some(v) = data.properties.get("velocity").and_then(|v| v.as_array())
+            && v.len() == 3
+        {
+            rb.velocity = Vec3::new(
+                v[0].as_f64()? as f32,
+                v[1].as_f64()? as f32,
+                v[2].as_f64()? as f32,
+            );
+        }
+        Some(Box::new(rb))
+    }
+}
+
+/// Built-in formatter for [`crate::components::AudioSource`].
+struct AudioSourceFormatter;
+
+impl ComponentFormatter for AudioSourceFormatter {
+    fn type_name(&self) -> &str {
+        "AudioSource"
+    }
+
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let a = component
+            .as_any()
+            .downcast_ref::<crate::components::AudioSource>()?;
+        let mut data = ComponentData::new("AudioSource");
+        data.properties
+            .insert("clip".into(), serde_json::json!(a.clip));
+        data.properties
+            .insert("volume".into(), serde_json::json!(a.volume));
+        data.properties
+            .insert("pitch".into(), serde_json::json!(a.pitch));
+        data.properties
+            .insert("loop_playing".into(), serde_json::json!(a.loop_playing));
+        data.properties
+            .insert("play_on_awake".into(), serde_json::json!(a.play_on_awake));
+        data.properties
+            .insert("spatial_blend".into(), serde_json::json!(a.spatial_blend));
+        Some(data)
+    }
+}
+
+struct AudioSourceDeserializer;
+
+impl ComponentDeserializer for AudioSourceDeserializer {
+    fn type_name(&self) -> &str {
+        "AudioSource"
+    }
+
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        let mut a = crate::components::AudioSource::default();
+        if let Some(v) = data.properties.get("clip").and_then(|v| v.as_str()) {
+            a.clip = v.to_string();
+        }
+        if let Some(v) = data.properties.get("volume").and_then(|v| v.as_f64()) {
+            a.volume = v as f32;
+        }
+        if let Some(v) = data.properties.get("pitch").and_then(|v| v.as_f64()) {
+            a.pitch = v as f32;
+        }
+        if let Some(v) = data
+            .properties
+            .get("loop_playing")
+            .and_then(|v| v.as_bool())
+        {
+            a.loop_playing = v;
+        }
+        if let Some(v) = data
+            .properties
+            .get("play_on_awake")
+            .and_then(|v| v.as_bool())
+        {
+            a.play_on_awake = v;
+        }
+        if let Some(v) = data
+            .properties
+            .get("spatial_blend")
+            .and_then(|v| v.as_f64())
+        {
+            a.spatial_blend = v as f32;
+        }
+        Some(Box::new(a))
+    }
+}
+
+/// Built-in formatter for [`crate::components::Light`].
+struct LightFormatter;
+
+impl ComponentFormatter for LightFormatter {
+    fn type_name(&self) -> &str {
+        "Light"
+    }
+
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let l = component
+            .as_any()
+            .downcast_ref::<crate::components::Light>()?;
+        use crate::components::LightType;
+        let type_str = match l.light_type {
+            LightType::Directional => "Directional",
+            LightType::Point => "Point",
+            LightType::Spot => "Spot",
+        };
+        let mut data = ComponentData::new("Light");
+        data.properties
+            .insert("light_type".into(), serde_json::json!(type_str));
+        data.properties
+            .insert("color".into(), serde_json::json!(l.color));
+        data.properties
+            .insert("intensity".into(), serde_json::json!(l.intensity));
+        data.properties
+            .insert("range".into(), serde_json::json!(l.range));
+        data.properties
+            .insert("shadows".into(), serde_json::json!(l.shadows));
+        Some(data)
+    }
+}
+
+struct LightDeserializer;
+
+impl ComponentDeserializer for LightDeserializer {
+    fn type_name(&self) -> &str {
+        "Light"
+    }
+
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        use crate::components::LightType;
+        let mut l = crate::components::Light::default();
+        if let Some(v) = data.properties.get("light_type").and_then(|v| v.as_str()) {
+            l.light_type = match v {
+                "Directional" => LightType::Directional,
+                "Spot" => LightType::Spot,
+                _ => LightType::Point,
+            };
+        }
+        if let Some(c) = data.properties.get("color")
+            && let Ok(arr) = serde_json::from_value::<[f32; 3]>(c.clone())
+        {
+            l.color = arr;
+        }
+        if let Some(v) = data.properties.get("intensity").and_then(|v| v.as_f64()) {
+            l.intensity = v as f32;
+        }
+        if let Some(v) = data.properties.get("range").and_then(|v| v.as_f64()) {
+            l.range = v as f32;
+        }
+        if let Some(v) = data.properties.get("shadows").and_then(|v| v.as_bool()) {
+            l.shadows = v;
+        }
+        Some(Box::new(l))
+    }
+}
+
+/// Built-in formatter for [`crate::components::Camera`].
+struct CameraFormatter;
+
+impl ComponentFormatter for CameraFormatter {
+    fn type_name(&self) -> &str {
+        "Camera"
+    }
+
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let c = component
+            .as_any()
+            .downcast_ref::<crate::components::Camera>()?;
+        let mut data = ComponentData::new("Camera");
+        data.properties
+            .insert("field_of_view".into(), serde_json::json!(c.field_of_view));
+        data.properties
+            .insert("near_clip".into(), serde_json::json!(c.near_clip));
+        data.properties
+            .insert("far_clip".into(), serde_json::json!(c.far_clip));
+        data.properties
+            .insert("orthographic".into(), serde_json::json!(c.orthographic));
+        data.properties.insert(
+            "background_color".into(),
+            serde_json::json!(c.background_color),
+        );
+        data.properties
+            .insert("depth".into(), serde_json::json!(c.depth));
+        Some(data)
+    }
+}
+
+struct CameraDeserializer;
+
+impl ComponentDeserializer for CameraDeserializer {
+    fn type_name(&self) -> &str {
+        "Camera"
+    }
+
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        let mut c = crate::components::Camera::default();
+        if let Some(v) = data
+            .properties
+            .get("field_of_view")
+            .and_then(|v| v.as_f64())
+        {
+            c.field_of_view = v as f32;
+        }
+        if let Some(v) = data.properties.get("near_clip").and_then(|v| v.as_f64()) {
+            c.near_clip = v as f32;
+        }
+        if let Some(v) = data.properties.get("far_clip").and_then(|v| v.as_f64()) {
+            c.far_clip = v as f32;
+        }
+        if let Some(v) = data
+            .properties
+            .get("orthographic")
+            .and_then(|v| v.as_bool())
+        {
+            c.orthographic = v;
+        }
+        if let Some(bg) = data.properties.get("background_color")
+            && let Ok(arr) = serde_json::from_value::<[f32; 4]>(bg.clone())
+        {
+            c.background_color = arr;
+        }
+        if let Some(v) = data.properties.get("depth").and_then(|v| v.as_f64()) {
+            c.depth = v as f32;
+        }
+        Some(Box::new(c))
+    }
+}
+
 /// Load a scene from JSON string.
 pub fn LoadSceneJson(
     json: &str,
@@ -394,9 +694,9 @@ mod tests {
     #[test]
     fn test_scene_serializer_new() {
         let s = SceneSerializer::new();
-        // Built-in Material + SpriteRenderer
-        assert_eq!(s.formatters.len(), 2);
-        assert_eq!(s.deserializers.len(), 2);
+        // Material, SpriteRenderer, Rigidbody, AudioSource, Light, Camera
+        assert_eq!(s.formatters.len(), 6);
+        assert_eq!(s.deserializers.len(), 6);
     }
 
     #[test]
@@ -665,7 +965,61 @@ mod tests {
     #[test]
     fn test_default_impl() {
         let s = SceneSerializer::default();
-        assert_eq!(s.formatters.len(), 2);
-        assert_eq!(s.deserializers.len(), 2);
+        assert_eq!(s.formatters.len(), 6);
+        assert_eq!(s.deserializers.len(), 6);
+    }
+
+    #[test]
+    fn test_physics_audio_light_camera_roundtrip() {
+        use crate::components::{AudioSource, Camera, Light, LightType, Rigidbody};
+
+        let mut world = World::new();
+        let go = world.CreateGameObject("Prop");
+        world.AddComponent(
+            go,
+            Rigidbody {
+                mass: 2.5,
+                use_gravity: true,
+                is_kinematic: false,
+                ..Default::default()
+            },
+        );
+        world.AddComponent(
+            go,
+            AudioSource {
+                clip: "sfx/hit.wav".into(),
+                volume: 0.7,
+                play_on_awake: true,
+                ..Default::default()
+            },
+        );
+        world.AddComponent(
+            go,
+            Light {
+                light_type: LightType::Directional,
+                color: [1.0, 0.9, 0.8],
+                intensity: 2.0,
+                range: 50.0,
+                shadows: true,
+                ..Default::default()
+            },
+        );
+        world.AddComponent(go, Camera::default());
+
+        let s = SceneSerializer::new();
+        let scene = s.Save(&world, "Props");
+        assert_eq!(scene.game_objects[0].components.len(), 4);
+
+        let mut world2 = World::new();
+        s.Load(&scene, &mut world2);
+        let go2 = world2.Find("Prop").unwrap();
+        let rb = world2.GetComponent::<Rigidbody>(go2).unwrap();
+        assert!((rb.mass - 2.5).abs() < 1e-5);
+        let au = world2.GetComponent::<AudioSource>(go2).unwrap();
+        assert_eq!(au.clip, "sfx/hit.wav");
+        let li = world2.GetComponent::<Light>(go2).unwrap();
+        assert_eq!(li.light_type, LightType::Directional);
+        assert!((li.intensity - 2.0).abs() < 1e-5);
+        assert!(world2.GetComponent::<Camera>(go2).is_some());
     }
 }
