@@ -115,6 +115,15 @@ pub struct SceneTree {
 }
 
 impl SceneTree {
+    /// Empty scene tree (no demo nodes). Use for New Scene.
+    pub fn empty() -> Self {
+        Self {
+            nodes: Vec::new(),
+            root_ids: Vec::new(),
+            next_id: 1,
+        }
+    }
+
     /// Creates a new scene tree with a default hierarchy (Root + 5 child nodes).
     pub fn new() -> Self {
         let root_id = 1;
@@ -1622,8 +1631,7 @@ impl EditorState {
                 self.status_message = Some("请使用文件菜单加载场景".into());
             }
             EditorAction::NewScene => {
-                self.scene_manager.create_scene("Untitled".into());
-                self.status_message = Some("新场景已创建".into());
+                self.new_scene();
             }
             EditorAction::Undo => {
                 self.undo();
@@ -2259,9 +2267,20 @@ impl EditorState {
     }
 
     /// Reset editor state to a blank new scene.
+    ///
+    /// Clears the Unity World (all roots) and editor node maps so World and
+    /// hierarchy stay one source of truth (P2.6).
     pub fn new_scene(&mut self) {
-        self.scene_tree = SceneTree::new();
+        let roots = self.world.GetRootGameObjects();
+        for handle in roots {
+            self.world.DestroyImmediate(handle);
+        }
+        self.world.sync_transforms();
+
+        self.scene_tree = SceneTree::empty();
         self.selected_nodes.clear();
+        self.node_to_handle.clear();
+        self.handle_to_node.clear();
         self.node_transforms.clear();
         self.node_render.clear();
         self.node_lights.clear();

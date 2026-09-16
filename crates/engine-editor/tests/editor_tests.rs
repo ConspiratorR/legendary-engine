@@ -80,6 +80,20 @@ fn apply_node_transform_to_world_writes_local_pose() {
 }
 
 #[test]
+fn new_scene_clears_unity_world_and_maps() {
+    let mut state = EditorState::new();
+    assert!(!state.world.GetRootGameObjects().is_empty());
+
+    state.new_scene();
+
+    assert!(state.world.GetRootGameObjects().is_empty());
+    assert!(state.scene_tree.nodes.is_empty());
+    assert!(state.node_to_handle.is_empty());
+    assert!(state.handle_to_node.is_empty());
+    assert!(state.node_transforms.is_empty());
+}
+
+#[test]
 fn unity_play_host_clones_common_components() {
     use engine_core::components::{AudioSource, Light, LightType, Rigidbody, ScriptBehaviour};
 
