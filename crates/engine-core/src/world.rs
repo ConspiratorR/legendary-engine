@@ -192,6 +192,40 @@ impl World {
             && self.generations[index] == handle.generation()
     }
 
+    /// Count of live (non-destroyed) GameObjects.
+    pub fn live_game_object_count(&self) -> usize {
+        self.gameobjects.iter().filter(|g| g.is_some()).count()
+    }
+
+    /// Iterate all live GameObject handles (slot order, not hierarchy order).
+    ///
+    /// P2.4 foundation: migration tools and tests walk the full set without
+    /// relying on roots/children only.
+    pub fn iter_game_objects(&self) -> impl Iterator<Item = GameObjectHandle> + '_ {
+        self.gameobjects
+            .iter()
+            .filter_map(|g| *g)
+            .filter(|h| self.is_valid(*h))
+    }
+
+    /// Shared access to the internal ECS world (migration / advanced systems).
+    ///
+    /// Prefer Unity World APIs for gameplay. Exposed for P2.4 storage merge
+    /// and identity-bridge tooling.
+    pub fn ecs_world(&self) -> &engine_ecs::world::World {
+        &self.ecs
+    }
+
+    /// Mutable access to the internal ECS world.
+    pub fn ecs_world_mut(&mut self) -> &mut engine_ecs::world::World {
+        &mut self.ecs
+    }
+
+    /// Whether `unity-world-primary` is compiled in (P2.4 migration switch).
+    pub fn unity_world_primary_feature() -> bool {
+        cfg!(feature = "unity-world-primary")
+    }
+
     /// Get the next instance ID.
     fn next_instance_id(&mut self) -> i32 {
         let id = self.next_instance_id;
@@ -1963,6 +1997,26 @@ impl World {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_iter_game_objects_and_ecs_escape_hatch() {
+        let mut world = World::new();
+        let a = world.CreateGameObject("A");
+        let b = world.CreateGameObject("B");
+        world.CreateGameObject("C");
+        world.DestroyImmediate(b);
+
+        let live: Vec<_> = world.iter_game_objects().collect();
+        assert_eq!(live.len(), 2);
+        assert!(live.contains(&a));
+        assert!(!live.contains(&b));
+        assert_eq!(world.live_game_object_count(), 2);
+
+        let _ = world.ecs_world();
+        let _ = world.ecs_world_mut();
+        // Default build: flag off; still callable.
+        let _ = World::unity_world_primary_feature();
+    }
 
     #[test]
     fn test_world_creation() {

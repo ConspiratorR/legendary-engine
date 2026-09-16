@@ -7,6 +7,9 @@ license.workspace = true
 [features]
 default = ["audio"]
 audio = ["dep:engine-audio"]
+# P2.4: prefer exposing internal ECS storage as the migration completes.
+# Default off — Unity World APIs stay the public surface.
+unity-world-primary = []
 
 [dependencies]
 engine-ecs = { path = "../engine-ecs" }
