@@ -29,6 +29,72 @@ fn unity_play_host_clones_hierarchy_and_ticks() {
 }
 
 #[test]
+fn unity_play_host_clones_common_components() {
+    use engine_core::components::{AudioSource, Light, LightType, Rigidbody, ScriptBehaviour};
+
+    let mut state = EditorState::new();
+    let go = state.world.CreateGameObject("Props");
+    state.world.AddComponent(
+        go,
+        Rigidbody {
+            mass: 3.0,
+            use_gravity: true,
+            ..Default::default()
+        },
+    );
+    state.world.AddComponent(
+        go,
+        AudioSource {
+            clip: "sfx/pickup.wav".into(),
+            ..Default::default()
+        },
+    );
+    state.world.AddComponent(
+        go,
+        Light {
+            light_type: LightType::Point,
+            intensity: 4.0,
+            ..Default::default()
+        },
+    );
+    state.world.AddComponent(
+        go,
+        ScriptBehaviour {
+            script_path: "scripts/props.lua".into(),
+            enabled: true,
+            ..Default::default()
+        },
+    );
+
+    let host = state.build_unity_play_host();
+    let runtime_go = host.runtime.world.Find("Props").expect("Props cloned");
+    assert!(
+        host.runtime
+            .world
+            .GetComponent::<Rigidbody>(runtime_go)
+            .is_some()
+    );
+    assert!(
+        host.runtime
+            .world
+            .GetComponent::<AudioSource>(runtime_go)
+            .is_some()
+    );
+    assert!(
+        host.runtime
+            .world
+            .GetComponent::<Light>(runtime_go)
+            .is_some()
+    );
+    let sb = host
+        .runtime
+        .world
+        .GetComponent::<ScriptBehaviour>(runtime_go)
+        .expect("ScriptBehaviour");
+    assert_eq!(sb.script_path, "scripts/props.lua");
+}
+
+#[test]
 fn save_scene_bundle_writes_runtime_twin() {
     let mut state = EditorState::new();
     let dir = std::env::temp_dir().join(format!("rustengine_editor_test_{}", std::process::id()));

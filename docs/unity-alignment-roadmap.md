@@ -223,8 +223,26 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 **本分支验收（2026-09）**
 
 - `cargo test -p engine-core` / `cargo test -p engine-editor --test editor_tests` 全绿  
-- 示例：`coroutine_demo`  
+- 示例：`coroutine_demo`、`runtime_scene_demo`、`so_asset`  
 - 不合并 `main`，直至用户明确要求  
+
+### PR 描述草稿（P5.6，合并时用）
+
+**Summary**
+- Unity PlayerLoop / MonoBehaviour 生命周期（Fixed→Update→Late→EoF）
+- SceneRuntime + SceneManager（加载/卸载/DDOL）；身份桥 auto-link 与 render_phase 消费
+- 编辑器：双写 `.runtime.json`、Play 模式 `UnityPlayHost` 驱动 SceneRuntime
+- 脚本：Wait/WaitRealtime/WaitUntil/WaitWhile、StopCoroutineByName
+- 资产：`.asset`+GUID 热重载、SceneData AssetRef；内置 Material/Sprite/Rigidbody/Audio/Light/Camera/ScriptBehaviour 序列化；`so_asset` CLI
+
+**Out of scope**
+- P2.4/P2.5 双 World 存储完全合并
+- engine-scene 整包删除
+
+**Test plan**
+- [x] `cargo test -p engine-core`
+- [x] `cargo test -p engine-editor --test editor_tests`
+- [x] `coroutine_demo` / `runtime_scene_demo` 本地运行
 
 ## 立即可做的第一个任务（历史，已完成）
 

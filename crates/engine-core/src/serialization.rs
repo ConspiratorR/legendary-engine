@@ -116,12 +116,14 @@ impl SceneSerializer {
         s.AddFormatter(Box::new(AudioSourceFormatter));
         s.AddFormatter(Box::new(LightFormatter));
         s.AddFormatter(Box::new(CameraFormatter));
+        s.AddFormatter(Box::new(ScriptBehaviourFormatter));
         s.AddDeserializer(Box::new(MaterialDeserializer));
         s.AddDeserializer(Box::new(SpriteRendererDeserializer));
         s.AddDeserializer(Box::new(RigidbodyDeserializer));
         s.AddDeserializer(Box::new(AudioSourceDeserializer));
         s.AddDeserializer(Box::new(LightDeserializer));
         s.AddDeserializer(Box::new(CameraDeserializer));
+        s.AddDeserializer(Box::new(ScriptBehaviourDeserializer));
         s
     }
 
@@ -677,6 +679,59 @@ impl ComponentDeserializer for CameraDeserializer {
     }
 }
 
+/// Built-in formatter for [`crate::components::ScriptBehaviour`].
+struct ScriptBehaviourFormatter;
+
+impl ComponentFormatter for ScriptBehaviourFormatter {
+    fn type_name(&self) -> &str {
+        "ScriptBehaviour"
+    }
+
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let s = component
+            .as_any()
+            .downcast_ref::<crate::components::ScriptBehaviour>()?;
+        let mut data = ComponentData::new("ScriptBehaviour");
+        data.properties
+            .insert("script_path".into(), serde_json::json!(s.script_path));
+        data.properties
+            .insert("enabled".into(), serde_json::json!(s.enabled));
+        data.properties
+            .insert("properties".into(), serde_json::json!(s.properties));
+        Some(data)
+    }
+}
+
+struct ScriptBehaviourDeserializer;
+
+impl ComponentDeserializer for ScriptBehaviourDeserializer {
+    fn type_name(&self) -> &str {
+        "ScriptBehaviour"
+    }
+
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        let mut s = crate::components::ScriptBehaviour::default();
+        if let Some(v) = data.properties.get("script_path").and_then(|v| v.as_str()) {
+            s.script_path = v.to_string();
+        }
+        if let Some(v) = data.properties.get("enabled").and_then(|v| v.as_bool()) {
+            s.enabled = v;
+        }
+        if let Some(obj) = data
+            .properties
+            .get("properties")
+            .and_then(|v| v.as_object())
+        {
+            for (k, val) in obj {
+                if let Some(sv) = val.as_str() {
+                    s.properties.insert(k.clone(), sv.to_string());
+                }
+            }
+        }
+        Some(Box::new(s))
+    }
+}
+
 /// Load a scene from JSON string.
 pub fn LoadSceneJson(
     json: &str,
@@ -694,9 +749,9 @@ mod tests {
     #[test]
     fn test_scene_serializer_new() {
         let s = SceneSerializer::new();
-        // Material, SpriteRenderer, Rigidbody, AudioSource, Light, Camera
-        assert_eq!(s.formatters.len(), 6);
-        assert_eq!(s.deserializers.len(), 6);
+        // Material, SpriteRenderer, Rigidbody, AudioSource, Light, Camera, ScriptBehaviour
+        assert_eq!(s.formatters.len(), 7);
+        assert_eq!(s.deserializers.len(), 7);
     }
 
     #[test]
@@ -965,8 +1020,8 @@ mod tests {
     #[test]
     fn test_default_impl() {
         let s = SceneSerializer::default();
-        assert_eq!(s.formatters.len(), 6);
-        assert_eq!(s.deserializers.len(), 6);
+        assert_eq!(s.formatters.len(), 7);
+        assert_eq!(s.deserializers.len(), 7);
     }
 
     #[test]

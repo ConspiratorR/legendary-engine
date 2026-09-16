@@ -1345,7 +1345,9 @@ impl EditorState {
         handle: GameObjectHandle,
         parent: Option<GameObjectHandle>,
     ) {
-        use engine_core::components::{Material, SpriteRenderer};
+        use engine_core::components::{
+            AudioSource, Camera, Light, Material, Rigidbody, ScriptBehaviour, SpriteRenderer,
+        };
 
         let name = src.GetName(handle).to_string();
         let new_handle = dst.CreateGameObject(&name);
@@ -1359,11 +1361,27 @@ impl EditorState {
             dt.SetLocalScale(st.LocalScale());
         }
 
+        // Common components that also have SceneData formatters
         if let Some(mat) = src.GetComponent::<Material>(handle) {
             dst.AddComponent(new_handle, mat.clone());
         }
         if let Some(sr) = src.GetComponent::<SpriteRenderer>(handle) {
             dst.AddComponent(new_handle, sr.clone());
+        }
+        if let Some(rb) = src.GetComponent::<Rigidbody>(handle) {
+            dst.AddComponent(new_handle, rb.clone());
+        }
+        if let Some(au) = src.GetComponent::<AudioSource>(handle) {
+            dst.AddComponent(new_handle, au.clone());
+        }
+        if let Some(li) = src.GetComponent::<Light>(handle) {
+            dst.AddComponent(new_handle, li.clone());
+        }
+        if let Some(cam) = src.GetComponent::<Camera>(handle) {
+            dst.AddComponent(new_handle, cam.clone());
+        }
+        if let Some(script) = src.GetComponent::<ScriptBehaviour>(handle) {
+            dst.AddComponent(new_handle, script.clone());
         }
 
         if let Some(parent) = parent {
