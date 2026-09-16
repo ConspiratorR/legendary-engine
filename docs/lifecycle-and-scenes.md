@@ -418,6 +418,8 @@ app.sync_identity_bridge();
 
 编辑器保存：`EditorState::save_scene_bundle` 写出编辑器 Scene + `<path>.runtime.json`（`SceneData`）；`open_scene_file` 优先识别 `game_objects` 字段。
 
+MonoBehaviour 可进 SceneData：实现 `SerializeProps` / `DeserializeProps`，并 `register_mono_behaviour::<T>()`；保存写 `script_type` + props，加载经全局注册表还原。
+
 编辑器 Play：进入运行时 `build_unity_play_host` 从编辑器 World 克隆层级到 `SceneRuntime`，每帧 `tick_unity_play_host` 走 Unity 生命周期；停止时丢弃。
 
 ## 与 Unity 的对应关系

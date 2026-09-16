@@ -184,7 +184,7 @@ impl SceneSerializer {
         };
 
         // Serialize components via registered formatters (Material, SpriteRenderer, …)
-        let components = world
+        let mut components = world
             .get_gameobject(handle)
             .map(|go| {
                 let mut out = Vec::new();
@@ -198,6 +198,19 @@ impl SceneSerializer {
                 out
             })
             .unwrap_or_default();
+
+        // MonoBehaviours (scripts) via TypeName + optional props
+        for (type_name, enabled, props) in world.CollectMonoBehaviours(handle) {
+            let mut data = ComponentData::new(type_name.clone());
+            data.properties
+                .insert("script_type".into(), serde_json::json!(type_name));
+            data.properties
+                .insert("enabled".into(), serde_json::json!(enabled));
+            if let Some(p) = props {
+                data.properties.insert("props".into(), p);
+            }
+            components.push(data);
+        }
 
         // Serialize children
         let children = world
@@ -240,13 +253,33 @@ impl SceneSerializer {
             t.SetLocalScale(data.transform.local_scale);
         }
 
-        // Restore components
+        // Restore components + MonoBehaviours
+        let mut scripts: Vec<(String, bool, Option<serde_json::Value>)> = Vec::new();
         for cd in &data.components {
+            // Script components: have script_type (or type_name is a registered MonoBehaviour)
+            if let Some(st) = cd
+                .properties
+                .get("script_type")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+            {
+                let enabled = cd
+                    .properties
+                    .get("enabled")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(true);
+                let props = cd.properties.get("props").cloned();
+                scripts.push((st, enabled, props));
+                continue;
+            }
             if let Some(d) = self.deserializers.get(cd.type_name.as_str())
                 && let Some(c) = d.deserialize(cd)
             {
                 world.AddComponentBoxed(handle, c);
             }
+        }
+        if !scripts.is_empty() {
+            world.RestoreMonoBehaviours(handle, &scripts);
         }
 
         // Spawn children and attach them
@@ -755,6 +788,7 @@ pub fn LoadSceneJson(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::any::Any;
 
     #[test]
     fn test_scene_serializer_new() {
@@ -817,6 +851,80 @@ mod tests {
         let mut null_data = ComponentData::new("X");
         null_data.insert_asset_ref("data", &AssetRef::null());
         assert!(null_data.get_asset_ref("data").unwrap().is_null());
+    }
+
+    #[test]
+    fn test_monobehaviour_scene_roundtrip_via_registry() {
+        use crate::behaviour::BehaviourState;
+        use crate::monobehaviour::{MonoBehaviour, register_mono_behaviour};
+        use crate::{Behaviour, Component};
+
+        #[derive(Debug, Default)]
+        struct SceneMarker {
+            hits: u32,
+            state: BehaviourState,
+        }
+
+        impl Component for SceneMarker {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+
+        impl Behaviour for SceneMarker {
+            fn Enabled(&self) -> bool {
+                self.state.enabled()
+            }
+            fn SetEnabled(&mut self, enabled: bool) {
+                self.state.set_enabled(enabled);
+            }
+            fn IsActiveAndEnabled(&self) -> bool {
+                self.state.enabled()
+            }
+            fn set_gameobject(&mut self, handle: crate::GameObjectHandle) {
+                self.state.set_gameobject(handle);
+            }
+            fn gameobject_handle(&self) -> Option<crate::GameObjectHandle> {
+                self.state.gameobject()
+            }
+        }
+
+        impl MonoBehaviour for SceneMarker {
+            fn SerializeProps(&self) -> Option<serde_json::Value> {
+                Some(serde_json::json!({ "hits": self.hits }))
+            }
+            fn DeserializeProps(&mut self, props: &serde_json::Value) {
+                self.hits = props.get("hits").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            }
+        }
+
+        register_mono_behaviour::<SceneMarker>();
+
+        let mut world = World::new();
+        let go = world.CreateGameObject("Scripted");
+        {
+            let mut m = SceneMarker::default();
+            m.hits = 7;
+            world.AddMonoBehaviour(go, m);
+        }
+
+        let s = SceneSerializer::new();
+        let scene = s.Save(&world, "Scripts");
+        let json = serde_json::to_string_pretty(&scene).unwrap();
+        assert!(json.contains("SceneMarker"));
+        assert!(json.contains("\"hits\": 7"));
+
+        let mut world2 = World::new();
+        s.Load(&scene, &mut world2);
+        let go2 = world2.Find("Scripted").unwrap();
+        assert_eq!(world2.MonoBehaviourCount(go2), 1);
+        let collected = world2.CollectMonoBehaviours(go2);
+        assert_eq!(collected.len(), 1);
+        let props = collected[0].2.clone().expect("props");
+        assert_eq!(props.get("hits").unwrap().as_u64(), Some(7));
     }
 
     #[test]
