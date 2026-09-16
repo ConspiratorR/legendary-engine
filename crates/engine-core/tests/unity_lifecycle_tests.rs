@@ -580,6 +580,108 @@ fn test_scene_unload_stops_coroutines() {
 }
 
 #[test]
+fn test_scenedata_components_survive_runtime_load_and_tick() {
+    use engine_core::SceneRuntime;
+    use engine_core::components::{Material, SpriteRenderer};
+    use engine_core::event::EventBus;
+    use engine_core::serialization::SceneSerializer;
+
+    // Author a small scene with components
+    let mut author = World::new();
+    let root = author.CreateGameObject("Hero");
+    author.AddComponent(
+        root,
+        Material {
+            base_color: [0.2, 0.8, 1.0, 1.0],
+            ..Default::default()
+        },
+    );
+    author.AddComponent(
+        root,
+        SpriteRenderer {
+            sprite: "hero.png".into(),
+            color: [1.0, 1.0, 1.0, 1.0],
+            sorting_order: 2,
+            ..Default::default()
+        },
+    );
+    let child = author.CreateGameObject("Weapon");
+    author.SetParent(child, Some(root));
+
+    let serializer = SceneSerializer::new();
+    let scene = serializer.Save(&author, "Level");
+    let json = serde_json::to_string_pretty(&scene).unwrap();
+    assert!(json.contains("\"Material\""));
+    assert!(json.contains("\"SpriteRenderer\""));
+    assert!(json.contains("hero.png"));
+
+    // Load into a fresh SceneRuntime (editor export → play / standalone)
+    let mut rt = SceneRuntime::new();
+    let loaded: engine_core::serialization::SceneData = serde_json::from_str(&json).unwrap();
+    let handles = serializer.Load(&loaded, &mut rt.world);
+    assert_eq!(handles.len(), 1);
+    rt.mark_needs_awake();
+
+    let hero = rt.world.Find("Hero").expect("Hero loaded");
+    let m = rt.world.GetComponent::<Material>(hero).unwrap();
+    assert_eq!(m.base_color, [0.2, 0.8, 1.0, 1.0]);
+    let sr = rt.world.GetComponent::<SpriteRenderer>(hero).unwrap();
+    assert_eq!(sr.sprite, "hero.png");
+    assert_eq!(sr.sorting_order, 2);
+    assert_eq!(rt.world.GetChildCount(hero), 1);
+
+    // Drive one lifecycle frame without App (Play-host style)
+    let mut time = Time::default();
+    let mut events = EventBus::new();
+    time.update(0.016);
+    rt.tick(&time, time.frameCount(), &mut events);
+    assert!(time.frameCount() >= 1);
+    assert!(rt.world.is_valid(hero));
+}
+
+#[test]
+fn test_app_load_scenedata_json_into_unity_world() {
+    use engine_core::components::Material;
+    use engine_core::serialization::SaveSceneJson;
+
+    let mut builder = AppBuilder::new();
+    builder.add_plugin(CorePlugins);
+    let mut app = builder.build();
+
+    let json = {
+        let mut author = World::new();
+        let go = author.CreateGameObject("Crate");
+        author.AddComponent(
+            go,
+            Material {
+                base_color: [1.0, 0.2, 0.2, 1.0],
+                ..Default::default()
+            },
+        );
+        SaveSceneJson(&author, "CrateScene").unwrap()
+    };
+
+    {
+        let rt = app.scene_runtime_mut().unwrap();
+        rt.load_scene_json(
+            "CrateScene",
+            &json,
+            engine_core::scene_management::LoadSceneMode::Single,
+        )
+        .expect("load scene json");
+    }
+
+    app.run_with_lifecycle(0.016);
+
+    let world = app.unity_world().unwrap();
+    let crate_go = world.Find("Crate").expect("Crate in unity world");
+    let m = world.GetComponent::<Material>(crate_go).unwrap();
+    assert_eq!(m.base_color, [1.0, 0.2, 0.2, 1.0]);
+    // Identity bridge should have auto-linked after lifecycle sync
+    assert_eq!(app.entity_for_gameobject(crate_go).is_some(), true);
+}
+
+#[test]
 fn test_wait_realtime_advances_when_paused() {
     use engine_core::coroutine::CoroutineStep;
 

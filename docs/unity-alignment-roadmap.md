@@ -207,18 +207,26 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 
 ## 验收清单（对照 Unity 十条契约）
 
-| # | 契约 | 现状 | 目标阶段 |
-|---|------|------|----------|
-| 1 | 实体-组件组合，Transform 强制 | 基本满足（双 World 待收敛） | P2 |
-| 2 | 引擎主循环回调 | ✅ | — |
-| 3 | 全局 Awake 门闩 | 部分（SceneRuntime 有 awake_started） | P1 强化 |
-| 4 | Fixed / Update / Late 三相 | ✅ | P1 物理挂钩 |
-| 5 | 固定步长物理 + 钳制 | Time ✅，物理 step 待接 | P1.2 |
-| 6 | deltaTime / timeScale | ✅ | — |
-| 7 | 延迟销毁 + OnDisable/OnDestroy | ✅ | P1.5 清理 |
-| 8 | Prefab 模板-实例-覆盖 | Variant ✅；与 World 实例覆盖 | P2/P3 |
-| 9 | Scene 可加载/叠加边界 | ✅ | P1.3 编辑器 |
-| 10 | 共享数据资产 | `.asset`+GUID ✅；热重载/引用 | P3 |
+| # | 契约 | 现状 | 备注 |
+|---|------|------|------|
+| 1 | 实体-组件组合，Transform 强制 | ✅ 主路径 | 双 World 并存；存储合并 P2.4 延后 |
+| 2 | 引擎主循环回调 | ✅ | PlayerLoop Fixed→Update→Late→EoF |
+| 3 | 全局 Awake 门闩 | ✅ | `SceneRuntime.awake_started` |
+| 4 | Fixed / Update / Late 三相 | ✅ | MonoBehaviour + ECS fixed schedule |
+| 5 | 固定步长物理 + 钳制 | ✅ | `PhysicsPlugin` → FixedUpdate schedule；Time 钳制 |
+| 6 | deltaTime / timeScale | ✅ | 含 unscaled / WaitRealtime |
+| 7 | 延迟销毁 + OnDisable/OnDestroy | ✅ | 含 Invoke/Coroutine 取消 |
+| 8 | Prefab 模板-实例-覆盖 | ✅ Variant | 与 World 实例覆盖弱耦合 |
+| 9 | Scene 可加载/叠加边界 | ✅ | 编辑器双写 + Play 克隆加载 |
+| 10 | 共享数据资产 | ✅ | `.asset`+GUID、热重载、SceneData AssetRef |
+
+**本分支验收（2026-09）**
+
+- `cargo test -p engine-core` / `cargo test -p engine-editor --test editor_tests` 全绿  
+- 示例：`coroutine_demo`  
+- 不合并 `main`，直至用户明确要求  
+
+## 立即可做的第一个任务（历史，已完成）
 
 ---
 

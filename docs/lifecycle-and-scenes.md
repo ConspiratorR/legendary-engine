@@ -365,6 +365,17 @@ for e in events {
 - 基于 mtime 比较，无后台线程；文件被外部修改后下次 poll 生效。
 - 内存中旧的 `Arc` 句柄仍指向旧数据；新的 `get_asset` / `resolve_ref` 得到新数据。
 
+### 与 engine-asset 的关系（双轨共存）
+
+| | `AssetDatabase`（本模块 / `.asset`） | `engine_asset::Registry` |
+|--|--------------------------------------|---------------------------|
+| 定位 | 游戏数据 ScriptableObject（配置、数值） | 运行时资源（贴图、网格句柄） |
+| 标识 | 稳定 **GUID**（`.meta`） | 内存 `Handle<T>` / 资产 key |
+| 序列化 | `.asset` JSON + `.meta` | 通常不进场景文件 |
+| 场景引用 | `AssetRef { guid }`（组件属性） | 不写入 SceneData |
+
+两套系统可并行：场景里用 `AssetRef` 指向共享数值资产；渲染用 `engine_asset` 贴图。桥接（Handle ↔ GUID）标为后续 Phase，不在本迭代强并。
+
 ## 身份桥（GameObject ↔ Entity）
 
 编辑器/脚本用 `GameObjectHandle`，渲染/物理用 ECS `Entity`。身份桥在**不合并存储**的前提下建立双向映射：

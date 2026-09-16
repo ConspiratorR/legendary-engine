@@ -84,6 +84,7 @@
 - **示例** — `coroutine_demo`：`cargo run -p engine-core --example coroutine_demo`
 - **身份桥** — 全量 auto-link、`TransformProxy`/`RenderProxy`、`require_unity_world`、render_phase 消费
 - **编辑器 Play** — `UnityPlayHost` 克隆场景进 SceneRuntime，驱动 MonoBehaviour 生命周期
+- **端到端** — SceneData Material/Sprite 往返；`runtime_scene_demo`；双资产系统双轨文档
 
 ### 9. 发布 & 生态 (阶段 9)
 - **CI/CD** — GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵)
