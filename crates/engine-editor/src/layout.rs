@@ -140,39 +140,39 @@ fn draw_menu_bar(state: &mut EditorState, ui: &mut egui::Ui) {
                                         match (i, j) {
                                             (0, 0) => state.new_scene(),
                                             (0, 1) => {
-                                                if let Some(path) = pick_file_to_open()
-                                                    && state.scene_manager.load_scene(&path).is_ok()
-                                                {
-                                                    let scene = state
-                                                        .scene_manager
-                                                        .current_scene()
-                                                        .cloned();
-                                                    if let Some(ref scene) = scene {
-                                                        state.load_from_scene(scene);
+                                                if let Some(path) = pick_file_to_open() {
+                                                    if let Err(e) = state.open_scene_file(&path) {
+                                                        state.status_message = Some(e);
                                                     }
                                                 }
                                             }
                                             (0, 2) => {
                                                 if state.scene_manager.scene_path().is_some() {
-                                                    let scene = state.to_scene("Scene");
-                                                    state.scene_manager.set_current_scene(scene);
-                                                    let _ =
-                                                        state.scene_manager.save_current_scene();
+                                                    let path = state
+                                                        .scene_manager
+                                                        .scene_path()
+                                                        .map(|p| p.to_path_buf());
+                                                    if let Some(path) = path
+                                                        && let Err(e) =
+                                                            state.save_scene_bundle(&path)
+                                                    {
+                                                        state.status_message = Some(e);
+                                                    }
                                                 } else if let Some(path) =
                                                     pick_file_to_save("scene.scene.json")
                                                 {
-                                                    let scene = state.to_scene("Scene");
-                                                    state.scene_manager.set_current_scene(scene);
-                                                    let _ = state.scene_manager.save_scene(&path);
+                                                    if let Err(e) = state.save_scene_bundle(&path) {
+                                                        state.status_message = Some(e);
+                                                    }
                                                 }
                                             }
                                             (0, 3) => {
                                                 if let Some(path) =
                                                     pick_file_to_save("scene.scene.json")
                                                 {
-                                                    let scene = state.to_scene("Scene");
-                                                    state.scene_manager.set_current_scene(scene);
-                                                    let _ = state.scene_manager.save_scene(&path);
+                                                    if let Err(e) = state.save_scene_bundle(&path) {
+                                                        state.status_message = Some(e);
+                                                    }
                                                 }
                                             }
                                             (0, 4) => {

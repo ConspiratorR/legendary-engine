@@ -286,6 +286,8 @@ pub struct App {
     /// Asset registry for texture loading (lazily initialized in render_phase).
     /// Registry is not Send+Sync but is only accessed from the main thread.
     asset_registry: Option<engine_asset::registry::Registry>,
+    /// 1×1 white texture used when drawing identity-bridge RenderProxy sprites.
+    fallback_sprite_texture: Option<engine_asset::asset::Handle<engine_asset::types::Texture>>,
     /// Centralized asset database for managing ScriptableObject assets.
     asset_database: AssetDatabase,
     /// Hooks executed before the update phase.
@@ -320,6 +322,7 @@ impl App {
             resources: ResourceRegistry::new(),
             renderer: None,
             asset_registry: None,
+            fallback_sprite_texture: None,
             asset_database: AssetDatabase::new(),
             pre_update_hooks: Vec::new(),
             post_update_hooks: Vec::new(),
@@ -763,13 +766,22 @@ impl App {
         }
 
         // Collect sprites (clone to avoid borrow conflict)
-        let sprites: Vec<Sprite> = {
+        let mut sprites: Vec<Sprite> = {
             let entities = self.world.component_entities::<Sprite>();
             entities
                 .iter()
                 .filter_map(|&idx| self.world.get_by_index::<Sprite>(idx).cloned())
                 .collect()
         };
+
+        // Merge identity-bridge proxies (Unity World → render) so GameObjects
+        // with Material / SpriteRenderer appear without a second ECS Sprite.
+        if let Some(fallback) = self.ensure_fallback_sprite_texture() {
+            sprites.extend(crate::identity_bridge::collect_proxy_sprites(
+                &self.world,
+                &fallback,
+            ));
+        }
 
         // Get TextureBridge from world
         let Some(bridge) = self.world.get_resource_mut::<TextureBridge>() else {
@@ -786,6 +798,38 @@ impl App {
         let camera_refs: Vec<&Camera> = cameras.iter().collect();
         let renderer = self.renderer.as_mut().unwrap();
         let _ = renderer.render_frame(&camera_refs, &sprites, bridge, registry);
+    }
+
+    /// Create (once) a 1×1 white texture handle for identity-bridge sprites.
+    fn ensure_fallback_sprite_texture(
+        &mut self,
+    ) -> Option<engine_asset::asset::Handle<engine_asset::types::Texture>> {
+        if self.fallback_sprite_texture.is_some() {
+            return self.fallback_sprite_texture.clone();
+        }
+        use engine_asset::types::Texture;
+        use std::path::PathBuf;
+
+        let white = Texture {
+            id: "unity_proxy_white".into(),
+            width: 1,
+            height: 1,
+            data: vec![255, 255, 255, 255],
+            channels: 4,
+            asset_path: PathBuf::new(),
+        };
+
+        if self.asset_registry.is_none() {
+            self.asset_registry = Some(engine_asset::registry::Registry::new());
+        }
+        let handle = self
+            .asset_registry
+            .as_mut()
+            .unwrap()
+            .store("unity_proxy_white", white);
+
+        self.fallback_sprite_texture = Some(handle.clone());
+        Some(handle)
     }
 
     /// Run one frame with delta time (Unity-like Update).
@@ -858,6 +902,7 @@ impl From<AppBuilder> for App {
             resources: b.resources,
             renderer: None,
             asset_registry: None,
+            fallback_sprite_texture: None,
             asset_database: b.asset_database,
             pre_update_hooks: b.pre_update_hooks,
             post_update_hooks: b.post_update_hooks,

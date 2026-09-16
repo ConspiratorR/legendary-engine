@@ -1118,6 +1118,63 @@ impl EditorState {
         self.import_core_scene_json(&json)
     }
 
+    /// Path used for the runtime (`SceneData`) twin of an editor scene file.
+    pub fn runtime_scene_path_for(path: &std::path::Path) -> std::path::PathBuf {
+        let mut s = path.as_os_str().to_os_string();
+        s.push(".runtime.json");
+        std::path::PathBuf::from(s)
+    }
+
+    /// Save the editor scene: ECS viewport format + runtime `SceneData` twin.
+    ///
+    /// Writes `<path>` (editor `Scene`) and `<path>.runtime.json` (engine-core
+    /// `SceneData` for `SceneRuntime` / play mode).
+    pub fn save_scene_bundle(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let scene = self.to_scene("Scene");
+        self.scene_manager.set_current_scene(scene);
+        self.scene_manager
+            .save_scene(path)
+            .map_err(|e| format!("ECS scene save failed: {e}"))?;
+
+        let runtime_json = self.export_core_scene_json("Scene")?;
+        let runtime_path = Self::runtime_scene_path_for(path);
+        if let Some(parent) = runtime_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        std::fs::write(&runtime_path, runtime_json)
+            .map_err(|e| format!("Failed to write {}: {e}", runtime_path.display()))?;
+        self.status_message = Some(format!(
+            "已保存（运行时副本: {}）",
+            runtime_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+        ));
+        Ok(())
+    }
+
+    /// Open a scene file: prefer runtime `SceneData`, fall back to ECS `Scene`.
+    pub fn open_scene_file(&mut self, path: &std::path::Path) -> Result<(), String> {
+        let json = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+
+        // Runtime SceneData has a top-level `game_objects` array + `version`.
+        if json.contains("\"game_objects\"") && json.contains("\"version\"") {
+            self.import_core_scene_json(&json)?;
+            self.status_message = Some("已加载运行时场景 (SceneData)".into());
+            return Ok(());
+        }
+
+        self.scene_manager
+            .load_scene(path)
+            .map_err(|e| format!("ECS scene load failed: {e}"))?;
+        if let Some(scene) = self.scene_manager.current_scene().cloned() {
+            self.load_from_scene(&scene);
+        }
+        self.status_message = Some("已加载编辑器场景".into());
+        Ok(())
+    }
+
     /// Recursively register a World subtree into editor node maps + scene tree.
     fn register_world_subtree(
         &mut self,
@@ -1345,23 +1402,24 @@ impl EditorState {
     pub fn handle_shortcut(&mut self, action: EditorAction) {
         match action {
             EditorAction::SaveScene => {
-                // Sync EditorState to scene before saving
-                let scene = self.to_scene("Untitled");
-                self.scene_manager.set_current_scene(scene);
-                match self.scene_manager.save_current_scene() {
-                    Ok(()) => {
-                        let entity_count = self
-                            .scene_manager
-                            .current_scene()
-                            .map(|s| s.entities.len())
-                            .unwrap_or(0);
-                        self.log_info(&format!("场景已保存 ({} 个实体)", entity_count));
-                        self.status_message = Some("场景已保存".into());
+                // Prefer full bundle (ECS + runtime SceneData) when a path exists.
+                if let Some(path) = self.scene_manager.scene_path().map(|p| p.to_path_buf()) {
+                    match self.save_scene_bundle(&path) {
+                        Ok(()) => {
+                            let entity_count = self
+                                .scene_manager
+                                .current_scene()
+                                .map(|s| s.entities.len())
+                                .unwrap_or(0);
+                            self.log_info(&format!("场景已保存 ({} 个实体)", entity_count));
+                        }
+                        Err(e) => {
+                            self.log_error(&format!("保存失败: {}", e));
+                            self.status_message = Some(format!("保存失败: {}", e));
+                        }
                     }
-                    Err(e) => {
-                        self.log_error(&format!("保存失败: {}", e));
-                        self.status_message = Some(format!("保存失败: {}", e));
-                    }
+                } else {
+                    self.status_message = Some("请使用文件菜单「另存为」设置场景路径".into());
                 }
             }
             EditorAction::LoadScene => {

@@ -394,7 +394,11 @@ app.sync_identity_bridge();
 | `TransformProxy` | Unity Transform 世界位姿 |
 | `RenderProxy` | Material / SpriteRenderer（color、sprite 路径、flip） |
 
-模块：`engine_core::identity_bridge`（`IdentityBridge`, `TransformProxy`, `RenderProxy`）。
+`App::render_phase` 会把 `TransformProxy`+`RenderProxy` 合并成 `engine_render::sprite::Sprite`（1×1 白纹理兜底），与 ECS `Sprite` 组件一并提交。
+
+模块：`engine_core::identity_bridge`（`IdentityBridge`, `TransformProxy`, `RenderProxy`, `collect_proxy_sprites`）。
+
+编辑器保存：`EditorState::save_scene_bundle` 写出编辑器 Scene + `<path>.runtime.json`（`SceneData`）；`open_scene_file` 优先识别 `game_objects` 字段。
 
 ## 与 Unity 的对应关系
 

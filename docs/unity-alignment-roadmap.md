@@ -105,6 +105,8 @@ engine-scene       → 自己的 Node/Transform (第三套)
 | P2.6 | Editor 只依赖 `engine_core::world::World` | 编辑器已持有 `state.world: engine_core::World`；菜单仍另有 ECS `scene_manager` 路径 |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
 | P2.8 | 统一 App 入口 | `unity_world` / `unity_world_ref` / `require_unity_world` / `link_unity_scene` ✅ |
+| P2.9 | 渲染消费身份桥 | `render_phase` 合并 `TransformProxy`+`RenderProxy` → `Sprite`（白纹理兜底） ✅ |
+| P2.10 | 编辑器双写场景 | `save_scene_bundle`：编辑器 Scene + `.runtime.json`（SceneData）；`open_scene_file` 优先 SceneData ✅ |
 
 ### 风险控制
 1. 全程用 feature flag：`unity-world-primary`（默认 off）

@@ -16,8 +16,12 @@
 
 use std::collections::HashMap;
 
+use engine_asset::asset::Handle;
+use engine_asset::types::Texture;
 use engine_ecs::entity::Entity;
 use engine_ecs::world::World as EcsWorld;
+use engine_math::{Mat4, Vec2};
+use engine_render::sprite::Sprite;
 
 use crate::components::{Material, SpriteRenderer};
 use crate::gameobject::GameObjectHandle;
@@ -217,6 +221,41 @@ impl IdentityBridge {
     }
 }
 
+/// Build 2D [`Sprite`]s from linked `TransformProxy` + `RenderProxy` entities.
+///
+/// Used by `App::render_phase` so Unity World objects reach the sprite
+/// pipeline without a second ECS `Sprite` component. `fallback_texture` is
+/// used when no per-path texture is registered (colored quads / placeholders).
+pub fn collect_proxy_sprites(ecs: &EcsWorld, fallback_texture: &Handle<Texture>) -> Vec<Sprite> {
+    let mut out = Vec::new();
+    for idx in ecs.component_entities::<RenderProxy>() {
+        let Some(rp) = ecs.get_by_index::<RenderProxy>(idx) else {
+            continue;
+        };
+        if !rp.visible {
+            continue;
+        }
+        let Some(tp) = ecs.get_by_index::<TransformProxy>(idx) else {
+            continue;
+        };
+        // Local unit quad; scale/rotation/position live on the matrix.
+        let unit = Vec2::new(
+            tp.scale.x.abs().max(f32::EPSILON),
+            tp.scale.y.abs().max(f32::EPSILON),
+        );
+        out.push(Sprite {
+            texture: fallback_texture.clone(),
+            color: rp.color,
+            size: unit,
+            transform: Mat4::from_scale_rotation_translation(tp.scale, tp.rotation, tp.position),
+            flip_x: rp.flip_x,
+            flip_y: rp.flip_y,
+            uv_region: [0.0, 0.0, 1.0, 1.0],
+        });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,5 +375,36 @@ mod tests {
             ecs.get::<TransformProxy>(bridge.entity_for(go).unwrap())
                 .is_some()
         );
+    }
+
+    #[test]
+    fn test_collect_proxy_sprites_from_visible() {
+        let mut unity = UnityWorld::new();
+        let go = unity.CreateGameObject("Quad");
+        unity.AddComponent(go, Material::new_with_color([1.0, 0.0, 0.0, 1.0]));
+        if let Some(t) = unity.GetTransformMut(go) {
+            t.SetLocalPosition(engine_math::Vec3::new(5.0, 0.0, 0.0));
+        }
+        unity.sync_transforms();
+
+        let mut ecs = EcsWorld::new();
+        let mut bridge = IdentityBridge::new();
+        bridge.sync_all(&unity, &mut ecs);
+
+        let fallback = Handle::new(Texture {
+            id: "t".into(),
+            width: 1,
+            height: 1,
+            data: vec![255, 255, 255, 255],
+            channels: 4,
+            asset_path: std::path::PathBuf::new(),
+        });
+        let sprites = collect_proxy_sprites(&ecs, &fallback);
+        assert_eq!(sprites.len(), 1);
+        assert_eq!(sprites[0].color, [1.0, 0.0, 0.0, 1.0]);
+        let pos = sprites[0]
+            .transform
+            .transform_point3(engine_math::Vec3::ZERO);
+        assert_eq!(pos.x, 5.0);
     }
 }
