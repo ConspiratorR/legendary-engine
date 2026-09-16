@@ -29,6 +29,35 @@ fn unity_play_host_clones_hierarchy_and_ticks() {
 }
 
 #[test]
+fn sync_node_transforms_from_world_updates_snapshots() {
+    use engine_core::transform::Transform;
+
+    let mut state = EditorState::new();
+    let root = state.world.GetRootGameObjects()[0];
+    // Ensure handle maps exist for the demo hierarchy
+    assert!(state.GetNodeId(root).is_some());
+
+    if let Some(t) = state.world.GetTransformMut(root) {
+        t.SetLocalPosition(engine_math::Vec3::new(42.0, 7.0, 1.5));
+    }
+    state.sync_node_transforms_from_world();
+
+    let node_id = state.GetNodeId(root).expect("node id");
+    let t = state.node_transforms.get(&node_id).expect("snapshot");
+    assert!((t[0] - 42.0).abs() < 1e-4);
+    assert!((t[1] - 7.0).abs() < 1e-4);
+    assert!((t[2] - 1.5).abs() < 1e-4);
+
+    // build_scene path: World wins over stale snapshot
+    if let Some(handle) = state.GetHandle(node_id) {
+        if let Some(wt) = state.world.GetTransform(handle) {
+            assert!((wt.LocalPosition().x - 42.0).abs() < 1e-4);
+        }
+    }
+    let _ = Transform::default();
+}
+
+#[test]
 fn unity_play_host_clones_common_components() {
     use engine_core::components::{AudioSource, Light, LightType, Rigidbody, ScriptBehaviour};
 

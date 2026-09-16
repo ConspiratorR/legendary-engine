@@ -476,7 +476,7 @@ app.sync_identity_bridge();
 | PlayerLoop | `crates/engine-core/src/player_loop.rs` |
 | 编辑器 Scene 桥 | `EditorState::to_core_scene_data` / `import_core_scene_json`（`engine-editor/src/state.rs`） |
 
-编辑器与运行时共用同一套 `SceneData` JSON：
+编辑器 3D 视口：`build_scene` 优先读 Unity World 的 Transform；Play 时 `tick_unity_play_host` 全层级镜像回编辑器 World，并 `sync_node_transforms_from_world` 更新快照。
 
 ```rust
 // 编辑器导出 → 运行时加载

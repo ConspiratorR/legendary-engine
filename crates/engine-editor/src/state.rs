@@ -1343,19 +1343,65 @@ impl EditorState {
         let frame = host.time.frameCount();
         host.runtime.tick(&host.time, frame, &mut host.events);
 
-        // Mirror active-object transforms back into the editor World for viewport.
-        // (Only roots: children inherit via hierarchy sync when needed.)
-        for root in host.runtime.world.GetRootGameObjects() {
-            let name = host.runtime.world.GetName(root).to_string();
-            if let Some(editor_go) = self.world.Find(&name) {
-                if let (Some(rt), Some(et)) = (
-                    host.runtime.world.GetTransform(root),
-                    self.world.GetTransformMut(editor_go),
-                ) {
-                    *et = rt.clone();
-                }
-                self.world.sync_transforms();
+        // Mirror runtime hierarchy transforms → editor World (viewport / inspector).
+        let runtime_roots = host.runtime.world.GetRootGameObjects();
+        for root in runtime_roots {
+            Self::mirror_transforms_recursive(&host.runtime.world, root, &mut self.world, None);
+        }
+        self.world.sync_transforms();
+        self.sync_node_transforms_from_world();
+    }
+
+    /// Copy local transforms from `src` GO into matching `dst` GO (matched by path name).
+    fn mirror_transforms_recursive(
+        src: &engine_core::world::World,
+        src_handle: GameObjectHandle,
+        dst: &mut engine_core::world::World,
+        parent_dst: Option<GameObjectHandle>,
+    ) {
+        let name = src.GetName(src_handle).to_string();
+        let dst_handle = match parent_dst {
+            Some(parent) => {
+                // Prefer child of parent with same name
+                dst.GetChildren(parent)
+                    .into_iter()
+                    .find(|&c| dst.GetName(c) == name)
+                    .or_else(|| dst.Find(&name))
             }
+            None => dst.Find(&name),
+        };
+        let Some(dst_handle) = dst_handle else { return };
+
+        if let (Some(st), Some(dt)) = (
+            src.GetTransform(src_handle),
+            dst.GetTransformMut(dst_handle),
+        ) {
+            *dt = st.clone();
+        }
+
+        for child in src.GetChildren(src_handle) {
+            Self::mirror_transforms_recursive(src, child, dst, Some(dst_handle));
+        }
+    }
+
+    /// Write Unity World local transforms into `node_transforms` for the 3D viewport.
+    ///
+    /// World is the authority; `node_transforms` is a mirror for `build_scene`.
+    pub fn sync_node_transforms_from_world(&mut self) {
+        let pairs: Vec<(u64, GameObjectHandle)> =
+            self.handle_to_node.iter().map(|(&h, &n)| (n, h)).collect();
+        for (node_id, handle) in pairs {
+            let Some(t) = self.world.GetTransform(handle) else {
+                continue;
+            };
+            let pos = t.LocalPosition();
+            let rot = t.LocalRotation();
+            let scale = t.LocalScale();
+            let (rx, ry, rz) = rot.to_euler(engine_math::EulerRot::XYZ);
+            self.node_transforms.insert(
+                node_id,
+                [pos.x, pos.y, pos.z, rx, ry, rz, scale.x, scale.y, scale.z],
+            );
         }
     }
 
@@ -2040,10 +2086,17 @@ impl EditorState {
             if node.parent.is_none() {
                 continue;
             }
+            // Prefer live Unity World transform (P2.6 authority); fall back to snapshot.
             let t = self
-                .node_transforms
-                .get(&node.id)
-                .copied()
+                .GetHandle(node.id)
+                .and_then(|h| self.world.GetTransform(h))
+                .map(|tr| {
+                    let pos = tr.LocalPosition();
+                    let (rx, ry, rz) = tr.LocalRotation().to_euler(engine_math::EulerRot::XYZ);
+                    let scale = tr.LocalScale();
+                    [pos.x, pos.y, pos.z, rx, ry, rz, scale.x, scale.y, scale.z]
+                })
+                .or_else(|| self.node_transforms.get(&node.id).copied())
                 .unwrap_or([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0]);
 
             // Check if this node has a material override

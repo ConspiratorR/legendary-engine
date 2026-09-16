@@ -102,7 +102,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 |----|------|------|
 | P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | 保持 Unity API 不变 — **延后**（大重写） |
 | P2.5 | 弃用 `engine-scene` 中重复 Transform | 全局变换只在 core World 计算 — **延后** |
-| P2.6 | Editor 只依赖 `engine_core::world::World` | 编辑器已持有 `state.world: engine_core::World`；菜单仍另有 ECS `scene_manager` 路径 |
+| P2.6 | Editor 只依赖 `engine_core::world::World` | 编辑器已持有 `state.world`；**视口位姿以 World 为准**（`sync_node_transforms_from_world` + `build_scene` 优先 World）；菜单仍另有 ECS `scene_manager` 路径 | 部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
 | P2.8 | 统一 App 入口 | `unity_world` / `unity_world_ref` / `require_unity_world` / `link_unity_scene` ✅ |
 | P2.9 | 渲染消费身份桥 | `render_phase` 合并 `TransformProxy`+`RenderProxy` → `Sprite`（白纹理兜底） ✅ |
