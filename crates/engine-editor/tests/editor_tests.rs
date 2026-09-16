@@ -94,6 +94,50 @@ fn new_scene_clears_unity_world_and_maps() {
 }
 
 #[test]
+fn unity_play_host_physics_falls_with_gravity() {
+    use engine_core::components::{Rigidbody, SphereCollider};
+
+    let mut state = EditorState::new();
+    state.new_scene();
+    let ball = state.world.CreateGameObject("Ball");
+    state.world.AddComponent(
+        ball,
+        Rigidbody {
+            mass: 1.0,
+            use_gravity: true,
+            is_kinematic: false,
+            ..Default::default()
+        },
+    );
+    state.world.AddComponent(ball, SphereCollider::default());
+    if let Some(t) = state.world.GetTransformMut(ball) {
+        t.SetLocalPosition(engine_math::Vec3::new(0.0, 10.0, 0.0));
+    }
+    state.world.sync_transforms();
+
+    let mut host = state.build_unity_play_host();
+    // Run several frames with enough delta for FixedUpdate steps (fixed=0.02)
+    for _ in 0..30 {
+        state.tick_unity_play_host(&mut host, 0.05);
+    }
+
+    let runtime_ball = host.runtime.world.Find("Ball").expect("Ball in play world");
+    let y = host
+        .runtime
+        .world
+        .GetTransform(runtime_ball)
+        .unwrap()
+        .Position()
+        .y;
+    assert!(
+        y < 10.0,
+        "gravity should lower ball y; got {y} (body_count={})",
+        host.physics.body_count
+    );
+    assert!(host.physics.body_count >= 1);
+}
+
+#[test]
 fn unity_play_host_clones_common_components() {
     use engine_core::components::{AudioSource, Light, LightType, Rigidbody, ScriptBehaviour};
 

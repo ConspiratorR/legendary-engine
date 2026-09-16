@@ -36,6 +36,10 @@ pub struct UnityPlayHost {
     pub runtime: engine_core::SceneRuntime,
     pub time: engine_core::time::Time,
     pub events: engine_core::event::EventBus,
+    /// ECS world holding physics RigidBody/Collider/Transform mirrors.
+    pub ecs: engine_ecs::world::World,
+    /// Physics simulation stepped on FixedUpdate.
+    pub physics: engine_physics::world::PhysicsWorld,
 }
 
 /// Active transform tool in the viewport toolbar.
@@ -1332,6 +1336,7 @@ impl EditorState {
     pub fn build_unity_play_host(&self) -> UnityPlayHost {
         use engine_core::event::EventBus;
         use engine_core::time::Time;
+        use engine_physics::world::PhysicsWorld;
 
         let mut runtime = engine_core::SceneRuntime::new();
         for root in self.world.GetRootGameObjects() {
@@ -1339,16 +1344,37 @@ impl EditorState {
         }
         runtime.mark_needs_awake();
 
-        UnityPlayHost {
+        let mut host = UnityPlayHost {
             runtime,
             time: Time::new(),
             events: EventBus::new(),
-        }
+            ecs: engine_ecs::world::World::new(),
+            physics: PhysicsWorld::default(),
+        };
+        // Identity-bridge every GO so physics can key off Entity.
+        host.runtime
+            .bridge
+            .ensure_all_linked(&host.runtime.world, &mut host.ecs);
+        host
     }
 
     /// Advance the Unity play host one frame (FixedUpdate 0+ → Start → Update → …).
     pub fn tick_unity_play_host(&mut self, host: &mut UnityPlayHost, dt: f32) {
         host.time.update(dt);
+
+        // Physics steps on FixedUpdate (Unity contract). Use pending_fixed_steps
+        // because SceneRuntime.tick does not call begin/end_fixed_update itself.
+        let fixed_steps = host.time.pending_fixed_steps();
+        for _ in 0..fixed_steps {
+            host.time.begin_fixed_update();
+            host.physics.delta_time = host.time.fixedDeltaTime();
+            Self::sync_physics_from_unity(host);
+            host.physics.step(&mut host.ecs);
+            Self::sync_physics_to_unity(host);
+            host.runtime.world.sync_transforms();
+            host.time.end_fixed_update();
+        }
+
         let frame = host.time.frameCount();
         host.runtime.tick(&host.time, frame, &mut host.events);
 
@@ -1359,6 +1385,139 @@ impl EditorState {
         }
         self.world.sync_transforms();
         self.sync_node_transforms_from_world();
+    }
+
+    /// Copy Unity Rigidbody / Transform / colliders into the physics ECS mirror.
+    fn sync_physics_from_unity(host: &mut UnityPlayHost) {
+        use engine_core::components::{BoxCollider, Rigidbody, SphereCollider};
+        use engine_core::transform::Transform as CoreTransform;
+        use engine_physics::{Collider, RigidBody};
+        use std::collections::HashMap;
+
+        host.runtime.world.sync_transforms();
+        let handles: Vec<_> = {
+            let unity = &host.runtime.world;
+            unity
+                .GetRootGameObjects()
+                .into_iter()
+                .flat_map(|root| {
+                    let mut stack = vec![root];
+                    let mut out = vec![];
+                    while let Some(h) = stack.pop() {
+                        out.push(h);
+                        stack.extend(unity.GetChildren(h));
+                    }
+                    out
+                })
+                .collect()
+        };
+
+        let mut go_to_entity: HashMap<GameObjectHandle, engine_ecs::entity::Entity> =
+            HashMap::new();
+        for &go in &handles {
+            if let Some(e) = host.runtime.bridge.entity_for(go) {
+                go_to_entity.insert(go, e);
+            } else {
+                let e = host.runtime.link_to_ecs(go, &mut host.ecs);
+                go_to_entity.insert(go, e);
+            }
+        }
+
+        for (&go, &entity) in &go_to_entity {
+            let Some(unity_rb) = host.runtime.world.GetComponent::<Rigidbody>(go) else {
+                continue;
+            };
+
+            // Transform mirror (world pose for integration)
+            if let Some(t) = host.runtime.world.GetTransform(go) {
+                let pos = t.Position();
+                let rot = t.Rotation();
+                let scale = t.LossyScale();
+                let proxy = CoreTransform::from_position_rotation_scale(pos, rot, scale);
+                if host.ecs.get::<CoreTransform>(entity).is_some() {
+                    *host.ecs.get_mut::<CoreTransform>(entity).unwrap() = proxy;
+                } else {
+                    host.ecs.add_component(entity, proxy);
+                }
+            }
+
+            let mut body = if host.ecs.get::<RigidBody>(entity).is_some() {
+                host.ecs.get_mut::<RigidBody>(entity).unwrap().clone()
+            } else if unity_rb.is_kinematic {
+                RigidBody::new_kinematic()
+            } else if unity_rb.use_gravity {
+                RigidBody::new_dynamic()
+            } else {
+                RigidBody::new_static()
+            };
+            body.mass = unity_rb.mass.max(0.001);
+            body.linear_velocity = unity_rb.velocity;
+            body.angular_velocity = unity_rb.angular_velocity;
+            body.linear_damping = unity_rb.drag;
+            body.angular_damping = unity_rb.angular_drag;
+            if host.ecs.get::<RigidBody>(entity).is_some() {
+                *host.ecs.get_mut::<RigidBody>(entity).unwrap() = body;
+            } else {
+                host.ecs.add_component(entity, body);
+            }
+
+            if let Some(sc) = host.runtime.world.GetComponent::<SphereCollider>(go) {
+                let col = Collider::sphere(sc.radius.max(0.01));
+                if host.ecs.get::<Collider>(entity).is_some() {
+                    *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
+                } else {
+                    host.ecs.add_component(entity, col);
+                }
+            } else if let Some(bc) = host.runtime.world.GetComponent::<BoxCollider>(go) {
+                let h = bc.size * 0.5;
+                let col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
+                if host.ecs.get::<Collider>(entity).is_some() {
+                    *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
+                } else {
+                    host.ecs.add_component(entity, col);
+                }
+            }
+        }
+    }
+
+    /// Write simulated Transform positions back onto Unity GameObjects.
+    fn sync_physics_to_unity(host: &mut UnityPlayHost) {
+        use engine_core::transform::Transform as CoreTransform;
+
+        let pairs: Vec<_> = {
+            let mut out = Vec::new();
+            for go in Self::all_handles(&host.runtime.world) {
+                if let Some(e) = host.runtime.bridge.entity_for(go) {
+                    out.push((go, e));
+                }
+            }
+            out
+        };
+
+        for (go, entity) in pairs {
+            let Some(ecs_t) = host.ecs.get::<CoreTransform>(entity) else {
+                continue;
+            };
+            // Only overwrite if this GO had a simulated Rigidbody.
+            if host.ecs.get::<engine_physics::RigidBody>(entity).is_none() {
+                continue;
+            }
+            let pos = ecs_t.Position();
+            // Write local position so the next World::sync_transforms rebuilds world space.
+            if let Some(t) = host.runtime.world.GetTransformMut(go) {
+                t.SetLocalPosition(pos);
+            }
+        }
+    }
+
+    fn all_handles(world: &engine_core::world::World) -> Vec<GameObjectHandle> {
+        let mut out = Vec::new();
+        let mut stack: Vec<GameObjectHandle> = world.GetRootGameObjects();
+        while let Some(h) = stack.pop() {
+            out.push(h);
+            stack.extend(world.GetChildren(h));
+        }
+        out
     }
 
     /// Copy local transforms from `src` GO into matching `dst` GO (matched by path name).
