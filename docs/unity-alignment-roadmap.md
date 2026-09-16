@@ -223,8 +223,10 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 **本分支验收（2026-09）**
 
 - `cargo test -p engine-core` / `cargo test -p engine-editor --test editor_tests` 全绿  
-- 示例：`coroutine_demo`、`runtime_scene_demo`、`so_asset`  
-- 不合并 `main`，直至用户明确要求  
+- 示例：`coroutine_demo`、`runtime_scene_demo`、`unity_gameplay_demo`、`so_asset`  
+- 分支相对 `main` 领先约 17 个提交；合 main 时在仓库根目录执行：  
+  `git checkout main && git merge --no-ff unity-lifecycle-refactor`  
+  （会话沙箱不允许本 agent 切换 main）
 
 ### PR 描述草稿（P5.6，合并时用）
 
