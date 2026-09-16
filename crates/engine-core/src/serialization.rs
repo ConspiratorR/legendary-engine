@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::component::Component;
 use crate::gameobject::{GameObject, GameObjectHandle};
+use crate::scriptable_asset::AssetRef;
 use crate::transform::Transform;
 use crate::world::World;
 use engine_math::{Quat, Vec3};
@@ -13,6 +14,47 @@ use engine_math::{Quat, Vec3};
 pub struct ComponentData {
     pub type_name: String,
     pub properties: HashMap<String, serde_json::Value>,
+}
+
+impl ComponentData {
+    pub fn new(type_name: impl Into<String>) -> Self {
+        Self {
+            type_name: type_name.into(),
+            properties: HashMap::new(),
+        }
+    }
+
+    pub fn with_property(mut self, key: &str, value: serde_json::Value) -> Self {
+        self.properties.insert(key.to_string(), value);
+        self
+    }
+
+    /// Store an [`AssetRef`] GUID under `key` (P3.3 scene asset references).
+    pub fn insert_asset_ref(&mut self, key: &str, r: &AssetRef) {
+        self.properties
+            .insert(key.to_string(), serde_json::json!({ "guid": r.guid }));
+    }
+
+    /// Read an [`AssetRef`] from `key`; missing/null becomes `AssetRef::null()`.
+    pub fn get_asset_ref(&self, key: &str) -> Option<AssetRef> {
+        let v = self.properties.get(key)?;
+        if v.is_null() {
+            return Some(AssetRef::null());
+        }
+        if let Some(guid) = v.as_str() {
+            return Some(if guid.is_empty() {
+                AssetRef::null()
+            } else {
+                AssetRef::from_guid(guid)
+            });
+        }
+        let guid = v.get("guid")?.as_str()?;
+        Some(if guid.is_empty() {
+            AssetRef::null()
+        } else {
+            AssetRef::from_guid(guid)
+        })
+    }
 }
 
 /// Serialized Transform data (built-in, not a Component).
@@ -62,11 +104,17 @@ pub struct SceneSerializer {
 }
 
 impl SceneSerializer {
+    /// Serializer with built-in Material / SpriteRenderer formatters.
     pub fn new() -> Self {
-        Self {
+        let mut s = Self {
             formatters: Vec::new(),
             deserializers: HashMap::new(),
-        }
+        };
+        s.AddFormatter(Box::new(MaterialFormatter));
+        s.AddFormatter(Box::new(SpriteRendererFormatter));
+        s.AddDeserializer(Box::new(MaterialDeserializer));
+        s.AddDeserializer(Box::new(SpriteRendererDeserializer));
+        s
     }
 
     pub fn AddFormatter(&mut self, formatter: Box<dyn ComponentFormatter>) {
@@ -115,8 +163,21 @@ impl SceneSerializer {
             }
         };
 
-        // Serialize components
-        let components = Vec::new(); // Components are stored differently now
+        // Serialize components via registered formatters (Material, SpriteRenderer, …)
+        let components = world
+            .get_gameobject(handle)
+            .map(|go| {
+                let mut out = Vec::new();
+                for c in go.Components() {
+                    for f in &self.formatters {
+                        if let Some(data) = f.format(c.as_ref()) {
+                            out.push(data);
+                        }
+                    }
+                }
+                out
+            })
+            .unwrap_or_default();
 
         // Serialize children
         let children = world
@@ -159,6 +220,15 @@ impl SceneSerializer {
             t.SetLocalScale(data.transform.local_scale);
         }
 
+        // Restore components
+        for cd in &data.components {
+            if let Some(d) = self.deserializers.get(cd.type_name.as_str())
+                && let Some(c) = d.deserialize(cd)
+            {
+                world.AddComponentBoxed(handle, c);
+            }
+        }
+
         // Spawn children and attach them
         for child_data in &data.children {
             let child_handle = self.SpawnGameObject(world, child_data);
@@ -192,6 +262,121 @@ pub fn SaveSceneJson(world: &World, name: &str) -> Result<String, serde_json::Er
     serde_json::to_string_pretty(&scene)
 }
 
+/// Built-in formatter for [`crate::components::Material`].
+struct MaterialFormatter;
+
+impl ComponentFormatter for MaterialFormatter {
+    fn type_name(&self) -> &str {
+        "Material"
+    }
+
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let m = component
+            .as_any()
+            .downcast_ref::<crate::components::Material>()?;
+        let mut data = ComponentData::new("Material");
+        data.properties
+            .insert("base_color".into(), serde_json::json!(m.base_color));
+        data.properties
+            .insert("metallic".into(), serde_json::json!(m.metallic));
+        data.properties
+            .insert("smoothness".into(), serde_json::json!(m.smoothness));
+        if !m.normal_map.is_empty() {
+            data.properties
+                .insert("normal_map".into(), serde_json::json!(m.normal_map));
+        }
+        Some(data)
+    }
+}
+
+struct MaterialDeserializer;
+
+impl ComponentDeserializer for MaterialDeserializer {
+    fn type_name(&self) -> &str {
+        "Material"
+    }
+
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        let mut m = crate::components::Material::default();
+        if let Some(c) = data.properties.get("base_color")
+            && let Ok(arr) = serde_json::from_value::<[f32; 4]>(c.clone())
+        {
+            m.base_color = arr;
+        }
+        if let Some(v) = data.properties.get("metallic").and_then(|v| v.as_f64()) {
+            m.metallic = v as f32;
+        }
+        if let Some(v) = data.properties.get("smoothness").and_then(|v| v.as_f64()) {
+            m.smoothness = v as f32;
+        }
+        if let Some(v) = data.properties.get("normal_map").and_then(|v| v.as_str()) {
+            m.normal_map = v.to_string();
+        }
+        Some(Box::new(m))
+    }
+}
+
+/// Built-in formatter for [`crate::components::SpriteRenderer`].
+struct SpriteRendererFormatter;
+
+impl ComponentFormatter for SpriteRendererFormatter {
+    fn type_name(&self) -> &str {
+        "SpriteRenderer"
+    }
+
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let sr = component
+            .as_any()
+            .downcast_ref::<crate::components::SpriteRenderer>()?;
+        let mut data = ComponentData::new("SpriteRenderer");
+        data.properties
+            .insert("sprite".into(), serde_json::json!(sr.sprite));
+        data.properties
+            .insert("color".into(), serde_json::json!(sr.color));
+        data.properties
+            .insert("flip_x".into(), serde_json::json!(sr.flip_x));
+        data.properties
+            .insert("flip_y".into(), serde_json::json!(sr.flip_y));
+        data.properties
+            .insert("sorting_order".into(), serde_json::json!(sr.sorting_order));
+        Some(data)
+    }
+}
+
+struct SpriteRendererDeserializer;
+
+impl ComponentDeserializer for SpriteRendererDeserializer {
+    fn type_name(&self) -> &str {
+        "SpriteRenderer"
+    }
+
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        let mut sr = crate::components::SpriteRenderer::default();
+        if let Some(v) = data.properties.get("sprite").and_then(|v| v.as_str()) {
+            sr.sprite = v.to_string();
+        }
+        if let Some(c) = data.properties.get("color")
+            && let Ok(arr) = serde_json::from_value::<[f32; 4]>(c.clone())
+        {
+            sr.color = arr;
+        }
+        if let Some(v) = data.properties.get("flip_x").and_then(|v| v.as_bool()) {
+            sr.flip_x = v;
+        }
+        if let Some(v) = data.properties.get("flip_y").and_then(|v| v.as_bool()) {
+            sr.flip_y = v;
+        }
+        if let Some(v) = data
+            .properties
+            .get("sorting_order")
+            .and_then(|v| v.as_i64())
+        {
+            sr.sorting_order = v as i32;
+        }
+        Some(Box::new(sr))
+    }
+}
+
 /// Load a scene from JSON string.
 pub fn LoadSceneJson(
     json: &str,
@@ -209,8 +394,64 @@ mod tests {
     #[test]
     fn test_scene_serializer_new() {
         let s = SceneSerializer::new();
-        assert_eq!(s.formatters.len(), 0);
-        assert_eq!(s.deserializers.len(), 0);
+        // Built-in Material + SpriteRenderer
+        assert_eq!(s.formatters.len(), 2);
+        assert_eq!(s.deserializers.len(), 2);
+    }
+
+    #[test]
+    fn test_material_sprite_roundtrip() {
+        use crate::components::{Material, SpriteRenderer};
+
+        let mut world = World::new();
+        let go = world.CreateGameObject("Prop");
+        world.AddComponent(
+            go,
+            Material {
+                base_color: [1.0, 0.5, 0.25, 1.0],
+                metallic: 0.3,
+                smoothness: 0.7,
+                ..Default::default()
+            },
+        );
+        world.AddComponent(
+            go,
+            SpriteRenderer {
+                sprite: "hero.png".into(),
+                color: [0.9, 0.1, 0.1, 1.0],
+                flip_x: true,
+                flip_y: false,
+                sorting_order: 3,
+            },
+        );
+
+        let s = SceneSerializer::new();
+        let scene = s.Save(&world, "Props");
+        assert_eq!(scene.game_objects[0].components.len(), 2);
+
+        let mut world2 = World::new();
+        s.Load(&scene, &mut world2);
+        let go2 = world2.Find("Prop").unwrap();
+        let m = world2.GetComponent::<Material>(go2).unwrap();
+        assert_eq!(m.base_color, [1.0, 0.5, 0.25, 1.0]);
+        assert!((m.metallic - 0.3).abs() < 1e-5);
+        let sr = world2.GetComponent::<SpriteRenderer>(go2).unwrap();
+        assert_eq!(sr.sprite, "hero.png");
+        assert!(sr.flip_x);
+        assert_eq!(sr.sorting_order, 3);
+    }
+
+    #[test]
+    fn test_component_data_asset_ref_property() {
+        let mut data = ComponentData::new("EnemyBrain");
+        let r = AssetRef::from_guid("deadbeefcafe");
+        data.insert_asset_ref("data", &r);
+        let back = data.get_asset_ref("data").unwrap();
+        assert_eq!(back.guid(), "deadbeefcafe");
+
+        let mut null_data = ComponentData::new("X");
+        null_data.insert_asset_ref("data", &AssetRef::null());
+        assert!(null_data.get_asset_ref("data").unwrap().is_null());
     }
 
     #[test]
@@ -424,7 +665,7 @@ mod tests {
     #[test]
     fn test_default_impl() {
         let s = SceneSerializer::default();
-        assert_eq!(s.formatters.len(), 0);
-        assert_eq!(s.deserializers.len(), 0);
+        assert_eq!(s.formatters.len(), 2);
+        assert_eq!(s.deserializers.len(), 2);
     }
 }

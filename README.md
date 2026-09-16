@@ -361,6 +361,20 @@ fn my_system(app: &App) {
 | **示例游戏** | ✅ | game_flow_demo — 完整游戏流程（菜单→游戏→暂停→结束）+ ECS/物理/渲染/音频演示 |
 | **WASM/Web 支持** | ✅ | 浏览器运行 (实验性) — wgpu WebGPU/WebGL2、feature flags、cfg-gating |
 
+### 阶段 10 — Unity 对齐运行时（分支 `unity-lifecycle-refactor`）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **PlayerLoop / MonoBehaviour** | ✅ | Fixed→Update→Late→EoF；SetActive/Destroy/Invoke；协程 Wait/WaitRealtime/WaitUntil |
+| **SceneRuntime** | ✅ | Unity World 挂 ECS App；SceneManager 加载/卸载/DDOL |
+| **身份桥** | ✅ | GameObject↔Entity auto-link；TransformProxy/RenderProxy；render_phase 消费 |
+| **编辑器 Play** | ✅ | UnityPlayHost 克隆场景进 SceneRuntime，驱动生命周期 |
+| **场景序列化** | ✅ | Material/SpriteRenderer 内置；`.runtime.json` SceneData；AssetRef 属性 |
+| **ScriptableObject** | ✅ | `.asset`+GUID 热重载、AssetRef |
+| **双 World 存储合并** | 🔗 | P2.4/P2.5 完整迁移 — 下迭代 |
+
+详见 [docs/unity-alignment-roadmap.md](docs/unity-alignment-roadmap.md) 与 [docs/lifecycle-and-scenes.md](docs/lifecycle-and-scenes.md)。
+
 ## 跨平台开发
 
 ### 平台特定代码
