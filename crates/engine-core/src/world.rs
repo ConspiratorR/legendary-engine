@@ -1092,6 +1092,12 @@ impl World {
     // Transform Access (built-in)
     // ============================================================
 
+    /// Array storage Transform (authoritative for hierarchy math; never ECS dual-read).
+    fn get_transform_array(&self, handle: GameObjectHandle) -> Option<&Transform> {
+        let index = handle.index() as usize;
+        self.transforms.get(index)?.as_ref()
+    }
+
     /// Get the Transform of a GameObject (matches `GameObject.transform`).
     ///
     /// # Unity Documentation
@@ -1108,8 +1114,7 @@ impl World {
                 return Some(t);
             }
         }
-        let index = handle.index() as usize;
-        self.transforms.get(index)?.as_ref()
+        self.get_transform_array(handle)
     }
 
     /// Get a mutable Transform reference (always array storage until full merge).
@@ -1138,6 +1143,11 @@ impl World {
             self.write_transform_to_ecs(handle);
         }
         Some(result)
+    }
+
+    /// Copy this handle's array Transform onto its linked ECS entity (if any).
+    pub fn sync_transform_to_ecs(&mut self, handle: GameObjectHandle) {
+        self.write_transform_to_ecs(handle);
     }
 
     /// Copy this handle's array Transform onto its linked ECS entity (if any).
@@ -1210,6 +1220,16 @@ impl World {
                 if let Some(pt) = parent_transform {
                     pt.children.push(child);
                 }
+            }
+        }
+
+        if Self::unity_world_primary_feature() {
+            self.sync_transform_to_ecs(child);
+            if let Some(p) = parent {
+                self.sync_transform_to_ecs(p);
+            }
+            if let Some(old_parent) = old_parent {
+                self.sync_transform_to_ecs(old_parent);
             }
         }
     }
@@ -1884,6 +1904,9 @@ impl World {
         for root in roots {
             self.sync_transform_recursive(root, true);
         }
+        if Self::unity_world_primary_feature() {
+            self.sync_all_transforms_to_ecs();
+        }
     }
 
     /// Recursively sync transform for a GameObject and its children.
@@ -1895,7 +1918,7 @@ impl World {
             None
         } else {
             self.GetParent(handle).and_then(|ph| {
-                self.GetTransform(ph)
+                self.get_transform_array(ph)
                     .map(|t| (t.Position(), t.Rotation(), t.LossyScale()))
             })
         };
@@ -2410,6 +2433,26 @@ mod tests {
             .expect("transform");
         let t = world.transforms[go.index() as usize].as_ref().unwrap();
         assert_eq!(t.LocalPosition().x, 9.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_transform_write_through_on_set_parent_and_sync() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("P");
+        let child = world.CreateGameObject("C");
+        world.with_transform_mut(child, |t| {
+            t.SetLocalPosition(engine_math::Vec3::new(1.0, 2.0, 0.0));
+        });
+        world.SetParent(child, Some(parent));
+        world.sync_transforms();
+
+        let e = world.entity_for(child).unwrap();
+        let t = world
+            .ecs_world()
+            .get::<Transform>(e)
+            .expect("Transform on ECS");
+        assert!((t.Position().y - 2.0).abs() < 1e-4 || (t.LocalPosition().y - 2.0).abs() < 1e-4);
     }
 
     #[cfg(feature = "unity-world-primary")]
