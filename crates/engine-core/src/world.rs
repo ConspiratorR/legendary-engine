@@ -1097,16 +1097,65 @@ impl World {
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/GameObject-transform.html>
     ///
-    /// Returns `Some` if the handle is valid. Transform is mandatory on every GameObject.
+    /// With `unity-world-primary`, prefers the internal ECS `Transform` when the
+    /// handle is linked and that component exists; otherwise falls back to the
+    /// array storage (P2.4 dual-read).
     pub fn GetTransform(&self, handle: GameObjectHandle) -> Option<&Transform> {
+        if Self::unity_world_primary_feature() {
+            if let Some(entity) = self.entity_for(handle)
+                && let Some(t) = self.ecs.get::<Transform>(entity)
+            {
+                return Some(t);
+            }
+        }
         let index = handle.index() as usize;
         self.transforms.get(index)?.as_ref()
     }
 
-    /// Get a mutable Transform reference.
+    /// Get a mutable Transform reference (always array storage until full merge).
+    ///
+    /// Prefer [`World::with_transform_mut`] so ECS write-through runs under
+    /// `unity-world-primary`.
     pub fn GetTransformMut(&mut self, handle: GameObjectHandle) -> Option<&mut Transform> {
         let index = handle.index() as usize;
         self.transforms.get_mut(index)?.as_mut()
+    }
+
+    /// Mutate the Transform then write-through to internal ECS when the feature is on.
+    ///
+    /// Array storage remains authoritative for the mutable borrow; ECS is updated
+    /// after `f` returns so P2.4 dual-read stays coherent.
+    pub fn with_transform_mut<R>(
+        &mut self,
+        handle: GameObjectHandle,
+        f: impl FnOnce(&mut Transform) -> R,
+    ) -> Option<R> {
+        let result = {
+            let t = self.GetTransformMut(handle)?;
+            f(t)
+        };
+        if Self::unity_world_primary_feature() {
+            self.write_transform_to_ecs(handle);
+        }
+        Some(result)
+    }
+
+    /// Copy this handle's array Transform onto its linked ECS entity (if any).
+    fn write_transform_to_ecs(&mut self, handle: GameObjectHandle) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let index = handle.index() as usize;
+        let Some(t) = self.transforms.get(index).and_then(|t| t.as_ref()) else {
+            return;
+        };
+        let full =
+            Transform::from_position_rotation_scale(t.Position(), t.Rotation(), t.LossyScale());
+        if self.ecs.get::<Transform>(entity).is_some() {
+            *self.ecs.get_mut::<Transform>(entity).unwrap() = full;
+        } else {
+            self.ecs.add_component(entity, full);
+        }
     }
 
     // ============================================================
@@ -1328,7 +1377,15 @@ impl World {
     }
 
     /// Get active state (matches `GameObject.activeSelf`).
+    ///
+    /// With `unity-world-primary`, prefers ECS `GameObjectActive` when linked.
     pub fn IsActive(&self, handle: GameObjectHandle) -> bool {
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+            && let Some(active) = self.ecs.get::<GameObjectActive>(entity)
+        {
+            return active.0;
+        }
         let index = handle.index() as usize;
 
         if let Some(go) = self.gameobject_data.get(index) {
@@ -1391,7 +1448,15 @@ impl World {
     }
 
     /// Get name (matches `Object.name`).
+    ///
+    /// With `unity-world-primary`, prefers ECS `GameObjectName` when linked.
     pub fn GetName(&self, handle: GameObjectHandle) -> &str {
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+            && let Some(name) = self.ecs.get::<GameObjectName>(entity)
+        {
+            return name.0.as_str();
+        }
         let index = handle.index() as usize;
 
         if let Some(go) = self.gameobject_data.get(index) {
@@ -1429,7 +1494,15 @@ impl World {
     }
 
     /// Get tag (matches `GameObject.tag`).
+    ///
+    /// With `unity-world-primary`, prefers ECS `GameObjectTag` when linked.
     pub fn GetTag(&self, handle: GameObjectHandle) -> &str {
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+            && let Some(tag) = self.ecs.get::<GameObjectTag>(entity)
+        {
+            return tag.0.as_str();
+        }
         let index = handle.index() as usize;
 
         if let Some(go) = self.gameobject_data.get(index) {
@@ -2324,6 +2397,58 @@ mod tests {
             .expect("MonoBehaviourTypes");
         assert_eq!(types.0.len(), 1);
         assert!(types.0[0].contains("Marker"));
+    }
+
+    #[test]
+    fn test_with_transform_mut_array_path() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Mut");
+        world
+            .with_transform_mut(go, |t| {
+                t.SetLocalPosition(engine_math::Vec3::new(9.0, 0.0, 0.0));
+            })
+            .expect("transform");
+        let t = world.transforms[go.index() as usize].as_ref().unwrap();
+        assert_eq!(t.LocalPosition().x, 9.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_dual_read_prefers_ecs_transform() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Dual");
+        world.sync_transforms();
+        world.sync_all_transforms_to_ecs();
+
+        // Overwrite ECS Transform only — GetTransform should see it with the feature on
+        let e = world.entity_for(go).unwrap();
+        let ecs_t = Transform::from_xyz(42.0, 0.0, 0.0);
+        if world.ecs.get::<Transform>(e).is_some() {
+            *world.ecs.get_mut::<Transform>(e).unwrap() = ecs_t;
+        } else {
+            world.ecs.add_component(e, ecs_t);
+        }
+
+        let t = world.GetTransform(go).unwrap();
+        assert_eq!(t.LocalPosition().x, 42.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_dual_read_prefers_ecs_name_tag_active() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("ArrayName");
+        // Overwrite ECS mirrors only
+        let e = world.entity_for(go).unwrap();
+        {
+            let ecs = world.ecs_world_mut();
+            *ecs.get_mut::<GameObjectName>(e).unwrap() = GameObjectName("EcsName".into());
+            *ecs.get_mut::<GameObjectTag>(e).unwrap() = GameObjectTag("EcsTag".into());
+            *ecs.get_mut::<GameObjectActive>(e).unwrap() = GameObjectActive(false);
+        }
+        assert_eq!(world.GetName(go), "EcsName");
+        assert_eq!(world.GetTag(go), "EcsTag");
+        assert!(!world.IsActive(go));
     }
 
     #[test]
