@@ -100,14 +100,16 @@ engine-scene       → 自己的 Node/Transform (第三套)
 **P2.b — 存储合并（后做，大）**
 | ID | 任务 | 说明 |
 |----|------|------|
-| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read + Transform/Hierarchy/Active 写回；Destroy despawn 内部 ECS；完整数组迁移仍后续 |
-| P2.5 | 弃用 `engine-scene` 中重复 Transform | **盘点**：`scene_bridge` 为可选 ECS 场景桥（非主路径）；动画 keyframe / `collect_system` GlobalTransform 仍依赖 engine-scene — 完整替换延后 |
+| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read + Transform/Hierarchy/Active/MBTypes **写通已完成**（含 B1 回填、B2 写路径收敛、B3 层级双读、B4 Destroy 一致）；完整数组权威迁移 → 见 P2.12 |
+| P2.5 | 弃用 `engine-scene` 中重复 Transform | **盘点 + 模块 doc 完成**；`scene_bridge` 为可选桥；动画 keyframe / `collect_system` GlobalTransform 仍依赖 engine-scene；C1 收集系统数据源 → 见 P2.13 |
 | P2.6 | Editor 只依赖 `engine_core::world::World` | 视口/命令/`new_scene` 已对齐 World；打开优先 `.runtime.json` 孪生；自动保存走 `save_scene_bundle`；旧 ECS Scene 仅作回退 | 大部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
 | P2.8 | 统一 App 入口 | `unity_world` / `unity_world_ref` / `require_unity_world` / `link_unity_scene` ✅ |
 | P2.9 | 渲染消费身份桥 | `render_phase` 合并 `TransformProxy`+`RenderProxy` → `Sprite`（白纹理兜底） ✅ |
 | P2.10 | 编辑器双写场景 | `save_scene_bundle`：编辑器 Scene + `.runtime.json`（SceneData）；`open_scene_file` 优先 SceneData ✅ |
 | P2.11 | 编辑器 Play → SceneRuntime | `UnityPlayHost`：克隆层级 + FixedUpdate 物理步进（Rigidbody→PhysicsWorld）✅ |
+| P2.12 | B5：MB 可恢复实例进 ECS | `MonoBehaviourInstances`（type_name+enabled+props）；`restore_monobehaviours_from_ecs`；SceneData 往返 | ✅ |
+| P2.13 | C1：光源收集数据源 | `light_collect_system` 优先 TransformProxy，回退 GlobalTransform；`TransformProxy` 定义在 `engine-render`；不改 Pass 内部 | ✅ |
 
 ### 风险控制
 1. 全程用 feature flag：`unity-world-primary`（默认 off）

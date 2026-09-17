@@ -70,6 +70,27 @@ impl Component for MonoBehaviourTypes {
     }
 }
 
+/// Recoverable MonoBehaviour metadata (B5). Does not hold the `dyn` instance.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MonoBehaviourInstance {
+    pub type_name: String,
+    pub enabled: bool,
+    pub props: Option<serde_json::Value>,
+}
+
+/// ECS list of recoverable MonoBehaviour descriptors (B5 dual-write).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MonoBehaviourInstances(pub Vec<MonoBehaviourInstance>);
+
+impl Component for MonoBehaviourInstances {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 /// ECS parent link (P2.4 hierarchy write-through). Empty = root.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GameObjectParent(pub GameObjectHandle);
@@ -454,22 +475,34 @@ impl World {
         }
     }
 
-    /// Refresh `MonoBehaviourTypes` on the linked entity from current holders.
+    /// Refresh `MonoBehaviourTypes` + `MonoBehaviourInstances` from current holders.
     fn sync_monobehaviour_types_to_ecs(&mut self, handle: GameObjectHandle) {
         let Some(entity) = self.entity_for(handle) else {
             return;
         };
-        let names: Vec<String> = self
-            .monobehaviours
-            .get(handle.index() as usize)
-            .and_then(|m| m.as_ref())
-            .map(|v| v.iter().map(|m| m.Get().TypeName().to_string()).collect())
-            .unwrap_or_default();
-        let comp = MonoBehaviourTypes(names);
+        let collected = self.CollectMonoBehaviours(handle);
+        let names: Vec<String> = collected.iter().map(|(name, _, _)| name.clone()).collect();
+        let instances: Vec<MonoBehaviourInstance> = collected
+            .into_iter()
+            .map(|(type_name, enabled, props)| MonoBehaviourInstance {
+                type_name,
+                enabled,
+                props,
+            })
+            .collect();
+
+        let types = MonoBehaviourTypes(names);
         if self.ecs.get::<MonoBehaviourTypes>(entity).is_some() {
-            *self.ecs.get_mut::<MonoBehaviourTypes>(entity).unwrap() = comp;
+            *self.ecs.get_mut::<MonoBehaviourTypes>(entity).unwrap() = types;
         } else {
-            self.ecs.add_component(entity, comp);
+            self.ecs.add_component(entity, types);
+        }
+
+        let inst = MonoBehaviourInstances(instances);
+        if self.ecs.get::<MonoBehaviourInstances>(entity).is_some() {
+            *self.ecs.get_mut::<MonoBehaviourInstances>(entity).unwrap() = inst;
+        } else {
+            self.ecs.add_component(entity, inst);
         }
     }
 
@@ -1021,7 +1054,39 @@ impl World {
                     last.SetEnabled(false);
                 }
             }
+            // Keep ECS descriptors coherent after per-item enabled override
+            self.sync_monobehaviour_types_to_ecs(handle);
         }
+    }
+
+    /// Rebuild array MonoBehaviour holders from ECS `MonoBehaviourInstances` (B5).
+    ///
+    /// Uses the global type registry. Returns `true` if any instance was restored.
+    /// Existing holders for `handle` are replaced when ECS metadata is present.
+    pub fn restore_monobehaviours_from_ecs(&mut self, handle: GameObjectHandle) -> bool {
+        let Some(entity) = self.entity_for(handle) else {
+            return false;
+        };
+        let Some(instances) = self.ecs.get::<MonoBehaviourInstances>(entity).cloned() else {
+            return false;
+        };
+        if instances.0.is_empty() {
+            return false;
+        }
+
+        let scripts: Vec<(String, bool, Option<serde_json::Value>)> = instances
+            .0
+            .into_iter()
+            .map(|i| (i.type_name, i.enabled, i.props))
+            .collect();
+
+        let index = handle.index() as usize;
+        if self.monobehaviours.len() <= index {
+            self.monobehaviours.resize_with(index + 1, || None);
+        }
+        self.monobehaviours[index] = Some(Vec::new());
+        self.RestoreMonoBehaviours(handle, &scripts);
+        self.MonoBehaviourCount(handle) > 0
     }
 
     /// Get a component from a GameObject (matches `GameObject.GetComponent<T>()`).
@@ -2699,6 +2764,82 @@ mod tests {
             .expect("MonoBehaviourTypes on ECS");
         assert!(types.0.iter().any(|n| n == "B5Marker"));
         assert_eq!(world.MonoBehaviourCount(go), 1);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_b5_instances_match_collect_and_restore() {
+        #[derive(Default)]
+        struct PropsScript {
+            hits: u32,
+            go: Option<GameObjectHandle>,
+        }
+        impl Component for PropsScript {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl crate::behaviour::Behaviour for PropsScript {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _enabled: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, handle: GameObjectHandle) {
+                self.go = Some(handle);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl crate::monobehaviour::MonoBehaviour for PropsScript {
+            fn TypeName(&self) -> &str {
+                "B5PropsScript"
+            }
+            fn SerializeProps(&self) -> Option<serde_json::Value> {
+                Some(serde_json::json!({ "hits": self.hits }))
+            }
+            fn DeserializeProps(&mut self, props: &serde_json::Value) {
+                self.hits = props.get("hits").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+            }
+        }
+
+        crate::monobehaviour::MonoBehaviourRegistry::global()
+            .lock()
+            .unwrap()
+            .register("B5PropsScript", || {
+                Box::new(PropsScript { hits: 0, go: None })
+            });
+
+        let mut world = World::new();
+        let go = world.CreateGameObject("Scripted");
+        world.AddMonoBehaviour(go, PropsScript { hits: 7, go: None });
+
+        let e = world.entity_for(go).unwrap();
+        let inst = world
+            .ecs_world()
+            .get::<MonoBehaviourInstances>(e)
+            .expect("MonoBehaviourInstances");
+        assert_eq!(inst.0.len(), 1);
+        assert_eq!(inst.0[0].type_name, "B5PropsScript");
+        assert_eq!(inst.0[0].props.as_ref().unwrap()["hits"], 7);
+
+        let collected = world.CollectMonoBehaviours(go);
+        assert_eq!(collected[0].0, "B5PropsScript");
+        assert_eq!(collected[0].2.as_ref().unwrap()["hits"], 7);
+
+        // Clear array holders; restore from ECS + registry
+        world.monobehaviours[go.index() as usize] = Some(Vec::new());
+        assert_eq!(world.MonoBehaviourCount(go), 0);
+        assert!(world.restore_monobehaviours_from_ecs(go));
+        assert_eq!(world.MonoBehaviourCount(go), 1);
+        let restored = world.CollectMonoBehaviours(go);
+        assert_eq!(restored[0].2.as_ref().unwrap()["hits"], 7);
     }
 
     #[cfg(feature = "unity-world-primary")]

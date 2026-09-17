@@ -111,6 +111,8 @@ pub mod pipeline;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod plugin;
 pub mod post_process;
+pub mod proxy;
+pub use proxy::TransformProxy;
 pub mod renderer;
 pub mod resource;
 pub mod shadow;

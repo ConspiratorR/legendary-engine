@@ -516,7 +516,8 @@ Other write paths that already go through ECS:
 
 - `CreateGameObject` — Name/Tag/Active/Transform/Children seeded on the linked entity
 - `SetParent` — hierarchy components rewritten on child, new parent, and old parent
-- `AddMonoBehaviour` — `MonoBehaviourTypes` type-name list
+- `AddMonoBehaviour` / `RestoreMonoBehaviours` — `MonoBehaviourTypes` + `MonoBehaviourInstances` (type_name, enabled, props)
+- `restore_monobehaviours_from_ecs` — rebuild array holders from ECS metadata + global registry
 - `Destroy` / `DestroyImmediate` / `flush_destroy` — ECS entity despawned; pending Destroy and DontDestroyOnLoad entries dropped
 
 ### Array-authoritative APIs
@@ -529,9 +530,11 @@ Other write paths that already go through ECS:
 
 ### Still deferred
 
-- Full authority move of `gameobject_data` / `transforms` / `monobehaviours` into ECS (B5+)
+- Full authority move of `gameobject_data` / `transforms` / `monobehaviours` into ECS (holders still array-backed)
 - Enabling the flag by default
 - engine-scene `Transform` deprecation (see roadmap P2.5)
+
+`engine_core::TransformProxy` is re-exported from `engine_render::proxy::TransformProxy` so render systems can consume the same component type without a core→render cycle.
 
 ---
 

@@ -70,7 +70,7 @@ impl MonoBehaviour for Spinner {
         let me = self.gameobject_handle().expect("host");
         let dt = ctx.DeltaTime().max(0.0);
         let time = ctx.Time();
-        if let Some(t) = ctx.world.GetTransformMut(me) {
+        let _ = ctx.world.with_transform_mut(me, |t| {
             let p = t.LocalPosition();
             t.SetLocalPosition(engine_math::Vec3::new(
                 p.x + 120.0 * dt,
@@ -78,7 +78,7 @@ impl MonoBehaviour for Spinner {
                 p.z,
             ));
             t.Rotate(engine_math::Vec3::new(0.0, 0.0, 90.0 * dt));
-        }
+        });
     }
 
     fn on_message(&mut self, method: &str, _value: Option<&dyn Any>, _ctx: &mut Context) {
@@ -118,9 +118,9 @@ fn main() {
                         ..Default::default()
                     },
                 );
-                if let Some(t) = ctx.world.GetTransformMut(player) {
+                let _ = ctx.world.with_transform_mut(player, |t| {
                     t.SetLocalPosition(engine_math::Vec3::new(0.0, 0.0, 0.0));
-                }
+                });
                 ctx.world.AddMonoBehaviour(
                     player,
                     Spinner {

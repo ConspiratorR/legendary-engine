@@ -40,9 +40,9 @@ fn main() {
     );
     let shield = author.CreateGameObject("Shield");
     author.SetParent(shield, Some(hero));
-    if let Some(t) = author.GetTransformMut(shield) {
+    let _ = author.with_transform_mut(shield, |t| {
         t.SetLocalPosition(engine_math::Vec3::new(0.5, 0.0, 0.0));
-    }
+    });
 
     let json = SaveSceneJson(&author, "DemoLevel").expect("serialize");
     println!("Scene JSON ({} bytes):\n{}", json.len(), json);

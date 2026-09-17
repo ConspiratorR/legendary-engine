@@ -44,16 +44,16 @@ pub fn main() {
         let world = &mut ctx.world;
 
         let player = world.CreateGameObject("Player");
-        if let Some(t) = world.GetTransformMut(player) {
+        let _ = world.with_transform_mut(player, |t| {
             *t = Transform::from_xyz(0.0, 0.0, 0.0);
-        }
+        });
         world.AddComponent(player, Position(Vec3::new(0.0, 0.0, 0.0)));
         world.AddComponent(player, Velocity(Vec3::new(1.0, 2.0, 0.0)));
 
         let enemy = world.CreateGameObject("Enemy");
-        if let Some(t) = world.GetTransformMut(enemy) {
+        let _ = world.with_transform_mut(enemy, |t| {
             *t = Transform::from_xyz(10.0, 5.0, 0.0);
-        }
+        });
         world.AddComponent(enemy, Position(Vec3::new(10.0, 5.0, 0.0)));
         world.AddComponent(enemy, Velocity(Vec3::new(-1.0, -0.5, 0.0)));
     });

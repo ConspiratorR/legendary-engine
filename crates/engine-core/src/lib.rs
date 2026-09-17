@@ -185,7 +185,7 @@ pub use time::Time;
 pub use transform::{Space, Transform};
 pub use world::{
     GameObjectActive, GameObjectChildren, GameObjectName, GameObjectParent, GameObjectTag,
-    MonoBehaviourTypes, World,
+    MonoBehaviourInstance, MonoBehaviourInstances, MonoBehaviourTypes, World,
 };
 
 // Re-export macros - impl_component is defined in component.rs with #[macro_export]

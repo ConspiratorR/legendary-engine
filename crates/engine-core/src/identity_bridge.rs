@@ -28,23 +28,8 @@ use crate::gameobject::GameObjectHandle;
 use crate::transform::Transform as CoreTransform;
 use crate::world::World as UnityWorld;
 
-/// ECS proxy of a Unity object's transform (updated by [`IdentityBridge::sync_transforms`]).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TransformProxy {
-    pub position: engine_math::Vec3,
-    pub rotation: engine_math::Quat,
-    pub scale: engine_math::Vec3,
-}
-
-impl Default for TransformProxy {
-    fn default() -> Self {
-        Self {
-            position: engine_math::Vec3::ZERO,
-            rotation: engine_math::Quat::IDENTITY,
-            scale: engine_math::Vec3::ONE,
-        }
-    }
-}
+// Re-export for API stability (`engine_core::TransformProxy`).
+pub use engine_render::TransformProxy;
 
 /// ECS proxy of Unity render-related components for the render phase.
 #[derive(Debug, Clone, Default)]
