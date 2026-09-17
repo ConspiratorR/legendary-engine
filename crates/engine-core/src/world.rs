@@ -1377,7 +1377,15 @@ impl World {
     }
 
     /// Get active state (matches `GameObject.activeSelf`).
+    ///
+    /// With `unity-world-primary`, prefers ECS `GameObjectActive` when linked.
     pub fn IsActive(&self, handle: GameObjectHandle) -> bool {
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+            && let Some(active) = self.ecs.get::<GameObjectActive>(entity)
+        {
+            return active.0;
+        }
         let index = handle.index() as usize;
 
         if let Some(go) = self.gameobject_data.get(index) {
@@ -1440,7 +1448,15 @@ impl World {
     }
 
     /// Get name (matches `Object.name`).
+    ///
+    /// With `unity-world-primary`, prefers ECS `GameObjectName` when linked.
     pub fn GetName(&self, handle: GameObjectHandle) -> &str {
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+            && let Some(name) = self.ecs.get::<GameObjectName>(entity)
+        {
+            return name.0.as_str();
+        }
         let index = handle.index() as usize;
 
         if let Some(go) = self.gameobject_data.get(index) {
@@ -1478,7 +1494,15 @@ impl World {
     }
 
     /// Get tag (matches `GameObject.tag`).
+    ///
+    /// With `unity-world-primary`, prefers ECS `GameObjectTag` when linked.
     pub fn GetTag(&self, handle: GameObjectHandle) -> &str {
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+            && let Some(tag) = self.ecs.get::<GameObjectTag>(entity)
+        {
+            return tag.0.as_str();
+        }
         let index = handle.index() as usize;
 
         if let Some(go) = self.gameobject_data.get(index) {
@@ -2407,6 +2431,24 @@ mod tests {
 
         let t = world.GetTransform(go).unwrap();
         assert_eq!(t.LocalPosition().x, 42.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_dual_read_prefers_ecs_name_tag_active() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("ArrayName");
+        // Overwrite ECS mirrors only
+        let e = world.entity_for(go).unwrap();
+        {
+            let ecs = world.ecs_world_mut();
+            *ecs.get_mut::<GameObjectName>(e).unwrap() = GameObjectName("EcsName".into());
+            *ecs.get_mut::<GameObjectTag>(e).unwrap() = GameObjectTag("EcsTag".into());
+            *ecs.get_mut::<GameObjectActive>(e).unwrap() = GameObjectActive(false);
+        }
+        assert_eq!(world.GetName(go), "EcsName");
+        assert_eq!(world.GetTag(go), "EcsTag");
+        assert!(!world.IsActive(go));
     }
 
     #[test]
