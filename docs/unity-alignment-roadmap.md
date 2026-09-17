@@ -116,8 +116,8 @@ engine-scene       → 自己的 Node/Transform (第三套)
 
 ### 退出条件
 - [x] 示例游戏只调用 Unity World API（`unity_gameplay_demo`）
-- [x] Editor 与运行时同一套 World 类型（Play 克隆 SceneRuntime World）
-- [ ] 渲染帧数据来自桥接（render_phase 已消费代理；编辑器 3D 视口仍走 engine-scene）
+- [x] Editor 与运行时同一套 World 类型（Play 克隆 SceneRuntime World；打开/自动保存优先 SceneData）
+- [x] 渲染帧数据来自桥接：`render_phase` 消费 TransformProxy/RenderProxy；编辑器 3D 位姿以 World 为准（mesh 列表仍来自节点树，非 engine-scene Transform）
 
 ### 提交建议
 `refactor(engine-core): bridge Unity World to ECS entities` → `refactor: converge dual worlds behind unity-world-primary`
