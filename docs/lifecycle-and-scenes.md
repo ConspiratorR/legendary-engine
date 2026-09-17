@@ -450,16 +450,14 @@ MonoBehaviour 可进 SceneData：实现 `SerializeProps` / `DeserializeProps`，
 
 详细分阶段执行计划见 [unity-alignment-roadmap.md](unity-alignment-roadmap.md)。
 
-1. **P1 运行时硬化** — ✅
-2. **P2.a 身份桥** — ✅；**P2.b 第一切片**：全量自动链接 + App 统一入口 ✅（完整存储合并仍延后）
-3. **P3 资产深化** — ✅ 热重载（App/编辑器轮询）、AssetRef 场景引用
-4. **P4 脚本体验** — ✅ WaitUntil / WaitRealtime / StopCoroutineByName / coroutine_demo / unity_gameplay_demo
-5. **P5 验收合并** — Unity 主路径已在 main；视口权威见 `p2-viewport-unity-source`
+1. **P1 运行时硬化** — ✅  
+2. **P2 身份桥 / 编辑器对齐** — ✅ 主路径（dual-read、SceneData 孪生打开/自动保存已合 main）  
+3. **P2.4 完整存储迁移** — 仍延后（`gameobject_data`/`transforms` 数组真迁 ECS）  
+4. **P3 资产深化** — ✅ 热重载、AssetRef、so_asset  
+5. **P4 脚本体验** — ✅ 协程 / SendMessage / 示例  
+6. **P5** — 主路径在 main；后续 PR 逐项合入  
 
-历史清单（部分已在 roadmap 细化）：
-- SetActive 立即回调（可选模式）
-- Coroutine yield 表达式
-- Asset 热重载
+仍延后：P2.5 弃用 engine-scene 重复 Transform；P2.4 数组存储完全合并。
 
 ## 相关源码
 
