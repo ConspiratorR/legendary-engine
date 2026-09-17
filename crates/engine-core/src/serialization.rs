@@ -288,6 +288,9 @@ impl SceneSerializer {
             world.SetParent(child_handle, Some(handle));
         }
 
+        // R1: complete ECS mirrors for dual-read coherence
+        world.seed_ecs_from_array(handle);
+
         handle
     }
 

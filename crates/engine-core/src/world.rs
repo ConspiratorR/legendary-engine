@@ -393,11 +393,46 @@ impl World {
         if !Self::unity_world_primary_feature() {
             return;
         }
+        if !self.is_valid(handle) {
+            return;
+        }
         let Some(entity) = self.entity_for(handle) else {
             return;
         };
         if self.ecs.get::<Transform>(entity).is_none() {
             self.write_transform_to_ecs(handle);
+        }
+    }
+
+    /// Seed all ECS identity mirrors from **array** storage (R1).
+    ///
+    /// Ensures dual-read under `unity-world-primary` never hits a linked entity
+    /// that is missing Name/Tag/Active/Transform/Hierarchy/MB metadata.
+    /// Always reads array/GameObject fields — never dual-reads ECS.
+    pub fn seed_ecs_from_array(&mut self, handle: GameObjectHandle) {
+        if !self.is_valid(handle) {
+            return;
+        }
+        let _ = self.ensure_entity(handle);
+        let index = handle.index() as usize;
+        if let Some(Some(go)) = self.gameobject_data.get(index) {
+            let name = go.Name().to_string();
+            let tag = go.Tag().to_string();
+            let active = go.ActiveSelf();
+            self.sync_name_to_ecs(handle, &name);
+            self.sync_tag_to_ecs(handle, &tag);
+            self.sync_active_to_ecs(handle, active);
+        }
+        self.write_transform_to_ecs(handle);
+        self.sync_hierarchy_to_ecs(handle);
+        self.sync_monobehaviour_types_to_ecs(handle);
+    }
+
+    /// Seed every valid GameObject's ECS mirrors from array storage (R1).
+    pub fn seed_all_ecs_from_array(&mut self) {
+        let handles: Vec<GameObjectHandle> = self.gameobjects.iter().flatten().copied().collect();
+        for handle in handles {
+            self.seed_ecs_from_array(handle);
         }
     }
 
@@ -2775,6 +2810,71 @@ mod tests {
         let parent_t = world.GetTransform(parent).expect("parent transform");
         assert_eq!(parent_t.LocalPosition(), Vec3::new(5.0, 0.0, 0.0));
         assert_eq!(parent_t.Position(), Vec3::new(5.0, 0.0, 0.0));
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_r1_seed_ecs_from_array_restores_mirrors() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("SeedMe");
+        world.SetTag(go, "Player");
+        world.SetActive(go, false);
+        let _ = world.with_transform_mut(go, |t| {
+            t.SetLocalPosition(Vec3::new(9.0, 1.0, 2.0));
+        });
+
+        let e = world.entity_for(go).unwrap();
+        // Strip ECS mirrors to simulate incomplete entity
+        let _ = world.ecs.remove_component::<GameObjectName>(e);
+        let _ = world.ecs.remove_component::<GameObjectTag>(e);
+        let _ = world.ecs.remove_component::<GameObjectActive>(e);
+        let _ = world.ecs.remove_component::<Transform>(e);
+        assert!(world.ecs.get::<GameObjectName>(e).is_none());
+
+        world.seed_ecs_from_array(go);
+        assert_eq!(world.GetName(go), "SeedMe");
+        assert_eq!(world.GetTag(go), "Player");
+        assert!(!world.IsActive(go));
+        assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 9.0);
+        // Array remains authority for the seed source
+        assert_eq!(world.GetTransformArray(go).unwrap().LocalPosition().x, 9.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_r1_scene_load_seeds_ecs_mirrors() {
+        use crate::serialization::{LoadSceneJson, SaveSceneJson};
+
+        let mut author = World::new();
+        let root = author.CreateGameObject("Root");
+        author.SetTag(root, "Environment");
+        let child = author.CreateGameObject("Child");
+        author.SetParent(child, Some(root));
+        let _ = author.with_transform_mut(child, |t| {
+            t.SetLocalPosition(Vec3::new(2.0, 0.0, 0.0));
+        });
+        let json = SaveSceneJson(&author, "R1Scene").unwrap();
+
+        let mut world = World::new();
+        let handles = LoadSceneJson(&json, &mut world).unwrap();
+        assert_eq!(handles.len(), 1);
+
+        let root_h = handles[0];
+        let root_e = world.entity_for(root_h).expect("root entity");
+        assert!(world.ecs_world().get::<GameObjectName>(root_e).is_some());
+        assert!(world.ecs_world().get::<GameObjectTag>(root_e).is_some());
+        assert!(world.ecs_world().get::<Transform>(root_e).is_some());
+        assert_eq!(world.GetName(root_h), "Root");
+        assert_eq!(world.GetTag(root_h), "Environment");
+
+        let children = world.GetChildren(root_h);
+        assert_eq!(children.len(), 1);
+        let child_e = world.entity_for(children[0]).expect("child entity");
+        assert!(world.ecs_world().get::<GameObjectParent>(child_e).is_some());
+        assert_eq!(
+            world.GetTransform(children[0]).unwrap().LocalPosition().x,
+            2.0
+        );
     }
 
     #[cfg(feature = "unity-world-primary")]
