@@ -733,6 +733,8 @@ fn test_setname_setactive_gettransform_stable_under_any_storage_mode() {
     if let Some(t) = world.GetTransformMut(go) {
         t.SetLocalPosition(engine_math::Vec3::new(1.0, 2.0, 3.0));
     }
+    // Write-through so dual-read GetTransform is coherent under unity-world-primary
+    world.sync_transform_to_ecs(go);
     let t = world.GetTransform(go).unwrap();
     assert_eq!(t.LocalPosition(), engine_math::Vec3::new(1.0, 2.0, 3.0));
 }
@@ -791,4 +793,33 @@ fn test_lifecycle_with_unity_world_primary_dual_read() {
     assert_eq!(world.GetName(go), "FlaggedRenamed");
     assert_eq!(world.GetTag(go), "Enemy");
     let _ = world.GetTransform(go).unwrap();
+}
+
+#[cfg(feature = "unity-world-primary")]
+#[test]
+fn test_b1_transform_backfill_survives_lifecycle() {
+    use engine_core::Transform;
+
+    let mut world = World::new();
+    let go = world.CreateGameObject("BackfillLife");
+    let entity = world.entity_for(go).expect("entity");
+
+    // Mutate array storage only — ensure_transform_from_array must refresh ECS
+    {
+        let t = world.GetTransformMut(go).expect("array transform");
+        t.SetLocalPosition(engine_math::Vec3::new(7.0, 0.0, 0.0));
+    }
+    // Strip ECS Transform then backfill from array
+    let _ = world.ecs_world_mut().remove_component::<Transform>(entity);
+    world.ensure_transform_from_array(go);
+
+    let ecs_t = world
+        .ecs_world()
+        .get::<Transform>(entity)
+        .expect("backfilled Transform");
+    assert_eq!(ecs_t.LocalPosition().x, 7.0);
+
+    // Dual-read GetTransform should now prefer the ECS component
+    let t = world.GetTransform(go).expect("GetTransform");
+    assert_eq!(t.LocalPosition().x, 7.0);
 }

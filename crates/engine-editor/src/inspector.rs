@@ -295,19 +295,20 @@ impl InspectorPanel {
             "变换 位置 旋转 缩放 transform position rotation scale",
             search_lower,
         ) {
-            // Use Unity-style World API to access Transform
+            // Use Unity-style World API to access Transform (write-through)
             if let Some(handle) = state.GetHandle(id) {
-                if let Some(t) = state.world.GetTransformMut(handle) {
-                    let old_pos = t.LocalPosition();
-                    let old_rot = t.LocalRotation();
-                    let old_scale = t.LocalScale();
+                let old_pos = state.world.GetTransform(handle).map(|t| t.LocalPosition());
+                let old_rot = state.world.GetTransform(handle).map(|t| t.LocalRotation());
+                let old_scale = state.world.GetTransform(handle).map(|t| t.LocalScale());
 
+                if let (Some(old_pos), Some(old_rot), Some(old_scale)) =
+                    (old_pos, old_rot, old_scale)
+                {
                     Self::section_separator(gui);
                     Self::section_header(gui, "变换");
 
                     let (mut px, mut py, mut pz) = (old_pos.x, old_pos.y, old_pos.z);
                     Self::vec3_row(gui, "位置", &mut px, &mut py, &mut pz);
-                    t.SetLocalPosition(engine_math::Vec3::new(px, py, pz));
 
                     let (mut rx, mut ry, mut rz) = (
                         old_rot.to_euler(engine_math::EulerRot::XYZ).0.to_degrees(),
@@ -315,16 +316,23 @@ impl InspectorPanel {
                         old_rot.to_euler(engine_math::EulerRot::XYZ).2.to_degrees(),
                     );
                     Self::vec3_row(gui, "旋转", &mut rx, &mut ry, &mut rz);
-                    t.SetLocalRotation(engine_math::Quat::from_euler(
+
+                    let (mut sx, mut sy, mut sz) = (old_scale.x, old_scale.y, old_scale.z);
+                    Self::vec3_row(gui, "缩放", &mut sx, &mut sy, &mut sz);
+
+                    let new_pos = engine_math::Vec3::new(px, py, pz);
+                    let new_rot = engine_math::Quat::from_euler(
                         engine_math::EulerRot::XYZ,
                         rx.to_radians(),
                         ry.to_radians(),
                         rz.to_radians(),
-                    ));
-
-                    let (mut sx, mut sy, mut sz) = (old_scale.x, old_scale.y, old_scale.z);
-                    Self::vec3_row(gui, "缩放", &mut sx, &mut sy, &mut sz);
-                    t.SetLocalScale(engine_math::Vec3::new(sx, sy, sz));
+                    );
+                    let new_scale = engine_math::Vec3::new(sx, sy, sz);
+                    let _ = state.world.with_transform_mut(handle, |t| {
+                        t.SetLocalPosition(new_pos);
+                        t.SetLocalRotation(new_rot);
+                        t.SetLocalScale(new_scale);
+                    });
                 }
             }
         }

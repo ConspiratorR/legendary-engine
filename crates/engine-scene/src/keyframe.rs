@@ -1,3 +1,11 @@
+//! Animation keyframe channels.
+//!
+//! **P2.5 relation:** keyframes currently sample `engine_scene` node poses
+//! (`Transform` translation/rotation/scale). Gameplay authority is
+//! `engine_core::transform::Transform`; animation_editor remains on this
+//! keyframe format until a later convergence. Do not interpret these values
+//! as core World local/world space without going through the scene graph.
+
 use engine_math::{Quat, Vec3};
 use serde::{Deserialize, Serialize};
 

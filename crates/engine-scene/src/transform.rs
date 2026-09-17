@@ -1,3 +1,20 @@
+//! Scene-graph node transform (legacy editor path).
+//!
+//! **P2.5 migration note:** `engine_scene::transform::Transform` is a
+//! lightweight editor/scene-graph pose (translation/rotation/scale only).
+//! Gameplay and the Unity World path use `engine_core::transform::Transform`
+//! (local + cached world + hierarchy).
+//!
+//! Relationship:
+//! - Viewport mesh building already reads poses from `engine_core::World`.
+//! - `engine-render::collect_system` still uses this type for render proxies
+//!   (data-source change deferred; Pass internals stay untouched).
+//! - Animation keyframes continue to sample this type until animation
+//!   converges on core `Transform` (see roadmap P2.5).
+//!
+//! Prefer `engine_core::transform::Transform` for new code. Do not dual-write
+//! both types for the same GameObject.
+
 use engine_math::{Mat4, Quat, Vec3};
 use serde::{Deserialize, Serialize};
 

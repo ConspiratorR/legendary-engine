@@ -818,42 +818,46 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
 
                     let first_id = state.selected_nodes[0];
                     if let Some(handle) = state.GetHandle(first_id) {
-                        if let Some(t) = state.world.GetTransformMut(handle) {
-                            match state.active_tool {
-                                crate::state::ToolType::Translate => {
-                                    let world_dx = dx * sensitivity;
-                                    let world_dz = dy * sensitivity;
+                        match state.active_tool {
+                            crate::state::ToolType::Translate => {
+                                let world_dx = dx * sensitivity;
+                                let world_dz = dy * sensitivity;
+                                let _ = state.world.with_transform_mut(handle, |t| {
                                     t.SetPosition(engine_math::Vec3::new(
                                         start_pos[0] + world_dx,
                                         start_pos[1],
                                         start_pos[2] + world_dz,
                                     ));
-                                }
-                                crate::state::ToolType::Rotate => {
-                                    let rot_sensitivity = 0.01;
-                                    let new_euler = engine_math::Vec3::new(
-                                        start_pos[3] + dy * rot_sensitivity,
-                                        start_pos[4] + dx * rot_sensitivity,
-                                        start_pos[5],
-                                    );
+                                });
+                            }
+                            crate::state::ToolType::Rotate => {
+                                let rot_sensitivity = 0.01;
+                                let new_euler = engine_math::Vec3::new(
+                                    start_pos[3] + dy * rot_sensitivity,
+                                    start_pos[4] + dx * rot_sensitivity,
+                                    start_pos[5],
+                                );
+                                let _ = state.world.with_transform_mut(handle, |t| {
                                     t.SetRotation(engine_math::Quat::from_euler(
                                         engine_math::EulerRot::XYZ,
                                         new_euler.x.to_radians(),
                                         new_euler.y.to_radians(),
                                         new_euler.z.to_radians(),
                                     ));
-                                }
-                                crate::state::ToolType::Scale => {
-                                    let scale_sensitivity = 0.005;
-                                    let scale_factor = 1.0 + dy * scale_sensitivity;
+                                });
+                            }
+                            crate::state::ToolType::Scale => {
+                                let scale_sensitivity = 0.005;
+                                let scale_factor = 1.0 + dy * scale_sensitivity;
+                                let _ = state.world.with_transform_mut(handle, |t| {
                                     t.SetLocalScale(engine_math::Vec3::new(
                                         (start_pos[6] * scale_factor).max(0.01),
                                         (start_pos[7] * scale_factor).max(0.01),
                                         (start_pos[8] * scale_factor).max(0.01),
                                     ));
-                                }
-                                _ => {}
+                                });
                             }
+                            _ => {}
                         }
                     }
                 }

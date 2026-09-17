@@ -78,10 +78,10 @@ mod tests {
         let mut world = World::new();
         let handle = world.CreateGameObject("Root");
 
-        // Set local position via transform
-        if let Some(t) = world.GetTransformMut(handle) {
+        // Set local position via write-through helper
+        let _ = world.with_transform_mut(handle, |t| {
             t.SetLocalPosition(engine_math::Vec3::new(1.0, 2.0, 3.0));
-        }
+        });
 
         sync_transforms(&mut world);
 
@@ -98,12 +98,12 @@ mod tests {
 
         world.SetParent(child, Some(parent));
 
-        if let Some(t) = world.GetTransformMut(parent) {
+        let _ = world.with_transform_mut(parent, |t| {
             t.SetLocalPosition(engine_math::Vec3::new(5.0, 0.0, 0.0));
-        }
-        if let Some(t) = world.GetTransformMut(child) {
+        });
+        let _ = world.with_transform_mut(child, |t| {
             t.SetLocalPosition(engine_math::Vec3::new(1.0, 0.0, 0.0));
-        }
+        });
 
         sync_transforms(&mut world);
 

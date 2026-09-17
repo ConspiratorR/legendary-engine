@@ -849,15 +849,17 @@ impl EditorState {
         let mut node_transforms = HashMap::new();
         for (id, t) in &transforms_data {
             node_transforms.insert(*id, *t);
-            if let Some(transform) = world.GetTransformMut(node_to_handle[id]) {
-                transform.SetLocalPosition(Vec3::new(t[0], t[1], t[2]));
-                transform.SetLocalRotation(Quat::from_euler(
-                    engine_math::EulerRot::XYZ,
-                    t[3],
-                    t[4],
-                    t[5],
-                ));
-                transform.SetLocalScale(Vec3::new(t[6], t[7], t[8]));
+            if let Some(handle) = node_to_handle.get(id) {
+                let _ = world.with_transform_mut(*handle, |transform| {
+                    transform.SetLocalPosition(Vec3::new(t[0], t[1], t[2]));
+                    transform.SetLocalRotation(Quat::from_euler(
+                        engine_math::EulerRot::XYZ,
+                        t[3],
+                        t[4],
+                        t[5],
+                    ));
+                    transform.SetLocalScale(Vec3::new(t[6], t[7], t[8]));
+                });
             }
         }
 
@@ -1524,9 +1526,9 @@ impl EditorState {
             }
             let pos = ecs_t.Position();
             // Write local position so the next World::sync_transforms rebuilds world space.
-            if let Some(t) = host.runtime.world.GetTransformMut(go) {
+            let _ = host.runtime.world.with_transform_mut(go, |t| {
                 t.SetLocalPosition(pos);
-            }
+            });
         }
     }
 
@@ -1560,11 +1562,16 @@ impl EditorState {
         };
         let Some(dst_handle) = dst_handle else { return };
 
-        if let (Some(st), Some(dt)) = (
-            src.GetTransform(src_handle),
-            dst.GetTransformMut(dst_handle),
-        ) {
-            *dt = st.clone();
+        // Copy local TRS only — parent/children handles are world-local and must not cross.
+        if let Some(st) = src.GetTransformArray(src_handle) {
+            let local_pos = st.LocalPosition();
+            let local_rot = st.LocalRotation();
+            let local_scale = st.LocalScale();
+            let _ = dst.with_transform_mut(dst_handle, |dt| {
+                dt.SetLocalPosition(local_pos);
+                dt.SetLocalRotation(local_rot);
+                dt.SetLocalScale(local_scale);
+            });
         }
 
         for child in src.GetChildren(src_handle) {
@@ -1582,7 +1589,7 @@ impl EditorState {
         let Some(t) = self.node_transforms.get(&node_id).copied() else {
             return;
         };
-        if let Some(wt) = self.world.GetTransformMut(handle) {
+        let _ = self.world.with_transform_mut(handle, |wt| {
             wt.SetLocalPosition(engine_math::Vec3::new(t[0], t[1], t[2]));
             wt.SetLocalRotation(engine_math::Quat::from_euler(
                 engine_math::EulerRot::XYZ,
@@ -1591,17 +1598,17 @@ impl EditorState {
                 t[5],
             ));
             wt.SetLocalScale(engine_math::Vec3::new(t[6], t[7], t[8]));
-        }
+        });
     }
 
     /// Write Unity World local transforms into `node_transforms` for the 3D viewport.
     ///
-    /// World is the authority; `node_transforms` is a mirror for `build_scene`.
+    /// World array storage is the authority; `node_transforms` is a mirror for `build_scene`.
     pub fn sync_node_transforms_from_world(&mut self) {
         let pairs: Vec<(u64, GameObjectHandle)> =
             self.handle_to_node.iter().map(|(&h, &n)| (n, h)).collect();
         for (node_id, handle) in pairs {
-            let Some(t) = self.world.GetTransform(handle) else {
+            let Some(t) = self.world.GetTransformArray(handle) else {
                 continue;
             };
             let pos = t.LocalPosition();
@@ -1631,10 +1638,15 @@ impl EditorState {
         dst.SetLayer(new_handle, src.GetLayer(handle));
         dst.SetActive(new_handle, src.IsActive(handle));
 
-        if let (Some(st), Some(dt)) = (src.GetTransform(handle), dst.GetTransformMut(new_handle)) {
-            dt.SetLocalPosition(st.LocalPosition());
-            dt.SetLocalRotation(st.LocalRotation());
-            dt.SetLocalScale(st.LocalScale());
+        if let Some(st) = src.GetTransformArray(handle) {
+            let local_pos = st.LocalPosition();
+            let local_rot = st.LocalRotation();
+            let local_scale = st.LocalScale();
+            let _ = dst.with_transform_mut(new_handle, |dt| {
+                dt.SetLocalPosition(local_pos);
+                dt.SetLocalRotation(local_rot);
+                dt.SetLocalScale(local_scale);
+            });
         }
 
         // Common components that also have SceneData formatters

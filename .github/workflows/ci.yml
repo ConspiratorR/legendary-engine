@@ -73,6 +73,34 @@ jobs:
         run: |
           cargo run --example basic -p engine-core --timeout 10s || true
 
+  unity-world-primary:
+    name: Unity World Primary
+    needs: [fmt, clippy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev
+
+      - name: engine-core lib tests (feature on)
+        run: cargo test -p engine-core --lib --features unity-world-primary
+
+      - name: engine-core lifecycle tests (feature on)
+        run: cargo test -p engine-core --test unity_lifecycle_tests --features unity-world-primary
+
+      - name: engine-core lib tests (feature off)
+        run: cargo test -p engine-core --lib
+
+      - name: engine-core lifecycle tests (feature off)
+        run: cargo test -p engine-core --test unity_lifecycle_tests
+
   wasm:
     name: WASM Build
     needs: [fmt, clippy]

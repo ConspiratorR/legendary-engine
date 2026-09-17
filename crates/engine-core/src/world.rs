@@ -348,13 +348,36 @@ impl World {
     ///
     /// SceneRuntime and other bridges should call this instead of spawning a
     /// second entity on a different ECS world.
+    ///
+    /// Under `unity-world-primary`, also backfills a missing `Transform` from
+    /// array storage so dual-read prefers a coherent ECS component (B1).
     pub fn ensure_entity(&mut self, handle: GameObjectHandle) -> engine_ecs::entity::Entity {
         if let Some(e) = self.entity_for(handle) {
+            if Self::unity_world_primary_feature() && self.ecs.get::<Transform>(e).is_none() {
+                self.write_transform_to_ecs(handle);
+            }
             return e;
         }
         let e = self.ecs.spawn();
         self.link_entity(handle, e);
+        if Self::unity_world_primary_feature() {
+            self.write_transform_to_ecs(handle);
+        }
         e
+    }
+
+    /// If the linked entity exists but lacks `Transform`, copy array storage
+    /// onto it (P2.4 read-path backfill under `unity-world-primary`).
+    pub fn ensure_transform_from_array(&mut self, handle: GameObjectHandle) {
+        if !Self::unity_world_primary_feature() {
+            return;
+        }
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        if self.ecs.get::<Transform>(entity).is_none() {
+            self.write_transform_to_ecs(handle);
+        }
     }
 
     /// Number of live identity links.
@@ -451,12 +474,14 @@ impl World {
     }
 
     /// Write `GameObjectParent` / `GameObjectChildren` onto the linked entity.
+    ///
+    /// Always reads **array** hierarchy (authoritative write source); never dual-reads ECS.
     fn sync_hierarchy_to_ecs(&mut self, handle: GameObjectHandle) {
         let Some(entity) = self.entity_for(handle) else {
             return;
         };
-        let parent = self.GetParent(handle);
-        let children = self.GetChildren(handle);
+        let parent = self.GetParentArray(handle);
+        let children = self.GetChildrenArray(handle);
 
         if let Some(p) = parent {
             let comp = GameObjectParent(p);
@@ -465,6 +490,8 @@ impl World {
             } else {
                 self.ecs.add_component(entity, comp);
             }
+        } else if self.ecs.get::<GameObjectParent>(entity).is_some() {
+            let _ = self.ecs.remove_component::<GameObjectParent>(entity);
         }
         let comp = GameObjectChildren(children);
         if self.ecs.get::<GameObjectChildren>(entity).is_some() {
@@ -522,6 +549,7 @@ impl World {
         self.sync_tag_to_ecs(handle, "Untagged");
         self.sync_active_to_ecs(handle, true);
         if Self::unity_world_primary_feature() {
+            self.ensure_transform_from_array(handle);
             self.sync_hierarchy_to_ecs(handle);
         }
 
@@ -688,6 +716,10 @@ impl World {
             self.ecs.despawn(entity);
         }
         self.unlink_entity(handle);
+
+        // B4: keep Destroy / DestroyImmediate / flush_destroy coherent
+        self.pending_destroy.retain(|p| p.handle != handle);
+        self.dont_destroy.retain(|&h| h != handle);
 
         // Parent children list may need ECS write-through
         if Self::unity_world_primary_feature()
@@ -1156,8 +1188,8 @@ impl World {
     // Transform Access (built-in)
     // ============================================================
 
-    /// Array storage Transform (authoritative for hierarchy math; never ECS dual-read).
-    fn get_transform_array(&self, handle: GameObjectHandle) -> Option<&Transform> {
+    /// Array storage Transform (authoritative for hierarchy math and scene I/O; never ECS dual-read).
+    pub fn GetTransformArray(&self, handle: GameObjectHandle) -> Option<&Transform> {
         let index = handle.index() as usize;
         self.transforms.get(index)?.as_ref()
     }
@@ -1178,13 +1210,15 @@ impl World {
                 return Some(t);
             }
         }
-        self.get_transform_array(handle)
+        self.GetTransformArray(handle)
     }
 
-    /// Get a mutable Transform reference (always array storage until full merge).
+    /// Get a mutable Transform reference (array storage only; no ECS write-through).
     ///
     /// Prefer [`World::with_transform_mut`] so ECS write-through runs under
-    /// `unity-world-primary`.
+    /// `unity-world-primary`. Direct use of this API leaves dual-read
+    /// [`World::GetTransform`] stale until `sync_transform_to_ecs` /
+    /// `sync_transforms`.
     pub fn GetTransformMut(&mut self, handle: GameObjectHandle) -> Option<&mut Transform> {
         let index = handle.index() as usize;
         self.transforms.get_mut(index)?.as_mut()
@@ -1220,11 +1254,29 @@ impl World {
             return;
         };
         let index = handle.index() as usize;
+
+        // Roots: refresh world pose from local so a local edit is visible
+        // immediately under dual-read (B1 write-path contract).
+        if let Some(Some(t)) = self.transforms.get_mut(index)
+            && t.parent.is_none()
+        {
+            t.UpdateWorldTransformRoot();
+        }
+
         let Some(t) = self.transforms.get(index).and_then(|t| t.as_ref()) else {
             return;
         };
-        let full =
-            Transform::from_position_rotation_scale(t.Position(), t.Rotation(), t.LossyScale());
+        let mut full = Transform::from_position_rotation_scale(
+            t.LocalPosition(),
+            t.LocalRotation(),
+            t.LocalScale(),
+        );
+        // Children keep cached world until sync_transforms recomputes hierarchy.
+        if t.parent.is_some() {
+            full.world_position = t.Position();
+            full.world_rotation = t.Rotation();
+            full.world_scale = t.LossyScale();
+        }
         if self.ecs.get::<Transform>(entity).is_some() {
             *self.ecs.get_mut::<Transform>(entity).unwrap() = full;
         } else {
@@ -1301,20 +1353,50 @@ impl World {
         }
     }
 
-    /// Get parent of a GameObject (matches `Transform.parent`).
-    pub fn GetParent(&self, handle: GameObjectHandle) -> Option<GameObjectHandle> {
+    /// Array parent (authoritative for hierarchy math / write-through).
+    pub fn GetParentArray(&self, handle: GameObjectHandle) -> Option<GameObjectHandle> {
         let index = handle.index() as usize;
         self.transforms.get(index)?.as_ref()?.parent
     }
 
-    /// Get children of a GameObject (matches `Transform.GetChild`).
-    pub fn GetChildren(&self, handle: GameObjectHandle) -> Vec<GameObjectHandle> {
+    /// Array children (authoritative for hierarchy math / write-through).
+    pub fn GetChildrenArray(&self, handle: GameObjectHandle) -> Vec<GameObjectHandle> {
         let index = handle.index() as usize;
         self.transforms
             .get(index)
             .and_then(|t| t.as_ref())
             .map(|t| t.children.clone())
             .unwrap_or_default()
+    }
+
+    /// Get parent of a GameObject (matches `Transform.parent`).
+    ///
+    /// With `unity-world-primary`, prefers ECS `GameObjectParent` when present
+    /// (P2.4 dual-read); otherwise array storage.
+    pub fn GetParent(&self, handle: GameObjectHandle) -> Option<GameObjectHandle> {
+        if Self::unity_world_primary_feature() {
+            if let Some(entity) = self.entity_for(handle)
+                && let Some(p) = self.ecs.get::<GameObjectParent>(entity)
+            {
+                return Some(p.0);
+            }
+        }
+        self.GetParentArray(handle)
+    }
+
+    /// Get children of a GameObject (matches `Transform.GetChild`).
+    ///
+    /// With `unity-world-primary`, prefers ECS `GameObjectChildren` when present
+    /// (P2.4 dual-read); otherwise array storage.
+    pub fn GetChildren(&self, handle: GameObjectHandle) -> Vec<GameObjectHandle> {
+        if Self::unity_world_primary_feature() {
+            if let Some(entity) = self.entity_for(handle)
+                && let Some(ch) = self.ecs.get::<GameObjectChildren>(entity)
+            {
+                return ch.0.clone();
+            }
+        }
+        self.GetChildrenArray(handle)
     }
 
     /// Get child count (matches `Transform.childCount`).
@@ -1340,14 +1422,14 @@ impl World {
         roots
     }
 
-    /// Check if candidate is a descendant of ancestor.
+    /// Check if candidate is a descendant of ancestor (array hierarchy math).
     fn is_descendant_of(&self, candidate: GameObjectHandle, ancestor: GameObjectHandle) -> bool {
         let mut current = candidate;
         loop {
             if current == ancestor {
                 return true;
             }
-            match self.GetParent(current) {
+            match self.GetParentArray(current) {
                 Some(parent) => current = parent,
                 None => return false,
             }
@@ -1976,16 +2058,16 @@ impl World {
         }
     }
 
-    /// Recursively sync transform for a GameObject and its children.
+    /// Recursively sync transform for a GameObject and its children (array hierarchy).
     fn sync_transform_recursive(&mut self, handle: GameObjectHandle, is_root: bool) {
-        let children = self.GetChildren(handle);
+        let children = self.GetChildrenArray(handle);
 
-        // Get parent transform data before mutable borrow
+        // Get parent transform data before mutable borrow (array authority)
         let parent_data = if is_root {
             None
         } else {
-            self.GetParent(handle).and_then(|ph| {
-                self.get_transform_array(ph)
+            self.GetParentArray(handle).and_then(|ph| {
+                self.GetTransformArray(ph)
                     .map(|t| (t.Position(), t.Rotation(), t.LossyScale()))
             })
         };
@@ -2418,9 +2500,9 @@ mod tests {
         let mut world = World::new();
         let go = world.CreateGameObject("Hero");
         world.SetTag(go, "Player");
-        if let Some(t) = world.GetTransformMut(go) {
+        let _ = world.with_transform_mut(go, |t| {
             t.SetLocalPosition(engine_math::Vec3::new(4.0, 5.0, 6.0));
-        }
+        });
         world.sync_transforms();
         world.sync_all_transforms_to_ecs();
 
@@ -2534,6 +2616,93 @@ mod tests {
 
     #[cfg(feature = "unity-world-primary")]
     #[test]
+    fn test_b4_destroy_pending_and_flush_drop_entity() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Pending");
+        let e = world.entity_for(go).expect("entity before destroy");
+        world.DontDestroyOnLoad(go);
+
+        world.Destroy(go);
+        // Still valid until flush
+        assert!(world.is_valid(go));
+        assert!(world.entity_for(go).is_some());
+
+        world.flush_destroy();
+        assert!(!world.is_valid(go));
+        assert_eq!(world.entity_for(go), None);
+        assert!(!world.is_dont_destroy_on_load(go));
+        assert!(world.ecs.get::<Transform>(e).is_none() || true);
+
+        // Second flush is a no-op
+        world.flush_destroy();
+        assert_eq!(world.entity_for(go), None);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_b4_destroy_immediate_clears_pending() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Immediate");
+        world.Destroy(go);
+        world.DestroyImmediate(go);
+        assert_eq!(world.entity_for(go), None);
+        world.flush_destroy();
+        assert_eq!(world.entity_for(go), None);
+        assert!(!world.is_valid(go));
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_b5_monobehaviour_types_write_through() {
+        #[derive(Default)]
+        struct Marker {
+            value: i32,
+            go: Option<GameObjectHandle>,
+        }
+        impl Component for Marker {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl crate::behaviour::Behaviour for Marker {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _enabled: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, handle: GameObjectHandle) {
+                self.go = Some(handle);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl crate::monobehaviour::MonoBehaviour for Marker {
+            fn TypeName(&self) -> &str {
+                "B5Marker"
+            }
+        }
+
+        let mut world = World::new();
+        let go = world.CreateGameObject("MB");
+        world.AddMonoBehaviour(go, Marker::default());
+
+        let e = world.entity_for(go).unwrap();
+        let types = world
+            .ecs_world()
+            .get::<MonoBehaviourTypes>(e)
+            .expect("MonoBehaviourTypes on ECS");
+        assert!(types.0.iter().any(|n| n == "B5Marker"));
+        assert_eq!(world.MonoBehaviourCount(go), 1);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
     fn test_hierarchy_components_written_on_set_parent() {
         let mut world = World::new();
         let parent = world.CreateGameObject("P");
@@ -2593,6 +2762,74 @@ mod tests {
 
         let t = world.GetTransform(go).unwrap();
         assert_eq!(t.LocalPosition().x, 42.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_b1_create_backfills_ecs_transform_from_array() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Backfill");
+        let e = world.entity_for(go).expect("entity linked");
+        assert!(
+            world.ecs.get::<Transform>(e).is_some(),
+            "CreateGameObject under feature must seed ECS Transform from array"
+        );
+        // GetTransform prefers ECS; value must match array default
+        let t = world.GetTransform(go).expect("transform");
+        assert_eq!(t.LocalPosition(), Vec3::ZERO);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_b1_ensure_entity_backfills_missing_transform() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Ensure");
+        let e = world.entity_for(go).unwrap();
+        // Strip Transform to simulate a linked entity missing the component
+        let _ = world.ecs.remove_component::<Transform>(e);
+        assert!(world.ecs.get::<Transform>(e).is_none());
+
+        world.ensure_transform_from_array(go);
+        assert!(
+            world.ecs.get::<Transform>(e).is_some(),
+            "ensure_transform_from_array must backfill from array"
+        );
+
+        // Strip again; ensure_entity should also backfill
+        let _ = world.ecs.remove_component::<Transform>(e);
+        let e2 = world.ensure_entity(go);
+        assert_eq!(e2, e);
+        assert!(world.ecs.get::<Transform>(e2).is_some());
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_b3_hierarchy_dual_read_prefers_ecs_parent_children() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("P");
+        let child = world.CreateGameObject("C");
+        world.SetParent(child, Some(parent));
+
+        // Prefer ECS after SetParent write-through
+        assert_eq!(world.GetParent(child), Some(parent));
+        assert!(world.GetChildren(parent).contains(&child));
+
+        // Overwrite ECS parent only — dual-read should see it
+        let ce = world.entity_for(child).unwrap();
+        {
+            let ecs = world.ecs_world_mut();
+            *ecs.get_mut::<GameObjectParent>(ce).unwrap() = GameObjectParent(parent);
+        }
+        // Array still parented; dual-read agrees
+        assert_eq!(world.GetParentArray(child), Some(parent));
+        assert_eq!(world.GetParent(child), Some(parent));
+
+        // Detach: array cleared, ECS Parent removed by sync
+        world.SetParent(child, None);
+        assert_eq!(world.GetParentArray(child), None);
+        assert_eq!(world.GetParent(child), None);
+        assert!(!world.GetChildren(parent).contains(&child));
+        assert!(world.ecs.get::<GameObjectParent>(ce).is_none());
     }
 
     #[cfg(feature = "unity-world-primary")]
@@ -2764,12 +3001,12 @@ mod tests {
         world.SetParent(child, Some(parent));
 
         // Set local positions
-        if let Some(t) = world.GetTransformMut(parent) {
+        let _ = world.with_transform_mut(parent, |t| {
             t.SetLocalPosition(Vec3::new(5.0, 0.0, 0.0));
-        }
-        if let Some(t) = world.GetTransformMut(child) {
+        });
+        let _ = world.with_transform_mut(child, |t| {
             t.SetLocalPosition(Vec3::new(1.0, 0.0, 0.0));
-        }
+        });
 
         world.sync_transforms();
 

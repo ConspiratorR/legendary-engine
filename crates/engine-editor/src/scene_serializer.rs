@@ -700,7 +700,7 @@ impl EditorState {
                 ],
             );
 
-            if let Some(mut transform) = self.world.GetTransformMut(handle) {
+            let _ = self.world.with_transform_mut(handle, |transform| {
                 transform.SetPosition(engine_math::Vec3::new(
                     entity.transform.translation[0],
                     entity.transform.translation[1],
@@ -712,7 +712,7 @@ impl EditorState {
                     entity.transform.scale[1],
                     entity.transform.scale[2],
                 ));
-            }
+            });
 
             // Add Material component
             if let Some(ref mat) = entity.material {

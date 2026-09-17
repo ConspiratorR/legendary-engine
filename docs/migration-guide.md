@@ -470,6 +470,71 @@ RustEngine uses **egui** for UI, which is immediate mode:
 
 ---
 
+## P2.4 Storage Migration (`unity-world-primary`)
+
+`engine-core` has an optional cargo feature `unity-world-primary` (default **off**). When enabled, Unity `World` APIs dual-read from the internal ECS and write mutations through to ECS components. Array storage remains authoritative for hierarchy math and scene I/O until the full storage merge (see `docs/unity-alignment-roadmap.md`).
+
+### Feature flag
+
+```bash
+cargo test -p engine-core --lib --features unity-world-primary
+cargo test -p engine-core --test unity_lifecycle_tests --features unity-world-primary
+```
+
+CI runs a dedicated `Unity World Primary` job covering both flag states.
+
+### Dual-read contract (feature **on**)
+
+| API | Prefers | Fallback |
+|-----|---------|----------|
+| `GetTransform` | ECS `Transform` | array `GetTransformArray` |
+| `GetName` / `GetTag` / `IsActive` | ECS name/tag/active | array |
+| `GetParent` / `GetChildren` | ECS `GameObjectParent` / `GameObjectChildren` | array `GetParentArray` / `GetChildrenArray` |
+
+Always use the **array** accessors for hierarchy math, world-pose composition, and scene serialization:
+
+- `GetTransformArray` — local + cached world after `sync_transforms`
+- `GetParentArray` / `GetChildrenArray` — authoritative parent/child links
+
+Do **not** use dual-read `GetTransform` to compute world coordinates or walk parents.
+
+### Write-through contract
+
+Prefer mutating transforms with:
+
+```rust
+world.with_transform_mut(handle, |t| {
+    t.SetLocalPosition(pos);
+});
+```
+
+This updates array storage, refreshes root world pose, and copies onto the linked ECS entity when the feature is on.
+
+`GetTransformMut` only mutates the array. After using it, call `sync_transform_to_ecs` / `sync_transforms` or dual-read will see a stale ECS `Transform`.
+
+Other write paths that already go through ECS:
+
+- `CreateGameObject` — Name/Tag/Active/Transform/Children seeded on the linked entity
+- `SetParent` — hierarchy components rewritten on child, new parent, and old parent
+- `AddMonoBehaviour` — `MonoBehaviourTypes` type-name list
+- `Destroy` / `DestroyImmediate` / `flush_destroy` — ECS entity despawned; pending Destroy and DontDestroyOnLoad entries dropped
+
+### Array-authoritative APIs
+
+| API | Use for |
+|-----|---------|
+| `GetTransformArray` | Scene save/load, hierarchy world math |
+| `GetParentArray` / `GetChildrenArray` | Cycle detection, `sync_transforms`, destroy child walk |
+| `ensure_transform_from_array` | Backfill missing ECS `Transform` from array |
+
+### Still deferred
+
+- Full authority move of `gameobject_data` / `transforms` / `monobehaviours` into ECS (B5+)
+- Enabling the flag by default
+- engine-scene `Transform` deprecation (see roadmap P2.5)
+
+---
+
 ## Next Steps
 
 - [Quick Start](quick-start.md) — Get started with RustEngine

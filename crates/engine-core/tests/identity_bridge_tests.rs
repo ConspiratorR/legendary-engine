@@ -28,9 +28,9 @@ fn test_sync_bridge_updates_transform_proxy() {
     let (go, entity) = app.spawn_linked("Mover").unwrap();
     {
         let world = app.unity_world().unwrap();
-        if let Some(t) = world.GetTransformMut(go) {
+        let _ = world.with_transform_mut(go, |t| {
             t.SetLocalPosition(engine_math::Vec3::new(10.0, 0.0, -5.0));
-        }
+        });
         world.sync_transforms();
     }
 
@@ -69,9 +69,9 @@ fn test_run_with_lifecycle_syncs_bridge() {
     let (go, entity) = app.spawn_linked("Auto").unwrap();
     {
         let world = app.unity_world().unwrap();
-        if let Some(t) = world.GetTransformMut(go) {
+        let _ = world.with_transform_mut(go, |t| {
             t.SetLocalPosition(engine_math::Vec3::new(1.0, 2.0, 3.0));
-        }
+        });
         world.sync_transforms();
     }
 

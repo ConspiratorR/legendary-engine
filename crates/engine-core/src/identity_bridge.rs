@@ -172,7 +172,8 @@ impl IdentityBridge {
             if !unity.is_valid(go) {
                 continue;
             }
-            let Some(t) = unity.GetTransform(go) else {
+            // Array storage holds world pose after World::sync_transforms; do not dual-read.
+            let Some(t) = unity.GetTransformArray(go) else {
                 continue;
             };
             let world_pos = t.Position();

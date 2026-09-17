@@ -168,8 +168,8 @@ impl SceneSerializer {
         let layer = world.GetLayer(handle);
         let active = world.IsActive(handle);
 
-        // Serialize Transform (built-in)
-        let transform_data = if let Some(t) = world.GetTransform(handle) {
+        // Serialize Transform from array storage (authoritative for scene I/O; not dual-read)
+        let transform_data = if let Some(t) = world.GetTransformArray(handle) {
             TransformData {
                 local_position: t.LocalPosition(),
                 local_rotation: t.LocalRotation(),
@@ -246,12 +246,12 @@ impl SceneSerializer {
         world.SetLayer(handle, data.layer);
         world.SetActive(handle, data.active);
 
-        // Set Transform
-        if let Some(t) = world.GetTransformMut(handle) {
+        // Set Transform via write-through so dual-read stays coherent
+        let _ = world.with_transform_mut(handle, |t| {
             t.SetLocalPosition(data.transform.local_position);
             t.SetLocalRotation(data.transform.local_rotation);
             t.SetLocalScale(data.transform.local_scale);
-        }
+        });
 
         // Restore components + MonoBehaviours
         let mut scripts: Vec<(String, bool, Option<serde_json::Value>)> = Vec::new();
@@ -1121,11 +1121,11 @@ mod tests {
     fn test_save_preserves_transform() {
         let mut world = World::new();
         let handle = world.CreateGameObject("Player");
-        if let Some(t) = world.GetTransformMut(handle) {
+        let _ = world.with_transform_mut(handle, |t| {
             t.SetLocalPosition(Vec3::new(1.0, 2.0, 3.0));
             t.SetLocalRotation(Quat::from_rotation_y(1.57));
             t.SetLocalScale(Vec3::new(2.0, 2.0, 2.0));
-        }
+        });
 
         let s = SceneSerializer::new();
         let scene = s.Save(&world, "Test");

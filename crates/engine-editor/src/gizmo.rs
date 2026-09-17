@@ -110,16 +110,16 @@ pub fn update_drag(state: &mut EditorState, mouse_pos: Pos2) {
         t[2] = start_world[2] + world_delta[2];
     }
 
-    // Sync to World API
+    // Sync to World API (write-through under unity-world-primary)
     if let Some(handle) = state.GetHandle(node_id) {
-        if let Some(transform) = state.world.GetTransformMut(handle) {
-            let pos = engine_math::Vec3::new(
-                start_world[0] + world_delta[0],
-                start_world[1] + world_delta[1],
-                start_world[2] + world_delta[2],
-            );
+        let pos = engine_math::Vec3::new(
+            start_world[0] + world_delta[0],
+            start_world[1] + world_delta[1],
+            start_world[2] + world_delta[2],
+        );
+        let _ = state.world.with_transform_mut(handle, |transform| {
             transform.SetPosition(pos);
-        }
+        });
     }
 }
 
