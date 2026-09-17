@@ -110,6 +110,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 | P2.11 | 编辑器 Play → SceneRuntime | `UnityPlayHost`：克隆层级 + FixedUpdate 物理步进（Rigidbody→PhysicsWorld）✅ |
 | P2.12 | B5：MB 可恢复实例进 ECS | `MonoBehaviourInstances`（type_name+enabled+props）；`restore_monobehaviours_from_ecs`；SceneData 往返 | ✅ |
 | P2.13 | C1：光源收集数据源 | `light_collect_system` 优先 TransformProxy，回退 GlobalTransform；`TransformProxy` 定义在 `engine-render`；不改 Pass 内部 | ✅ |
+| P2.14 | D2：内置样例 MB 注册 | `sample_scripts`：Mover/Rotator/Lifetime；`CorePlugins` 自动 `register_sample_scripts`；SceneData 往返测试 | ✅ |
 
 ### 风险控制
 1. 全程用 feature flag：`unity-world-primary`（默认 off）

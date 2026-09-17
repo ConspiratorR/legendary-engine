@@ -112,6 +112,9 @@ pub mod monobehaviour_runner;
 /// Coroutine system (Wait / Call / Action steps).
 pub mod coroutine;
 
+/// Built-in sample MonoBehaviours registered for SceneData (D2).
+pub mod sample_scripts;
+
 // ============================================================
 // Existing modules (to be refactored in later phases)
 // ============================================================
@@ -187,6 +190,8 @@ pub use world::{
     GameObjectActive, GameObjectChildren, GameObjectName, GameObjectParent, GameObjectTag,
     MonoBehaviourInstance, MonoBehaviourInstances, MonoBehaviourTypes, World,
 };
+
+pub use sample_scripts::{Lifetime, Mover, Rotator, register_sample_scripts};
 
 // Re-export macros - impl_component is defined in component.rs with #[macro_export]
 // It's automatically available at crate root

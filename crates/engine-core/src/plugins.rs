@@ -126,6 +126,8 @@ impl Plugin for CorePlugins {
         app.add_plugin(TimePlugin);
         app.add_plugin(ActionPlugin);
         app.add_plugin(SceneRuntimePlugin);
+        // D2: sample MonoBehaviour types for SceneData save/load
+        crate::sample_scripts::register_sample_scripts();
         // InputManager is already added by AppBuilder::new()
     }
 }

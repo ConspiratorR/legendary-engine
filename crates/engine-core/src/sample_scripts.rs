@@ -1,0 +1,285 @@
+//! Built-in sample MonoBehaviours registered for SceneData roundtrip (D2).
+//!
+//! These types are intentionally small and `Default` so
+//! [`crate::monobehaviour::MonoBehaviourRegistry`] can rebuild them from
+//! `script_type` + props after scene load.
+
+use crate::behaviour::BehaviourState;
+use crate::context::Context;
+use crate::gameobject::GameObjectHandle;
+use crate::monobehaviour::MonoBehaviour;
+use crate::{Behaviour, Component};
+use engine_math::Vec3;
+use std::any::Any;
+
+/// Translate the host transform every Update.
+#[derive(Debug, Default, Clone)]
+pub struct Mover {
+    pub speed: f32,
+    pub direction: Vec3,
+    pub state: BehaviourState,
+}
+
+impl Component for Mover {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl Behaviour for Mover {
+    fn Enabled(&self) -> bool {
+        self.state.enabled()
+    }
+    fn SetEnabled(&mut self, enabled: bool) {
+        self.state.set_enabled(enabled);
+    }
+    fn IsActiveAndEnabled(&self) -> bool {
+        self.state.enabled()
+    }
+    fn set_gameobject(&mut self, handle: GameObjectHandle) {
+        self.state.set_gameobject(handle);
+    }
+    fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+        self.state.gameobject()
+    }
+}
+
+impl MonoBehaviour for Mover {
+    fn TypeName(&self) -> &str {
+        "Mover"
+    }
+
+    fn SerializeProps(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({
+            "speed": self.speed,
+            "direction": [self.direction.x, self.direction.y, self.direction.z],
+        }))
+    }
+
+    fn DeserializeProps(&mut self, props: &serde_json::Value) {
+        self.speed = props.get("speed").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        if let Some(d) = props.get("direction").and_then(|v| v.as_array()) {
+            self.direction = Vec3::new(
+                d.first().and_then(|x| x.as_f64()).unwrap_or(0.0) as f32,
+                d.get(1).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32,
+                d.get(2).and_then(|x| x.as_f64()).unwrap_or(0.0) as f32,
+            );
+        }
+    }
+
+    fn Update(&mut self, ctx: &mut Context) {
+        let Some(me) = self.gameobject_handle() else {
+            return;
+        };
+        let dt = ctx.DeltaTime();
+        let delta = self.direction * (self.speed * dt);
+        let _ = ctx.world.with_transform_mut(me, |t| {
+            let p = t.LocalPosition();
+            t.SetLocalPosition(p + delta);
+        });
+    }
+}
+
+/// Spin the host on the Y axis each frame.
+#[derive(Debug, Default, Clone)]
+pub struct Rotator {
+    pub degrees_per_second: f32,
+    pub state: BehaviourState,
+}
+
+impl Component for Rotator {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl Behaviour for Rotator {
+    fn Enabled(&self) -> bool {
+        self.state.enabled()
+    }
+    fn SetEnabled(&mut self, enabled: bool) {
+        self.state.set_enabled(enabled);
+    }
+    fn IsActiveAndEnabled(&self) -> bool {
+        self.state.enabled()
+    }
+    fn set_gameobject(&mut self, handle: GameObjectHandle) {
+        self.state.set_gameobject(handle);
+    }
+    fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+        self.state.gameobject()
+    }
+}
+
+impl MonoBehaviour for Rotator {
+    fn TypeName(&self) -> &str {
+        "Rotator"
+    }
+
+    fn SerializeProps(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({ "degrees_per_second": self.degrees_per_second }))
+    }
+
+    fn DeserializeProps(&mut self, props: &serde_json::Value) {
+        self.degrees_per_second = props
+            .get("degrees_per_second")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+    }
+
+    fn Update(&mut self, ctx: &mut Context) {
+        let Some(me) = self.gameobject_handle() else {
+            return;
+        };
+        let dt = ctx.DeltaTime();
+        let angle = self.degrees_per_second * dt;
+        let _ = ctx.world.with_transform_mut(me, |t| {
+            t.Rotate(Vec3::new(0.0, angle, 0.0));
+        });
+    }
+}
+
+/// Destroy the host after `lifetime` seconds.
+#[derive(Debug, Default, Clone)]
+pub struct Lifetime {
+    pub seconds: f32,
+    pub elapsed: f32,
+    pub state: BehaviourState,
+}
+
+impl Component for Lifetime {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl Behaviour for Lifetime {
+    fn Enabled(&self) -> bool {
+        self.state.enabled()
+    }
+    fn SetEnabled(&mut self, enabled: bool) {
+        self.state.set_enabled(enabled);
+    }
+    fn IsActiveAndEnabled(&self) -> bool {
+        self.state.enabled()
+    }
+    fn set_gameobject(&mut self, handle: GameObjectHandle) {
+        self.state.set_gameobject(handle);
+    }
+    fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+        self.state.gameobject()
+    }
+}
+
+impl MonoBehaviour for Lifetime {
+    fn TypeName(&self) -> &str {
+        "Lifetime"
+    }
+
+    fn SerializeProps(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({ "seconds": self.seconds }))
+    }
+
+    fn DeserializeProps(&mut self, props: &serde_json::Value) {
+        self.seconds = props.get("seconds").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+    }
+
+    fn Update(&mut self, ctx: &mut Context) {
+        self.elapsed += ctx.DeltaTime();
+        if self.seconds > 0.0 && self.elapsed >= self.seconds {
+            if let Some(me) = self.gameobject_handle() {
+                ctx.world.Destroy(me);
+            }
+        }
+    }
+}
+
+/// Register sample scripts under their short [`MonoBehaviour::TypeName`] keys.
+///
+/// Called from [`crate::plugins::CorePlugins`] so SceneData load can rebuild them.
+pub fn register_sample_scripts() {
+    use crate::monobehaviour::MonoBehaviourRegistry;
+
+    let mut reg = MonoBehaviourRegistry::global()
+        .lock()
+        .expect("MonoBehaviourRegistry");
+    reg.register("Mover", || {
+        Box::new(Mover {
+            speed: 1.0,
+            direction: Vec3::new(0.0, 0.0, 1.0),
+            state: BehaviourState::new(),
+        })
+    });
+    reg.register("Rotator", || {
+        Box::new(Rotator {
+            degrees_per_second: 90.0,
+            state: BehaviourState::new(),
+        })
+    });
+    reg.register("Lifetime", || {
+        Box::new(Lifetime {
+            seconds: 1.0,
+            elapsed: 0.0,
+            state: BehaviourState::new(),
+        })
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::serialization::{LoadSceneJson, SaveSceneJson};
+    use crate::world::World;
+
+    #[test]
+    fn test_sample_scripts_scenedata_roundtrip() {
+        register_sample_scripts();
+
+        let mut world = World::new();
+        let go = world.CreateGameObject("MoverGO");
+        world.AddMonoBehaviour(
+            go,
+            Mover {
+                speed: 3.5,
+                direction: Vec3::new(1.0, 0.0, 0.0),
+                state: BehaviourState::new(),
+            },
+        );
+        world.AddMonoBehaviour(
+            go,
+            Rotator {
+                degrees_per_second: 45.0,
+                state: BehaviourState::new(),
+            },
+        );
+
+        let json = SaveSceneJson(&world, "SampleScripts").unwrap();
+        assert!(json.contains("Mover"));
+        assert!(json.contains("Rotator"));
+
+        let mut loaded = World::new();
+        let handles = LoadSceneJson(&json, &mut loaded).unwrap();
+        let h = handles[0];
+        assert_eq!(loaded.MonoBehaviourCount(h), 2);
+        let collected = loaded.CollectMonoBehaviours(h);
+        let mover = collected
+            .iter()
+            .find(|(n, _, _)| n == "Mover")
+            .expect("Mover restored");
+        assert_eq!(mover.2.as_ref().unwrap()["speed"], 3.5);
+        let rot = collected
+            .iter()
+            .find(|(n, _, _)| n == "Rotator")
+            .expect("Rotator restored");
+        assert_eq!(rot.2.as_ref().unwrap()["degrees_per_second"], 45.0);
+    }
+}
