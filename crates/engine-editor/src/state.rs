@@ -1180,7 +1180,27 @@ impl EditorState {
     }
 
     /// Open a scene file: prefer runtime `SceneData`, fall back to ECS `Scene`.
+    ///
+    /// If `path` is an editor Scene file, also tries the `.runtime.json` twin
+    /// written by [`Self::save_scene_bundle`] so World/Unity data is restored.
     pub fn open_scene_file(&mut self, path: &std::path::Path) -> Result<(), String> {
+        // Prefer the runtime twin next to an editor scene file.
+        let twin = Self::runtime_scene_path_for(path);
+        if twin.exists() && twin != path {
+            if let Ok(json) = std::fs::read_to_string(&twin)
+                && json.contains("\"game_objects\"")
+            {
+                self.import_core_scene_json(&json)?;
+                self.scene_manager.set_current_scene(self.to_scene("Scene"));
+                self.scene_manager.set_scene_path(path.to_path_buf());
+                self.status_message = Some(format!(
+                    "已加载运行时场景 ({})",
+                    twin.file_name().unwrap_or_default().to_string_lossy()
+                ));
+                return Ok(());
+            }
+        }
+
         let json = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
 

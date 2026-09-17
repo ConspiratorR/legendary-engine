@@ -219,6 +219,24 @@ fn save_scene_bundle_writes_runtime_twin() {
 }
 
 #[test]
+fn open_scene_prefers_runtime_twin() {
+    let mut state = EditorState::new();
+    let dir = std::env::temp_dir().join(format!("rustengine_open_twin_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("level.scene.json");
+    state.save_scene_bundle(&path).unwrap();
+
+    // Clear world then reopen — should restore from .runtime.json twin
+    state.new_scene();
+    assert!(state.world.GetRootGameObjects().is_empty());
+
+    state.open_scene_file(&path).expect("open");
+    assert!(!state.world.GetRootGameObjects().is_empty());
+    assert_eq!(state.scene_manager.scene_path(), Some(path.as_path()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn editor_state_default_tool_is_translate() {
     let state = EditorState::new();
     assert_eq!(state.active_tool, ToolType::Translate);
