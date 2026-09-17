@@ -112,6 +112,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 | P2.13 | C1：光源收集数据源 | `light_collect_system` 优先 TransformProxy，回退 GlobalTransform；`TransformProxy` 定义在 `engine-render`；不改 Pass 内部 | ✅ |
 | P2.14 | D2：内置样例 MB 注册 | `sample_scripts`：Mover/Rotator/Lifetime；`CorePlugins` 自动 `register_sample_scripts`；SceneData 往返测试 | ✅ |
 | P2.15 | R1 首刀：读路径 ECS 完备性 | `seed_ecs_from_array` / `seed_all_ecs_from_array`；Scene Load 后 Name/Tag/Active/Transform/Hierarchy 镜像齐全 | ✅ 首刀 |
+| P2.16 | R1b/c：Instantiate/Play + Layer | `GameObjectLayer` 写通/双读；Instantiate 复制 tag/layer/active 并 seed；编辑器 `clone_go_recursive` seed | ✅ |
 
 ### 风险控制
 1. 全程用 feature flag：`unity-world-primary`（默认 off）

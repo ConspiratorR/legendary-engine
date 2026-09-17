@@ -1679,6 +1679,9 @@ impl EditorState {
         for child in src.GetChildren(handle) {
             Self::clone_go_recursive(src, dst, child, Some(new_handle));
         }
+
+        // R1: complete ECS mirrors on the cloned node after children/parent are set
+        dst.seed_ecs_from_array(new_handle);
     }
 
     /// Build a runtime ECS World from the current scene tree.

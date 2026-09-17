@@ -44,6 +44,19 @@ impl Component for GameObjectTag {
     }
 }
 
+/// ECS mirror of `GameObject.layer` (R1 storage write-through).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GameObjectLayer(pub i32);
+
+impl Component for GameObjectLayer {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 /// ECS mirror of `GameObject.activeSelf` (P2.4 storage write-through).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GameObjectActive(pub bool);
@@ -419,9 +432,11 @@ impl World {
             let name = go.Name().to_string();
             let tag = go.Tag().to_string();
             let active = go.ActiveSelf();
+            let layer = go.Layer();
             self.sync_name_to_ecs(handle, &name);
             self.sync_tag_to_ecs(handle, &tag);
             self.sync_active_to_ecs(handle, active);
+            self.sync_layer_to_ecs(handle, layer);
         }
         self.write_transform_to_ecs(handle);
         self.sync_hierarchy_to_ecs(handle);
@@ -478,6 +493,19 @@ impl World {
         let comp = GameObjectTag(tag.to_string());
         if self.ecs.get::<GameObjectTag>(entity).is_some() {
             *self.ecs.get_mut::<GameObjectTag>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
+    }
+
+    /// Write `GameObjectLayer` onto the linked entity (internal ECS).
+    fn sync_layer_to_ecs(&mut self, handle: GameObjectHandle, layer: i32) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let comp = GameObjectLayer(layer);
+        if self.ecs.get::<GameObjectLayer>(entity).is_some() {
+            *self.ecs.get_mut::<GameObjectLayer>(entity).unwrap() = comp;
         } else {
             self.ecs.add_component(entity, comp);
         }
@@ -602,6 +630,7 @@ impl World {
         self.sync_name_to_ecs(handle, name);
         self.sync_tag_to_ecs(handle, "Untagged");
         self.sync_active_to_ecs(handle, true);
+        self.sync_layer_to_ecs(handle, 0);
         if Self::unity_world_primary_feature() {
             self.ensure_transform_from_array(handle);
             self.sync_hierarchy_to_ecs(handle);
@@ -828,31 +857,23 @@ impl World {
 
         let handle = self.CreateGameObject(&new_name);
 
-        // Copy components from template
+        // Mirror identity fields from template
         if let Some(template_go) = self.gameobject_data[template_index].as_ref() {
-            let components: Vec<Box<dyn Component>> = template_go
-                .Components()
-                .iter()
-                .map(|c| {
-                    // We can't clone components generically, so we create empty ones
-                    // In production, this would need a Clone trait or factory pattern
-                    None
-                })
-                .flatten()
-                .collect();
-
-            // Components would be cloned here
+            let tag = template_go.Tag().to_string();
+            let layer = template_go.Layer();
+            let active = template_go.ActiveSelf();
+            self.SetTag(handle, &tag);
+            self.SetLayer(handle, layer);
+            self.SetActive(handle, active);
         }
 
-        // Set transform
-        let new_index = handle.index() as usize;
-        if let Some(transform) = self.transforms.get_mut(new_index) {
-            if let Some(t) = transform {
-                t.SetPosition(position);
-                t.SetRotation(rotation);
-            }
-        }
+        // Set transform via write-through (local = requested pose)
+        let _ = self.with_transform_mut(handle, |t| {
+            t.SetLocalPosition(position);
+            t.SetLocalRotation(rotation);
+        });
 
+        self.seed_ecs_from_array(handle);
         handle
     }
 
@@ -1783,10 +1804,19 @@ impl World {
                 go.SetLayer(layer);
             }
         }
+        self.sync_layer_to_ecs(handle, layer);
     }
 
     /// Get layer (matches `GameObject.layer`).
+    ///
+    /// With `unity-world-primary`, prefers ECS `GameObjectLayer` when present.
     pub fn GetLayer(&self, handle: GameObjectHandle) -> i32 {
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+            && let Some(layer) = self.ecs.get::<GameObjectLayer>(entity)
+        {
+            return layer.0;
+        }
         let index = handle.index() as usize;
 
         if let Some(go) = self.gameobject_data.get(index) {
@@ -2838,6 +2868,44 @@ mod tests {
         assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 9.0);
         // Array remains authority for the seed source
         assert_eq!(world.GetTransformArray(go).unwrap().LocalPosition().x, 9.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_r1b_instantiate_copies_identity_and_seeds_ecs() {
+        let mut world = World::new();
+        let template = world.CreateGameObject("Template");
+        world.SetTag(template, "Enemy");
+        world.SetLayer(template, 7);
+        world.SetActive(template, false);
+        let _ = world.with_transform_mut(template, |t| {
+            t.SetLocalPosition(Vec3::new(1.0, 2.0, 3.0));
+        });
+
+        let clone = world.InstantiateAtPosition(template, Vec3::new(4.0, 0.0, 0.0), Quat::IDENTITY);
+        assert!(world.GetName(clone).contains("Clone"));
+        assert_eq!(world.GetTag(clone), "Enemy");
+        assert_eq!(world.GetLayer(clone), 7);
+        assert!(!world.IsActive(clone));
+
+        let e = world.entity_for(clone).unwrap();
+        assert!(world.ecs.get::<GameObjectLayer>(e).is_some());
+        assert!(world.ecs.get::<GameObjectTag>(e).is_some());
+        assert_eq!(world.GetTransform(clone).unwrap().LocalPosition().x, 4.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_r1b_layer_dual_read_prefers_ecs() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Layered");
+        world.SetLayer(go, 3);
+        let e = world.entity_for(go).unwrap();
+        assert_eq!(world.GetLayer(go), 3);
+        // Overwrite ECS only
+        *world.ecs.get_mut::<GameObjectLayer>(e).unwrap() = GameObjectLayer(9);
+        assert_eq!(world.GetLayer(go), 9);
+        assert_eq!(world.GetTransformArray(go).is_some(), true);
     }
 
     #[cfg(feature = "unity-world-primary")]

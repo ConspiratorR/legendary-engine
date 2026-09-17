@@ -187,8 +187,8 @@ pub use system::System;
 pub use time::Time;
 pub use transform::{Space, Transform};
 pub use world::{
-    GameObjectActive, GameObjectChildren, GameObjectName, GameObjectParent, GameObjectTag,
-    MonoBehaviourInstance, MonoBehaviourInstances, MonoBehaviourTypes, World,
+    GameObjectActive, GameObjectChildren, GameObjectLayer, GameObjectName, GameObjectParent,
+    GameObjectTag, MonoBehaviourInstance, MonoBehaviourInstances, MonoBehaviourTypes, World,
 };
 
 pub use sample_scripts::{Lifetime, Mover, Rotator, register_sample_scripts};
