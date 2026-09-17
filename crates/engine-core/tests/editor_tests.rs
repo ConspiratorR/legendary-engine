@@ -49,9 +49,9 @@ fn prefab_workflow_create_and_instantiate() {
     let handle = world.CreateGameObject("Player");
     world.SetTag(handle, "PlayerTag");
     world.SetLayer(handle, 5);
-    if let Some(t) = world.GetTransformMut(handle) {
+    let _ = world.with_transform_mut(handle, |t| {
         t.SetLocalPosition(Vec3::new(1.0, 2.0, 3.0));
-    }
+    });
 
     let prefab = Prefab::Create("PlayerPrefab", &GameObject::new_with_name("Player"), &world);
     assert_eq!(prefab.Name(), "PlayerPrefab");
@@ -258,11 +258,11 @@ fn serialization_workflow_hierarchy_roundtrip() {
 fn serialization_workflow_transform_roundtrip() {
     let mut world = World::new();
     let handle = world.CreateGameObject("Actor");
-    if let Some(t) = world.GetTransformMut(handle) {
+    let _ = world.with_transform_mut(handle, |t| {
         t.SetLocalPosition(Vec3::new(10.0, 20.0, 30.0));
         t.SetLocalRotation(Quat::from_rotation_y(1.57));
         t.SetLocalScale(Vec3::new(2.0, 3.0, 4.0));
-    }
+    });
 
     let serializer = SceneSerializer::new();
     let scene = serializer.Save(&world, "TransformTest");
@@ -314,10 +314,10 @@ fn serialization_workflow_inactive_objects_preserved() {
     let mut world = World::new();
     let handle = world.CreateGameObject("InactiveObj");
     world.SetActive(handle, false);
-    if let Some(t) = world.GetTransformMut(handle) {
+    let _ = world.with_transform_mut(handle, |t| {
         t.SetLocalPosition(Vec3::new(5.0, 5.0, 5.0));
         t.SetLocalScale(Vec3::new(0.5, 0.5, 0.5));
-    }
+    });
 
     let json = SaveSceneJson(&world, "Inactive").unwrap();
     let mut loaded_world = World::new();

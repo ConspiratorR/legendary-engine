@@ -302,9 +302,9 @@ mod tests {
     fn test_sync_transforms() {
         let mut unity = UnityWorld::new();
         let go = unity.CreateGameObject("Obj");
-        if let Some(t) = unity.GetTransformMut(go) {
+        let _ = unity.with_transform_mut(go, |t| {
             t.SetLocalPosition(engine_math::Vec3::new(1.0, 2.0, 3.0));
-        }
+        });
         unity.sync_transforms();
 
         let mut ecs = EcsWorld::new();
@@ -385,9 +385,9 @@ mod tests {
     fn test_sync_writes_full_transform_for_physics() {
         let mut unity = UnityWorld::new();
         let go = unity.CreateGameObject("Body");
-        if let Some(t) = unity.GetTransformMut(go) {
+        let _ = unity.with_transform_mut(go, |t| {
             t.SetLocalPosition(engine_math::Vec3::new(1.0, 2.0, 3.0));
-        }
+        });
         unity.sync_transforms();
 
         let mut ecs = EcsWorld::new();
@@ -408,9 +408,9 @@ mod tests {
         let mut unity = UnityWorld::new();
         let go = unity.CreateGameObject("Quad");
         unity.AddComponent(go, Material::new_with_color([1.0, 0.0, 0.0, 1.0]));
-        if let Some(t) = unity.GetTransformMut(go) {
+        let _ = unity.with_transform_mut(go, |t| {
             t.SetLocalPosition(engine_math::Vec3::new(5.0, 0.0, 0.0));
-        }
+        });
         unity.sync_transforms();
 
         let mut ecs = EcsWorld::new();

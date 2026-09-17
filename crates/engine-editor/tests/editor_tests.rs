@@ -37,9 +37,9 @@ fn sync_node_transforms_from_world_updates_snapshots() {
     // Ensure handle maps exist for the demo hierarchy
     assert!(state.GetNodeId(root).is_some());
 
-    if let Some(t) = state.world.GetTransformMut(root) {
+    let _ = state.world.with_transform_mut(root, |t| {
         t.SetLocalPosition(engine_math::Vec3::new(42.0, 7.0, 1.5));
-    }
+    });
     state.sync_node_transforms_from_world();
 
     let node_id = state.GetNodeId(root).expect("node id");
@@ -110,9 +110,9 @@ fn unity_play_host_physics_falls_with_gravity() {
         },
     );
     state.world.AddComponent(ball, SphereCollider::default());
-    if let Some(t) = state.world.GetTransformMut(ball) {
+    let _ = state.world.with_transform_mut(ball, |t| {
         t.SetLocalPosition(engine_math::Vec3::new(0.0, 10.0, 0.0));
-    }
+    });
     state.world.sync_transforms();
 
     let mut host = state.build_unity_play_host();

@@ -528,7 +528,26 @@ Other write paths that already go through ECS:
 | `GetParentArray` / `GetChildrenArray` | Cycle detection, `sync_transforms`, destroy child walk |
 | `ensure_transform_from_array` | Backfill missing ECS `Transform` from array |
 
-### Still deferred
+#### Experimental default-on builds (D1)
+
+`unity-world-primary` stays **off** in workspace `Cargo.toml`. For a local trial build that exercises dual-read/write-through:
+
+```toml
+# engine-editor or a game crate Cargo.toml — only for experiment binaries
+[dependencies]
+engine-core = { path = "../engine-core", features = ["unity-world-primary"] }
+```
+
+Or from the CLI without editing Cargo.toml:
+
+```bash
+cargo test -p engine-core --features unity-world-primary
+cargo run -p engine-core --example unity_gameplay_demo --features unity-world-primary
+```
+
+Do **not** flip `default = ["audio"]` / remove it in favor of this flag until full storage authority migration lands.
+
+## Still deferred
 
 - Full authority move of `gameobject_data` / `transforms` / `monobehaviours` into ECS (holders still array-backed)
 - Enabling the flag by default

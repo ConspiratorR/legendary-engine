@@ -110,10 +110,10 @@ mod tests {
         let player = world.CreateGameObject("Player");
 
         // Set transform (Unity: Transform.position = ...)
-        if let Some(t) = world.GetTransformMut(player) {
+        let _ = world.with_transform_mut(player, |t| {
             t.SetLocalPosition(Vec3::new(10.0, 0.0, 5.0));
             t.SetLocalScale(Vec3::new(2.0, 2.0, 2.0));
-        }
+        });
 
         // Verify
         let t = world.GetTransform(player).unwrap();
@@ -252,9 +252,9 @@ mod tests {
         world.SetParent(camera, Some(player));
 
         // 3. Modify transform
-        if let Some(t) = world.GetTransformMut(player) {
+        let _ = world.with_transform_mut(player, |t| {
             t.SetLocalPosition(Vec3::new(0.0, 1.0, 0.0));
-        }
+        });
 
         // 4. Verify everything
         assert_eq!(world.GetName(player), "Player");

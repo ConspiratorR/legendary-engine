@@ -374,7 +374,11 @@ fn my_system(app: &App) {
 | **编辑器视口** | ✅ | `build_scene` 优先 Unity World 位姿；命令回写 World；`new_scene` 清空 World |
 | **场景序列化** | ✅ | Material/Sprite/Rigidbody/Audio/Light/Camera/ScriptBehaviour；`.runtime.json`；AssetRef |
 | **ScriptableObject** | ✅ | `.asset`+GUID 热重载（App/编辑器轮询）、AssetRef |
-| **双 World 存储合并** | 🔗 | P2.4/P2.5 完整迁移 — 下迭代 |
+| **P2.4 dual-write 切片** | ✅ | `unity-world-primary`：Transform/Hierarchy/MBInstances 写通；Destroy despawn；CI 双开测 |
+| **光源收集数据源** | ✅ | `light_collect_system` 优先 `TransformProxy`，回退 engine-scene `GlobalTransform` |
+| **双 World 存储权威合并** | 🔗 | 数组仍权威 — 完整迁 ECS 延后（feature 默认 off） |
+
+试验构建：在 `engine-core` 依赖上开启 `features = ["unity-world-primary"]`（**不要**改 workspace default）。契约见 [docs/migration-guide.md](docs/migration-guide.md)。
 
 详见 [docs/unity-alignment-roadmap.md](docs/unity-alignment-roadmap.md) 与 [docs/lifecycle-and-scenes.md](docs/lifecycle-and-scenes.md)。
 
