@@ -518,6 +518,7 @@ Other write paths that already go through ECS:
 - `SetParent` — hierarchy components rewritten on child, new parent, and old parent
 - `AddMonoBehaviour` / `RestoreMonoBehaviours` — `MonoBehaviourTypes` + `MonoBehaviourInstances` (type_name, enabled, props)
 - `restore_monobehaviours_from_ecs` — rebuild array holders from ECS metadata + global registry
+- `seed_ecs_from_array` / `seed_all_ecs_from_array` — fill all ECS identity mirrors from array/GameObject fields (scene load, tools)
 - `Destroy` / `DestroyImmediate` / `flush_destroy` — ECS entity despawned; pending Destroy and DontDestroyOnLoad entries dropped
 
 ### Array-authoritative APIs
