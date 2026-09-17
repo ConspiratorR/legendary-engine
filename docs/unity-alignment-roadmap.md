@@ -101,7 +101,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 | ID | 任务 | 说明 |
 |----|------|------|
 | P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read 已合 main；`unity-world-primary` 下 SetParent/sync 写回 ECS；层级同步只读数组权威；完整存储迁移后续 |
-| P2.5 | 弃用 `engine-scene` 中重复 Transform | 全局变换只在 core World 计算 — **延后** |
+| P2.5 | 弃用 `engine-scene` 中重复 Transform | **盘点**：`scene_bridge`（Parent/Children/Transform）、`animation_editor`（keyframe）、`engine-render::collect_system`（GlobalTransform）、prefab 演示；动画/IK 仍依赖 engine-scene — 完整替换延后 |
 | P2.6 | Editor 只依赖 `engine_core::world::World` | 视口/命令/`new_scene` 已对齐 World；打开优先 `.runtime.json` 孪生；自动保存走 `save_scene_bundle`；旧 ECS Scene 仅作回退 | 大部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
 | P2.8 | 统一 App 入口 | `unity_world` / `unity_world_ref` / `require_unity_world` / `link_unity_scene` ✅ |
