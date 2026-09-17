@@ -1,5 +1,12 @@
 //! Bridge between the serializable [`Scene`] representation and the ECS
 //! [`World`]. Handles import/export of entities and component data.
+//!
+//! # P2.5 note
+//! This is the **legacy ECS scene path** (uses `engine_scene::Transform` /
+//! hierarchy components). The primary editor path is `engine_core::World` +
+//! SceneData JSON (`export_core_scene_json` / `save_scene_bundle`). Keep this
+//! module for 3D mesh scenes that still consume engine-scene; new work should
+//! not add engine-scene Transform dependencies here.
 
 use crate::scene_serializer::{ComponentData, PropertyValue, Scene, SceneEntity, TransformData};
 use anyhow::{Context, Result};

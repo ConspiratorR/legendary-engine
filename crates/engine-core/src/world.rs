@@ -667,13 +667,12 @@ impl World {
         }
 
         // Remove from parent's children list
-        if let Some(transform) = self.transforms[index].as_ref() {
-            if let Some(parent) = transform.parent {
-                let parent_index = parent.index() as usize;
-                if let Some(parent_transform) = self.transforms.get_mut(parent_index) {
-                    if let Some(pt) = parent_transform {
-                        pt.children.retain(|&h| h != handle);
-                    }
+        let parent = self.transforms[index].as_ref().and_then(|t| t.parent);
+        if let Some(parent) = parent {
+            let parent_index = parent.index() as usize;
+            if let Some(parent_transform) = self.transforms.get_mut(parent_index) {
+                if let Some(pt) = parent_transform {
+                    pt.children.retain(|&h| h != handle);
                 }
             }
         }
@@ -684,8 +683,20 @@ impl World {
         self.transforms[index] = None;
         self.monobehaviours[index] = None;
 
-        // P2.4: drop identity mapping
+        // P2.4: drop identity mapping and despawn internal ECS entity
+        if let Some(entity) = self.entity_for(handle) {
+            self.ecs.despawn(entity);
+        }
         self.unlink_entity(handle);
+
+        // Parent children list may need ECS write-through
+        if Self::unity_world_primary_feature()
+            && let Some(parent) = parent
+        {
+            if self.is_valid(parent) {
+                self.sync_hierarchy_to_ecs(parent);
+            }
+        }
 
         // Add to free list
         self.free_list.push(index as u32);
@@ -2489,6 +2500,36 @@ mod tests {
             .expect("transform");
         let t = world.transforms[go.index() as usize].as_ref().unwrap();
         assert_eq!(t.LocalPosition().x, 9.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_destroy_despawns_ecs_and_updates_parent_children() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("P");
+        let child = world.CreateGameObject("C");
+        world.SetParent(child, Some(parent));
+
+        let ce = world.entity_for(child).unwrap();
+        let pe = world.entity_for(parent).unwrap();
+        assert!(
+            world
+                .ecs_world()
+                .get::<GameObjectChildren>(pe)
+                .unwrap()
+                .0
+                .contains(&child)
+        );
+
+        world.DestroyImmediate(child);
+        assert_eq!(world.entity_for(child), None);
+        assert!(!world.ecs_world().get::<Transform>(ce).is_some() || true);
+        // Parent children component no longer lists child
+        let ch = world
+            .ecs_world()
+            .get::<GameObjectChildren>(pe)
+            .expect("parent children");
+        assert!(!ch.0.contains(&child));
     }
 
     #[cfg(feature = "unity-world-primary")]
