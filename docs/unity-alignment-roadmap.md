@@ -102,7 +102,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 |----|------|------|
 | P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read 已合 main；补 lifecycle 集成测试（含 feature）；完整存储迁移后续 |
 | P2.5 | 弃用 `engine-scene` 中重复 Transform | 全局变换只在 core World 计算 — **延后** |
-| P2.6 | Editor 只依赖 `engine_core::world::World` | 视口以 World 为准；命令回写 World；`new_scene` 清空 World + 句柄映射；菜单仍另有 ECS `scene_manager` | 部分 ✅ |
+| P2.6 | Editor 只依赖 `engine_core::world::World` | 视口/命令/`new_scene` 已对齐 World；打开优先 `.runtime.json` 孪生；自动保存走 `save_scene_bundle`；旧 ECS Scene 仅作回退 | 大部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
 | P2.8 | 统一 App 入口 | `unity_world` / `unity_world_ref` / `require_unity_world` / `link_unity_scene` ✅ |
 | P2.9 | 渲染消费身份桥 | `render_phase` 合并 `TransformProxy`+`RenderProxy` → `Sprite`（白纹理兜底） ✅ |

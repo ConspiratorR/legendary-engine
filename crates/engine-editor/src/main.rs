@@ -151,13 +151,22 @@ fn main() -> anyhow::Result<()> {
                                     }
                                 }
 
-                                // Check autosave
+                                // Check autosave — prefer SceneData bundle (World + runtime twin)
                                 if editor_state.check_autosave(dt as f32) {
-                                    if let Err(e) = editor_state.scene_manager.save_current_scene()
+                                    let result = match editor_state
+                                        .scene_manager
+                                        .scene_path()
+                                        .map(|p| p.to_path_buf())
                                     {
-                                        log::warn!("Autosave failed: {}", e);
-                                    } else {
-                                        log::info!("Autosave completed");
+                                        Some(path) => editor_state.save_scene_bundle(&path),
+                                        None => editor_state
+                                            .scene_manager
+                                            .save_current_scene()
+                                            .map_err(|e| e.to_string()),
+                                    };
+                                    match result {
+                                        Ok(()) => log::info!("Autosave completed"),
+                                        Err(e) => log::warn!("Autosave failed: {}", e),
                                     }
                                 }
 

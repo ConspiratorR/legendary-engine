@@ -361,6 +361,11 @@ impl SceneManager {
         self.is_modified = true;
     }
 
+    /// Sets the active scene file path (used after World/SceneData load).
+    pub fn set_scene_path(&mut self, path: PathBuf) {
+        self.scene_path = Some(path);
+    }
+
     /// Returns a reference to the current scene, if loaded.
     pub fn current_scene(&self) -> Option<&Scene> {
         self.current_scene.as_ref()
