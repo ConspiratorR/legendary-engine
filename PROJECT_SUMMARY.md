@@ -76,19 +76,22 @@
 - **WASM 脚本** — wasmtime 集成、沙盒执行
 - **蓝图执行** — BlueprintComponent、begin_play + tick
 
-### 8b. Unity 对齐运行时（分支 `unity-lifecycle-refactor`）
+### 8b. Unity 对齐运行时（已在 `main`）
 - **PlayerLoop / MonoBehaviour 生命周期** — Fixed→Update→Late→EoF，SetActive/Destroy/Invoke
 - **SceneRuntime** — Unity World 挂 ECS App；SceneManager 加载/卸载/DDOL
 - **协程** — `Wait` / `WaitRealtime` / `WaitFixedUpdate` / `WaitUntil` / `WaitWhile`；按 id 或名停止
 - **ScriptableObject 资产** — `.asset` + `.meta` GUID、热重载、`AssetRef`
 - **示例** — `coroutine_demo`：`cargo run -p engine-core --example coroutine_demo`
 - **身份桥** — 全量 auto-link、`TransformProxy`/`RenderProxy`、`require_unity_world`、render_phase 消费
+- **P2.4 dual-write** — feature `unity-world-primary`：Transform/Hierarchy/MBInstances 写通；Destroy despawn；CI 双开测
+- **内置样例脚本** — `sample_scripts` Mover/Rotator/Lifetime，SceneData 往返
 - **编辑器 Play** — `UnityPlayHost` 克隆场景进 SceneRuntime，驱动 MonoBehaviour 生命周期
 - **端到端** — SceneData Material/Sprite 往返；`runtime_scene_demo`；`unity_gameplay_demo`（纯 Unity World）
 - **AddMonoBehaviour** — 挂载时写入 `gameobject` 句柄（Unity AddComponent 语义）
 - **热重载** — App lifecycle / 编辑器每帧 `poll_hot_reload`；场景 AssetRef 只存 GUID
 - **内置序列化** — Material / SpriteRenderer / Rigidbody / AudioSource / Light / Camera
 - **so_asset CLI** — `pack` / `list` 递归补 `.meta`
+- **仍延后** — 数组存储权威完全迁 ECS；默认打开 `unity-world-primary`；WASM SceneRuntime 全量
 
 ### 9. 发布 & 生态 (阶段 9)
 - **CI/CD** — GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵)

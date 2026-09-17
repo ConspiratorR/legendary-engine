@@ -408,31 +408,17 @@ impl World {
 
     /// Copy all Unity Transforms onto linked internal-ECS entities as
     /// [`Transform`] components (P2.4 write-through for tools / storage merge).
+    ///
+    /// Uses the same local/world contract as [`World::write_transform_to_ecs`]:
+    /// local fields stay local; roots refresh world from local; children keep
+    /// cached world after `sync_transforms`.
     pub fn sync_all_transforms_to_ecs(&mut self) {
-        let pairs: Vec<(GameObjectHandle, engine_ecs::entity::Entity)> = self
-            .handle_to_entity
-            .iter()
-            .map(|(&h, &e)| (h, e))
-            .collect();
-        for (handle, entity) in pairs {
+        let handles: Vec<GameObjectHandle> = self.handle_to_entity.keys().copied().collect();
+        for handle in handles {
             if !self.is_valid(handle) {
                 continue;
             }
-            let Some(t) = self
-                .transforms
-                .get(handle.index() as usize)
-                .and_then(|t| t.as_ref())
-            else {
-                continue;
-            };
-            // Prefer world pose after World::sync_transforms; fall back to local.
-            let full =
-                Transform::from_position_rotation_scale(t.Position(), t.Rotation(), t.LossyScale());
-            if self.ecs.get::<Transform>(entity).is_some() {
-                *self.ecs.get_mut::<Transform>(entity).unwrap() = full;
-            } else {
-                self.ecs.add_component(entity, full);
-            }
+            self.write_transform_to_ecs(handle);
         }
     }
 
@@ -2764,6 +2750,31 @@ mod tests {
             .expect("MonoBehaviourTypes on ECS");
         assert!(types.0.iter().any(|n| n == "B5Marker"));
         assert_eq!(world.MonoBehaviourCount(go), 1);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_sync_all_preserves_child_local_position_under_dual_read() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("P");
+        let child = world.CreateGameObject("C");
+        world.SetParent(child, Some(parent));
+        let _ = world.with_transform_mut(parent, |t| {
+            t.SetLocalPosition(Vec3::new(5.0, 0.0, 0.0));
+        });
+        let _ = world.with_transform_mut(child, |t| {
+            t.SetLocalPosition(Vec3::new(1.0, 0.0, 0.0));
+        });
+        world.sync_transforms();
+        world.sync_all_transforms_to_ecs();
+
+        let child_t = world.GetTransform(child).expect("child transform");
+        assert_eq!(child_t.LocalPosition(), Vec3::new(1.0, 0.0, 0.0));
+        assert_eq!(child_t.Position(), Vec3::new(6.0, 0.0, 0.0));
+
+        let parent_t = world.GetTransform(parent).expect("parent transform");
+        assert_eq!(parent_t.LocalPosition(), Vec3::new(5.0, 0.0, 0.0));
+        assert_eq!(parent_t.Position(), Vec3::new(5.0, 0.0, 0.0));
     }
 
     #[cfg(feature = "unity-world-primary")]
