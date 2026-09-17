@@ -721,3 +721,74 @@ fn test_stop_coroutine_by_name() {
     assert_eq!(world.CoroutineCount(), 1);
     assert!(!world.StopCoroutineByName(obj, "Blink"));
 }
+
+#[test]
+fn test_setname_setactive_gettransform_stable_under_any_storage_mode() {
+    let mut world = World::new();
+    let go = world.CreateGameObject("Before");
+    world.SetName(go, "After");
+    world.SetActive(go, false);
+    assert_eq!(world.GetName(go), "After");
+    assert!(!world.IsActive(go));
+    if let Some(t) = world.GetTransformMut(go) {
+        t.SetLocalPosition(engine_math::Vec3::new(1.0, 2.0, 3.0));
+    }
+    let t = world.GetTransform(go).unwrap();
+    assert_eq!(t.LocalPosition(), engine_math::Vec3::new(1.0, 2.0, 3.0));
+}
+
+#[cfg(feature = "unity-world-primary")]
+#[test]
+fn test_lifecycle_with_unity_world_primary_dual_read() {
+    use engine_core::components::Material;
+    use engine_core::scene_management::LoadSceneMode;
+    use engine_core::serialization::SaveSceneJson;
+
+    let mut builder = AppBuilder::new();
+    builder.add_plugin(CorePlugins);
+    let mut app = builder.build();
+
+    let json = {
+        let mut author = World::new();
+        let go = author.CreateGameObject("Flagged");
+        author.SetTag(go, "Enemy");
+        author.AddComponent(
+            go,
+            Material {
+                base_color: [1.0, 0.0, 0.0, 1.0],
+                ..Default::default()
+            },
+        );
+        SaveSceneJson(&author, "FlaggedScene").unwrap()
+    };
+
+    {
+        let rt = app.scene_runtime_mut().unwrap();
+        rt.load_scene_json("FlaggedScene", &json, LoadSceneMode::Single)
+            .unwrap();
+    }
+
+    // Rename through API — dual-read GetName must see it
+    {
+        let world = app.unity_world().expect("SceneRuntime");
+        let go = world.Find("Flagged").expect("loaded");
+        let _ = world.GetTransform(go).expect("transform");
+        assert_eq!(world.GetTag(go), "Enemy");
+    }
+    {
+        let world = app.unity_world().unwrap();
+        let go = world.Find("Flagged").unwrap();
+        world.SetName(go, "FlaggedRenamed");
+    }
+
+    app.run_with_lifecycle(0.016);
+
+    let world = app.unity_world().unwrap();
+    let go = world
+        .Find("FlaggedRenamed")
+        .or_else(|| world.Find("Flagged"))
+        .expect("object after rename");
+    assert_eq!(world.GetName(go), "FlaggedRenamed");
+    assert_eq!(world.GetTag(go), "Enemy");
+    let _ = world.GetTransform(go).unwrap();
+}
