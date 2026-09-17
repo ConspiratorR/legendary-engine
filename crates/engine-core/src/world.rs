@@ -70,6 +70,32 @@ impl Component for MonoBehaviourTypes {
     }
 }
 
+/// ECS parent link (P2.4 hierarchy write-through). Empty = root.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GameObjectParent(pub GameObjectHandle);
+
+impl Component for GameObjectParent {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+/// ECS children list (P2.4 hierarchy write-through).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GameObjectChildren(pub Vec<GameObjectHandle>);
+
+impl Component for GameObjectChildren {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
 /// Primitive type for CreatePrimitive (matches Unity's `PrimitiveType` enum).
 ///
 /// # Unity Documentation
@@ -424,6 +450,30 @@ impl World {
         }
     }
 
+    /// Write `GameObjectParent` / `GameObjectChildren` onto the linked entity.
+    fn sync_hierarchy_to_ecs(&mut self, handle: GameObjectHandle) {
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let parent = self.GetParent(handle);
+        let children = self.GetChildren(handle);
+
+        if let Some(p) = parent {
+            let comp = GameObjectParent(p);
+            if self.ecs.get::<GameObjectParent>(entity).is_some() {
+                *self.ecs.get_mut::<GameObjectParent>(entity).unwrap() = comp;
+            } else {
+                self.ecs.add_component(entity, comp);
+            }
+        }
+        let comp = GameObjectChildren(children);
+        if self.ecs.get::<GameObjectChildren>(entity).is_some() {
+            *self.ecs.get_mut::<GameObjectChildren>(entity).unwrap() = comp;
+        } else {
+            self.ecs.add_component(entity, comp);
+        }
+    }
+
     /// Get the next instance ID.
     fn next_instance_id(&mut self) -> i32 {
         let id = self.next_instance_id;
@@ -471,6 +521,9 @@ impl World {
         self.sync_name_to_ecs(handle, name);
         self.sync_tag_to_ecs(handle, "Untagged");
         self.sync_active_to_ecs(handle, true);
+        if Self::unity_world_primary_feature() {
+            self.sync_hierarchy_to_ecs(handle);
+        }
 
         handle
     }
@@ -1225,11 +1278,14 @@ impl World {
 
         if Self::unity_world_primary_feature() {
             self.sync_transform_to_ecs(child);
+            self.sync_hierarchy_to_ecs(child);
             if let Some(p) = parent {
                 self.sync_transform_to_ecs(p);
+                self.sync_hierarchy_to_ecs(p);
             }
             if let Some(old_parent) = old_parent {
                 self.sync_transform_to_ecs(old_parent);
+                self.sync_hierarchy_to_ecs(old_parent);
             }
         }
     }
@@ -2433,6 +2489,28 @@ mod tests {
             .expect("transform");
         let t = world.transforms[go.index() as usize].as_ref().unwrap();
         assert_eq!(t.LocalPosition().x, 9.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_hierarchy_components_written_on_set_parent() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("P");
+        let child = world.CreateGameObject("C");
+        world.SetParent(child, Some(parent));
+
+        let ce = world.entity_for(child).unwrap();
+        let pe = world.entity_for(parent).unwrap();
+        let par = world
+            .ecs_world()
+            .get::<GameObjectParent>(ce)
+            .expect("GameObjectParent");
+        assert_eq!(par.0, parent);
+        let ch = world
+            .ecs_world()
+            .get::<GameObjectChildren>(pe)
+            .expect("GameObjectChildren");
+        assert!(ch.0.contains(&child));
     }
 
     #[cfg(feature = "unity-world-primary")]
