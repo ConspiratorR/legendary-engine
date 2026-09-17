@@ -503,12 +503,18 @@ Do **not** use dual-read `GetTransform` to compute world coordinates or walk par
 Prefer mutating transforms with:
 
 ```rust
+// Array-primary write (legacy / scene I/O) — mirrors ECS when feature on
 world.with_transform_mut(handle, |t| {
+    t.SetLocalPosition(pos);
+});
+
+// ECS-primary write under unity-world-primary — array becomes cache
+world.with_ecs_transform_mut(handle, |t| {
     t.SetLocalPosition(pos);
 });
 ```
 
-This updates array storage, refreshes root world pose, and copies onto the linked ECS entity when the feature is on.
+`with_ecs_transform_mut` falls back to `with_transform_mut` when the feature is off. After ECS-only edits, call `sync_transform_from_ecs` / `sync_all_transforms_from_ecs` to refresh array cache (hierarchy math + scene save still use array pose fields).
 
 `GetTransformMut` only mutates the array. After using it, call `sync_transform_to_ecs` / `sync_transforms` or dual-read will see a stale ECS `Transform`.
 

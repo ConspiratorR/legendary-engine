@@ -1333,8 +1333,8 @@ impl World {
 
     /// Mutate the Transform then write-through to internal ECS when the feature is on.
     ///
-    /// Array storage remains authoritative for the mutable borrow; ECS is updated
-    /// after `f` returns so P2.4 dual-read stays coherent.
+    /// Array storage remains the mutable source; ECS is updated after `f` returns
+    /// so dual-read stays coherent (legacy write path / scene I/O).
     pub fn with_transform_mut<R>(
         &mut self,
         handle: GameObjectHandle,
@@ -1350,9 +1350,73 @@ impl World {
         Some(result)
     }
 
+    /// Mutate the **ECS** Transform as the write authority, then mirror local
+    /// fields onto the array cache (R1d under `unity-world-primary`).
+    ///
+    /// When the feature is off this falls back to [`World::with_transform_mut`].
+    /// Parent/children links stay array-authoritative; only pose fields mirror.
+    pub fn with_ecs_transform_mut<R>(
+        &mut self,
+        handle: GameObjectHandle,
+        f: impl FnOnce(&mut Transform) -> R,
+    ) -> Option<R> {
+        if !Self::unity_world_primary_feature() {
+            return self.with_transform_mut(handle, f);
+        }
+        if !self.is_valid(handle) {
+            return None;
+        }
+        let entity = self.ensure_entity(handle);
+        if self.ecs.get::<Transform>(entity).is_none() {
+            self.write_transform_to_ecs(handle);
+        }
+        let result = {
+            let t = self.ecs.get_mut::<Transform>(entity)?;
+            f(t)
+        };
+        self.sync_transform_from_ecs(handle);
+        Some(result)
+    }
+
     /// Copy this handle's array Transform onto its linked ECS entity (if any).
     pub fn sync_transform_to_ecs(&mut self, handle: GameObjectHandle) {
         self.write_transform_to_ecs(handle);
+    }
+
+    /// Copy ECS Transform local pose onto array storage (R1d array-as-cache).
+    ///
+    /// No-op when the feature is off or the entity has no ECS `Transform`.
+    /// Does not touch array parent/children links.
+    pub fn sync_transform_from_ecs(&mut self, handle: GameObjectHandle) {
+        if !Self::unity_world_primary_feature() {
+            return;
+        }
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let Some(ecs_t) = self.ecs.get::<Transform>(entity).cloned() else {
+            return;
+        };
+        let index = handle.index() as usize;
+        if let Some(Some(arr)) = self.transforms.get_mut(index) {
+            arr.local_position = ecs_t.LocalPosition();
+            arr.local_rotation = ecs_t.LocalRotation();
+            arr.local_scale = ecs_t.LocalScale();
+            arr.has_changed = true;
+        }
+    }
+
+    /// Mirror every linked entity's ECS Transform local pose back to array cache.
+    pub fn sync_all_transforms_from_ecs(&mut self) {
+        if !Self::unity_world_primary_feature() {
+            return;
+        }
+        let handles: Vec<GameObjectHandle> = self.handle_to_entity.keys().copied().collect();
+        for handle in handles {
+            if self.is_valid(handle) {
+                self.sync_transform_from_ecs(handle);
+            }
+        }
     }
 
     /// Copy this handle's array Transform onto its linked ECS entity (if any).
@@ -2906,6 +2970,62 @@ mod tests {
         *world.ecs.get_mut::<GameObjectLayer>(e).unwrap() = GameObjectLayer(9);
         assert_eq!(world.GetLayer(go), 9);
         assert_eq!(world.GetTransformArray(go).is_some(), true);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_r1d_with_ecs_transform_mut_mirrors_array_cache() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("EcsWrite");
+        let _ = world.with_ecs_transform_mut(go, |t| {
+            t.SetLocalPosition(Vec3::new(11.0, 0.0, 0.0));
+        });
+        // Dual-read sees ECS authority
+        assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 11.0);
+        // Array cache mirrored
+        assert_eq!(world.GetTransformArray(go).unwrap().LocalPosition().x, 11.0);
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_r1d_sync_transform_from_ecs_restores_array_cache() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("FromEcs");
+        let e = world.entity_for(go).unwrap();
+        let _ = world.with_ecs_transform_mut(go, |t| {
+            t.SetLocalPosition(Vec3::new(6.0, 7.0, 0.0));
+        });
+        // Corrupt array cache only
+        if let Some(Some(arr)) = world.transforms.get_mut(go.index() as usize) {
+            arr.local_position = Vec3::ZERO;
+        }
+        world.sync_transform_from_ecs(go);
+        assert_eq!(world.GetTransformArray(go).unwrap().LocalPosition().x, 6.0);
+        assert_eq!(world.GetTransformArray(go).unwrap().LocalPosition().y, 7.0);
+        // ECS still authority for dual-read
+        assert_eq!(
+            world.ecs.get::<Transform>(e).unwrap().LocalPosition().x,
+            6.0
+        );
+    }
+
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_r1d_identity_writes_prefer_ecs_reads() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Ident");
+        world.SetName(go, "Renamed");
+        world.SetTag(go, "Hero");
+        world.SetActive(go, false);
+        world.SetLayer(go, 4);
+        let e = world.entity_for(go).unwrap();
+        // Strip array-side view by trusting ECS dual-read after API writes
+        assert_eq!(world.GetName(go), "Renamed");
+        assert_eq!(world.GetTag(go), "Hero");
+        assert!(!world.IsActive(go));
+        assert_eq!(world.GetLayer(go), 4);
+        assert!(world.ecs.get::<GameObjectName>(e).is_some());
+        assert!(world.ecs.get::<GameObjectLayer>(e).is_some());
     }
 
     #[cfg(feature = "unity-world-primary")]
