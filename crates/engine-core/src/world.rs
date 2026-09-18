@@ -1322,10 +1322,11 @@ impl World {
 
     /// Get a mutable Transform reference (array storage only; no ECS write-through).
     ///
-    /// Prefer [`World::with_transform_mut`] so ECS write-through runs under
-    /// `unity-world-primary`. Direct use of this API leaves dual-read
-    /// [`World::GetTransform`] stale until `sync_transform_to_ecs` /
-    /// `sync_transforms`.
+    /// Prefer [`World::with_ecs_transform_mut`] / [`World::SetLocalPosition`] so the
+    /// compiled storage authority is used. [`World::with_transform_mut`] remains the
+    /// array-primary path (scene I/O / feature off). Direct use of this API leaves
+    /// dual-read [`World::GetTransform`] stale under `unity-world-primary` until
+    /// `sync_transform_to_ecs` / `sync_transforms`.
     pub fn GetTransformMut(&mut self, handle: GameObjectHandle) -> Option<&mut Transform> {
         let index = handle.index() as usize;
         self.transforms.get_mut(index)?.as_mut()
@@ -3426,6 +3427,9 @@ mod tests {
                 arr.local_position = engine_math::Vec3::ZERO;
                 arr.local_scale = engine_math::Vec3::ONE;
             }
+            // Corruption actually applied to the non-authoritative store.
+            assert_eq!(world.GetTransformArray(go).unwrap().LocalPosition().x, 0.0);
+            assert_eq!(world.GetTransformArray(go).unwrap().LocalScale().x, 1.0);
             assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 5.0);
             assert_eq!(world.GetTransform(go).unwrap().LocalScale().x, 2.0);
             assert_eq!(
@@ -3484,6 +3488,15 @@ mod tests {
             if let Some(Some(arr)) = world.transforms.get_mut(index) {
                 arr.parent = None;
             }
+            // Corruption actually applied to array / GameObject fields.
+            let index = go.index() as usize;
+            if let Some(Some(godata)) = world.gameobject_data.get(index) {
+                assert_eq!(godata.Name(), "ArrayCorrupt");
+                assert_eq!(godata.Tag(), "ArrayCorrupt");
+                assert!(godata.ActiveSelf());
+                assert_eq!(godata.Layer(), 99);
+            }
+            assert_eq!(world.GetParentArray(go), None);
             // Public reads still see ECS write-authority.
             assert_eq!(world.GetName(go), "Written");
             assert_eq!(world.GetTag(go), "Hero");

@@ -506,7 +506,7 @@ Always use the **array** accessors for hierarchy math, world-pose composition, a
 
 Do **not** use dual-read `GetTransform` to compute world coordinates or walk parents.
 
-Phase 11 note: dual-read preference is implemented; full write-authority migration (arrays demoted to cache only when the feature is on) is still in progress under the phase plan.
+Phase 11 S3 note: dual-read preference **and** public write-authority policy are implemented (`SetLocal*` + identity dual-write). Full demotion of array holders to pure cache for every internal path is still in progress under the phase plan.
 
 ### Write-through contract
 

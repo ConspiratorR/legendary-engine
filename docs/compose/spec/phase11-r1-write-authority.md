@@ -1,14 +1,32 @@
 ---
 feature: phase11-r1-write-authority
-status: in-progress
+status: delivered
 updated: 2026-07-13
 branch: phase11-r1-read
-commits: 
+commits: c756def877ae3e805d3e77d167dbb1911fadc13c..HEAD
 ---
 
 # Phase 11 R1 — Write Authority Slices
 
 ## Report
+
+**What was built** — Phase 11 S3 write-authority on `phase11-r1-read`. Public World transform writers (`SetLocalPosition` / `SetLocalRotation` / `SetLocalScale` / `SetLocalPositionAndRotation`) route through `with_ecs_transform_mut`: feature off keeps array authority; feature on mutates ECS `Transform` and mirrors local pose to the array cache. Identity setters already dual-write; dual-mode tests lock post-write authority by corrupting the **non-authoritative** store and asserting public reads still return the written truth. `sample_scripts` Mover/Rotator use `with_ecs_transform_mut` for relative motion. `migration-guide` documents the write-authority table and public writers. Workspace default features remain `["audio"]`.
+
+**Verification** —
+- `cargo test -p engine-core --lib` — PASS (222)
+- `cargo test -p engine-core --lib --features unity-world-primary` — PASS (242)
+- `cargo test -p engine-core --lib test_s3_` (both modes) — PASS (2 + 2)
+- `cargo test -p engine-core --test unity_lifecycle_tests` — PASS (21)
+- `cargo test -p engine-core --test unity_lifecycle_tests --features unity-world-primary` — PASS (23)
+- `cargo test -p engine-editor --test editor_tests` — PASS (58)
+- `cargo build -p engine-core --examples` — PASS
+
+**Journey log** —
+1. S3 production surface for identity was already dual-write; real new API is World `SetLocal*` wrappers over `with_ecs_transform_mut`.
+2. Dual-mode tests use `World::unity_world_primary_feature()` at runtime so one body covers both CI feature jobs.
+3. Reviewer noted vacuous-pass risk if corruption were a no-op — tests now assert the corrupted store (`GetTransformArray` / array GameObject fields) before asserting public authority.
+4. `SetParent` still syncs ECS hierarchy only when the feature is compiled on — intentional; feature-off dual-read ignores ECS parent anyway.
+5. `sample_scripts` correctly use `with_ecs_transform_mut` for RMW motion rather than absolute `SetLocal*`.
 
 ## [S1] Problem
 
@@ -46,11 +64,7 @@ world.SetLocalPositionAndRotation(handle, pos, rot);
 
 ### Identity / hierarchy write authority
 
-No production redesign: `SetName`/`SetTag`/`SetActive`/`SetLayer`/`SetParent` already write array and ECS. S3 locks them with a dual-mode **post-write divergence** test:
-
-- After a public write, ECS and array agree (coherent dual-write).
-- Feature **on**: if only array is later corrupted, public read still returns the written (ECS) truth.
-- Feature **off**: if only ECS is later corrupted, public read still returns the written (array) truth.
+No production redesign: `SetName`/`SetTag`/`SetActive`/`SetLayer`/`SetParent` already write array and ECS (SetParent hierarchy mirrors are feature-gated). S3 locks them with a dual-mode **post-write divergence** test that also asserts the corrupted store.
 
 ### MonoBehaviour metadata
 
@@ -76,10 +90,10 @@ See design out-of-scope. Additionally: no workspace default-feature flip; no ren
 
 ## Tasks
 
-- [x] T1: Add World transform writers (`SetLocalPosition` / `SetLocalRotation` / `SetLocalScale` / `SetLocalPositionAndRotation`) routing through `with_ecs_transform_mut` — acceptance: methods compile; feature off still array-authoritative; feature on ECS-primary + array cache mirrored (covers: S2)
+- [x] T1: Add World transform writers routing through `with_ecs_transform_mut` (covers: S2)
 - [x] T2: Dual-mode transform write-authority test — `test_s3_transform_write_authority_after_set_local_position` (covers: S2; depends: T1)
 - [x] T3: Dual-mode identity/hierarchy write-authority test — `test_s3_identity_write_authority_after_public_setters` (covers: S2)
-- [x] T4: Keep MB restore + Instantiate seed regression green — existing B5/R1 tests still pass both feature modes (covers: S2)
-- [x] T5: Sample scripts use World transform writers — `sample_scripts` Mover/Rotator call `with_ecs_transform_mut` (covers: S2; depends: T1)
-- [x] T6: Update `docs/migration-guide.md` write-authority contract — feature on = ECS read authority + array cache; feature off = array authority (covers: S2)
-- [x] T7: Dual-mode verification gate + examples build — listed commands PASS (covers: S2)
+- [x] T4: Keep MB restore + Instantiate seed regression green both feature modes (covers: S2)
+- [x] T5: Sample scripts use `with_ecs_transform_mut` (covers: S2; depends: T1)
+- [x] T6: Update `docs/migration-guide.md` write-authority contract (covers: S2)
+- [x] T7: Dual-mode verification gate + examples build (covers: S2)
