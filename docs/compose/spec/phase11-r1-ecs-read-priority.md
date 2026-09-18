@@ -3,7 +3,7 @@ feature: phase11-r1-ecs-read-priority
 status: delivered
 updated: 2026-07-13
 branch: phase11-r1-read
-commits: 149ff3d151e7e5604bdc112823b88014cbbcab9a..HEAD
+commits: 149ff3d151e7e5604bdc112823b88014cbbcab9a..54e161613d401774a9cd7b7b36de45524796339e
 ---
 
 # Phase 11 R1 — ECS Read Priority + Baseline Cleanup
@@ -28,6 +28,7 @@ commits: 149ff3d151e7e5604bdc112823b88014cbbcab9a..HEAD
 3. Review found GetParent was not actually diverged in the first test draft (ECS parent equalled array parent); fixed with a decoy parent handle.
 4. Review found roadmap still pointed write-authority at completed P2.12 and told users to merge already-merged `p2-viewport-unity-source`; both corrected.
 5. Review found migration-guide had two dual-read tables (one incomplete); merged into a single complete table including `GetLayer` + feature-off note.
+6. Focused re-review after fix: all four prior criticals confirmed FIXED at working tree `54e1616`.
 
 ## [S1] Problem
 
