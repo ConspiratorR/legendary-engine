@@ -3301,6 +3301,7 @@ mod tests {
     fn test_dual_read_storage_mode_contract_when_ecs_diverges() {
         let mut world = World::new();
         let parent = world.CreateGameObject("ArrayParent");
+        let decoy = world.CreateGameObject("DecoyParent");
         let go = world.CreateGameObject("ArrayTruth");
         world.SetParent(go, Some(parent));
         world.SetName(go, "ArrayTruth");
@@ -3314,7 +3315,7 @@ mod tests {
 
         let e = world.entity_for(go).expect("linked entity");
         let pe = world.entity_for(parent).expect("parent entity");
-        let _ = pe;
+        let _ = world.entity_for(decoy).expect("decoy entity");
 
         // Force ECS mirrors to a divergent truth without touching array storage.
         {
@@ -3329,11 +3330,11 @@ mod tests {
             } else {
                 ecs.add_component(e, divergent);
             }
-            // Spoof hierarchy away from array parent/children.
+            // Diverge parent AND children: array still says `parent`; ECS says `decoy`.
             if ecs.get::<GameObjectParent>(e).is_some() {
-                *ecs.get_mut::<GameObjectParent>(e).unwrap() = GameObjectParent(parent);
+                *ecs.get_mut::<GameObjectParent>(e).unwrap() = GameObjectParent(decoy);
             } else {
-                ecs.add_component(e, GameObjectParent(parent));
+                ecs.add_component(e, GameObjectParent(decoy));
             }
             let empty = GameObjectChildren(Vec::new());
             if ecs.get::<GameObjectChildren>(pe).is_some() {
@@ -3353,7 +3354,8 @@ mod tests {
             assert!(!world.IsActive(go));
             assert_eq!(world.GetLayer(go), 9);
             assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 42.0);
-            assert_eq!(world.GetParent(go), Some(parent));
+            // ECS parent diverged to decoy — dual-read must prefer it.
+            assert_eq!(world.GetParent(go), Some(decoy));
             // ECS children list diverged to empty — dual-read must prefer it.
             assert!(world.GetChildren(parent).is_empty());
         } else {
@@ -3362,6 +3364,7 @@ mod tests {
             assert!(world.IsActive(go));
             assert_eq!(world.GetLayer(go), 2);
             assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 1.0);
+            // Array parent remains authority when the feature is off.
             assert_eq!(world.GetParent(go), Some(parent));
             assert!(world.GetChildren(parent).contains(&go));
         }

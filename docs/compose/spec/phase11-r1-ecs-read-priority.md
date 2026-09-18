@@ -1,24 +1,37 @@
 ---
 feature: phase11-r1-ecs-read-priority
-status: in-progress
+status: delivered
 updated: 2026-07-13
 branch: phase11-r1-read
-commits: 
+commits: 149ff3d151e7e5604bdc112823b88014cbbcab9a..HEAD
 ---
 
 # Phase 11 R1 — ECS Read Priority + Baseline Cleanup
 
 ## Report
 
+**What was built** — Phase 11 first slice (S1 cleanup + S2 dual-read acceptance) on branch `phase11-r1-read`. Production dual-read preference (`GetTransform/Name/Tag/Active/Layer/Parent/Children` → ECS under `unity-world-primary`) was already on `main`; this slice locks the contract with a dual-mode divergence test (`test_dual_read_storage_mode_contract_when_ecs_diverges`) that mutates **only** ECS mirrors (including a decoy parent) and asserts public reads follow the compiled feature. Roadmap / PROJECT_SUMMARY / migration-guide / lifecycle docs were refreshed so dual-read is documented as implemented and still-deferred write-authority work points at the phase 11 plan, not completed P2.12 or unmerged p2 branches. Workspace default features remain `["audio"]`.
+
+**Verification** —
+- `cargo test -p engine-core --lib` — PASS (220)
+- `cargo test -p engine-core --lib --features unity-world-primary` — PASS (240)
+- `cargo test -p engine-core --test unity_lifecycle_tests` — PASS (21)
+- `cargo test -p engine-core --test unity_lifecycle_tests --features unity-world-primary` — PASS (23)
+- `cargo test -p engine-editor --test editor_tests` — PASS (58)
+- `cargo build -p engine-editor` — PASS
+- `cargo run -p engine-editor` smoke ~12s — PASS (process ran; wgpu Vulkan + RTX 5080 init)
+- Dual-mode contract test re-run after GetParent decoy fix — PASS both feature states
+
+**Journey log** —
+1. Session policy blocked `git worktree add` and `git branch -d`; work proceeded on in-place branch `phase11-r1-read`. Merged-branch cleanup remains for user/orchestrator: `docs-unity-exit-criteria`, `p2-4-flag-integration`, `p2-4-storage-merge`, `p2-4-transform-dual-read`, `p2-6-editor-scene-path`, `p2-deferred-storage`, `p2-viewport-unity-source`, `unity-lifecycle-refactor`.
+2. Dual-read production code was already complete — correct S2 scope is docs + acceptance tests, not API redesign.
+3. Review found GetParent was not actually diverged in the first test draft (ECS parent equalled array parent); fixed with a decoy parent handle.
+4. Review found roadmap still pointed write-authority at completed P2.12 and told users to merge already-merged `p2-viewport-unity-source`; both corrected.
+5. Review found migration-guide had two dual-read tables (one incomplete); merged into a single complete table including `GetLayer` + feature-off note.
+
 ## [S1] Problem
 
-Phase 10 landed dual-write slices (B/C/D/R1 first cuts) on `main`, but:
-
-1. Local feature branches remain after merge (clutter; no unmerged commits).
-2. Roadmap / PROJECT_SUMMARY / migration-guide still read as if dual-read is incomplete or pending.
-3. Dual-mode test contract for **feature-off array authority when ECS mirrors diverge** is not explicitly asserted in one place — risk of silent semantic drift when later write-authority slices land.
-
-This feature delivers **S1 cleanup + S2 dual-read acceptance** from `.mimocode/plans/next-phase-11-r1-authority.md`. Write-authority migration (S3) is out of scope here.
+Phase 10 landed dual-write slices on `main`, but local feature branches remained, docs understated dual-read completion, and dual-mode feature-off array authority when ECS mirrors diverge was not locked by one explicit test.
 
 ## [S2] Design
 
@@ -27,9 +40,9 @@ This feature delivers **S1 cleanup + S2 dual-read acceptance** from `.mimocode/p
 | Mode | Read API | Write authority |
 |------|----------|-----------------|
 | `unity-world-primary` **off** (default) | Array / `GameObject` fields | Array; ECS mirrors may exist but are **not** read |
-| `unity-world-primary` **on** | ECS component when linked + present, else array | Array write-through (`with_transform_mut`) or ECS-primary (`with_ecs_transform_mut`) |
+| `unity-world-primary` **on** | ECS component when linked + present, else array | Array write-through or ECS-primary (`with_ecs_transform_mut`) |
 
-### Dual-read inventory (already implemented in `world.rs`)
+### Dual-read inventory
 
 | Public read | Feature-on preferred source | Fallback |
 |-------------|----------------------------|----------|
@@ -41,28 +54,13 @@ This feature delivers **S1 cleanup + S2 dual-read acceptance** from `.mimocode/p
 | `GetParent` | ECS `GameObjectParent` | `GetParentArray` |
 | `GetChildren` | ECS `GameObjectChildren` | `GetChildrenArray` |
 
-`GetTransformArray` / `GetParentArray` / `GetChildrenArray` remain array-authoritative in **both** modes (scene I/O, hierarchy math).
-
 ### Contracts for this slice
 
-1. **No production API redesign.** Existing dual-read preference stays; only docs + dual-mode tests.
-2. **Divergence test** must pass under both feature modes with `World::unity_world_primary_feature()` branching:
-   - off → public reads return **array** truth after ECS-only mutation
-   - on → public reads return **ECS** truth after ECS-only mutation
-3. **Workspace default features** stay `["audio"]` — do not enable `unity-world-primary` by default.
-4. **Worktree override:** session policy blocked `git worktree add`; implement on local branch `phase11-r1-read` in the main checkout.
-   **Branch-delete override:** session policy also blocked `git branch -d` on other refs; merged-branch cleanup deferred to the user/orchestrator (listed in Report).
-5. **Editor smoke:** launch/run editor tests; full interactive Play verification is deferred if GPU/window is unavailable — report honestly.
-
-### Verification gate
-
-```bash
-cargo test -p engine-core --lib
-cargo test -p engine-core --lib --features unity-world-primary
-cargo test -p engine-core --test unity_lifecycle_tests
-cargo test -p engine-core --test unity_lifecycle_tests --features unity-world-primary
-cargo test -p engine-editor --test editor_tests
-```
+1. No production API redesign — existing dual-read preference stays; docs + dual-mode tests only.
+2. Divergence test must pass under both feature modes; GetParent must point ECS at a **different** handle than array.
+3. Workspace default features stay `["audio"]`.
+4. Worktree/branch-delete overrides: session policy blocked both; branch `phase11-r1-read` in main checkout; cleanup deferred.
+5. Editor smoke: tests + binary launch verified; interactive Play not automated this slice.
 
 ## [S3] Out of Scope
 
@@ -70,14 +68,15 @@ cargo test -p engine-editor --test editor_tests
 - Enabling `unity-world-primary` by default
 - engine-scene Transform removal / animation keyframe cut (S4)
 - VR/AR, Android NDK, WASM SceneRuntime full
-- Mouse DPI root-cause fix (investigate only if time; not acceptance)
+- Mouse DPI root-cause fix
 - Remote `git push`
+- Deleting merged local branches (policy-blocked for agent)
 
 ## Tasks
 
-- [ ] T1: Delete merged local branches — acceptance: blocked by session ref-store policy; list remains for user/orchestrator (covers: S1) — **blocked**
-- [ ] T2: Sync README / PROJECT_SUMMARY / migration-guide / roadmap dual-read status — acceptance: docs state dual-read implemented; still-deferred items accurate (covers: S1)
-- [ ] T3: Add dual-mode divergence acceptance test in `world.rs` — acceptance: test name visible; green with and without `unity-world-primary` (covers: S2)
-- [ ] T4: Commit plan + feature doc + code/docs on `phase11-r1-read` — acceptance: clean status after commit (covers: S1; S2)
-- [ ] T5: Run dual-mode verification gate — acceptance: listed commands PASS (covers: S2)
-- [ ] T6: Editor smoke — acceptance: `cargo test -p engine-editor --test editor_tests` PASS; note if interactive run blocked (covers: S2)
+- [ ] T1: Delete merged local branches — **blocked** by session ref-store policy; leftover list in Report (covers: S1)
+- [x] T2: Sync README / PROJECT_SUMMARY / migration-guide / roadmap dual-read status — dual-read implemented; still-deferred write-authority → phase 11 plan; P2.12 pointer removed (covers: S1)
+- [x] T3: Add dual-mode divergence acceptance test — `test_dual_read_storage_mode_contract_when_ecs_diverges` green both modes; GetParent decoy divergence included (covers: S2)
+- [x] T4: Commit plan + feature doc + code/docs on `phase11-r1-read` (covers: S1; S2)
+- [x] T5: Run dual-mode verification gate — listed commands PASS (covers: S2)
+- [x] T6: Editor smoke — editor_tests 58 PASS; engine-editor process launched with GPU init (covers: S2)

@@ -485,11 +485,19 @@ CI runs a dedicated `Unity World Primary` job covering both flag states.
 
 ### Dual-read contract (feature **on**)
 
-| API | Prefers | Fallback |
-|-----|---------|----------|
-| `GetTransform` | ECS `Transform` | array `GetTransformArray` |
-| `GetName` / `GetTag` / `IsActive` | ECS name/tag/active | array |
-| `GetParent` / `GetChildren` | ECS `GameObjectParent` / `GameObjectChildren` | array `GetParentArray` / `GetChildrenArray` |
+When `unity-world-primary` is enabled, public Unity World **read** APIs prefer the linked internal-ECS mirror if present:
+
+| Read API | Preferred component | Fallback |
+|----------|---------------------|----------|
+| `GetTransform` | ECS `Transform` | array (`GetTransformArray`) |
+| `GetName` | ECS `GameObjectName` | `gameobject_data` |
+| `GetTag` | ECS `GameObjectTag` | `gameobject_data` |
+| `IsActive` | ECS `GameObjectActive` | `gameobject_data` |
+| `GetLayer` | ECS `GameObjectLayer` | `gameobject_data` |
+| `GetParent` | ECS `GameObjectParent` | `GetParentArray` |
+| `GetChildren` | ECS `GameObjectChildren` | `GetChildrenArray` |
+
+When the feature is **off** (workspace default), the same public APIs always read **array / GameObject** storage even if ECS mirrors exist.
 
 Always use the **array** accessors for hierarchy math, world-pose composition, and scene serialization:
 
@@ -497,6 +505,8 @@ Always use the **array** accessors for hierarchy math, world-pose composition, a
 - `GetParentArray` / `GetChildrenArray` — authoritative parent/child links
 
 Do **not** use dual-read `GetTransform` to compute world coordinates or walk parents.
+
+Phase 11 note: dual-read preference is implemented; full write-authority migration (arrays demoted to cache only when the feature is on) is still in progress under the phase plan.
 
 ### Write-through contract
 
@@ -526,24 +536,6 @@ Other write paths that already go through ECS:
 - `restore_monobehaviours_from_ecs` — rebuild array holders from ECS metadata + global registry
 - `seed_ecs_from_array` / `seed_all_ecs_from_array` — fill all ECS identity mirrors from array/GameObject fields (scene load, tools)
 - `Destroy` / `DestroyImmediate` / `flush_destroy` — ECS entity despawned; pending Destroy and DontDestroyOnLoad entries dropped
-
-### Dual-read contract (feature on)
-
-When `unity-world-primary` is enabled, public Unity World **read** APIs prefer the linked internal-ECS mirror if present:
-
-| Read API | Preferred component | Fallback |
-|----------|---------------------|----------|
-| `GetTransform` | ECS `Transform` | array (`GetTransformArray`) |
-| `GetName` | ECS `GameObjectName` | `gameobject_data` |
-| `GetTag` | ECS `GameObjectTag` | `gameobject_data` |
-| `IsActive` | ECS `GameObjectActive` | `gameobject_data` |
-| `GetLayer` | ECS `GameObjectLayer` | `gameobject_data` |
-| `GetParent` | ECS `GameObjectParent` | `GetParentArray` |
-| `GetChildren` | ECS `GameObjectChildren` | `GetChildrenArray` |
-
-When the feature is **off** (workspace default), the same public APIs always read **array / GameObject** storage even if ECS mirrors exist. `GetTransformArray` / `GetParentArray` / `GetChildrenArray` stay array-authoritative in both modes.
-
-Phase 11 note: dual-read preference is implemented; full write-authority migration (arrays demoted to cache only when the feature is on) is still in progress under the phase plan.
 
 ### Array-authoritative APIs
 

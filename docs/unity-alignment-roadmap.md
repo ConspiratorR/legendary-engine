@@ -1,7 +1,7 @@
 # Unity 对齐：后续执行计划
 
-**分支：** `unity-lifecycle-refactor`  
-**基线提交：** `e60b820`（feat(engine-core): align runtime with Unity lifecycle and asset contracts）  
+**分支：** `main`（`unity-lifecycle-refactor` / `p2-*` 已合入）  
+**基线提交：** `e60b820` + 后续 dual-write/dual-read 切片  
 **目标：** 在已接通的运行时契约之上，继续收敛双 World、补全脚本/编辑器侧缺口，并保证每步可验证、可合并。
 
 ---
@@ -100,8 +100,8 @@ engine-scene       → 自己的 Node/Transform (第三套)
 **P2.b — 存储合并（后做，大）**
 | ID | 任务 | 说明 |
 |----|------|------|
-| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read + Transform/Hierarchy/Active/MBTypes **写通已完成**（含 B1 回填、B2 写路径收敛、B3 层级双读、B4 Destroy 一致）；完整数组权威迁移 → 见 P2.12 |
-| P2.5 | 弃用 `engine-scene` 中重复 Transform | **盘点 + 模块 doc 完成**；`scene_bridge` 为可选桥；动画 keyframe / `collect_system` GlobalTransform 仍依赖 engine-scene；C1 收集系统数据源 → 见 P2.13 |
+| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read + Transform/Hierarchy/Active/MBTypes **写通已完成**；**dual-read 优先 ECS** ✅；完整数组写权威迁移 → **阶段 11 R1 续**（`.mimocode/plans/next-phase-11-r1-authority.md`） |
+| P2.5 | 弃用 `engine-scene` 中重复 Transform | **盘点 + 模块 doc 完成**；`scene_bridge` 为可选桥；动画 keyframe 仍依赖 engine-scene（阶段 11 S4）；`light_collect_system` 已优先 TransformProxy（P2.13 ✅） |
 | P2.6 | Editor 只依赖 `engine_core::world::World` | 视口/命令/`new_scene` 已对齐 World；打开优先 `.runtime.json` 孪生；自动保存走 `save_scene_bundle`；旧 ECS Scene 仅作回退 | 大部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
 | P2.8 | 统一 App 入口 | `unity_world` / `unity_world_ref` / `require_unity_world` / `link_unity_scene` ✅ |
@@ -230,9 +230,9 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 
 - `cargo test -p engine-core` / `cargo test -p engine-editor --test editor_tests` 全绿  
 - 示例：`coroutine_demo`、`runtime_scene_demo`、`unity_gameplay_demo`、`so_asset`  
-- Unity 主路径：`main`（`unity-lifecycle-refactor` 已合入远程）  
-- 视口权威后续：`p2-viewport-unity-source`  
-- 合视口分支：`git checkout main && git merge --no-ff p2-viewport-unity-source`
+- Unity 主路径：`main`（`unity-lifecycle-refactor`、`p2-viewport-unity-source` 等均已合入，无未合提交）  
+- 后续写权威：阶段 11 — 见 `.mimocode/plans/next-phase-11-r1-authority.md`  
+- 本地已合分支清理：会话策略禁止 agent 删 ref，需用户/orchestrator 执行 `git branch -d`
 
 ### PR 描述草稿（P5.6，合并时用）
 
