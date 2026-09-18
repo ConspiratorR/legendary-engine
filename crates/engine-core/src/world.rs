@@ -3290,6 +3290,83 @@ mod tests {
         assert!(!world.IsActive(go));
     }
 
+    /// Dual-mode storage contract (phase 11 S2).
+    ///
+    /// After ECS-only mutations, public reads must follow the compiled feature:
+    /// - off → array / GameObject fields (workspace default)
+    /// - on → linked ECS mirrors
+    ///
+    /// This runs in both CI modes without `#[cfg]` duplication.
+    #[test]
+    fn test_dual_read_storage_mode_contract_when_ecs_diverges() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("ArrayParent");
+        let go = world.CreateGameObject("ArrayTruth");
+        world.SetParent(go, Some(parent));
+        world.SetName(go, "ArrayTruth");
+        world.SetTag(go, "ArrayTag");
+        world.SetActive(go, true);
+        world.SetLayer(go, 2);
+        let _ = world.with_transform_mut(go, |t| {
+            t.SetLocalPosition(Vec3::new(1.0, 2.0, 3.0));
+        });
+        world.sync_transforms();
+
+        let e = world.entity_for(go).expect("linked entity");
+        let pe = world.entity_for(parent).expect("parent entity");
+        let _ = pe;
+
+        // Force ECS mirrors to a divergent truth without touching array storage.
+        {
+            let ecs = world.ecs_world_mut();
+            *ecs.get_mut::<GameObjectName>(e).unwrap() = GameObjectName("EcsTruth".into());
+            *ecs.get_mut::<GameObjectTag>(e).unwrap() = GameObjectTag("EcsTag".into());
+            *ecs.get_mut::<GameObjectActive>(e).unwrap() = GameObjectActive(false);
+            *ecs.get_mut::<GameObjectLayer>(e).unwrap() = GameObjectLayer(9);
+            let divergent = Transform::from_xyz(42.0, 0.0, 0.0);
+            if ecs.get::<Transform>(e).is_some() {
+                *ecs.get_mut::<Transform>(e).unwrap() = divergent;
+            } else {
+                ecs.add_component(e, divergent);
+            }
+            // Spoof hierarchy away from array parent/children.
+            if ecs.get::<GameObjectParent>(e).is_some() {
+                *ecs.get_mut::<GameObjectParent>(e).unwrap() = GameObjectParent(parent);
+            } else {
+                ecs.add_component(e, GameObjectParent(parent));
+            }
+            let empty = GameObjectChildren(Vec::new());
+            if ecs.get::<GameObjectChildren>(pe).is_some() {
+                *ecs.get_mut::<GameObjectChildren>(pe).unwrap() = empty;
+            } else {
+                ecs.add_component(pe, empty);
+            }
+        }
+
+        // Array remains the dual-write baseline truth.
+        assert_eq!(world.GetTransformArray(go).unwrap().LocalPosition().x, 1.0);
+        assert_eq!(world.GetParentArray(go), Some(parent));
+
+        if World::unity_world_primary_feature() {
+            assert_eq!(world.GetName(go), "EcsTruth");
+            assert_eq!(world.GetTag(go), "EcsTag");
+            assert!(!world.IsActive(go));
+            assert_eq!(world.GetLayer(go), 9);
+            assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 42.0);
+            assert_eq!(world.GetParent(go), Some(parent));
+            // ECS children list diverged to empty — dual-read must prefer it.
+            assert!(world.GetChildren(parent).is_empty());
+        } else {
+            assert_eq!(world.GetName(go), "ArrayTruth");
+            assert_eq!(world.GetTag(go), "ArrayTag");
+            assert!(world.IsActive(go));
+            assert_eq!(world.GetLayer(go), 2);
+            assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 1.0);
+            assert_eq!(world.GetParent(go), Some(parent));
+            assert!(world.GetChildren(parent).contains(&go));
+        }
+    }
+
     #[test]
     fn test_world_creation() {
         let world = World::new();

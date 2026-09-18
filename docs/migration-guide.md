@@ -527,6 +527,24 @@ Other write paths that already go through ECS:
 - `seed_ecs_from_array` / `seed_all_ecs_from_array` — fill all ECS identity mirrors from array/GameObject fields (scene load, tools)
 - `Destroy` / `DestroyImmediate` / `flush_destroy` — ECS entity despawned; pending Destroy and DontDestroyOnLoad entries dropped
 
+### Dual-read contract (feature on)
+
+When `unity-world-primary` is enabled, public Unity World **read** APIs prefer the linked internal-ECS mirror if present:
+
+| Read API | Preferred component | Fallback |
+|----------|---------------------|----------|
+| `GetTransform` | ECS `Transform` | array (`GetTransformArray`) |
+| `GetName` | ECS `GameObjectName` | `gameobject_data` |
+| `GetTag` | ECS `GameObjectTag` | `gameobject_data` |
+| `IsActive` | ECS `GameObjectActive` | `gameobject_data` |
+| `GetLayer` | ECS `GameObjectLayer` | `gameobject_data` |
+| `GetParent` | ECS `GameObjectParent` | `GetParentArray` |
+| `GetChildren` | ECS `GameObjectChildren` | `GetChildrenArray` |
+
+When the feature is **off** (workspace default), the same public APIs always read **array / GameObject** storage even if ECS mirrors exist. `GetTransformArray` / `GetParentArray` / `GetChildrenArray` stay array-authoritative in both modes.
+
+Phase 11 note: dual-read preference is implemented; full write-authority migration (arrays demoted to cache only when the feature is on) is still in progress under the phase plan.
+
 ### Array-authoritative APIs
 
 | API | Use for |
@@ -556,7 +574,7 @@ Do **not** flip `default = ["audio"]` / remove it in favor of this flag until fu
 
 ## Still deferred
 
-- Full authority move of `gameobject_data` / `transforms` / `monobehaviours` into ECS (holders still array-backed)
+- Full authority move of `gameobject_data` / `transforms` / `monobehaviours` into ECS (holders still array-backed) — dual-read preference is done; write-authority migration continues in phase 11
 - Enabling the flag by default
 - engine-scene `Transform` deprecation (see roadmap P2.5)
 

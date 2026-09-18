@@ -91,7 +91,8 @@
 - **热重载** — App lifecycle / 编辑器每帧 `poll_hot_reload`；场景 AssetRef 只存 GUID
 - **内置序列化** — Material / SpriteRenderer / Rigidbody / AudioSource / Light / Camera
 - **so_asset CLI** — `pack` / `list` 递归补 `.meta`
-- **仍延后** — 数组存储权威完全迁 ECS；默认打开 `unity-world-primary`；WASM SceneRuntime 全量
+- **Dual-read（feature 开）** — `GetTransform/Name/Tag/Active/Layer/Parent/Children` 优先 ECS 镜像；关 feature 仍读数组
+- **仍延后** — 数组存储权威完全迁 ECS（写权威切片进行中）；默认打开 `unity-world-primary`；WASM SceneRuntime 全量；本地已合分支清理需手动执行
 
 ### 9. 发布 & 生态 (阶段 9)
 - **CI/CD** — GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵)

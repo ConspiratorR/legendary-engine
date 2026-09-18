@@ -376,7 +376,7 @@ fn my_system(app: &App) {
 | **ScriptableObject** | ✅ | `.asset`+GUID 热重载（App/编辑器轮询）、AssetRef |
 | **P2.4 dual-write 切片** | ✅ | `unity-world-primary`：Transform/Hierarchy/MBInstances 写通；Destroy despawn；CI 双开测 |
 | **光源收集数据源** | ✅ | `light_collect_system` 优先 `TransformProxy`，回退 engine-scene `GlobalTransform` |
-| **双 World 存储权威合并** | 🔗 | 数组仍权威 — 完整迁 ECS 延后（feature 默认 off） |
+| **双 World 存储权威合并** | 🔞 | dual-write + **dual-read 优先 ECS** 已合入；数组写权威仍保留 — 完整迁 ECS 进行中（feature 默认 off） |
 
 试验构建：在 `engine-core` 依赖上开启 `features = ["unity-world-primary"]`（**不要**改 workspace default）。契约见 [docs/migration-guide.md](docs/migration-guide.md)。
 

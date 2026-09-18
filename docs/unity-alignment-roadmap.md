@@ -215,7 +215,7 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 
 | # | 契约 | 现状 | 备注 |
 |---|------|------|------|
-| 1 | 实体-组件组合，Transform 强制 | ✅ 主路径 | 双 World 并存；存储合并 P2.4 延后 |
+| 1 | 实体-组件组合，Transform 强制 | ✅ 主路径 | 双 World 并存；dual-read 已优先 ECS；存储写权威迁移进行中 |
 | 2 | 引擎主循环回调 | ✅ | PlayerLoop Fixed→Update→Late→EoF |
 | 3 | 全局 Awake 门闩 | ✅ | `SceneRuntime.awake_started` |
 | 4 | Fixed / Update / Late 三相 | ✅ | MonoBehaviour + ECS fixed schedule |

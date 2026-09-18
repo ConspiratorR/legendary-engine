@@ -451,7 +451,7 @@ MonoBehaviour 可进 SceneData：实现 `SerializeProps` / `DeserializeProps`，
 详细分阶段执行计划见 [unity-alignment-roadmap.md](unity-alignment-roadmap.md)。
 
 1. **P1 / P3 / P4 / 编辑器主路径** — ✅ 已在 main  
-2. **P2.4 dual-write 切片** — ✅ 写通 Transform/Hierarchy/MBInstances、Destroy despawn、CI 双开测；`gameobject_data`/`transforms`/`monobehaviours` **数组权威仍保留**，完整迁 ECS 延后  
+2. **P2.4 dual-write 切片** — ✅ 写通 Transform/Hierarchy/MBInstances、Destroy despawn、CI 双开测；**dual-read 优先 ECS**（Name/Tag/Active/Layer/Parent/Children/Transform）✅；`gameobject_data`/`transforms`/`monobehaviours` **数组写权威仍保留**，完整写权威迁移 → 阶段 11 R1 续  
 3. **P2.5 engine-scene Transform** — 盘点 + 模块 doc 完成；`light_collect_system` 已优先 `TransformProxy`；animation_editor keyframe 仍用 engine-scene — 完整替换延后  
 4. **D2 样例脚本** — ✅ `sample_scripts`（Mover/Rotator/Lifetime）随 `CorePlugins` 注册进 SceneData  
 
