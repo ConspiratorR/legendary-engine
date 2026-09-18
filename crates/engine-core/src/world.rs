@@ -1378,6 +1378,42 @@ impl World {
         Some(result)
     }
 
+    /// Set local position through the current storage-authority path (R1e).
+    ///
+    /// Feature on: ECS `Transform` primary, array pose cache mirrored.
+    /// Feature off: array primary (via `with_ecs_transform_mut` fallback).
+    pub fn SetLocalPosition(&mut self, handle: GameObjectHandle, position: engine_math::Vec3) {
+        let _ = self.with_ecs_transform_mut(handle, |t| {
+            t.SetLocalPosition(position);
+        });
+    }
+
+    /// Set local rotation through the current storage-authority path (R1e).
+    pub fn SetLocalRotation(&mut self, handle: GameObjectHandle, rotation: engine_math::Quat) {
+        let _ = self.with_ecs_transform_mut(handle, |t| {
+            t.SetLocalRotation(rotation);
+        });
+    }
+
+    /// Set local scale through the current storage-authority path (R1e).
+    pub fn SetLocalScale(&mut self, handle: GameObjectHandle, scale: engine_math::Vec3) {
+        let _ = self.with_ecs_transform_mut(handle, |t| {
+            t.SetLocalScale(scale);
+        });
+    }
+
+    /// Set local position and rotation through the current storage-authority path (R1e).
+    pub fn SetLocalPositionAndRotation(
+        &mut self,
+        handle: GameObjectHandle,
+        position: engine_math::Vec3,
+        rotation: engine_math::Quat,
+    ) {
+        let _ = self.with_ecs_transform_mut(handle, |t| {
+            t.SetLocalPositionAndRotation(position, rotation);
+        });
+    }
+
     /// Copy this handle's array Transform onto its linked ECS entity (if any).
     pub fn sync_transform_to_ecs(&mut self, handle: GameObjectHandle) {
         self.write_transform_to_ecs(handle);
@@ -3367,6 +3403,126 @@ mod tests {
             // Array parent remains authority when the feature is off.
             assert_eq!(world.GetParent(go), Some(parent));
             assert!(world.GetChildren(parent).contains(&go));
+        }
+    }
+
+    /// S3 T2 — public transform writers follow storage authority after write.
+    #[test]
+    fn test_s3_transform_write_authority_after_set_local_position() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Writer");
+        world.SetLocalPosition(go, engine_math::Vec3::new(5.0, 6.0, 7.0));
+        world.SetLocalScale(go, engine_math::Vec3::new(2.0, 2.0, 2.0));
+
+        // Dual-write/cache path: both stores agree after a public write.
+        assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 5.0);
+        assert_eq!(world.GetTransformArray(go).unwrap().LocalPosition().x, 5.0);
+        assert_eq!(world.GetTransformArray(go).unwrap().LocalScale().x, 2.0);
+
+        let e = world.entity_for(go).expect("entity");
+        if World::unity_world_primary_feature() {
+            // Corrupt array cache only — public read must still see ECS authority.
+            if let Some(Some(arr)) = world.transforms.get_mut(go.index() as usize) {
+                arr.local_position = engine_math::Vec3::ZERO;
+                arr.local_scale = engine_math::Vec3::ONE;
+            }
+            assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 5.0);
+            assert_eq!(world.GetTransform(go).unwrap().LocalScale().x, 2.0);
+            assert_eq!(
+                world
+                    .ecs
+                    .get::<Transform>(e)
+                    .unwrap()
+                    .LocalPosition()
+                    .x,
+                5.0
+            );
+        } else {
+            // Corrupt ECS-only (if present) — public read must still see array authority.
+            if world.ecs.get::<Transform>(e).is_none() {
+                world.ecs.add_component(e, Transform::from_xyz(99.0, 0.0, 0.0));
+            } else {
+                *world.ecs.get_mut::<Transform>(e).unwrap() = Transform::from_xyz(99.0, 0.0, 0.0);
+            }
+            assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 5.0);
+            assert_eq!(world.GetTransformArray(go).unwrap().LocalPosition().x, 5.0);
+        }
+    }
+
+    /// S3 T3 — identity/hierarchy public writes dual-write; reads follow mode authority.
+    #[test]
+    fn test_s3_identity_write_authority_after_public_setters() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("P");
+        let go = world.CreateGameObject("Go");
+        world.SetName(go, "Written");
+        world.SetTag(go, "Hero");
+        world.SetActive(go, false);
+        world.SetLayer(go, 5);
+        world.SetParent(go, Some(parent));
+
+        let e = world.entity_for(go).expect("entity");
+        let pe = world.entity_for(parent).expect("parent entity");
+
+        // After public writes, dual-write keeps stores coherent.
+        assert_eq!(world.GetName(go), "Written");
+        assert_eq!(world.GetTag(go), "Hero");
+        assert!(!world.IsActive(go));
+        assert_eq!(world.GetLayer(go), 5);
+        assert_eq!(world.GetParent(go), Some(parent));
+        assert_eq!(world.GetParentArray(go), Some(parent));
+
+        if World::unity_world_primary_feature() {
+            // Corrupt array / GameObject fields only.
+            let index = go.index() as usize;
+            if let Some(Some(godata)) = world.gameobject_data.get_mut(index) {
+                godata.SetName("ArrayCorrupt");
+                godata.SetTag("ArrayCorrupt");
+                godata.SetActive(true);
+                godata.SetLayer(99);
+            }
+            if let Some(Some(arr)) = world.transforms.get_mut(index) {
+                arr.parent = None;
+            }
+            // Public reads still see ECS write-authority.
+            assert_eq!(world.GetName(go), "Written");
+            assert_eq!(world.GetTag(go), "Hero");
+            assert!(!world.IsActive(go));
+            assert_eq!(world.GetLayer(go), 5);
+            assert_eq!(world.GetParent(go), Some(parent));
+        } else {
+            // Corrupt ECS mirrors only — public reads still see array authority.
+            {
+                let ecs = world.ecs_world_mut();
+                if let Some(n) = ecs.get_mut::<GameObjectName>(e) {
+                    *n = GameObjectName("EcsCorrupt".into());
+                }
+                if let Some(t) = ecs.get_mut::<GameObjectTag>(e) {
+                    *t = GameObjectTag("EcsCorrupt".into());
+                }
+                if let Some(a) = ecs.get_mut::<GameObjectActive>(e) {
+                    *a = GameObjectActive(true);
+                }
+                if let Some(l) = ecs.get_mut::<GameObjectLayer>(e) {
+                    *l = GameObjectLayer(99);
+                }
+                if let Some(p) = ecs.get_mut::<GameObjectParent>(e) {
+                    *p = GameObjectParent(parent); // still parent; below we spoof a wrong one
+                } else {
+                    // ensure component exists then spoof away from array
+                    let _ = pe;
+                }
+            }
+            // Spoof parent away from array truth.
+            if let Some(p) = world.ecs_world_mut().get_mut::<GameObjectParent>(e) {
+                *p = GameObjectParent(go); // invalid self-parent — array must ignore it
+            }
+            assert_eq!(world.GetName(go), "Written");
+            assert_eq!(world.GetTag(go), "Hero");
+            assert!(!world.IsActive(go));
+            assert_eq!(world.GetLayer(go), 5);
+            assert_eq!(world.GetParent(go), Some(parent));
+            assert_eq!(world.GetParentArray(go), Some(parent));
         }
     }
 

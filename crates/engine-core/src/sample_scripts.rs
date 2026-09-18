@@ -76,7 +76,8 @@ impl MonoBehaviour for Mover {
         };
         let dt = ctx.DeltaTime();
         let delta = self.direction * (self.speed * dt);
-        let _ = ctx.world.with_transform_mut(me, |t| {
+        // ECS-primary under unity-world-primary; array-primary when the feature is off.
+        let _ = ctx.world.with_ecs_transform_mut(me, |t| {
             let p = t.LocalPosition();
             t.SetLocalPosition(p + delta);
         });
@@ -139,7 +140,7 @@ impl MonoBehaviour for Rotator {
         };
         let dt = ctx.DeltaTime();
         let angle = self.degrees_per_second * dt;
-        let _ = ctx.world.with_transform_mut(me, |t| {
+        let _ = ctx.world.with_ecs_transform_mut(me, |t| {
             t.Rotate(Vec3::new(0.0, angle, 0.0));
         });
     }
