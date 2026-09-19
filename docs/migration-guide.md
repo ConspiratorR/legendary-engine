@@ -472,7 +472,7 @@ RustEngine uses **egui** for UI, which is immediate mode:
 
 ## P2.4 Storage Migration (`unity-world-primary`)
 
-`engine-core` has an optional cargo feature `unity-world-primary` (default **off**). When enabled, Unity `World` APIs dual-read from the internal ECS and write mutations through to ECS components. Array storage remains authoritative for hierarchy math and scene I/O until the full storage merge (see `docs/unity-alignment-roadmap.md`).
+`engine-core` has an optional cargo feature `unity-world-primary` (default **off**). When enabled, Unity `World` APIs dual-read from the internal ECS and public writes treat ECS as **storage authority** for Identity, Hierarchy, Transform pose, Scene I/O, and MonoBehaviour metadata; array slots are refreshable **caches**. Dyn MonoBehaviour holders remain array-backed. When the feature is **off**, arrays stay the authority (see write-authority tables below and `docs/unity-alignment-roadmap.md`).
 
 ### Feature flag
 
@@ -485,28 +485,29 @@ CI runs a dedicated `Unity World Primary` job covering both flag states.
 
 ### Dual-read contract (feature **on**)
 
-When `unity-world-primary` is enabled, public Unity World **read** APIs prefer the linked internal-ECS mirror if present:
+When `unity-world-primary` is enabled, public Unity World **read** APIs follow storage authority:
 
-| Read API | Preferred component | Fallback |
-|----------|---------------------|----------|
-| `GetTransform` | ECS `Transform` | array (`GetTransformArray`) |
+| Read API | Authority (feature on) | Fallback |
+|----------|------------------------|----------|
+| `GetTransform` | ECS `Transform` | array pose cache (`GetTransformArray`) |
 | `GetName` | ECS `GameObjectName` | `gameobject_data` |
 | `GetTag` | ECS `GameObjectTag` | `gameobject_data` |
 | `IsActive` | ECS `GameObjectActive` | `gameobject_data` |
 | `GetLayer` | ECS `GameObjectLayer` | `gameobject_data` |
-| `GetParent` | ECS `GameObjectParent` | `GetParentArray` |
+| `GetParent` | hierarchy authority (ECS Parent; Children-without-Parent = root) | `GetParentArray` |
 | `GetChildren` | ECS `GameObjectChildren` | `GetChildrenArray` |
 
 When the feature is **off** (workspace default), the same public APIs always read **array / GameObject** storage even if ECS mirrors exist.
 
-Always use the **array** accessors for hierarchy math, world-pose composition, and scene serialization:
+**Array accessors under feature on (R1-full):**
 
-- `GetTransformArray` — local + cached world after `sync_transforms`
-- `GetParentArray` / `GetChildrenArray` — authoritative parent/child links
+- `GetTransformArray` — array **pose cache** (local + world after `sync_transforms`)
+- `GetParentArray` / `GetChildrenArray` — array **link cache**; seed/export and feature-off authority
+- Hierarchy math / `sync_transforms` under feature on refresh caches via `prepare_scene_io_cache` before composing world pose
 
-Do **not** use dual-read `GetTransform` to compute world coordinates or walk parents.
+Do **not** use dual-read `GetTransform` to compute world coordinates when you need the composed world pose cache — use refreshed `GetTransformArray` after `sync_transforms` / `prepare_scene_io_cache`.
 
-Phase 11 S3 note: dual-read preference **and** write-authority slices are delivered on branch `phase11-r1-read` (`SetLocal*`, dual-mode tests, `animation_apply`, editor pick/Play restore). Full demotion of array holders to pure cache for every internal path remains open under the phase plan.
+Phase 12 (R1-full) note: dual-read + write-authority + full authority contract for Identity/Hierarchy/Pose/Scene I/O/MB metadata are delivered on branch `phase12-array-authority`. Dyn holders are **not** migrated into ECS. Workspace default features stay `["audio"]`.
 
 ### Write-through contract
 

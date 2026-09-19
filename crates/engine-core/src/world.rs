@@ -1772,15 +1772,12 @@ impl World {
 
     /// Get parent of a GameObject (matches `Transform.parent`).
     ///
-    /// With `unity-world-primary`, prefers ECS `GameObjectParent` when present
-    /// (P2.4 dual-read); otherwise array storage.
+    /// With `unity-world-primary`, uses the same storage authority as hierarchy
+    /// writes: ECS Parent when present; linked + Children mirror without Parent
+    /// means ECS-authoritative root (`None`); otherwise array fallback.
     pub fn GetParent(&self, handle: GameObjectHandle) -> Option<GameObjectHandle> {
         if Self::unity_world_primary_feature() {
-            if let Some(entity) = self.entity_for(handle)
-                && let Some(p) = self.ecs.get::<GameObjectParent>(entity)
-            {
-                return Some(p.0);
-            }
+            return self.hierarchy_authority_parent(handle);
         }
         self.GetParentArray(handle)
     }
@@ -1822,12 +1819,24 @@ impl World {
     /// Check if candidate is a descendant of ancestor (storage-authority walk).
     fn is_descendant_of(&self, candidate: GameObjectHandle, ancestor: GameObjectHandle) -> bool {
         let mut current = candidate;
+        // Guard against corrupted parent cycles (array or ECS).
+        let mut hops = 0usize;
+        const MAX_HOPS: usize = 4096;
         loop {
             if current == ancestor {
                 return true;
             }
+            hops += 1;
+            if hops > MAX_HOPS {
+                return false;
+            }
             match self.hierarchy_authority_parent(current) {
-                Some(parent) => current = parent,
+                Some(parent) => {
+                    if parent == current {
+                        return false;
+                    }
+                    current = parent;
+                }
                 None => return false,
             }
         }
@@ -1848,10 +1857,24 @@ impl World {
     pub fn SetActive(&mut self, handle: GameObjectHandle, active: bool) {
         let index = handle.index() as usize;
 
-        let was_active = match self.gameobject_data.get(index).and_then(|g| g.as_ref()) {
-            Some(go) => go.ActiveSelf(),
-            None => return,
+        // Compare against storage authority so feature-on dirty arrays don't no-op writes.
+        let was_active = if Self::unity_world_primary_feature() {
+            self.IsActive(handle)
+        } else {
+            match self.gameobject_data.get(index).and_then(|g| g.as_ref()) {
+                Some(go) => go.ActiveSelf(),
+                None => return,
+            }
         };
+        if !Self::unity_world_primary_feature()
+            && self
+                .gameobject_data
+                .get(index)
+                .and_then(|g| g.as_ref())
+                .is_none()
+        {
+            return;
+        }
         if was_active == active {
             return;
         }
@@ -2473,25 +2496,64 @@ impl World {
     }
 
     /// Sync all transforms (called by update system).
+    ///
+    /// Feature **on** (R1-full): refresh pose + hierarchy caches from ECS
+    /// authority **before** array hierarchy math, then recompute world pose on
+    /// the cache. Do not array→ECS clobber ECS local pose.
+    /// Feature **off**: array authority math, then best-effort ECS mirror.
     pub fn sync_transforms(&mut self) {
+        if Self::unity_world_primary_feature() {
+            self.prepare_scene_io_cache();
+        }
         let roots = self.GetRootGameObjects();
         for root in roots {
             self.sync_transform_recursive(root, true);
         }
         if Self::unity_world_primary_feature() {
-            self.sync_all_transforms_to_ecs();
+            // Push refreshed world pose back to ECS; local fields stay ECS authority.
+            self.sync_world_pose_to_ecs_after_math();
         }
     }
 
-    /// Recursively sync transform for a GameObject and its children (array hierarchy).
-    fn sync_transform_recursive(&mut self, handle: GameObjectHandle, is_root: bool) {
-        let children = self.GetChildrenArray(handle);
+    /// After array world-pose math under feature on, copy **world** fields
+    /// onto ECS Transform without overwriting ECS local authority.
+    fn sync_world_pose_to_ecs_after_math(&mut self) {
+        if !Self::unity_world_primary_feature() {
+            return;
+        }
+        let handles: Vec<GameObjectHandle> = self.handle_to_entity.keys().copied().collect();
+        for handle in handles {
+            if !self.is_valid(handle) {
+                continue;
+            }
+            let Some(entity) = self.entity_for(handle) else {
+                continue;
+            };
+            let Some(arr) = self.GetTransformArray(handle) else {
+                continue;
+            };
+            let (wp, wr, ws) = (arr.Position(), arr.Rotation(), arr.LossyScale());
+            if let Some(ecs_t) = self.ecs.get_mut::<Transform>(entity) {
+                ecs_t.world_position = wp;
+                ecs_t.world_rotation = wr;
+                ecs_t.world_scale = ws;
+            }
+        }
+    }
 
-        // Get parent transform data before mutable borrow (array authority)
+    /// Recursively sync transform for a GameObject and its children.
+    ///
+    /// Uses **storage-authority** parent/children links, then writes world pose
+    /// onto the array pose cache (`GetTransformMut`). Under feature on,
+    /// [`World::sync_transforms`] refreshes that cache from ECS first.
+    fn sync_transform_recursive(&mut self, handle: GameObjectHandle, is_root: bool) {
+        let children = self.hierarchy_authority_children(handle);
+
+        // Parent world pose from the pose cache (refreshed from ECS when feature on).
         let parent_data = if is_root {
             None
         } else {
-            self.GetParentArray(handle).and_then(|ph| {
+            self.hierarchy_authority_parent(handle).and_then(|ph| {
                 self.GetTransformArray(ph)
                     .map(|t| (t.Position(), t.Rotation(), t.LossyScale()))
             })
@@ -4280,5 +4342,98 @@ mod tests {
             }
         }
         assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 3.0);
+    }
+
+    /// T4 — sync_transforms must not clobber ECS local pose with stale array cache.
+    #[test]
+    fn test_r1full_sync_transforms_preserves_ecs_pose_authority() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("PoseAuth");
+        world.SetLocalPosition(go, Vec3::new(1.0, 0.0, 0.0));
+        world.sync_transforms();
+
+        if World::unity_world_primary_feature() {
+            let e = world.entity_for(go).unwrap();
+            let divergent = Transform::from_xyz(99.0, 0.0, 0.0);
+            if world.ecs.get::<Transform>(e).is_some() {
+                *world.ecs.get_mut::<Transform>(e).unwrap() = divergent;
+            } else {
+                world.ecs.add_component(e, divergent);
+            }
+            // Dirty array cache too — sync_transforms must refresh from ECS first.
+            if let Some(Some(t)) = world.transforms.get_mut(go.index() as usize) {
+                t.local_position = Vec3::new(-5.0, 0.0, 0.0);
+            }
+            world.sync_transforms();
+            let t = world.GetTransform(go).unwrap();
+            assert_eq!(
+                t.LocalPosition().x,
+                99.0,
+                "ECS pose must survive sync_transforms"
+            );
+            assert_eq!(
+                world.GetTransformArray(go).unwrap().LocalPosition().x,
+                99.0,
+                "array cache must be refreshed from ECS before math"
+            );
+        } else {
+            world.sync_transforms();
+            assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 1.0);
+        }
+    }
+
+    /// T2 — GetParent follows hierarchy authority for ECS roots (Children, no Parent).
+    #[test]
+    fn test_r1full_get_parent_ecs_root_ignores_dirty_array() {
+        let mut world = World::new();
+        let root = world.CreateGameObject("EcsRoot");
+        let decoy = world.CreateGameObject("Decoy");
+        // Seed hierarchy as root (Children mirror present, no Parent).
+        world.SetParent(root, None);
+
+        if World::unity_world_primary_feature() {
+            if let Some(Some(t)) = world.transforms.get_mut(root.index() as usize) {
+                t.parent = Some(decoy);
+            }
+            assert_eq!(
+                world.GetParent(root),
+                None,
+                "ECS root must not read dirty array parent"
+            );
+        } else {
+            if let Some(Some(t)) = world.transforms.get_mut(root.index() as usize) {
+                t.parent = Some(decoy);
+            }
+            assert_eq!(world.GetParent(root), Some(decoy));
+        }
+    }
+
+    /// Cycle guard — corrupted ECS parent self-loop must not hang SetParent checks.
+    #[test]
+    fn test_r1full_cycle_guard_on_corrupt_parent() {
+        let mut world = World::new();
+        let a = world.CreateGameObject("A");
+        let b = world.CreateGameObject("B");
+        world.SetParent(b, Some(a));
+
+        if World::unity_world_primary_feature() {
+            if let Some(e) = world.entity_for(a) {
+                // Corrupt: A parents to itself
+                if world.ecs.get::<GameObjectParent>(e).is_some() {
+                    *world.ecs.get_mut::<GameObjectParent>(e).unwrap() = GameObjectParent(a);
+                } else {
+                    world.ecs.add_component(e, GameObjectParent(a));
+                }
+            }
+        } else if let Some(Some(t)) = world.transforms.get_mut(a.index() as usize) {
+            t.parent = Some(a);
+        }
+
+        // Must return without hanging; cycle detection / hop cap rejects the move.
+        world.SetParent(a, Some(b));
+        // A should not become a descendant of itself via the move — either rejected
+        // or b remains not under a in a way that infinite-loops GetParent walks.
+        let _ = world.GetParent(a);
+        let _ = world.GetParent(b);
     }
 }

@@ -1631,7 +1631,11 @@ impl EditorState {
 
     /// Write Unity World local transforms into `node_transforms` for the 3D viewport.
     ///
-    /// World array storage is the authority; `node_transforms` is a mirror for `build_scene`.
+    /// Sync `node_transforms` from World for `build_scene`.
+    ///
+    /// Uses `GetTransformArray` (pose cache). Under `unity-world-primary` that
+    /// cache is refreshed from ECS by `sync_transforms` / `prepare_scene_io_cache`;
+    /// feature off it is array authority. `node_transforms` stays a mirror.
     pub fn sync_node_transforms_from_world(&mut self) {
         let pairs: Vec<(u64, GameObjectHandle)> =
             self.handle_to_node.iter().map(|(&h, &n)| (n, h)).collect();
