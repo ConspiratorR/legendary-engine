@@ -3433,18 +3433,15 @@ mod tests {
             assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 5.0);
             assert_eq!(world.GetTransform(go).unwrap().LocalScale().x, 2.0);
             assert_eq!(
-                world
-                    .ecs
-                    .get::<Transform>(e)
-                    .unwrap()
-                    .LocalPosition()
-                    .x,
+                world.ecs.get::<Transform>(e).unwrap().LocalPosition().x,
                 5.0
             );
         } else {
             // Corrupt ECS-only (if present) — public read must still see array authority.
             if world.ecs.get::<Transform>(e).is_none() {
-                world.ecs.add_component(e, Transform::from_xyz(99.0, 0.0, 0.0));
+                world
+                    .ecs
+                    .add_component(e, Transform::from_xyz(99.0, 0.0, 0.0));
             } else {
                 *world.ecs.get_mut::<Transform>(e).unwrap() = Transform::from_xyz(99.0, 0.0, 0.0);
             }

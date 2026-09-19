@@ -32,9 +32,21 @@ pub fn apply_clip_pose(
     if !has_pos && !has_rot && !has_scale {
         return false;
     }
-    let pos = if has_pos { clip.sample_position(time) } else { None };
-    let rot = if has_rot { clip.sample_rotation(time) } else { None };
-    let scale = if has_scale { clip.sample_scale(time) } else { None };
+    let pos = if has_pos {
+        clip.sample_position(time)
+    } else {
+        None
+    };
+    let rot = if has_rot {
+        clip.sample_rotation(time)
+    } else {
+        None
+    };
+    let scale = if has_scale {
+        clip.sample_scale(time)
+    } else {
+        None
+    };
     if pos.is_none() && rot.is_none() && scale.is_none() {
         return false;
     }
@@ -95,7 +107,10 @@ mod tests {
         world.SetLocalPosition(go, Vec3::new(1.0, 2.0, 3.0));
         let clip = AnimationClip::new("empty", 1.0);
         assert!(!apply_clip_pose(&mut world, go, &clip, 0.5));
-        assert_eq!(world.GetTransform(go).unwrap().LocalPosition(), Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(
+            world.GetTransform(go).unwrap().LocalPosition(),
+            Vec3::new(1.0, 2.0, 3.0)
+        );
     }
 
     #[test]
@@ -107,6 +122,9 @@ mod tests {
         clip.position_track = Some(Vec::new());
         clip.scale_track = Some(Vec::new());
         assert!(!apply_clip_pose(&mut world, go, &clip, 0.25));
-        assert_eq!(world.GetTransform(go).unwrap().LocalPosition(), Vec3::new(4.0, 5.0, 6.0));
+        assert_eq!(
+            world.GetTransform(go).unwrap().LocalPosition(),
+            Vec3::new(4.0, 5.0, 6.0)
+        );
     }
 }

@@ -65,7 +65,9 @@ pub fn apply_preview(
     } else {
         node_transforms.insert(
             target,
-            [pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, scl_x, scl_y, scl_z],
+            [
+                pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, scl_x, scl_y, scl_z,
+            ],
         );
     }
 }
