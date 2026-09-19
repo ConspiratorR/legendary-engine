@@ -252,6 +252,11 @@ impl EguiState {
         self.mouse_pos = (x, y);
     }
 
+    /// Current pixels-per-point (window scale factor) used for input + ScreenDescriptor.
+    pub fn pixels_per_point(&self) -> f32 {
+        self.scale_factor
+    }
+
     pub fn press_button(&mut self, button: usize) {
         if !self.mouse_buttons[button] {
             self.just_pressed[button] = true;

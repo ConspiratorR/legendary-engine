@@ -15,6 +15,61 @@ fn editor_state_new_has_default_tree() {
 }
 
 #[test]
+fn play_stop_restores_editor_world_transforms() {
+    let mut state = EditorState::new();
+    // Use the default demo hierarchy root — already mapped to a scene node.
+    let node_id = state.scene_tree.root_ids[0];
+    let handle = state.GetHandle(node_id).expect("root handle");
+    let _ = state.world.with_ecs_transform_mut(handle, |t| {
+        t.SetLocalPosition(engine_math::Vec3::new(1.0, 2.0, 3.0));
+    });
+    state.sync_node_transforms_from_world();
+    let pre = state.world.GetTransform(handle).unwrap().LocalPosition();
+
+    assert!(state.play());
+    // Simulate play-mode World mutation (UnityPlayHost mirror path)
+    let _ = state.world.with_ecs_transform_mut(handle, |t| {
+        t.SetLocalPosition(engine_math::Vec3::new(99.0, 99.0, 99.0));
+    });
+    assert!(state.stop());
+
+    let post = state.world.GetTransform(handle).unwrap().LocalPosition();
+    assert!(
+        (post - pre).length() < 1e-3,
+        "stop must restore World pose; pre={pre:?} post={post:?}"
+    );
+}
+
+#[test]
+fn play_tick_host_then_stop_keeps_scene_bundle_roundtrip() {
+    use std::path::PathBuf;
+
+    let mut state = EditorState::new();
+    let root = state.world.GetRootGameObjects()[0];
+    let _ = state.world.with_ecs_transform_mut(root, |t| {
+        t.SetLocalPosition(engine_math::Vec3::new(3.0, 0.0, 0.0));
+    });
+    state.sync_node_transforms_from_world();
+
+    let dir = std::env::temp_dir().join(format!("rustengine_s5_rt_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path: PathBuf = dir.join("s5.scene.json");
+    state.save_scene_bundle(&path).unwrap();
+
+    let mut host = state.build_unity_play_host();
+    state.tick_unity_play_host(&mut host, 0.05);
+    state.stop();
+
+    state.new_scene();
+    state.open_scene_file(&path).expect("reopen");
+    let roots = state.world.GetRootGameObjects();
+    assert!(!roots.is_empty());
+    let rt = EditorState::runtime_scene_path_for(&path);
+    assert!(rt.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn unity_play_host_clones_hierarchy_and_ticks() {
     let mut state = EditorState::new();
     let root_count = state.world.GetRootGameObjects().len();

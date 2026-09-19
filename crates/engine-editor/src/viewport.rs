@@ -334,10 +334,17 @@ fn draw_single_viewport(
 ) {
     let painter = gui.ui.painter_at(canvas_rect);
 
-    // Render 3D scene to offscreen viewport texture
-    let vp_w = canvas_rect.width().max(1.0) as u32;
-    let vp_h = canvas_rect.height().max(1.0) as u32;
-    let aspect = vp_w as f32 / vp_h.max(1) as f32;
+    // Logical rect where the 3D texture is painted (excludes top tab strip).
+    // ALL pick/gizmo projections must use this rect — not the full canvas —
+    // otherwise clicks are offset by the strip height (phase 11 S5 / DPI).
+    let img_rect = scene_image_rect(canvas_rect, h_scale);
+
+    // Render 3D scene to offscreen viewport texture at physical resolution
+    // for DPI sharpness; paint still fills `img_rect` in logical points.
+    let ppp = egui_state.pixels_per_point().max(1.0);
+    let vp_w = (img_rect.width() * ppp).max(1.0) as u32;
+    let vp_h = (img_rect.height() * ppp).max(1.0) as u32;
+    let aspect = img_rect.width() / img_rect.height().max(1.0);
 
     vp_renderer.ensure_target(viewport_type, vp_w, vp_h);
     if let Some(target_view) = vp_renderer.target_view(viewport_type) {
@@ -545,10 +552,7 @@ fn draw_single_viewport(
             vp_renderer.set_egui_texture_id(viewport_type, id);
             id
         };
-        let img_rect = Rect::from_min_size(
-            Pos2::new(canvas_rect.left(), canvas_rect.top() + 32.0 * h_scale),
-            Vec2::new(canvas_rect.width(), canvas_rect.height() - 32.0 * h_scale),
-        );
+        let img_rect = scene_image_rect(canvas_rect, h_scale);
         egui::widgets::Image::new(egui::load::SizedTexture::new(
             tex_id,
             egui::vec2(img_rect.width(), img_rect.height()),
@@ -580,7 +584,16 @@ fn draw_single_viewport(
 
     // Draw 2D screen-space gizmo overlay with hover feedback
     let mouse_pos = gui.ui.input(|i| i.pointer.hover_pos());
-    crate::gizmo::draw(state, &painter, canvas_rect, h_scale, w_scale, mouse_pos);
+    let gizmo_center = projected_gizmo_center(state, canvas_rect, img_rect, h_scale);
+    crate::gizmo::draw(
+        state,
+        &painter,
+        canvas_rect,
+        h_scale,
+        w_scale,
+        mouse_pos,
+        Some(gizmo_center),
+    );
 
     // Viewport info overlay (top-right corner)
     let info_font = FontId::proportional(10.0 * h_scale);
@@ -634,6 +647,94 @@ fn draw_single_viewport(
     );
 
     handle_camera_input(state, gui, canvas_rect);
+}
+
+/// Logical rect of the painted 3D texture (canvas minus viewport tab strip).
+pub fn scene_image_rect(canvas_rect: Rect, h_scale: f32) -> Rect {
+    let top = 32.0 * h_scale;
+    Rect::from_min_size(
+        Pos2::new(canvas_rect.left(), canvas_rect.top() + top),
+        Vec2::new(canvas_rect.width(), (canvas_rect.height() - top).max(1.0)),
+    )
+}
+
+/// Project a world position into logical screen points inside `img_rect`.
+///
+/// `vp` must be the same view-projection used to render the viewport.
+pub fn project_world_to_image(
+    world_pos: engine_math::Vec3,
+    vp: engine_math::Mat4,
+    img_rect: Rect,
+) -> Option<Pos2> {
+    let clip = vp * world_pos.extend(1.0);
+    if clip.w <= 0.001 {
+        return None;
+    }
+    let ndc = clip.truncate() / clip.w;
+    let x = img_rect.left() + img_rect.width() * 0.5 * (ndc.x + 1.0);
+    let y = img_rect.top() + img_rect.height() * 0.5 * (1.0 - ndc.y);
+    Some(Pos2::new(x, y))
+}
+
+#[cfg(test)]
+mod pick_tests {
+    use super::*;
+    use engine_math::{Mat4, Vec3};
+
+    #[test]
+    fn scene_image_rect_offsets_top_strip() {
+        let canvas = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0));
+        let img = scene_image_rect(canvas, 1.0);
+        assert_eq!(img.top(), 32.0);
+        assert_eq!(img.height(), 568.0);
+        assert_eq!(img.width(), 800.0);
+    }
+
+    #[test]
+    fn project_world_to_image_center_when_ndc_zero() {
+        // Identity VP: origin maps to NDC (0,0) → image center when w=1.
+        let img = Rect::from_min_size(Pos2::new(100.0, 50.0), Vec2::new(400.0, 200.0));
+        let p = project_world_to_image(Vec3::ZERO, Mat4::IDENTITY, img).unwrap();
+        assert!((p.x - 300.0).abs() < 1e-3);
+        assert!((p.y - 150.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn project_world_to_image_rejects_behind_camera() {
+        let img = Rect::from_min_size(Pos2::ZERO, Vec2::new(100.0, 100.0));
+        // Point with clip.w <= 0 under identity: use a transform that yields w<=0
+        // Identity always has w=1 for Vec3::extend(1.0); craft via negative w row.
+        let vp = Mat4::from_cols(
+            engine_math::Vec4::new(1.0, 0.0, 0.0, 0.0),
+            engine_math::Vec4::new(0.0, 1.0, 0.0, 0.0),
+            engine_math::Vec4::new(0.0, 0.0, 1.0, 0.0),
+            engine_math::Vec4::new(0.0, 0.0, 0.0, -1.0),
+        );
+        // clip.w = -1 for pos (0,0,0,1)
+        assert!(project_world_to_image(Vec3::ZERO, vp, img).is_none());
+    }
+}
+
+/// Gizmo anchor: projected selected object, else HUD fallback corner.
+pub fn projected_gizmo_center(
+    state: &EditorState,
+    canvas_rect: Rect,
+    img_rect: Rect,
+    h_scale: f32,
+) -> Pos2 {
+    let (fallback, _) = crate::gizmo::gizmo_metrics(canvas_rect, h_scale);
+    let Some(&node_id) = state.selected_nodes.first() else {
+        return fallback;
+    };
+    let Some(handle) = state.GetHandle(node_id) else {
+        return fallback;
+    };
+    let Some(t) = state.world.GetTransform(handle) else {
+        return fallback;
+    };
+    let aspect = img_rect.width() / img_rect.height().max(1.0);
+    let vp = state.camera.projection_matrix(aspect) * state.camera.view_matrix();
+    project_world_to_image(t.Position(), vp, img_rect).unwrap_or(fallback)
 }
 
 // --- IMGUI: Transform Overlay ---
@@ -761,7 +862,13 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         // Compute h_scale from screen height (same formula used in draw_single_viewport)
         let screen_h = ctx.screen_rect().height();
         let h_scale = screen_h / 1080.0;
-        let (gizmo_center, gizmo_size) = crate::gizmo::gizmo_metrics(canvas_rect, h_scale);
+        let gizmo_center = projected_gizmo_center(
+            state,
+            canvas_rect,
+            scene_image_rect(canvas_rect, h_scale),
+            h_scale,
+        );
+        let gizmo_size = 60.0 * h_scale;
 
         if primary_down && canvas_rect.contains(pointer_pos) {
             if state.gizmo_drag_axis.is_none() {
@@ -879,15 +986,19 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
 
     // IMGUI: Object selection (left-click with distance check)
     // Unity equivalent: HandleUtility.PickGameObject in OnSceneGUI
+    // Phase 11 S5: project using the **3D image rect**, not full canvas_rect.
+    let pick_h_scale = ctx.screen_rect().height() / 1080.0;
     if canvas_response.clicked()
         && state.active_tool != crate::state::ToolType::Terrain
         && state.gizmo_drag_axis.is_none()
         && let Some(click_pos) = ctx.pointer_interact_pos()
+        && scene_image_rect(canvas_rect, pick_h_scale).contains(click_pos)
     {
-        let rel_x = click_pos.x - canvas_rect.left();
-        let rel_y = click_pos.y - canvas_rect.top();
-        let canvas_w = canvas_rect.width();
-        let canvas_h = canvas_rect.height();
+        let img_rect = scene_image_rect(canvas_rect, pick_h_scale);
+        let rel_x = click_pos.x - img_rect.left();
+        let rel_y = click_pos.y - img_rect.top();
+        let canvas_w = img_rect.width();
+        let canvas_h = img_rect.height();
 
         // Project each object to screen space and find nearest to click
         // Use Unity-style World API for transform access
@@ -901,15 +1012,11 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         for (&node_id, &handle) in &state.node_to_handle {
             if let Some(t) = state.world.GetTransform(handle) {
                 let world_pos = t.Position();
-                let clip = vp * world_pos.extend(1.0);
-                if clip.w <= 0.001 {
+                let Some(screen) = project_world_to_image(world_pos, vp, img_rect) else {
                     continue;
-                }
-                let ndc = clip.truncate() / clip.w;
-                let screen_x = canvas_w * 0.5 * (ndc.x + 1.0);
-                let screen_y = canvas_h * 0.5 * (1.0 - ndc.y);
-                let dx = screen_x - rel_x;
-                let dy = screen_y - rel_y;
+                };
+                let dx = screen.x - click_pos.x;
+                let dy = screen.y - click_pos.y;
                 let dist_sq = dx * dx + dy * dy;
                 if dist_sq < best_dist_sq {
                     best_dist_sq = dist_sq;
@@ -918,7 +1025,7 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
             }
         }
 
-        // Select if within reasonable distance (25 pixels)
+        // Select if within reasonable distance (25 logical points)
         if best_dist_sq < 625.0 {
             if let Some(id) = best_id {
                 let ctrl = ctx.input(|i| i.modifiers.ctrl);
@@ -936,6 +1043,7 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         } else if !ctx.input(|i| i.modifiers.ctrl) {
             state.selected_nodes.clear();
         }
+        let _ = (rel_x, rel_y);
     }
 
     // IMGUI: Camera orbit (right-click drag)

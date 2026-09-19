@@ -152,7 +152,7 @@ pub fn end_drag(state: &mut EditorState) -> Option<(u64, [f32; 9], [f32; 9])> {
     Some((node_id, old_full, new_full))
 }
 
-/// Get the current gizmo center and size for the given canvas rect.
+/// Get the default HUD gizmo center and size for the given canvas rect.
 pub fn gizmo_metrics(canvas_rect: Rect, h_scale: f32) -> (Pos2, f32) {
     let gizmo_center = Pos2::new(canvas_rect.right() - 100.0, canvas_rect.top() + 80.0);
     let gizmo_size = 60.0 * h_scale;
@@ -166,8 +166,10 @@ pub fn draw(
     h_scale: f32,
     _w_scale: f32,
     mouse_pos: Option<Pos2>,
+    override_center: Option<Pos2>,
 ) {
-    let (gizmo_center, gizmo_size) = gizmo_metrics(canvas_rect, h_scale);
+    let (hud_center, gizmo_size) = gizmo_metrics(canvas_rect, h_scale);
+    let gizmo_center = override_center.unwrap_or(hud_center);
 
     // Update hover state when not dragging — supports axis-to-axis transitions
     if !matches!(

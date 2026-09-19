@@ -1322,13 +1322,21 @@ impl EditorState {
         }
     }
 
-    /// Stop play mode: restore editor state.
+    /// Stop play mode: restore editor state (World + node snapshot).
     /// Returns true if state changed to Editing.
     pub fn stop(&mut self) -> bool {
         if self.play_state == PlayState::Editing {
             return false;
         }
         self.node_transforms = self.editor_transform_snapshot.clone();
+        // Play mode mirrors runtime poses into the editor World; restore authority
+        // from the pre-play snapshot so the scene is not left dirty (phase 11 S5).
+        let node_ids: Vec<u64> = self.node_transforms.keys().copied().collect();
+        for node_id in node_ids {
+            self.apply_node_transform_to_world(node_id);
+        }
+        self.world.sync_transforms();
+        self.sync_node_transforms_from_world();
         self.play_state = PlayState::Editing;
         self.status_message = Some("Stopped".into());
         self.log_info("运行模式已停止");
@@ -1613,9 +1621,7 @@ impl EditorState {
             let pos = tr.LocalPosition();
             let (rx, ry, rz) = tr.LocalRotation().to_euler(engine_math::EulerRot::XYZ);
             let scale = tr.LocalScale();
-            return Some([
-                pos.x, pos.y, pos.z, rx, ry, rz, scale.x, scale.y, scale.z,
-            ]);
+            return Some([pos.x, pos.y, pos.z, rx, ry, rz, scale.x, scale.y, scale.z]);
         }
         self.node_transforms.get(&node_id).copied()
     }

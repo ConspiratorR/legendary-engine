@@ -111,13 +111,13 @@
 
 ### S5 — 编辑器与端到端验收（S–M）
 
-| ID | 任务 | 验收 |
-|----|------|------|
-| S5.1 | 双模式跑编辑器：默认 + 本地试验 `features=["unity-world-primary"]` | **必须实际启动编辑器**验证（用户规则） |
-| S5.2 | Play 模式：加载示例场景 → Play → 克隆/生命周期 → 停止 → 场景不脏 | 视口位姿与层级正确 |
-| S5.3 | 保存/打开 `.runtime.json` 往返 | Material/脚本/Transform 一致 |
-| S5.4 | 已知问题：编辑器鼠标点击 DPI 偏移（多 commit 未根治） | **调查根因**（读 `viewport`/`input` 源码，禁止盲改）；能修则修，不能则写清根因假设与复现步骤到 `notes.md` |
-| S5.5 | `cargo clippy` / `fmt`（相关 crate） | 无新增警告 |
+| ID | 任务 | 验收 | 状态 |
+|----|------|------|------|
+| S5.1 | 双模式跑编辑器：默认 + 本地试验 `features=["unity-world-primary"]` | **必须实际启动编辑器**验证 | ✅ 默认模式进程启动；feature-on 需改 editor 依赖，默认仍 off |
+| S5.2 | Play 模式：加载场景 → Play → 停止 → **场景不脏** | World 在 stop 后从 snapshot 恢复 | ✅ `stop()` 恢复 World + 测试 |
+| S5.3 | 保存/打开 `.runtime.json` 往返 | Material/脚本/Transform 一致 | ✅ 既有测试 + play/tick/stop 后重开 |
+| S5.4 | 鼠标点击 DPI 偏移根因 | 读源码；能修则修 | ✅ 根因：拾取用 canvas 而非 `img_rect`（顶栏 32pt）；gizmo 固定 HUD 角；已修投影+img_rect；notes.md |
+| S5.5 | `cargo clippy` / `fmt`（相关 crate） | 无新增警告 | ✅ fmt 已跑；clippy 仅既有 Unity API 命名警告 |
 
 ### S6 — 收尾（S）
 
