@@ -594,7 +594,7 @@ Do **not** flip `default = ["audio"]` / remove it in favor of this flag until fu
 
 ## Still deferred
 
-- Full authority move of `gameobject_data` / `transforms` / `monobehaviours` into ECS (holders still array-backed) — dual-read preference is done; write-authority migration continues in phase 11
+- Full authority move of `gameobject_data` / `transforms` / `monobehaviours` into ECS (holders still array-backed) — dual-read **and** write-authority slices delivered on branch `phase11-r1-read`; **full** array demotion when the feature is on remains open
 - Enabling the flag by default
 - engine-scene `Transform` deprecation (see roadmap P2.5)
 
