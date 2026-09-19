@@ -5,7 +5,10 @@ use engine_scene::transform::GlobalTransform;
 
 const DEFAULT_POSITION: [f32; 3] = [0.0; 3];
 
-/// Prefer identity-bridge world pose; fall back to engine-scene GlobalTransform.
+/// Prefer identity-bridge `TransformProxy`; fall back to engine-scene `GlobalTransform`.
+///
+/// Phase 11 S4: Proxy remains preferred; GlobalTransform is a scene-graph
+/// fallback only (not gameplay pose authority).
 fn resolve_position(world: &World, idx: u32) -> [f32; 3] {
     if let Some(proxy) = world.get_by_index::<TransformProxy>(idx) {
         return [proxy.position.x, proxy.position.y, proxy.position.z];

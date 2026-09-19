@@ -1,10 +1,17 @@
 //! Animation keyframe channels.
 //!
-//! **P2.5 relation:** keyframes currently sample `engine_scene` node poses
-//! (`Transform` translation/rotation/scale). Gameplay authority is
-//! `engine_core::transform::Transform`; animation_editor remains on this
-//! keyframe format until a later convergence. Do not interpret these values
-//! as core World local/world space without going through the scene graph.
+//! **P2.5 / phase 11 S4 relation:** keyframe **values** are pure math samples
+//! (Vec3 / Quat). They are **not** `engine_scene::transform::Transform` poses
+//! and must not be treated as core World local/world space without going
+//! through application.
+//!
+//! Application authority (phase 11 S4):
+//! - Gameplay: `engine_core::animation_apply::apply_clip_pose` writes Unity
+//!   World via `with_ecs_transform_mut` (ECS primary under `unity-world-primary`).
+//! - Editor preview: writes `node_transforms` then `EditorState::apply_node_transform_to_world`.
+//!
+//! Keep this module as the **clip format** (serde + interpolation). Do not
+//! re-point keyframe storage at engine-scene Transform.
 
 use engine_math::{Quat, Vec3};
 use serde::{Deserialize, Serialize};

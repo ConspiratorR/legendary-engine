@@ -576,8 +576,14 @@ pub fn draw_animation_editor(
         preview::advance_playback(anim, dt);
     }
 
-    // Apply preview
+    // Apply preview to the node snapshot, then write through to Unity World
+    // so viewport / gameplay see the animated pose (phase 11 S4).
     preview::apply_preview(anim, &mut state.node_transforms);
+    if state.animation_editor.preview_enabled
+        && let Some(target) = state.animation_editor.target_entity
+    {
+        state.apply_node_transform_to_world(target);
+    }
 }
 
 fn draw_animation_toolbar(

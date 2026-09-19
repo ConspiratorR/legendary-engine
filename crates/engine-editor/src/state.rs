@@ -1581,7 +1581,8 @@ impl EditorState {
 
     /// Apply a `node_transforms` snapshot `[pos3, rot_quat_xyzw, scale3]` onto the Unity World.
     ///
-    /// Call after gizmo / undo commands that still write the array form.
+    /// Call after gizmo / undo / animation preview that still write the array form.
+    /// Uses the compiled storage-authority path (`with_ecs_transform_mut`).
     pub fn apply_node_transform_to_world(&mut self, node_id: u64) {
         let Some(handle) = self.GetHandle(node_id) else {
             return;
@@ -1589,7 +1590,7 @@ impl EditorState {
         let Some(t) = self.node_transforms.get(&node_id).copied() else {
             return;
         };
-        let _ = self.world.with_transform_mut(handle, |wt| {
+        let _ = self.world.with_ecs_transform_mut(handle, |wt| {
             wt.SetLocalPosition(engine_math::Vec3::new(t[0], t[1], t[2]));
             wt.SetLocalRotation(engine_math::Quat::from_euler(
                 engine_math::EulerRot::XYZ,
@@ -1599,6 +1600,24 @@ impl EditorState {
             ));
             wt.SetLocalScale(engine_math::Vec3::new(t[6], t[7], t[8]));
         });
+    }
+
+    /// Prefer live Unity World local pose for a scene node; fall back to snapshot.
+    ///
+    /// Used by animation preview/keyframe tools so editing does not drift when
+    /// World and `node_transforms` diverge (phase 11 S4).
+    pub fn animation_pose_from_world(&self, node_id: u64) -> Option<[f32; 9]> {
+        if let Some(handle) = self.GetHandle(node_id)
+            && let Some(tr) = self.world.GetTransform(handle)
+        {
+            let pos = tr.LocalPosition();
+            let (rx, ry, rz) = tr.LocalRotation().to_euler(engine_math::EulerRot::XYZ);
+            let scale = tr.LocalScale();
+            return Some([
+                pos.x, pos.y, pos.z, rx, ry, rz, scale.x, scale.y, scale.z,
+            ]);
+        }
+        self.node_transforms.get(&node_id).copied()
     }
 
     /// Write Unity World local transforms into `node_transforms` for the 3D viewport.

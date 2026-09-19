@@ -92,13 +92,20 @@
 
 **目标：** animation keyframe / 编辑器动画面板的数据位姿优先 core/Proxy；engine-scene Transform 仅回退。**不删包。**
 
-| ID | 任务 | 验收 |
-|----|------|------|
-| S4.1 | 盘点 `engine_scene::transform` 在 animation / animation_editor / collect 的读写点 | 清单在本文件更新 |
-| S4.2 | keyframe 播放写位姿时：feature 或 Proxy 存在 → 写 core/Proxy；否则写 engine-scene | 运行时动画驱动 Unity World Transform |
-| S4.3 | 编辑器动画面板读位姿：优先 World/Proxy | 打开场景编辑关键帧不漂移 |
-| S4.4 | `light_collect` / `collect_system` 保持 Proxy 优先（C1 已做） | 回归测试绿 |
-| S4.5 | 模块 doc 标注 engine-scene Transform「动画回退，非权威」 | 文档 |
+| ID | 任务 | 验收 | 状态 |
+|----|------|------|------|
+| S4.1 | 盘点 `engine_scene::transform` 在 animation / animation_editor / collect 的读写点 | 清单在本文件更新 | ✅ |
+| S4.2 | keyframe 播放写位姿时：feature 或 Proxy 存在 → 写 core/Proxy；否则写 engine-scene | `engine_core::animation_apply::apply_clip_pose` → World；编辑器预览写回 World | ✅ |
+| S4.3 | 编辑器动画面板读位姿：优先 World/Proxy | `animation_pose_from_world`；空轨不漂移 | ✅ |
+| S4.4 | `light_collect` / `collect_system` 保持 Proxy 优先（C1 已做） | 回归测试绿 | ✅ |
+| S4.5 | 模块 doc 标注 engine-scene Transform「动画回退，非权威」 | keyframe/transform/migration-guide | ✅ |
+
+**Inventory（S4.1）**
+- `engine-render::collect_system` — Proxy → GlobalTransform（保留回退）
+- `engine-scene::keyframe` — 纯 clip 格式 + 采样数学
+- `engine-scene::transform` — 场景图回退位姿
+- `engine_core::animation_apply` — 采样写入 World（权威）
+- `engine-editor` preview / `apply_node_transform_to_world` — 快照 + World 写通
 
 **提交：** `refactor(anim): prefer Unity/Proxy pose; engine-scene Transform as fallback`
 

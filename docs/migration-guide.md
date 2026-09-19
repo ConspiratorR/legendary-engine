@@ -553,6 +553,18 @@ Other write paths that already go through ECS:
 - `seed_ecs_from_array` / `seed_all_ecs_from_array` — fill all ECS identity mirrors from array/GameObject fields (scene load, tools)
 - `Destroy` / `DestroyImmediate` / `flush_destroy` — ECS entity despawned; pending Destroy and DontDestroyOnLoad entries dropped
 
+### Animation pose application (phase 11 S4)
+
+| Layer | Role |
+|-------|------|
+| `engine_scene::keyframe` | Clip **format** + interpolation only (pure math samples) |
+| `engine_core::animation_apply::apply_clip_pose` | Gameplay apply: samples clip → `World::with_ecs_transform_mut` |
+| Editor animation preview | Writes `node_transforms`, then `EditorState::apply_node_transform_to_world` (ECS-primary under feature) |
+| `engine_scene::transform::Transform` | Scene-graph **fallback** only — not pose authority |
+| `engine-render::collect_system` | Prefers `TransformProxy`; falls back to `GlobalTransform` |
+
+Empty animation tracks leave existing pose components unchanged (no zeroing).
+
 ### Array-authoritative APIs
 
 | API | Use for |

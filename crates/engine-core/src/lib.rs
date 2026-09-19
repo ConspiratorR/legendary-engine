@@ -76,6 +76,9 @@ pub mod behaviour;
 /// Transform — built-in component for position, rotation, scale, and hierarchy.
 pub mod transform;
 
+/// Apply `engine_scene::keyframe::AnimationClip` samples onto Unity World poses.
+pub mod animation_apply;
+
 /// GameObject — fundamental building block of Unity scenes.
 pub mod gameobject;
 
