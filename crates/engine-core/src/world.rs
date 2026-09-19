@@ -1754,13 +1754,21 @@ impl World {
         }
     }
 
-    /// Array parent (authoritative for hierarchy math / write-through).
+    /// Array parent link.
+    ///
+    /// Feature **off**: hierarchy math / write-through authority.
+    /// Feature **on**: array **cache** after `sync_hierarchy_from_ecs`; public
+    /// hierarchy APIs use ECS authority (`GetParent` / `hierarchy_authority_parent`).
     pub fn GetParentArray(&self, handle: GameObjectHandle) -> Option<GameObjectHandle> {
         let index = handle.index() as usize;
         self.transforms.get(index)?.as_ref()?.parent
     }
 
-    /// Array children (authoritative for hierarchy math / write-through).
+    /// Array children list.
+    ///
+    /// Feature **off**: hierarchy math / write-through authority.
+    /// Feature **on**: array **cache**; public hierarchy APIs prefer ECS
+    /// `GameObjectChildren` when present.
     pub fn GetChildrenArray(&self, handle: GameObjectHandle) -> Vec<GameObjectHandle> {
         let index = handle.index() as usize;
         self.transforms
