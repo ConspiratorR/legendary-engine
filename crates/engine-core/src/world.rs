@@ -525,11 +525,13 @@ impl World {
     }
 
     /// Refresh `MonoBehaviourTypes` + `MonoBehaviourInstances` from current holders.
+    ///
+    /// Always reads **array holders** (dyn runtime store), never dual-reads ECS.
     fn sync_monobehaviour_types_to_ecs(&mut self, handle: GameObjectHandle) {
         let Some(entity) = self.entity_for(handle) else {
             return;
         };
-        let collected = self.CollectMonoBehaviours(handle);
+        let collected = self.collect_monobehaviours_from_holders(handle);
         let names: Vec<String> = collected.iter().map(|(name, _, _)| name.clone()).collect();
         let instances: Vec<MonoBehaviourInstance> = collected
             .into_iter()
@@ -555,9 +557,182 @@ impl World {
         }
     }
 
+    /// Array-holder MonoBehaviour metadata (runtime dyn store + props snapshot).
+    fn collect_monobehaviours_from_holders(
+        &self,
+        handle: GameObjectHandle,
+    ) -> Vec<(String, bool, Option<serde_json::Value>)> {
+        let index = handle.index() as usize;
+        let Some(Some(monos)) = self.monobehaviours.get(index) else {
+            return Vec::new();
+        };
+        monos
+            .iter()
+            .map(|m| {
+                let inner = m.Get();
+                (
+                    inner.TypeName().to_string(),
+                    m.Enabled(),
+                    inner.SerializeProps(),
+                )
+            })
+            .collect()
+    }
+
+    /// Parent link under compiled storage authority (R1-full).
+    ///
+    /// Feature on + linked + hierarchy mirror present → ECS `GameObjectParent`
+    /// (missing component on a seeded entity = root). Otherwise array storage.
+    fn hierarchy_authority_parent(&self, handle: GameObjectHandle) -> Option<GameObjectHandle> {
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+        {
+            if let Some(p) = self.ecs.get::<GameObjectParent>(entity) {
+                return Some(p.0);
+            }
+            // Seeded hierarchy without Parent component means ECS-authoritative root.
+            if self.ecs.get::<GameObjectChildren>(entity).is_some() {
+                return None;
+            }
+        }
+        self.GetParentArray(handle)
+    }
+
+    /// Children list under compiled storage authority (R1-full).
+    fn hierarchy_authority_children(&self, handle: GameObjectHandle) -> Vec<GameObjectHandle> {
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+            && let Some(ch) = self.ecs.get::<GameObjectChildren>(entity)
+        {
+            return ch.0.clone();
+        }
+        self.GetChildrenArray(handle)
+    }
+
+    /// Refresh array `parent`/`children` cache from ECS hierarchy mirrors (R1-full).
+    ///
+    /// No-op when the feature is off or the entity has no hierarchy mirror.
+    fn sync_hierarchy_from_ecs(&mut self, handle: GameObjectHandle) {
+        if !Self::unity_world_primary_feature() {
+            return;
+        }
+        let Some(entity) = self.entity_for(handle) else {
+            return;
+        };
+        let parent = self.ecs.get::<GameObjectParent>(entity).map(|p| p.0);
+        let children = self
+            .ecs
+            .get::<GameObjectChildren>(entity)
+            .map(|c| c.0.clone())
+            .unwrap_or_default();
+        let index = handle.index() as usize;
+        if let Some(Some(t)) = self.transforms.get_mut(index) {
+            t.parent = parent;
+            t.children = children;
+        }
+    }
+
+    /// Feature-on hierarchy write: ECS Parent/Children are authority; arrays become cache.
+    fn set_parent_ecs_primary(
+        &mut self,
+        child: GameObjectHandle,
+        parent: Option<GameObjectHandle>,
+    ) {
+        let old_parent = self.hierarchy_authority_parent(child);
+        self.ensure_entity(child);
+        if let Some(p) = parent {
+            self.ensure_entity(p);
+        }
+        if let Some(op) = old_parent {
+            self.ensure_entity(op);
+        }
+
+        if let Some(ce) = self.entity_for(child) {
+            if let Some(p) = parent {
+                if self.ecs.get::<GameObjectParent>(ce).is_some() {
+                    *self.ecs.get_mut::<GameObjectParent>(ce).unwrap() = GameObjectParent(p);
+                } else {
+                    self.ecs.add_component(ce, GameObjectParent(p));
+                }
+            } else if self.ecs.get::<GameObjectParent>(ce).is_some() {
+                let _ = self.ecs.remove_component::<GameObjectParent>(ce);
+            }
+            // Keep child's Children mirror present (empty roots included).
+            if self.ecs.get::<GameObjectChildren>(ce).is_none() {
+                let kids = self.GetChildrenArray(child);
+                self.ecs.add_component(ce, GameObjectChildren(kids));
+            }
+        }
+
+        if old_parent != parent {
+            if let Some(op) = old_parent
+                && let Some(oe) = self.entity_for(op)
+            {
+                if self.ecs.get::<GameObjectChildren>(oe).is_some() {
+                    if let Some(ch) = self.ecs.get_mut::<GameObjectChildren>(oe) {
+                        ch.0.retain(|&h| h != child);
+                    }
+                } else {
+                    let mut kids = self.GetChildrenArray(op);
+                    kids.retain(|&h| h != child);
+                    self.ecs.add_component(oe, GameObjectChildren(kids));
+                }
+            }
+            if let Some(np) = parent
+                && let Some(ne) = self.entity_for(np)
+            {
+                if self.ecs.get::<GameObjectChildren>(ne).is_some() {
+                    if let Some(ch) = self.ecs.get_mut::<GameObjectChildren>(ne) {
+                        if !ch.0.contains(&child) {
+                            ch.0.push(child);
+                        }
+                    }
+                } else {
+                    let mut kids = self.GetChildrenArray(np);
+                    if !kids.contains(&child) {
+                        kids.push(child);
+                    }
+                    self.ecs.add_component(ne, GameObjectChildren(kids));
+                }
+            }
+        }
+
+        // Array cache ← ECS authority
+        self.sync_hierarchy_from_ecs(child);
+        if let Some(p) = parent {
+            self.sync_hierarchy_from_ecs(p);
+        }
+        if let Some(op) = old_parent {
+            self.sync_hierarchy_from_ecs(op);
+        }
+        // Ensure pose components exist; do not clobber ECS local pose from array.
+        self.ensure_transform_from_array(child);
+        self.sync_transform_from_ecs(child);
+    }
+
+    /// Prepare caches before scene serialization (R1-full).
+    ///
+    /// Feature on: refresh pose + hierarchy array caches from ECS authority.
+    /// Feature off: no-op (arrays already authoritative).
+    pub fn prepare_scene_io_cache(&mut self) {
+        if !Self::unity_world_primary_feature() {
+            return;
+        }
+        let handles: Vec<GameObjectHandle> = self.gameobjects.iter().flatten().copied().collect();
+        for handle in handles {
+            if !self.is_valid(handle) {
+                continue;
+            }
+            self.sync_hierarchy_from_ecs(handle);
+            self.sync_transform_from_ecs(handle);
+        }
+    }
+
     /// Write `GameObjectParent` / `GameObjectChildren` onto the linked entity.
     ///
-    /// Always reads **array** hierarchy (authoritative write source); never dual-reads ECS.
+    /// Seed/export path: reads **array** hierarchy then mirrors to ECS.
+    /// Public hierarchy **writes** under `unity-world-primary` use
+    /// [`World::set_parent_ecs_primary`] instead (ECS authority + array cache).
     fn sync_hierarchy_to_ecs(&mut self, handle: GameObjectHandle) {
         let Some(entity) = self.entity_for(handle) else {
             return;
@@ -764,21 +939,15 @@ impl World {
             }
         }
 
-        // Recursively destroy children
-        let children: Vec<GameObjectHandle> = {
-            if let Some(transform) = self.transforms[index].as_ref() {
-                transform.children.clone()
-            } else {
-                Vec::new()
-            }
-        };
+        // Hierarchy walk uses storage authority (ECS under feature on; array otherwise).
+        let children = self.hierarchy_authority_children(handle);
+        let parent = self.hierarchy_authority_parent(handle);
 
         for child in children {
             self.destroy_internal(child);
         }
 
-        // Remove from parent's children list
-        let parent = self.transforms[index].as_ref().and_then(|t| t.parent);
+        // Remove from parent's children list (array cache + authority when needed)
         if let Some(parent) = parent {
             let parent_index = parent.index() as usize;
             if let Some(parent_transform) = self.transforms.get_mut(parent_index) {
@@ -804,11 +973,23 @@ impl World {
         self.pending_destroy.retain(|p| p.handle != handle);
         self.dont_destroy.retain(|&h| h != handle);
 
-        // Parent children list may need ECS write-through
-        if Self::unity_world_primary_feature()
-            && let Some(parent) = parent
+        // Parent children: keep ECS authority coherent after despawn (R1-full)
+        if let Some(parent) = parent
+            && self.is_valid(parent)
         {
-            if self.is_valid(parent) {
+            if Self::unity_world_primary_feature() {
+                if let Some(pe) = self.entity_for(parent) {
+                    if self.ecs.get::<GameObjectChildren>(pe).is_some() {
+                        if let Some(ch) = self.ecs.get_mut::<GameObjectChildren>(pe) {
+                            ch.0.retain(|&h| h != handle);
+                        }
+                    } else {
+                        let remaining = self.GetChildrenArray(parent);
+                        self.ecs.add_component(pe, GameObjectChildren(remaining));
+                    }
+                }
+                self.sync_hierarchy_from_ecs(parent);
+            } else {
                 self.sync_hierarchy_to_ecs(parent);
             }
         }
@@ -857,7 +1038,7 @@ impl World {
 
         let handle = self.CreateGameObject(&new_name);
 
-        // Mirror identity fields from template
+        // Mirror identity fields from template (authority-aware writers)
         if let Some(template_go) = self.gameobject_data[template_index].as_ref() {
             let tag = template_go.Tag().to_string();
             let layer = template_go.Layer();
@@ -867,12 +1048,13 @@ impl World {
             self.SetActive(handle, active);
         }
 
-        // Set transform via write-through (local = requested pose)
-        let _ = self.with_transform_mut(handle, |t| {
+        // Pose through the compiled storage-authority path (ECS primary when feature on).
+        let _ = self.with_ecs_transform_mut(handle, |t| {
             t.SetLocalPosition(position);
             t.SetLocalRotation(rotation);
         });
 
+        // Load/Instantiate boundary: materialize full ECS mirrors from array cache.
         self.seed_ecs_from_array(handle);
         handle
     }
@@ -1043,25 +1225,28 @@ impl World {
     }
 
     /// Collect MonoBehaviour metadata for SceneData: `(TypeName, enabled, props)`.
+    ///
+    /// Feature **on**: ECS `MonoBehaviourInstances` is metadata authority when the
+    /// handle is linked and the mirror exists; array holders are the dyn runtime store.
+    /// Feature **off**: array holders.
+    ///
+    /// Sync/export-to-ECS paths must use
+    /// [`World::collect_monobehaviours_from_holders`] so they never dual-read ECS.
     pub fn CollectMonoBehaviours(
         &self,
         handle: GameObjectHandle,
     ) -> Vec<(String, bool, Option<serde_json::Value>)> {
-        let index = handle.index() as usize;
-        let Some(Some(monos)) = self.monobehaviours.get(index) else {
-            return Vec::new();
-        };
-        monos
-            .iter()
-            .map(|m| {
-                let inner = m.Get();
-                (
-                    inner.TypeName().to_string(),
-                    m.Enabled(),
-                    inner.SerializeProps(),
-                )
-            })
-            .collect()
+        if Self::unity_world_primary_feature()
+            && let Some(entity) = self.entity_for(handle)
+            && let Some(inst) = self.ecs.get::<MonoBehaviourInstances>(entity)
+        {
+            return inst
+                .0
+                .iter()
+                .map(|i| (i.type_name.clone(), i.enabled, i.props.clone()))
+                .collect();
+        }
+        self.collect_monobehaviours_from_holders(handle)
     }
 
     /// Restore MonoBehaviours from SceneData using the global type registry.
@@ -1500,6 +1685,10 @@ impl World {
     ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/Transform.SetParent.html>
+    ///
+    /// Storage authority (R1-full):
+    /// - feature **on**: ECS Parent/Children are written first; array links are cache
+    /// - feature **off**: array remains authority, then best-effort ECS mirror
     pub fn SetParent(&mut self, child: GameObjectHandle, parent: Option<GameObjectHandle>) {
         if !self.is_valid(child) {
             return;
@@ -1510,10 +1699,15 @@ impl World {
             if !self.is_valid(new_parent) {
                 return;
             }
-            // Cycle detection
+            // Cycle detection on storage authority
             if self.is_descendant_of(new_parent, child) {
                 return;
             }
+        }
+
+        if Self::unity_world_primary_feature() {
+            self.set_parent_ecs_primary(child, parent);
+            return;
         }
 
         let child_index = child.index() as usize;
@@ -1547,17 +1741,16 @@ impl World {
             }
         }
 
-        if Self::unity_world_primary_feature() {
-            self.sync_transform_to_ecs(child);
-            self.sync_hierarchy_to_ecs(child);
-            if let Some(p) = parent {
-                self.sync_transform_to_ecs(p);
-                self.sync_hierarchy_to_ecs(p);
-            }
-            if let Some(old_parent) = old_parent {
-                self.sync_transform_to_ecs(old_parent);
-                self.sync_hierarchy_to_ecs(old_parent);
-            }
+        // Feature off: array authority already updated; mirror to ECS for dual-read.
+        self.sync_transform_to_ecs(child);
+        self.sync_hierarchy_to_ecs(child);
+        if let Some(p) = parent {
+            self.sync_transform_to_ecs(p);
+            self.sync_hierarchy_to_ecs(p);
+        }
+        if let Some(old_parent) = old_parent {
+            self.sync_transform_to_ecs(old_parent);
+            self.sync_hierarchy_to_ecs(old_parent);
         }
     }
 
@@ -1618,26 +1811,22 @@ impl World {
     /// <https://docs.unity3d.com/ScriptReference/SceneManagement.Scene.GetRootGameObjects.html>
     pub fn GetRootGameObjects(&self) -> Vec<GameObjectHandle> {
         let mut roots = Vec::new();
-        for (i, transform) in self.transforms.iter().enumerate() {
-            if let Some(t) = transform {
-                if t.parent.is_none() && self.gameobjects[i].is_some() {
-                    if let Some(handle) = self.gameobjects[i] {
-                        roots.push(handle);
-                    }
-                }
+        for handle in self.gameobjects.iter().flatten().copied() {
+            if self.hierarchy_authority_parent(handle).is_none() {
+                roots.push(handle);
             }
         }
         roots
     }
 
-    /// Check if candidate is a descendant of ancestor (array hierarchy math).
+    /// Check if candidate is a descendant of ancestor (storage-authority walk).
     fn is_descendant_of(&self, candidate: GameObjectHandle, ancestor: GameObjectHandle) -> bool {
         let mut current = candidate;
         loop {
             if current == ancestor {
                 return true;
             }
-            match self.GetParentArray(current) {
+            match self.hierarchy_authority_parent(current) {
                 Some(parent) => current = parent,
                 None => return false,
             }
@@ -1670,6 +1859,9 @@ impl World {
         let was_in_hierarchy = self.IsActiveInHierarchy(handle);
         if let Some(go) = self.gameobject_data.get_mut(index).and_then(|g| g.as_mut()) {
             go.SetActive(active);
+        }
+        if Self::unity_world_primary_feature() {
+            self.ensure_entity(handle);
         }
         self.sync_active_to_ecs(handle, active);
         let now_in_hierarchy = self.IsActiveInHierarchy(handle);
@@ -1800,6 +1992,9 @@ impl World {
     // ============================================================
 
     /// Set name (matches `Object.name`).
+    ///
+    /// Under `unity-world-primary`, ECS `GameObjectName` is write authority;
+    /// `gameobject_data` + lookup tables are refreshed cache.
     pub fn SetName(&mut self, handle: GameObjectHandle, name: &str) {
         let index = handle.index() as usize;
 
@@ -1820,6 +2015,9 @@ impl World {
                     .or_default()
                     .push(handle);
             }
+        }
+        if Self::unity_world_primary_feature() {
+            self.ensure_entity(handle);
         }
         self.sync_name_to_ecs(handle, name);
     }
@@ -1846,6 +2044,8 @@ impl World {
     }
 
     /// Set tag (matches `GameObject.tag`).
+    ///
+    /// Under `unity-world-primary`, ECS `GameObjectTag` is write authority.
     pub fn SetTag(&mut self, handle: GameObjectHandle, tag: &str) {
         let index = handle.index() as usize;
 
@@ -1866,6 +2066,9 @@ impl World {
                     .or_default()
                     .push(handle);
             }
+        }
+        if Self::unity_world_primary_feature() {
+            self.ensure_entity(handle);
         }
         self.sync_tag_to_ecs(handle, tag);
     }
@@ -1897,6 +2100,8 @@ impl World {
     }
 
     /// Set layer (matches `GameObject.layer`).
+    ///
+    /// Under `unity-world-primary`, ECS `GameObjectLayer` is write authority.
     pub fn SetLayer(&mut self, handle: GameObjectHandle, layer: i32) {
         let index = handle.index() as usize;
 
@@ -1904,6 +2109,9 @@ impl World {
             if let Some(go) = go {
                 go.SetLayer(layer);
             }
+        }
+        if Self::unity_world_primary_feature() {
+            self.ensure_entity(handle);
         }
         self.sync_layer_to_ecs(handle, layer);
     }
@@ -3845,5 +4053,232 @@ mod tests {
         world.AddComponent(handle, Mesh);
         assert!(world.HasComponent::<Mesh>(handle));
         assert!(world.HasComponent::<MeshRenderer>(handle));
+    }
+
+    /// R1-full — SetParent follows storage authority; array is cache when feature on.
+    #[test]
+    fn test_r1full_set_parent_storage_authority() {
+        let mut world = World::new();
+        let a = world.CreateGameObject("A");
+        let b = world.CreateGameObject("B");
+        let child = world.CreateGameObject("C");
+        world.SetParent(child, Some(a));
+
+        if World::unity_world_primary_feature() {
+            // Dirty array cache; public reads + further writes must follow ECS.
+            let idx = child.index() as usize;
+            if let Some(Some(t)) = world.transforms.get_mut(idx) {
+                t.parent = Some(b);
+            }
+            assert_eq!(world.GetParent(child), Some(a));
+            assert!(world.GetChildren(a).contains(&child));
+            assert!(!world.GetChildren(b).contains(&child));
+
+            // Cycle check uses authority: child is under a, so a cannot parent under child.
+            world.SetParent(a, Some(child));
+            assert_eq!(world.GetParent(a), None);
+
+            // Reparent via public API; array cache must refresh from ECS.
+            world.SetParent(child, Some(b));
+            assert_eq!(world.GetParent(child), Some(b));
+            assert_eq!(world.GetParentArray(child), Some(b));
+            assert!(world.GetChildrenArray(b).contains(&child));
+            assert!(!world.GetChildrenArray(a).contains(&child));
+        } else {
+            assert_eq!(world.GetParent(child), Some(a));
+            world.SetParent(child, Some(b));
+            assert_eq!(world.GetParent(child), Some(b));
+            assert_eq!(world.GetParentArray(child), Some(b));
+        }
+    }
+
+    /// R1-full — identity public reads ignore dirty array when feature on.
+    #[test]
+    fn test_r1full_identity_write_authority_after_array_dirty() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Clean");
+        world.SetName(go, "Authoritative");
+        world.SetTag(go, "Player");
+        world.SetLayer(go, 3);
+        world.SetActive(go, true);
+
+        let idx = go.index() as usize;
+        if let Some(Some(data)) = world.gameobject_data.get_mut(idx) {
+            data.SetName("DirtyArray");
+            data.SetTag("Enemy");
+            data.SetLayer(99);
+        }
+
+        if World::unity_world_primary_feature() {
+            assert_eq!(world.GetName(go), "Authoritative");
+            assert_eq!(world.GetTag(go), "Player");
+            assert_eq!(world.GetLayer(go), 3);
+            assert!(world.IsActive(go));
+        } else {
+            // Feature off: array remains authority after direct mutation.
+            assert_eq!(world.GetName(go), "DirtyArray");
+            assert_eq!(world.GetTag(go), "Enemy");
+            assert_eq!(world.GetLayer(go), 99);
+        }
+    }
+
+    /// R1-full — Destroy removes handle from parent hierarchy authority.
+    #[test]
+    fn test_r1full_destroy_clears_parent_children_authority() {
+        let mut world = World::new();
+        let parent = world.CreateGameObject("P");
+        let c1 = world.CreateGameObject("C1");
+        let c2 = world.CreateGameObject("C2");
+        world.SetParent(c1, Some(parent));
+        world.SetParent(c2, Some(parent));
+        assert_eq!(world.GetChildren(parent).len(), 2);
+
+        world.DestroyImmediate(c1);
+
+        assert!(!world.GetChildren(parent).contains(&c1));
+        assert!(world.GetChildren(parent).contains(&c2));
+        assert!(!world.GetChildrenArray(parent).contains(&c1));
+        if World::unity_world_primary_feature() {
+            if let Some(pe) = world.entity_for(parent) {
+                let ch = world
+                    .ecs
+                    .get::<GameObjectChildren>(pe)
+                    .expect("parent children mirror");
+                assert!(!ch.0.contains(&c1));
+                assert!(ch.0.contains(&c2));
+            }
+        }
+    }
+
+    /// R1-full — GetRootGameObjects follows hierarchy authority.
+    #[test]
+    fn test_r1full_roots_follow_hierarchy_authority() {
+        let mut world = World::new();
+        let root = world.CreateGameObject("Root");
+        let mid = world.CreateGameObject("Mid");
+        let leaf = world.CreateGameObject("Leaf");
+        world.SetParent(mid, Some(root));
+        world.SetParent(leaf, Some(mid));
+
+        let roots = world.GetRootGameObjects();
+        assert!(roots.contains(&root));
+        assert!(!roots.contains(&mid));
+        assert!(!roots.contains(&leaf));
+
+        if World::unity_world_primary_feature() {
+            // Dirty array parent of mid → root list must still ignore it when ECS says parented.
+            let idx = mid.index() as usize;
+            if let Some(Some(t)) = world.transforms.get_mut(idx) {
+                t.parent = None;
+            }
+            let roots2 = world.GetRootGameObjects();
+            assert!(!roots2.contains(&mid), "ECS parent must keep mid non-root");
+            assert!(roots2.contains(&root));
+        }
+    }
+
+    /// R1-full — scene serialize prefers ECS transform when feature on.
+    #[test]
+    fn test_r1full_serialize_prefers_storage_authority_transform() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Pose");
+        let _ = world.with_ecs_transform_mut(go, |t| {
+            t.SetLocalPosition(Vec3::new(7.0, 0.0, 0.0));
+        });
+
+        if World::unity_world_primary_feature() {
+            // Dirty array pose cache; serialize must still see ECS authority via GetTransform.
+            if let Some(Some(t)) = world.transforms.get_mut(go.index() as usize) {
+                t.local_position = Vec3::new(-1.0, -1.0, -1.0);
+            }
+        }
+
+        let scene = crate::serialization::SceneSerializer::new().Save(&world, "S");
+        let data = &scene.game_objects[0];
+        if World::unity_world_primary_feature() {
+            assert_eq!(data.transform.local_position.x, 7.0);
+        } else {
+            // Feature off: with_ecs_transform_mut falls back to array write.
+            assert_eq!(data.transform.local_position.x, 7.0);
+        }
+    }
+
+    /// R1-full — CollectMonoBehaviours prefers ECS Instances when feature on.
+    #[test]
+    fn test_r1full_collect_monobehaviours_prefers_ecs_instances() {
+        #[derive(Default)]
+        struct MetaScript {
+            go: Option<GameObjectHandle>,
+        }
+        impl Component for MetaScript {
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                self
+            }
+        }
+        impl crate::behaviour::Behaviour for MetaScript {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _enabled: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, handle: GameObjectHandle) {
+                self.go = Some(handle);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl crate::monobehaviour::MonoBehaviour for MetaScript {
+            fn TypeName(&self) -> &str {
+                "R1FullMetaScript"
+            }
+        }
+
+        let mut world = World::new();
+        let go = world.CreateGameObject("Meta");
+        world.AddMonoBehaviour(go, MetaScript { go: None });
+        assert_eq!(world.CollectMonoBehaviours(go).len(), 1);
+
+        if World::unity_world_primary_feature() {
+            let e = world.entity_for(go).unwrap();
+            let divergent = MonoBehaviourInstances(vec![MonoBehaviourInstance {
+                type_name: "GhostFromEcs".into(),
+                enabled: true,
+                props: None,
+            }]);
+            if world.ecs.get::<MonoBehaviourInstances>(e).is_some() {
+                *world.ecs.get_mut::<MonoBehaviourInstances>(e).unwrap() = divergent;
+            } else {
+                world.ecs.add_component(e, divergent);
+            }
+            let collected = world.CollectMonoBehaviours(go);
+            assert_eq!(collected.len(), 1);
+            assert_eq!(collected[0].0, "GhostFromEcs");
+            // Holders remain the dyn runtime store.
+            assert_eq!(world.MonoBehaviourCount(go), 1);
+        } else {
+            assert_eq!(world.CollectMonoBehaviours(go)[0].0, "R1FullMetaScript");
+        }
+    }
+
+    /// R1-full — prepare_scene_io_cache is a no-op off; refreshes caches on.
+    #[test]
+    fn test_r1full_prepare_scene_io_cache() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("Cache");
+        world.SetLocalPosition(go, Vec3::new(3.0, 0.0, 0.0));
+        world.prepare_scene_io_cache();
+
+        if World::unity_world_primary_feature() {
+            if let Some(Some(t)) = world.transforms.get(go.index() as usize) {
+                assert_eq!(t.LocalPosition().x, 3.0);
+            }
+        }
+        assert_eq!(world.GetTransform(go).unwrap().LocalPosition().x, 3.0);
     }
 }

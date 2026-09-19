@@ -13,14 +13,14 @@
 
 | ID | 摘要 | 状态 |
 |----|------|------|
-| T1 | 权威契约落盘（migration-guide + world 注释） | 待做 |
-| T2 | 层级写权威（SetParent / Destroy / Instantiate） | 待做 |
-| T3 | Identity 写权威硬化 + 分歧测试 | 待做 |
-| T4 | Pose / 层级数学 cache 刷新契约 | 待做 |
-| T5 | Scene I/O 双模态（Load seed → ECS 权威；Save 前刷新） | 待做 |
-| T6 | MB 元数据权威（Instances）；holder 仍数组 | 待做 |
-| T7 | 内部路径审计 | 待做 |
-| T8 | 文档 + 双模态门禁 + ready 评估（不 flip） | 待做 |
+| T1 | 权威契约落盘（migration-guide + world 注释） | ✅ |
+| T2 | 层级写权威（SetParent / Destroy / Instantiate） | ✅ |
+| T3 | Identity 写权威硬化 + 分歧测试 | ✅ |
+| T4 | Pose / 层级数学 cache 刷新契约 | ✅ |
+| T5 | Scene I/O 双模态（Load seed → ECS 权威；Save 前刷新） | ✅ |
+| T6 | MB 元数据权威（Instances）；holder 仍数组 | ✅ |
+| T7 | 内部路径审计 | ✅（见 spec Report） |
+| T8 | 文档 + 双模态门禁 + ready 评估（不 flip） | ✅ 门禁绿；default-on 未 flip |
 
 ## 门禁
 

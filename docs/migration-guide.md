@@ -531,27 +531,40 @@ world.with_ecs_transform_mut(handle, |t| {
 });
 ```
 
-**Write-authority contract (phase 11 S3)**
+### Write-authority contract (phase 11 S3 + phase 12 R1-full)
 
-| Mode | Transform public writers | Identity / hierarchy (`SetName`/`SetTag`/`SetActive`/`SetLayer`/`SetParent`) | Public reads after write |
-|------|--------------------------|----------------------------------------------------------------------------------|--------------------------|
-| feature **off** (default) | array authority (`with_ecs_transform_mut` → `with_transform_mut`) | array + best-effort ECS mirrors | **array** |
-| feature **on** | ECS authority + array pose cache (`with_ecs_transform_mut`) | array + ECS dual-write; dual-read prefers ECS | **ECS** |
+| Mode | Transform public writers | Identity (`SetName`/`SetTag`/`SetActive`/`SetLayer`) | Hierarchy (`SetParent`) | MB metadata (Serialize/Collect) | Public reads after write |
+|------|--------------------------|------------------------------------------------------|-------------------------|----------------------------------|--------------------------|
+| feature **off** (default) | array authority (`with_ecs_transform_mut` → `with_transform_mut`) | array + best-effort ECS mirrors | array authority + ECS mirror | array holders | **array** |
+| feature **on** | ECS authority + array pose cache (`with_ecs_transform_mut`) | ECS write authority + array/lookup cache | ECS Parent/Children authority + array link cache | ECS `MonoBehaviourInstances` authority; dyn holders remain array | **ECS** |
 
-`with_ecs_transform_mut` falls back to `with_transform_mut` when the feature is off. After ECS-only edits, call `sync_transform_from_ecs` / `sync_all_transforms_from_ecs` to refresh array cache (hierarchy math + scene save still use array pose fields).
+`with_ecs_transform_mut` falls back to `with_transform_mut` when the feature is off. After ECS-only edits, call `sync_transform_from_ecs` / `sync_all_transforms_from_ecs` (or `prepare_scene_io_cache`) to refresh array cache for any remaining array consumers.
+
+**Phase 12 (R1-full) additions**
+
+| API / path | feature on | feature off |
+|------------|------------|-------------|
+| `SetParent` | writes ECS Parent/Children first; array links are cache via `sync_hierarchy_from_ecs` | array first, then `sync_hierarchy_to_ecs` |
+| `GetParent` / `GetChildren` / `GetRootGameObjects` / cycle checks | storage authority (ECS when hierarchy mirror present) | array |
+| `Destroy` hierarchy walk | `hierarchy_authority_children/parent` | same helpers fall back to array |
+| `CollectMonoBehaviours` / Scene serialize scripts | ECS `MonoBehaviourInstances` when present | array holders |
+| `sync_monobehaviour_types_to_ecs` | always reads **array holders** (runtime dyn store) → writes ECS | same |
+| `SceneSerializer::SerializeGameObject` | dual-read `GetTransform` / `GetChildren` | array via fallback |
+| `SceneSerializer::SavePrepared` / `World::prepare_scene_io_cache` | refresh pose + hierarchy caches from ECS before save | no-op |
+| Load (`SpawnGameObject`) | `seed_ecs_from_array` then optional `restore_monobehaviours_from_ecs` | seed still best-effort |
 
 `GetTransformMut` only mutates the array. After using it, call `sync_transform_to_ecs` / `sync_transforms` or dual-read will see a stale ECS `Transform`.
 
-MonoBehaviour instance holders stay **array-authoritative**; ECS `MonoBehaviourInstances` is the recoverable mirror (`restore_monobehaviours_from_ecs`).
+MonoBehaviour **runtime instances** (`Box<dyn MonoBehaviour>` holders) stay **array-authoritative**; ECS `MonoBehaviourInstances` is recoverable **metadata** authority when the feature is on (`restore_monobehaviours_from_ecs`).
 
 Other write paths that already go through ECS:
 
 - `CreateGameObject` — Name/Tag/Active/Transform/Children seeded on the linked entity
-- `SetParent` — hierarchy components rewritten on child, new parent, and old parent
+- `SetParent` — hierarchy components rewritten on child, new parent, and old parent (ECS-first when feature on)
 - `AddMonoBehaviour` / `RestoreMonoBehaviours` — `MonoBehaviourTypes` + `MonoBehaviourInstances` (type_name, enabled, props)
 - `restore_monobehaviours_from_ecs` — rebuild array holders from ECS metadata + global registry
 - `seed_ecs_from_array` / `seed_all_ecs_from_array` — fill all ECS identity mirrors from array/GameObject fields (scene load, tools)
-- `Destroy` / `DestroyImmediate` / `flush_destroy` — ECS entity despawned; pending Destroy and DontDestroyOnLoad entries dropped
+- `Destroy` / `DestroyImmediate` / `flush_destroy` — ECS entity despawned; parent ECS children updated when feature on
 
 ### Animation pose application (phase 11 S4)
 
@@ -567,11 +580,13 @@ Empty animation tracks leave existing pose components unchanged (no zeroing).
 
 ### Array-authoritative APIs
 
-| API | Use for |
-|-----|---------|
-| `GetTransformArray` | Scene save/load, hierarchy world math |
-| `GetParentArray` / `GetChildrenArray` | Cycle detection, `sync_transforms`, destroy child walk |
-| `ensure_transform_from_array` | Backfill missing ECS `Transform` from array |
+| API | feature on (R1-full) | feature off |
+|-----|----------------------|-------------|
+| `GetTransformArray` | array **pose cache** (refresh via `sync_transform_from_ecs` / `prepare_scene_io_cache`) | scene I/O + hierarchy world math authority |
+| `GetParentArray` / `GetChildrenArray` | array **link cache**; public hierarchy APIs use ECS authority | cycle detection, `sync_transforms`, destroy child walk |
+| `ensure_transform_from_array` | Backfill missing ECS `Transform` from array cache | same |
+| `sync_hierarchy_to_ecs` | seed/export path only (array → ECS) | write-through mirror |
+| `sync_hierarchy_from_ecs` | public hierarchy write path (ECS → array cache) | no-op |
 
 #### Experimental default-on builds (D1)
 
@@ -590,13 +605,14 @@ cargo test -p engine-core --features unity-world-primary
 cargo run -p engine-core --example unity_gameplay_demo --features unity-world-primary
 ```
 
-Do **not** flip `default = ["audio"]` / remove it in favor of this flag until full storage authority migration lands.
+Do **not** flip `default = ["audio"]` / remove it in favor of this flag until phase 12 gate is green and a separate default-on review is approved.
 
 ## Still deferred
 
-- Full authority move of `gameobject_data` / `transforms` / `monobehaviours` into ECS (holders still array-backed) — dual-read **and** write-authority slices delivered on branch `phase11-r1-read`; **full** array demotion when the feature is on remains open
-- Enabling the flag by default
+- Dyn MonoBehaviour holders (`Box<dyn MonoBehaviour>`) are **not** migrated into ECS — array remains the runtime instance store; ECS `MonoBehaviourInstances` holds recoverable metadata only
+- Enabling the flag by default (phase 12 may only **assess** readiness; flip is a separate decision)
 - engine-scene `Transform` deprecation (see roadmap P2.5)
+- VR/AR / Android NDK / WASM SceneRuntime full
 
 `engine_core::TransformProxy` is re-exported from `engine_render::proxy::TransformProxy` so render systems can consume the same component type without a core→render cycle.
 

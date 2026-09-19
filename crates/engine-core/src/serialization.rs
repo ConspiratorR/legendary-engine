@@ -168,8 +168,10 @@ impl SceneSerializer {
         let layer = world.GetLayer(handle);
         let active = world.IsActive(handle);
 
-        // Serialize Transform from array storage (authoritative for scene I/O; not dual-read)
-        let transform_data = if let Some(t) = world.GetTransformArray(handle) {
+        // Transform: dual-read — feature on prefers ECS Transform; feature off array.
+        // Callers that need array caches refreshed should call
+        // `World::prepare_scene_io_cache` first.
+        let transform_data = if let Some(t) = world.GetTransform(handle) {
             TransformData {
                 local_position: t.LocalPosition(),
                 local_rotation: t.LocalRotation(),
@@ -199,7 +201,7 @@ impl SceneSerializer {
             })
             .unwrap_or_default();
 
-        // MonoBehaviours (scripts) via TypeName + optional props
+        // MonoBehaviours: CollectMonoBehaviours uses ECS Instances under feature on.
         for (type_name, enabled, props) in world.CollectMonoBehaviours(handle) {
             let mut data = ComponentData::new(type_name.clone());
             data.properties
@@ -212,7 +214,7 @@ impl SceneSerializer {
             components.push(data);
         }
 
-        // Serialize children
+        // Serialize children (dual-read GetChildren: ECS authority when feature on)
         let children = world
             .GetChildren(handle)
             .iter()
@@ -288,10 +290,21 @@ impl SceneSerializer {
             world.SetParent(child_handle, Some(handle));
         }
 
-        // R1: complete ECS mirrors for dual-read coherence
+        // Load boundary: materialize ECS mirrors; feature-on authority switches to ECS.
         world.seed_ecs_from_array(handle);
+        // Feature-on: prefer rebuilding holders from ECS metadata when present.
+        #[cfg(feature = "unity-world-primary")]
+        {
+            let _ = world.restore_monobehaviours_from_ecs(handle);
+        }
 
         handle
+    }
+
+    /// Save with array caches refreshed from ECS authority when the feature is on.
+    pub fn SavePrepared(&self, world: &mut World, name: &str) -> SceneData {
+        world.prepare_scene_io_cache();
+        self.Save(world, name)
     }
 
     /// Save a scene (snake_case alias for Save).

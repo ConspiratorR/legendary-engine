@@ -1,6 +1,6 @@
 ---
 feature: phase12-array-authority
-status: designed
+status: in-progress
 updated: 2026-07-13
 branch: phase12-array-authority
 commits: # filled at delivery
