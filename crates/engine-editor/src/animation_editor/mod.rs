@@ -572,16 +572,25 @@ pub fn draw_animation_editor(
 
     // Advance playback
     let dt = ui.input(|i| i.unstable_dt);
-    if anim.player.playing {
-        preview::advance_playback(anim, dt);
+    if state.animation_editor.player.playing {
+        preview::advance_playback(&mut state.animation_editor, dt);
+    }
+
+    // Seed the node snapshot from Unity World (dual-read) so partial clips
+    // and empty tracks cannot re-stale poses when World and snapshot diverge.
+    let preview_on = state.animation_editor.preview_enabled;
+    let target = state.animation_editor.target_entity;
+    if preview_on
+        && let Some(target) = target
+        && let Some(pose) = state.animation_pose_from_world(target)
+    {
+        state.node_transforms.insert(target, pose);
     }
 
     // Apply preview to the node snapshot, then write through to Unity World
     // so viewport / gameplay see the animated pose (phase 11 S4).
-    preview::apply_preview(anim, &mut state.node_transforms);
-    if state.animation_editor.preview_enabled
-        && let Some(target) = state.animation_editor.target_entity
-    {
+    preview::apply_preview(&mut state.animation_editor, &mut state.node_transforms);
+    if preview_on && let Some(target) = target {
         state.apply_node_transform_to_world(target);
     }
 }

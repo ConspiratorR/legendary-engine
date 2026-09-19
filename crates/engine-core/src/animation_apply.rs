@@ -14,14 +14,27 @@ use engine_scene::keyframe::AnimationClip;
 
 /// Sample `clip` at `time` and write local pose onto `handle`.
 ///
-/// Tracks that are absent are left unchanged. Returns `true` if any track wrote.
-pub fn apply_clip_pose(world: &mut World, handle: GameObjectHandle, clip: &AnimationClip, time: f32) -> bool {
+/// Tracks that are absent **or empty** (`Some(vec![])`) are left unchanged.
+/// Returns `true` if any track wrote.
+pub fn apply_clip_pose(
+    world: &mut World,
+    handle: GameObjectHandle,
+    clip: &AnimationClip,
+    time: f32,
+) -> bool {
     if !world.is_valid(handle) {
         return false;
     }
-    let pos = clip.sample_position(time);
-    let rot = clip.sample_rotation(time);
-    let scale = clip.sample_scale(time);
+    let tracked = |present: bool| present;
+    let has_pos = tracked(clip.position_track.as_ref().is_some_and(|t| !t.is_empty()));
+    let has_rot = tracked(clip.rotation_track.as_ref().is_some_and(|t| !t.is_empty()));
+    let has_scale = tracked(clip.scale_track.as_ref().is_some_and(|t| !t.is_empty()));
+    if !has_pos && !has_rot && !has_scale {
+        return false;
+    }
+    let pos = if has_pos { clip.sample_position(time) } else { None };
+    let rot = if has_rot { clip.sample_rotation(time) } else { None };
+    let scale = if has_scale { clip.sample_scale(time) } else { None };
     if pos.is_none() && rot.is_none() && scale.is_none() {
         return false;
     }
@@ -83,5 +96,17 @@ mod tests {
         let clip = AnimationClip::new("empty", 1.0);
         assert!(!apply_clip_pose(&mut world, go, &clip, 0.5));
         assert_eq!(world.GetTransform(go).unwrap().LocalPosition(), Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn test_apply_clip_pose_empty_but_present_track_is_noop() {
+        let mut world = World::new();
+        let go = world.CreateGameObject("EmptyTrack");
+        world.SetLocalPosition(go, Vec3::new(4.0, 5.0, 6.0));
+        let mut clip = AnimationClip::new("empty_pos", 1.0);
+        clip.position_track = Some(Vec::new());
+        clip.scale_track = Some(Vec::new());
+        assert!(!apply_clip_pose(&mut world, go, &clip, 0.25));
+        assert_eq!(world.GetTransform(go).unwrap().LocalPosition(), Vec3::new(4.0, 5.0, 6.0));
     }
 }
