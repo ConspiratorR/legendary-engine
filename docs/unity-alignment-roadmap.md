@@ -100,7 +100,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 **P2.b — 存储合并（后做，大）**
 | ID | 任务 | 说明 |
 |----|------|------|
-| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read + Transform/Hierarchy/Active/MBTypes **写通已完成**；**dual-read 优先 ECS** ✅；完整数组写权威迁移 → **阶段 11 R1 续**（`.mimocode/plans/next-phase-11-r1-authority.md`） |
+| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read + Transform/Hierarchy/Active/MBTypes **写通** ✅；**dual-read 优先 ECS** ✅；**阶段 11 写权威切片**（SetLocal* / dual-mode tests）✅ on `phase11-r1-read`；完整数组写权威迁 ECS → 仍延后（feature 默认 off） |
 | P2.5 | 弃用 `engine-scene` 中重复 Transform | **盘点 + 模块 doc 完成**；`scene_bridge` 为可选桥；动画 keyframe 仍依赖 engine-scene（阶段 11 S4）；`light_collect_system` 已优先 TransformProxy（P2.13 ✅） |
 | P2.6 | Editor 只依赖 `engine_core::world::World` | 视口/命令/`new_scene` 已对齐 World；打开优先 `.runtime.json` 孪生；自动保存走 `save_scene_bundle`；旧 ECS Scene 仅作回退 | 大部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |

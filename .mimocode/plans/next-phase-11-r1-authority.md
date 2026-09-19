@@ -38,55 +38,27 @@
 
 ### S1 — 仓库与文档收尾（S，先做）
 
-| ID | 任务 | 验收 |
-|----|------|------|
-| S1.1 | 删除已合入本地分支：`docs-unity-exit-criteria`、`p2-4-*`、`p2-6-*`、`p2-deferred-storage`、`p2-viewport-unity-source`、`unity-lifecycle-refactor` | `git branch` 仅剩 `main` |
-| S1.2 | 同步 `README.md` 开发路线图阶段 10 状态、`docs/unity-alignment-roadmap.md` P2.b、`PROJECT_SUMMARY.md` 仍延后条目 | 文档与代码一致 |
-| S1.3 | 双开测试门禁全绿（见 §4） | 双 feature 测试通过 |
-| S1.4 | 本地 commit | `chore(engine): phase-11 baseline — cleanup branches, refresh roadmap` |
-
-### S2 — R1 读路径：feature 下 ECS 优先（M，核心切片 1）
-
-**目标：** 有 linked entity 时，Unity World 公共读 API 优先返回 ECS 镜像；无 entity 或关 feature 时走数组（现状）。
-
-| ID | 任务 | 范围 | 验收 |
+| ID | 任务 | 验收 | 状态 |
 |----|------|------|------|
-| S2.1 | 盘点读 API | `GetTransform` / `GetName` / `GetTag` / `GetActive` / `GetParent` / `GetChildren` / `GetLayer` | 清单写入本计划附录 |
-| S2.2 | 统一 dual-read 辅助 | `world.rs` 已有优先模式的收敛，避免每处手写 fallback | 新增私有 helper 或沿用现有优先读模式 |
-| S2.3 | Hierarchy/Active/Name/Tag/Layer 读路径 | 已有优先实现的补齐测试 | feature 开：改 ECS → 读 API 立刻反映 |
-| S2.4 | Transform 读路径 | `GetTransform` 在 feature 下优先 ECS `Transform` | 与 `sync_transform_from_ecs` 一致 |
-| S2.5 | 测试 | 双开各一组：关=数组；开=ECS 优先 | `cargo test -p engine-core --lib` 及 `--features unity-world-primary` 绿 |
+| S1.1 | 删除已合入本地分支 | 策略禁止 agent 删 ref | 🔗 需用户 `git branch -d` |
+| S1.2 | 同步 README / roadmap / PROJECT_SUMMARY | 文档一致 | ✅（S6 再刷） |
+| S1.3 | 双开测试门禁 | 双 feature 绿 | ✅ |
+| S1.4 | 本地 commit | | ✅ |
 
-**不做：** 改默认 feature；删数组字段；改渲染 Pass。
+### S2 — R1 读路径：feature 下 ECS 优先（M）
 
-**提交：** `feat(engine-core): prefer ECS mirrors on Unity World reads under unity-world-primary`
+| ID | 状态 |
+|----|------|
+| S2.1–S2.5 读路径 + 双模态分歧测试 | ✅ `test_dual_read_storage_mode_contract_when_ecs_diverges` |
 
-### S3 — R1 写路径：权威切片 + 数组缓存（L，核心切片 2）
+### S3 — R1 写路径：权威切片 + 数组缓存（L）
 
-**目标：** feature 开启时，写 API **权威写 ECS**，数组仅作 pose/cache 回填；关 feature 时权威仍在数组。
-
-| ID | 任务 | 说明 | 验收 |
-|----|------|------|------|
-| S3.1 | Transform 写权威 | 推广 `with_ecs_transform_mut`：SetPosition/Rotation/Scale、Transform 赋值 | feature 下改 API → ECS 变；`sync_*_to_array` 可选回填 |
-| S3.2 | Hierarchy 写权威 | SetParent / 移除子节点：feature 下写 ECS Parent/Children，数组双写保持一致 | 现有 dual-write 测试扩展 |
-| S3.3 | Active/Name/Tag/Layer 写权威 | SetActive / SetName / SetTag / SetLayer | feature 下读优先已覆盖；写侧同步权威 |
-| S3.4 | MB 元数据写权威 | Add/Remove/Enable Mono：`MonoBehaviourInstances` 为镜像权威；实例 holder 仍在数组 | B5 测试保持；补「数组清空后 feature 下可 restore」 |
-| S3.5 | Destroy 一致 | feature 下 despawn entity + 数组清理（已有）回归 | lifecycle 测试双开绿 |
-| S3.6 | Instantiate / 场景 Load | Seed 策略：Load 后 `seed_all_ecs_from_array`；Instantiate 复制后 seed | SceneData 往返测试 |
-| S3.7 | 编辑器/示例写路径 | 禁止新代码裸 `GetTransformMut`；示例统一写通 API | grep 无新增裸写；examples 构建过 |
-| S3.8 | 文档契约 | `migration-guide.md` 写清：feature 开=「ECS 权威 + 数组缓存」；关=「数组权威」 | 文档与测试断言一致 |
-
-**风险控制：**
-1. 每切片一个 commit，可独立 revert  
-2. 全程不改 workspace default features  
-3. 每步跑 §4 门禁  
-4. 禁止同时大改渲染 Pass / 着色器  
-
-**提交序列建议：**  
-- `feat(engine-core): R1e transform write authority under unity-world-primary`  
-- `feat(engine-core): R1f hierarchy/identity write authority under feature`  
-- `feat(engine-core): R1g monobehaviour metadata authority + load seed`  
-- `docs(migration): document ECS-authority dual-read/write contract`
+| ID | 状态 |
+|----|------|
+| S3.1 Transform 写权威（SetLocal*） | ✅ |
+| S3.2–S3.3 Hierarchy/Identity dual-write 测试 | ✅ 双模态写权威测试 |
+| S3.4–S3.6 MB/Destroy/Instantiate 回归 | ✅ 既有测试双开绿 |
+| S3.7–S3.8 示例写通 / 文档契约 | ✅ migration-guide 写权威表 |
 
 ### S4 — R2：engine-scene 动画依赖切割（M，可与 S2 并行）
 
@@ -121,11 +93,12 @@
 
 ### S6 — 收尾（S）
 
-| ID | 任务 |
-|----|------|
-| S6.1 | 更新本计划勾选状态 + roadmap / PROJECT_SUMMARY |
-| S6.2 | 全量 §4 门禁 |
-| S6.3 | 本地 commit；**不 push**（除非用户明确要求） |
+| ID | 任务 | 状态 |
+|----|------|------|
+| S6.1 | 更新本计划勾选状态 + roadmap / PROJECT_SUMMARY / README | ✅ |
+| S6.2 | 全量 §4 门禁 | ✅（见 S6 Report / commit） |
+| S6.3 | 本地 commit；**不 push** | ✅ |
+| S6.3 | 本地 commit；**不 push**（除非用户明确要求） | ✅ |
 
 ---
 

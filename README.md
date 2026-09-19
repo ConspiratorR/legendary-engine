@@ -376,7 +376,19 @@ fn my_system(app: &App) {
 | **ScriptableObject** | ✅ | `.asset`+GUID 热重载（App/编辑器轮询）、AssetRef |
 | **P2.4 dual-write 切片** | ✅ | `unity-world-primary`：Transform/Hierarchy/MBInstances 写通；Destroy despawn；CI 双开测 |
 | **光源收集数据源** | ✅ | `light_collect_system` 优先 `TransformProxy`，回退 engine-scene `GlobalTransform` |
-| **双 World 存储权威合并** | 🔞 | dual-write + **dual-read 优先 ECS** 已合入；数组写权威仍保留 — 完整迁 ECS 进行中（feature 默认 off） |
+| **双 World 存储权威合并** | 🔞 | dual-write + **dual-read 优先 ECS** + **写权威切片（SetLocal\*/动画/编辑器 Stop）** 已在 `phase11-r1-read`；数组完整迁 ECS 仍进行中（feature 默认 off） |
+
+### 阶段 11 — R1 权威收敛（分支 `phase11-r1-read`）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **Dual-read 契约** | ✅ | feature 开：读 API 优先 ECS；关：数组权威；双模态分歧测试 |
+| **写权威（R1e–g）** | ✅ | `World.SetLocal*` → `with_ecs_transform_mut`；identity dual-write 测试 |
+| **动画位姿** | ✅ | `engine_core::animation_apply`；编辑器预览写回 World；engine-scene Transform 仅回退 |
+| **编辑器 Play / 拾取** | ✅ | `stop()` 恢复 World；pick/gizmo 用 `scene_image_rect`；DPI 根因记录 |
+| **完整数组权威迁 ECS** | 🔞 | 仍延后；`unity-world-primary` 默认 **off** |
+
+契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段计划：`.mimocode/plans/next-phase-11-r1-authority.md`。
 
 试验构建：在 `engine-core` 依赖上开启 `features = ["unity-world-primary"]`（**不要**改 workspace default）。契约见 [docs/migration-guide.md](docs/migration-guide.md)。
 

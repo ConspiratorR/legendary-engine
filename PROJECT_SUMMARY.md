@@ -92,7 +92,8 @@
 - **内置序列化** — Material / SpriteRenderer / Rigidbody / AudioSource / Light / Camera
 - **so_asset CLI** — `pack` / `list` 递归补 `.meta`
 - **Dual-read（feature 开）** — `GetTransform/Name/Tag/Active/Layer/Parent/Children` 优先 ECS 镜像；关 feature 仍读数组
-- **仍延后** — 数组存储权威完全迁 ECS（写权威切片进行中）；默认打开 `unity-world-primary`；WASM SceneRuntime 全量；本地已合分支清理需手动执行
+- **写权威 / 动画 / 编辑器（阶段 11, `phase11-r1-read`）** — `World.SetLocal*` via `with_ecs_transform_mut`；`animation_apply`；编辑器 Play stop 恢复 World；视口拾取对齐 `img_rect`
+- **仍延后** — 数组存储权威完全迁 ECS；默认打开 `unity-world-primary`；WASM SceneRuntime 全量；本地已合分支清理需用户执行 `git branch -d`
 
 ### 9. 发布 & 生态 (阶段 9)
 - **CI/CD** — GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵)

@@ -448,12 +448,13 @@ MonoBehaviour 可进 SceneData：实现 `SerializeProps` / `DeserializeProps`，
 
 ## 后续路线（未完成）
 
-详细分阶段执行计划见 [unity-alignment-roadmap.md](unity-alignment-roadmap.md)。
+详细分阶段执行计划见 [unity-alignment-roadmap.md](unity-alignment-roadmap.md) 与阶段 11 计划 `.mimocode/plans/next-phase-11-r1-authority.md`。
 
 1. **P1 / P3 / P4 / 编辑器主路径** — ✅ 已在 main  
-2. **P2.4 dual-write 切片** — ✅ 写通 Transform/Hierarchy/MBInstances、Destroy despawn、CI 双开测；**dual-read 优先 ECS**（Name/Tag/Active/Layer/Parent/Children/Transform）✅；`gameobject_data`/`transforms`/`monobehaviours` **数组写权威仍保留**，完整写权威迁移 → 阶段 11 R1 续  
-3. **P2.5 engine-scene Transform** — 盘点 + 模块 doc 完成；`light_collect_system` 已优先 `TransformProxy`；animation_editor keyframe 仍用 engine-scene — 完整替换延后  
-4. **D2 样例脚本** — ✅ `sample_scripts`（Mover/Rotator/Lifetime）随 `CorePlugins` 注册进 SceneData  
+2. **P2.4 dual-write + dual-read** — ✅ 写通 + feature 开读优先 ECS；**阶段 11 写权威/动画/编辑器拾取** 在分支 `phase11-r1-read` ✅  
+3. **完整数组权威迁 ECS / 默认开 flag** — 🔞 仍延后  
+4. **P2.5 engine-scene Transform** — 盘点 + 模块 doc；动画应用走 `engine_core::animation_apply`；keyframe 格式仍在 engine-scene  
+5. **D2 样例脚本** — ✅ `sample_scripts`（Mover/Rotator/Lifetime）随 `CorePlugins` 注册进 SceneData  
 
 试验开 flag 与双读契约见 [migration-guide.md](migration-guide.md)。
 
