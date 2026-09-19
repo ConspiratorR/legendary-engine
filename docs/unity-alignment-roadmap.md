@@ -231,7 +231,8 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 - `cargo test -p engine-core` / `cargo test -p engine-editor --test editor_tests` 全绿  
 - 示例：`coroutine_demo`、`runtime_scene_demo`、`unity_gameplay_demo`、`so_asset`  
 - Unity 主路径：`main`（`unity-lifecycle-refactor`、`p2-viewport-unity-source` 等均已合入，无未合提交）  
-- 后续写权威：阶段 11 — 见 `.mimocode/plans/next-phase-11-r1-authority.md`  
+- **阶段 11（`phase11-r1-read` 本地分支）**：dual-read ✅、写权威切片 ✅、动画位姿 ✅、编辑器 Play/拾取 ✅；完整数组权威迁 ECS 🔞  
+- 门禁记录：`docs/compose/spec/phase11-s6-wrapup.md`  
 - 本地已合分支清理：会话策略禁止 agent 删 ref，需用户/orchestrator 执行 `git branch -d`
 
 ### PR 描述草稿（P5.6，合并时用）

@@ -506,7 +506,7 @@ Always use the **array** accessors for hierarchy math, world-pose composition, a
 
 Do **not** use dual-read `GetTransform` to compute world coordinates or walk parents.
 
-Phase 11 S3 note: dual-read preference **and** public write-authority policy are implemented (`SetLocal*` + identity dual-write). Full demotion of array holders to pure cache for every internal path is still in progress under the phase plan.
+Phase 11 S3 note: dual-read preference **and** write-authority slices are delivered on branch `phase11-r1-read` (`SetLocal*`, dual-mode tests, `animation_apply`, editor pick/Play restore). Full demotion of array holders to pure cache for every internal path remains open under the phase plan.
 
 ### Write-through contract
 
