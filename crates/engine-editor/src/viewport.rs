@@ -649,12 +649,19 @@ fn draw_single_viewport(
     handle_camera_input(state, gui, canvas_rect);
 }
 
-/// Logical rect of the painted 3D texture (canvas minus viewport tab strip).
+/// Logical rect of the painted 3D texture **inside** `canvas_rect`.
+///
+/// `viewport::draw` already excludes the tab header from `canvas_rect`.
+/// This helper only reserves a small top inset for the in-canvas axis HUD so
+/// pick/gizmo/paint share one geometry (phase 11 S5).
 pub fn scene_image_rect(canvas_rect: Rect, h_scale: f32) -> Rect {
     let top = 32.0 * h_scale;
+    if canvas_rect.height() <= top + 8.0 {
+        return canvas_rect;
+    }
     Rect::from_min_size(
         Pos2::new(canvas_rect.left(), canvas_rect.top() + top),
-        Vec2::new(canvas_rect.width(), (canvas_rect.height() - top).max(1.0)),
+        Vec2::new(canvas_rect.width(), canvas_rect.height() - top),
     )
 }
 
@@ -716,6 +723,9 @@ mod pick_tests {
 }
 
 /// Gizmo anchor: projected selected object, else HUD fallback corner.
+///
+/// Uses the same camera as the active viewport tab (Game tab → `game_camera`
+/// while playing) so projection matches the rendered 3D image.
 pub fn projected_gizmo_center(
     state: &EditorState,
     canvas_rect: Rect,
@@ -732,8 +742,14 @@ pub fn projected_gizmo_center(
     let Some(t) = state.world.GetTransform(handle) else {
         return fallback;
     };
+    let camera =
+        if state.active_viewport_tab == 1 && state.play_state != crate::state::PlayState::Editing {
+            &state.game_camera
+        } else {
+            &state.camera
+        };
     let aspect = img_rect.width() / img_rect.height().max(1.0);
-    let vp = state.camera.projection_matrix(aspect) * state.camera.view_matrix();
+    let vp = camera.projection_matrix(aspect) * camera.view_matrix();
     project_world_to_image(t.Position(), vp, img_rect).unwrap_or(fallback)
 }
 
@@ -995,8 +1011,6 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         && scene_image_rect(canvas_rect, pick_h_scale).contains(click_pos)
     {
         let img_rect = scene_image_rect(canvas_rect, pick_h_scale);
-        let rel_x = click_pos.x - img_rect.left();
-        let rel_y = click_pos.y - img_rect.top();
         let canvas_w = img_rect.width();
         let canvas_h = img_rect.height();
 
@@ -1043,7 +1057,6 @@ fn handle_camera_input(state: &mut EditorState, gui: &mut Gui, canvas_rect: Rect
         } else if !ctx.input(|i| i.modifiers.ctrl) {
             state.selected_nodes.clear();
         }
-        let _ = (rel_x, rel_y);
     }
 
     // IMGUI: Camera orbit (right-click drag)

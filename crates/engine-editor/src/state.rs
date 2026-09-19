@@ -1301,6 +1301,9 @@ impl EditorState {
         if self.play_state == PlayState::Playing {
             return false;
         }
+        // Complete snapshot of current World poses so Stop cannot leave
+        // unsnapshotted nodes dirty (phase 11 S5).
+        self.sync_node_transforms_from_world();
         self.editor_transform_snapshot = self.node_transforms.clone();
         self.runtime_elapsed = 0.0;
         self.play_state = PlayState::Playing;

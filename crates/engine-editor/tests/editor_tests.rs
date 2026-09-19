@@ -50,6 +50,7 @@ fn play_tick_host_then_stop_keeps_scene_bundle_roundtrip() {
         t.SetLocalPosition(engine_math::Vec3::new(3.0, 0.0, 0.0));
     });
     state.sync_node_transforms_from_world();
+    let pre = state.world.GetTransform(root).unwrap().LocalPosition();
 
     let dir = std::env::temp_dir().join(format!("rustengine_s5_rt_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -57,15 +58,28 @@ fn play_tick_host_then_stop_keeps_scene_bundle_roundtrip() {
     state.save_scene_bundle(&path).unwrap();
 
     let mut host = state.build_unity_play_host();
+    assert!(state.play(), "must enter play mode before stop restore");
+    // Simulate play-time World mutation via the host mirror path
     state.tick_unity_play_host(&mut host, 0.05);
-    state.stop();
+    let _ = state.world.with_ecs_transform_mut(root, |t| {
+        t.SetLocalPosition(engine_math::Vec3::new(77.0, 0.0, 0.0));
+    });
+    assert!(state.stop());
+
+    let post_stop = state.world.GetTransform(root).unwrap().LocalPosition();
+    assert!(
+        (post_stop - pre).length() < 1e-3,
+        "World must restore after stop; pre={pre:?} post={post_stop:?}"
+    );
 
     state.new_scene();
     state.open_scene_file(&path).expect("reopen");
-    let roots = state.world.GetRootGameObjects();
-    assert!(!roots.is_empty());
+    assert!(!state.world.GetRootGameObjects().is_empty());
     let rt = EditorState::runtime_scene_path_for(&path);
     assert!(rt.exists());
+    // Runtime twin remains valid SceneData after play/stop cycle
+    let twin_json = std::fs::read_to_string(&rt).unwrap();
+    assert!(twin_json.contains("\"game_objects\""));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
