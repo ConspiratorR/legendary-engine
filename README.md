@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 31 — WASM physics/CI（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **engine-physics wasm32** | ✅ | 本机可编译；CI wasm job 已覆盖 core+physics |
+
+规格：`docs/compose/spec/phase31-wasm-physics-ci.md`。
+
 ### 阶段 30 — Android 基线探测（同分支）
 
 | 项目 | 状态 | 说明 |

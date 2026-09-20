@@ -7,10 +7,17 @@
 | engine-math | ✅ | `cargo build -p engine-math --target wasm32-unknown-unknown` |
 | engine-ecs | ✅ | `cargo build -p engine-ecs --target wasm32-unknown-unknown` |
 | engine-render | ✅ | `cargo build -p engine-render --target wasm32-unknown-unknown` |
-| **engine-core (lib)** | ✅ **phase 21** | `cargo build -p engine-core --target wasm32-unknown-unknown` |
+| **engine-core (lib)** | ✅ **phase 21** | `cargo build -p engine-core --target wasm32-unknown-unknown --no-default-features --features unity-world-primary`（或默认 features，见 phase 21） |
+| **engine-physics** | ✅ **phase 31** | `cargo build -p engine-physics --target wasm32-unknown-unknown` |
 | engine-editor (lib) | ✅ | `cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib` |
 | engine-editor (bin) | ❌ | 需要原生事件循环, WASM 使用 `start_wasm()` 入口点 |
 | web-demo | ✅ | `wasm-pack build --target web --release` |
+
+### Phase 31 — WASM 编译面扩展
+
+- CI `wasm` job 增加 **engine-core** + **engine-physics** 的 wasm32 构建。
+- `engine-physics` 在 wasm32 上可编译（依赖 engine-core 的非默认 features 经 `default-features = false, features = ["audio"]`）。
+- SceneRuntime **JSON API** 仍在 engine-core 内（phase 22）；浏览器全量运行仍延后。
 
 ### Phase 21 — engine-core WASM 门控
 

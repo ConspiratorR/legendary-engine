@@ -24,6 +24,7 @@
 
 | 29 | 分支索引 12–28 | `phase29-branch-index.md` | BRANCH_INDEX + PROJECT_SUMMARY |
 | 30 | Android 基线探测 + `game-activity` feature | `phase30-android-baseline.md` | 本机缺 NDK；文档/feature 就绪 |
+| 31 | WASM physics + CI 编译面 | `phase31-wasm-physics-ci.md` | engine-physics wasm32 ✅；CI 增 core/physics |
 
 ## 推荐门禁（合并前）
 

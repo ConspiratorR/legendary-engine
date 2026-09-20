@@ -116,6 +116,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: engine-core (wasm32)
+        run: cargo build -p engine-core --target wasm32-unknown-unknown --no-default-features --features unity-world-primary
+
+      - name: engine-physics (wasm32)
+        run: cargo build -p engine-physics --target wasm32-unknown-unknown
+
       - name: Build engine-render for WASM
         run: cargo build -p engine-render --target wasm32-unknown-unknown
 
