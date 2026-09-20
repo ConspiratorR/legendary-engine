@@ -10,7 +10,7 @@ wasmtime = { version = "45", default-features = false, features = ["cranelift", 
 notify = "8"
 notify-debouncer-mini = "0.6"
 engine-ecs = { path = "../engine-ecs" }
-engine-core = { path = "../engine-core" }
+engine-core = { path = "../engine-core", default-features = false, features = ["audio"] }
 engine-math = { path = "../engine-math" }
 anyhow = "1"
 thiserror = "2"

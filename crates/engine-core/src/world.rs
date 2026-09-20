@@ -1642,17 +1642,25 @@ impl World {
     }
 
     /// Copy this handle's array Transform onto its linked ECS entity (if any).
+    ///
+    /// Seed/export path (array → ECS). Under feature on, root detection uses
+    /// hierarchy authority so a dirty array parent cache does not skip
+    /// `UpdateWorldTransformRoot` on an ECS-authoritative root.
     fn write_transform_to_ecs(&mut self, handle: GameObjectHandle) {
         let Some(entity) = self.entity_for(handle) else {
             return;
         };
         let index = handle.index() as usize;
 
+        let is_root = if Self::unity_world_primary_feature() {
+            self.hierarchy_authority_parent(handle).is_none()
+        } else {
+            self.GetParentArray(handle).is_none()
+        };
+
         // Roots: refresh world pose from local so a local edit is visible
         // immediately under dual-read (B1 write-path contract).
-        if let Some(Some(t)) = self.transforms.get_mut(index)
-            && t.parent.is_none()
-        {
+        if is_root && let Some(Some(t)) = self.transforms.get_mut(index) {
             t.UpdateWorldTransformRoot();
         }
 
@@ -1665,7 +1673,7 @@ impl World {
             t.LocalScale(),
         );
         // Children keep cached world until sync_transforms recomputes hierarchy.
-        if t.parent.is_some() {
+        if !is_root {
             full.world_position = t.Position();
             full.world_rotation = t.Rotation();
             full.world_scale = t.LossyScale();
@@ -2001,17 +2009,25 @@ impl World {
     ///
     /// # Unity Documentation
     /// <https://docs.unity3d.com/ScriptReference/GameObject-activeInHierarchy.html>
+    ///
+    /// Parent walk is hop-capped (phase 13) so corrupted parent cycles terminate.
     pub fn IsActiveInHierarchy(&self, handle: GameObjectHandle) -> bool {
         if !self.IsActive(handle) {
             return false;
         }
 
-        // Check if all parents are active
+        let mut prev = handle;
         let mut current = self.GetParent(handle);
+        let mut hops = 0usize;
         while let Some(parent) = current {
+            hops += 1;
+            if hops > crate::hierarchy::MAX_PARENT_HOPS || parent == prev {
+                break;
+            }
             if !self.IsActive(parent) {
                 return false;
             }
+            prev = parent;
             current = self.GetParent(parent);
         }
 
@@ -4439,9 +4455,32 @@ mod tests {
 
         // Must return without hanging; cycle detection / hop cap rejects the move.
         world.SetParent(a, Some(b));
-        // A should not become a descendant of itself via the move — either rejected
-        // or b remains not under a in a way that infinite-loops GetParent walks.
         let _ = world.GetParent(a);
         let _ = world.GetParent(b);
+        let _ = world.IsActiveInHierarchy(a);
+        let _ = crate::hierarchy::get_root(&world, a);
+        let _ = crate::hierarchy::get_ancestors(&world, a);
+        let _ = crate::hierarchy::get_depth(&world, a);
+        let _ = crate::hierarchy::is_ancestor(&world, a, b);
+    }
+
+    /// Phase 13 — prepared scene export refreshes ECS pose into the save payload.
+    #[test]
+    fn test_phase13_prepared_save_matches_ecs_pose() {
+        use crate::serialization::{SceneSerializer, TransformData};
+        let mut world = World::new();
+        let go = world.CreateGameObject("Export");
+        world.SetLocalPosition(go, Vec3::new(2.0, 0.0, 0.0));
+
+        if World::unity_world_primary_feature() {
+            // Dirty array cache; prepared save must still see ECS authority.
+            if let Some(Some(t)) = world.transforms.get_mut(go.index() as usize) {
+                t.local_position = Vec3::new(-9.0, 0.0, 0.0);
+            }
+        }
+
+        let scene = SceneSerializer::new().SavePrepared(&mut world, "S");
+        let TransformData { local_position, .. } = scene.game_objects[0].transform;
+        assert_eq!(local_position.x, 2.0);
     }
 }

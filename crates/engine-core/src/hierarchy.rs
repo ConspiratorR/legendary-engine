@@ -2,9 +2,15 @@
 //!
 //! Provides helper functions for working with the Transform hierarchy.
 //! These functions use Transform's built-in parent/child relationships.
+//!
+//! Parent walks are hop-capped so corrupted parent cycles (array or ECS)
+//! terminate instead of hanging callers.
 
 use crate::gameobject::GameObjectHandle;
 use crate::world::World;
+
+/// Maximum parent hops in a hierarchy walk (phase 13 residual hardening).
+pub(crate) const MAX_PARENT_HOPS: usize = 4096;
 
 /// Synchronize world transforms from local transforms.
 ///
@@ -19,10 +25,17 @@ pub fn sync_transforms(world: &mut World) {
 /// Get all ancestors of a GameObject (from immediate parent to root).
 pub fn get_ancestors(world: &World, handle: GameObjectHandle) -> Vec<GameObjectHandle> {
     let mut ancestors = Vec::new();
+    let mut prev = handle;
     let mut current = world.GetParent(handle);
+    let mut hops = 0usize;
 
     while let Some(parent) = current {
+        hops += 1;
+        if hops > MAX_PARENT_HOPS || parent == prev {
+            break;
+        }
         ancestors.push(parent);
+        prev = parent;
         current = world.GetParent(parent);
     }
 
@@ -32,9 +45,15 @@ pub fn get_ancestors(world: &World, handle: GameObjectHandle) -> Vec<GameObjectH
 /// Get the root ancestor of a GameObject.
 ///
 /// If the handle itself is a root (no parent), the handle is returned as-is.
+/// Corrupted parent cycles return the last node seen (hop-capped).
 pub fn get_root(world: &World, handle: GameObjectHandle) -> GameObjectHandle {
     let mut current = handle;
+    let mut hops = 0usize;
     while let Some(parent) = world.GetParent(current) {
+        hops += 1;
+        if hops > MAX_PARENT_HOPS || parent == current {
+            break;
+        }
         current = parent;
     }
     current
@@ -46,11 +65,18 @@ pub fn is_ancestor(
     ancestor: GameObjectHandle,
     descendant: GameObjectHandle,
 ) -> bool {
+    let mut prev = descendant;
     let mut current = world.GetParent(descendant);
+    let mut hops = 0usize;
     while let Some(parent) = current {
         if parent == ancestor {
             return true;
         }
+        hops += 1;
+        if hops > MAX_PARENT_HOPS || parent == prev {
+            return false;
+        }
+        prev = parent;
         current = world.GetParent(parent);
     }
     false
@@ -59,10 +85,17 @@ pub fn is_ancestor(
 /// Get the depth of a GameObject in the hierarchy (root = 0).
 pub fn get_depth(world: &World, handle: GameObjectHandle) -> usize {
     let mut depth = 0;
+    let mut prev = handle;
     let mut current = world.GetParent(handle);
+    let mut hops = 0usize;
 
     while let Some(parent) = current {
+        hops += 1;
+        if hops > MAX_PARENT_HOPS || parent == prev {
+            break;
+        }
         depth += 1;
+        prev = parent;
         current = world.GetParent(parent);
     }
 

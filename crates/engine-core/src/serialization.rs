@@ -324,10 +324,19 @@ impl Default for SceneSerializer {
     }
 }
 
-/// Save a scene to JSON string.
+/// Save a scene to JSON string (does not refresh caches; prefer
+/// [`SaveSceneJsonPrepared`] when `unity-world-primary` may be on).
 pub fn SaveSceneJson(world: &World, name: &str) -> Result<String, serde_json::Error> {
     let serializer = SceneSerializer::new();
     let scene = serializer.Save(world, name);
+    serde_json::to_string_pretty(&scene)
+}
+
+/// Save a scene to JSON after refreshing pose/hierarchy caches from ECS
+/// authority when `unity-world-primary` is enabled (phase 13).
+pub fn SaveSceneJsonPrepared(world: &mut World, name: &str) -> Result<String, serde_json::Error> {
+    let serializer = SceneSerializer::new();
+    let scene = serializer.SavePrepared(world, name);
     serde_json::to_string_pretty(&scene)
 }
 

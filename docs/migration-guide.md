@@ -472,16 +472,24 @@ RustEngine uses **egui** for UI, which is immediate mode:
 
 ## P2.4 Storage Migration (`unity-world-primary`)
 
-`engine-core` has an optional cargo feature `unity-world-primary` (default **off**). When enabled, Unity `World` APIs dual-read from the internal ECS and public writes treat ECS as **storage authority** for Identity, Hierarchy, Transform pose, Scene I/O, and MonoBehaviour metadata; array slots are refreshable **caches**. Dyn MonoBehaviour holders remain array-backed. When the feature is **off**, arrays stay the authority (see write-authority tables below and `docs/unity-alignment-roadmap.md`).
+`engine-core` feature `unity-world-primary` is **ON by default** since phase 13 (`default = ["audio", "unity-world-primary"]`). Unity `World` APIs treat internal ECS as **storage authority** for Identity, Hierarchy, Transform pose, Scene I/O, and MonoBehaviour metadata; array slots are refreshable **caches**. Dyn MonoBehaviour holders remain array-backed.
+
+**Opt-out (array authority):** depend on `engine-core` with `default-features = false, features = ["audio"]`. Public APIs then read/write array/GameObject storage; ECS mirrors stay best-effort.
 
 ### Feature flag
 
 ```bash
+# Default (includes unity-world-primary)
+cargo test -p engine-core --lib
+
+# Array-authority opt-out (feature off)
+cargo test -p engine-core --lib --no-default-features --features audio
+
+# Explicit enable (redundant once default includes the flag)
 cargo test -p engine-core --lib --features unity-world-primary
-cargo test -p engine-core --test unity_lifecycle_tests --features unity-world-primary
 ```
 
-CI runs a dedicated `Unity World Primary` job covering both flag states.
+CI should run both the default job and an opt-out (`--no-default-features --features audio`) job for `engine-core` tests.
 
 ### Dual-read contract (feature **on**)
 

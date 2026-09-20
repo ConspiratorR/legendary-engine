@@ -401,7 +401,18 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
-试验构建：在 `engine-core` 依赖上开启 `features = ["unity-world-primary"]`（**不要**改 workspace default）。契约见 [docs/migration-guide.md](docs/migration-guide.md)。
+### 阶段 13 — 默认开 flag + 残余硬化（分支 `phase12-array-authority` 续写）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **父链 hop-cap** | ✅ | `hierarchy::get_*` / `IsActiveInHierarchy` 超限断链，不挂起 |
+| **Prepared scene save** | ✅ | `SaveSceneJsonPrepared`；编辑器 `export_core_scene_json` 先刷新 cache |
+| **默认 features** | ✅ | `engine-core` `default = ["audio", "unity-world-primary"]`；opt-out 见 migration-guide |
+| **dyn MB 进 ECS** | ❌ | 仍明确不做 |
+
+契约：[docs/migration-guide.md](docs/migration-guide.md)。规格：`docs/compose/spec/phase13-default-on-hardening.md`。
+
+Opt-out：`engine-core = { path = "...", default-features = false, features = ["audio"] }`。
 
 详见 [docs/unity-alignment-roadmap.md](docs/unity-alignment-roadmap.md) 与 [docs/lifecycle-and-scenes.md](docs/lifecycle-and-scenes.md)。
 

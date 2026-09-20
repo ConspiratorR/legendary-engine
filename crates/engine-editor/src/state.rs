@@ -1096,14 +1096,20 @@ impl EditorState {
 
     /// Export the editor World as runtime-compatible `SceneData`
     /// (same format as `SceneRuntime` / `SceneManager::LoadSceneJson`).
-    pub fn to_core_scene_data(&self, name: &str) -> engine_core::serialization::SceneData {
+    ///
+    /// Refreshes pose/hierarchy caches from ECS when `unity-world-primary` is on.
+    pub fn to_core_scene_data(&mut self, name: &str) -> engine_core::serialization::SceneData {
+        self.world.prepare_scene_io_cache();
         let serializer = engine_core::serialization::SceneSerializer::new();
         serializer.Save(&self.world, name)
     }
 
     /// Export as pretty JSON for the runtime scene pipeline.
-    pub fn export_core_scene_json(&self, name: &str) -> Result<String, String> {
-        engine_core::serialization::SaveSceneJson(&self.world, name).map_err(|e| e.to_string())
+    ///
+    /// Uses prepared save so feature-on ECS pose authority is visible on disk.
+    pub fn export_core_scene_json(&mut self, name: &str) -> Result<String, String> {
+        engine_core::serialization::SaveSceneJsonPrepared(&mut self.world, name)
+            .map_err(|e| e.to_string())
     }
 
     /// Import runtime `SceneData` into the editor World and rebuild the hierarchy tree.

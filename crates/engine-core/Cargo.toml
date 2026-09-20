@@ -5,10 +5,11 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["audio"]
+# Phase 13: unity-world-primary is ON by default — ECS storage authority for
+# Identity/Hierarchy/Pose/Scene I/O/MB metadata; arrays are caches.
+# Opt-out: default-features = false, features = ["audio"].
+default = ["audio", "unity-world-primary"]
 audio = ["dep:engine-audio"]
-# P2.4: prefer exposing internal ECS storage as the migration completes.
-# Default off — Unity World APIs stay the public surface.
 unity-world-primary = []
 
 [dependencies]
