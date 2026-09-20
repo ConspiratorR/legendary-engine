@@ -101,13 +101,24 @@ impl AppBuilder {
         &mut self,
         plugins_dir: &std::path::Path,
     ) -> Result<&mut Self, Box<dyn std::error::Error>> {
-        use crate::plugin_loader::PluginLoader;
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = plugins_dir;
+            return Err(Box::new(
+                crate::plugin_loader::PluginLoadError::UnsupportedPlatform,
+            ));
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use crate::plugin_loader::PluginLoader;
 
-        let mut loader = PluginLoader::new(plugins_dir.join("registry.json"))
-            .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
-        unsafe { loader.load_all() }.map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
-        loader.register_all(self);
-        Ok(self)
+            let mut loader = PluginLoader::new(plugins_dir.join("registry.json"))
+                .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
+            unsafe { loader.load_all() }
+                .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })?;
+            loader.register_all(self);
+            Ok(self)
+        }
     }
 
     /// Add a system to the update schedule (parallel if enabled, sequential otherwise).

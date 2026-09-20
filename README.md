@@ -407,6 +407,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 21 — WASM 构建基线（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **engine-core wasm32 编译** | ✅ | libloading/动态插件 wasm 门控；`UnsupportedPlatform` |
+| SceneRuntime 浏览器全量 | ❌ | 仍延后（R3 后续切片） |
+
+规格：`docs/compose/spec/phase21-wasm-engine-core.md`。状态：`WASM_STATUS.md`。
+
 ### 阶段 20 — 碰撞完善（同分支）
 
 | 项目 | 状态 | 说明 |

@@ -1,4 +1,4 @@
-## WASM 构建状态 (更新于 2026-06-16)
+## WASM 构建状态 (更新于 2026-07-13, phase 21)
 
 ### 编译状态
 
@@ -7,9 +7,17 @@
 | engine-math | ✅ | `cargo build -p engine-math --target wasm32-unknown-unknown` |
 | engine-ecs | ✅ | `cargo build -p engine-ecs --target wasm32-unknown-unknown` |
 | engine-render | ✅ | `cargo build -p engine-render --target wasm32-unknown-unknown` |
+| **engine-core (lib)** | ✅ **phase 21** | `cargo build -p engine-core --target wasm32-unknown-unknown` |
 | engine-editor (lib) | ✅ | `cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib` |
 | engine-editor (bin) | ❌ | 需要原生事件循环, WASM 使用 `start_wasm()` 入口点 |
 | web-demo | ✅ | `wasm-pack build --target web --release` |
+
+### Phase 21 — engine-core WASM 门控
+
+- `libloading` 仅在 **非 wasm32** 目标依赖（`cfg(not(target_arch = "wasm32"))`）。
+- `DynamicPlugin::load` / `PluginLoader::load_all` / `register_all`：wasm 返回 `PluginLoadError::UnsupportedPlatform`；manifest/registry 类型仍可用。
+- `AppBuilder::load_dynamic_plugins`：wasm 返回 `UnsupportedPlatform`。
+- **未做**：SceneRuntime 全量 WASM 跑通 / 浏览器生命周期（后续切片）。
 
 ### 实际运行测试
 
@@ -29,12 +37,16 @@
 7. **文件对话框** — 通过 `native-dialogs` feature flag 可选
 8. **随机数生成** — 添加 `getrandom` 的 `wasm_js` feature
 9. **入口点** — `start_wasm()` 异步函数 + `wasm_bindgen_futures::spawn_local`
+10. **libloading / 动态插件** — phase 21：wasm 门控，`UnsupportedPlatform`
 
 ### 构建命令
 
 ```bash
 # 安装 WASM 目标
 rustup target add wasm32-unknown-unknown
+
+# 构建 engine-core（phase 21 起可编译）
+cargo build -p engine-core --target wasm32-unknown-unknown
 
 # 构建渲染器
 cargo build -p engine-render --target wasm32-unknown-unknown
@@ -57,6 +69,13 @@ engine-editor 的 feature flags:
 - `web` — Web/WASM 平台支持
 - `scripting` — Lua 脚本支持 (mlua + engine-script)
 - `native-dialogs` — 原生文件对话框 (rfd)
+
+engine-core 默认 features（native）：`["audio", "unity-world-primary"]`。WASM 构建建议：
+
+```bash
+cargo build -p engine-core --target wasm32-unknown-unknown --no-default-features
+# 或仅 unity-world-primary：--no-default-features --features unity-world-primary
+```
 
 ### 关键文件
 

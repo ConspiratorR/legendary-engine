@@ -1,3 +1,8 @@
+//! Dynamic plugin loading (native only; WASM returns UnsupportedPlatform).
+//!
+//! Phase 21: `libloading` is a non-wasm dependency. Manifest/registry types
+//! remain available on all targets; `DynamicPlugin::load` is native-only.
+
 use crate::app::AppBuilder;
 use crate::plugin::Plugin;
 use serde::{Deserialize, Serialize};
@@ -25,12 +30,14 @@ pub struct PluginManifest {
 }
 
 /// A loaded dynamic plugin with its manifest and library handle.
+#[cfg(not(target_arch = "wasm32"))]
 pub struct DynamicPlugin {
     pub manifest: PluginManifest,
     _lib: libloading::Library,
     plugin: Box<dyn Plugin>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl DynamicPlugin {
     /// Load a plugin from a directory containing `plugin.json` and a shared library.
     ///
@@ -79,6 +86,24 @@ impl DynamicPlugin {
     /// Get a reference to the loaded plugin.
     pub fn plugin(&self) -> &dyn Plugin {
         &*self.plugin
+    }
+}
+
+/// WASM stub — dynamic plugins are native-only (phase 21).
+#[cfg(target_arch = "wasm32")]
+pub struct DynamicPlugin {
+    pub manifest: PluginManifest,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl DynamicPlugin {
+    /// Always fails on WASM (no `libloading` / dlopen).
+    pub unsafe fn load(_plugin_dir: &Path) -> Result<Self, PluginLoadError> {
+        Err(PluginLoadError::UnsupportedPlatform)
+    }
+
+    pub fn manifest(&self) -> &PluginManifest {
+        &self.manifest
     }
 }
 
@@ -140,6 +165,7 @@ impl Default for PluginRegistry {
 pub struct PluginLoader {
     registry: PluginRegistry,
     registry_path: PathBuf,
+    #[cfg(not(target_arch = "wasm32"))]
     loaded_plugins: Vec<DynamicPlugin>,
 }
 
@@ -150,6 +176,7 @@ impl PluginLoader {
         Ok(Self {
             registry,
             registry_path,
+            #[cfg(not(target_arch = "wasm32"))]
             loaded_plugins: Vec::new(),
         })
     }
@@ -202,6 +229,7 @@ impl PluginLoader {
     /// # Safety
     ///
     /// Each plugin's shared library must be compatible with the current engine version.
+    #[cfg(not(target_arch = "wasm32"))]
     pub unsafe fn load_all(&mut self) -> Result<(), PluginLoadError> {
         let plugin_dirs: Vec<_> = self.registry.plugins.values().cloned().collect();
         for dir in &plugin_dirs {
@@ -224,12 +252,21 @@ impl PluginLoader {
         Ok(())
     }
 
+    /// WASM: dynamic plugins are not supported (phase 21).
+    #[cfg(target_arch = "wasm32")]
+    pub unsafe fn load_all(&mut self) -> Result<(), PluginLoadError> {
+        Err(PluginLoadError::UnsupportedPlatform)
+    }
+
     /// Register all loaded plugins with the application builder.
     pub fn register_all(&self, app: &mut AppBuilder) {
+        #[cfg(not(target_arch = "wasm32"))]
         for plugin in &self.loaded_plugins {
             log::info!("Registering plugin: {}", plugin.manifest().name);
             plugin.plugin().build(app);
         }
+        #[cfg(target_arch = "wasm32")]
+        let _ = app;
     }
 
     /// Get the plugin registry.
@@ -243,8 +280,15 @@ impl PluginLoader {
     }
 
     /// Get the list of loaded plugin manifests.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn loaded_manifests(&self) -> Vec<&PluginManifest> {
         self.loaded_plugins.iter().map(|p| p.manifest()).collect()
+    }
+
+    /// WASM always has no dynamically loaded plugins.
+    #[cfg(target_arch = "wasm32")]
+    pub fn loaded_manifests(&self) -> Vec<&PluginManifest> {
+        Vec::new()
     }
 }
 
@@ -259,10 +303,14 @@ pub enum PluginLoadError {
     SerializationError(serde_json::Error),
     #[error("library not found: {0}")]
     LibraryNotFound(PathBuf),
+    #[cfg(not(target_arch = "wasm32"))]
     #[error("failed to load library {0}: {1}")]
     LibraryLoadFailed(PathBuf, libloading::Error),
+    #[cfg(not(target_arch = "wasm32"))]
     #[error("entry point '{0}' not found: {1}")]
     EntryPointNotFound(String, libloading::Error),
+    #[error("dynamic plugins are not supported on this platform (WASM)")]
+    UnsupportedPlatform,
 }
 
 fn lib_prefix() -> &'static str {
