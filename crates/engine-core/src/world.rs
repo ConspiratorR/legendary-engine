@@ -1984,6 +1984,35 @@ impl World {
         self.pending_enable_disable.len()
     }
 
+    /// Dispatch `OnCollisionEnter` on enabled MonoBehaviours of `handle`
+    /// (phase 19 physics bridge → Unity callback).
+    pub fn invoke_collision_enter(
+        &mut self,
+        handle: GameObjectHandle,
+        collision: crate::events::Collision,
+        time: Time,
+        frame: u64,
+        events: &mut crate::event::EventBus,
+    ) {
+        if !self.is_valid(handle) {
+            return;
+        }
+        let index = handle.index() as usize;
+        let Some(mut monos) = self.monobehaviours[index].take() else {
+            return;
+        };
+        {
+            let mut ctx = Context::new(self, time.clone(), frame, events);
+            for mono in monos.iter_mut() {
+                if !mono.Enabled() {
+                    continue;
+                }
+                mono.GetMut().OnCollisionEnter(&mut ctx, &collision);
+            }
+        }
+        self.monobehaviours[index] = Some(monos);
+    }
+
     /// Get active state (matches `GameObject.activeSelf`).
     ///
     /// With `unity-world-primary`, prefers ECS `GameObjectActive` when linked.

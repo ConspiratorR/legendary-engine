@@ -57,8 +57,9 @@ use engine_core::animation_apply::Vec3Keyframe;
 | Unity 组件 | `engine_core::components::Rigidbody` / colliders | 游戏侧数据 |
 | 桥 | `engine_physics::unity_bridge`（`sync_physics_from_unity` / `to_unity` / `unity_physics_fixed_step`） | World ↔ physics ECS |
 | 模拟 | `PhysicsWorld::step`（ECS `Transform` + physics `RigidBody`） | 积分/碰撞 |
-| 写回 | `World::SetLocalPosition`（storage authority） | 位姿权威路径 |
-| 插件 | `engine_physics::UnityPhysicsPlugin` | FixedUpdate：from → step → to |
+| 写回 | `World::SetLocalPosition` + `SetLocalRotation`（storage authority；world→local） | 位姿/旋转 |
+| 插件 | `engine_physics::UnityPhysicsPlugin` | FixedUpdate：from → step → **OnCollisionEnter** → to |
+| Sleep | `Rigidbody::Sleep()` / `is_sleeping` | 桥强制休眠并清速度 |
 | 示例 | `cargo run --example unity_physics_demo -p engine-core` | 重力下落写 World |
 
 编辑器 Play 仍使用 `UnityPlayHost` 内的同构同步；运行时优先 `UnityPhysicsPlugin` + SceneRuntime。

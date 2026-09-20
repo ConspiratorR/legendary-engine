@@ -30,6 +30,8 @@ pub struct Rigidbody {
     pub velocity: Vec3,
     /// Angular velocity.
     pub angular_velocity: Vec3,
+    /// Physics sleep gate (phase 19): when true, bridge forces the sim body asleep.
+    pub is_sleeping: bool,
 }
 
 impl Default for Rigidbody {
@@ -42,6 +44,7 @@ impl Default for Rigidbody {
             is_kinematic: false,
             velocity: Vec3::ZERO,
             angular_velocity: Vec3::ZERO,
+            is_sleeping: false,
         }
     }
 }
@@ -58,16 +61,25 @@ impl Component for Rigidbody {
 impl Rigidbody {
     pub fn AddForce(&mut self, force: Vec3) {
         self.velocity += force / self.mass;
+        self.is_sleeping = false;
     }
-    pub fn AddTorque(&mut self, torque: Vec3) {
-        self.angular_velocity += torque / self.mass;
-    }
+    /// Force the physics bridge to treat this body as asleep (zero velocities).
     pub fn Sleep(&mut self) {
+        self.is_sleeping = true;
         self.velocity = Vec3::ZERO;
         self.angular_velocity = Vec3::ZERO;
     }
+    pub fn WakeUp(&mut self) {
+        self.is_sleeping = false;
+    }
+    pub fn AddTorque(&mut self, torque: Vec3) {
+        self.angular_velocity += torque / self.mass;
+        self.is_sleeping = false;
+    }
     pub fn IsSleeping(&self) -> bool {
-        self.velocity.length_squared() < 0.001 && self.angular_velocity.length_squared() < 0.001
+        self.is_sleeping
+            || (self.velocity.length_squared() < 0.001
+                && self.angular_velocity.length_squared() < 0.001)
     }
 }
 
@@ -119,10 +131,7 @@ impl Rigidbody {
     pub fn AddRelativeTorque(&mut self, torque: Vec3, rotation: Quat) {
         let world_torque = rotation * torque;
         self.angular_velocity += world_torque / self.mass;
-    }
-
-    pub fn WakeUp(&mut self) {
-        // Wake up is implicit when velocity is set
+        self.is_sleeping = false;
     }
 }
 

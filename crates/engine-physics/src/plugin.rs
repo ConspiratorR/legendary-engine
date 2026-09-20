@@ -1,6 +1,6 @@
 //! Physics plugins for engine (3D and 2D).
 use crate::physics_2d::PhysicsWorld2D;
-use crate::world::PhysicsWorld;
+use crate::world::{CollisionEvent, PhysicsWorld};
 use engine_core::app::AppBuilder;
 use engine_core::plugin::Plugin;
 
@@ -99,7 +99,65 @@ fn unity_physics_step_system(world: &mut engine_ecs::world::World) {
 
     crate::unity_bridge::unity_physics_fixed_step(&mut runtime, world, fixed_dt);
 
+    // Phase 19: dispatch collision enter events to Unity MonoBehaviours.
+    dispatch_unity_collision_enters(&mut runtime, world);
+
     world.insert_resource(runtime);
+}
+
+/// Map physics entity index → GameObject via identity bridge links.
+fn go_for_physics_id(
+    runtime: &engine_core::scene_runtime::SceneRuntime,
+    id: u32,
+) -> Option<engine_core::gameobject::GameObjectHandle> {
+    for go in crate::unity_bridge::collect_unity_handles(&runtime.world) {
+        if let Some(e) = runtime.entity_for(go)
+            && e.index() == id
+        {
+            return Some(go);
+        }
+    }
+    None
+}
+
+/// Fire `MonoBehaviour::OnCollisionEnter` for each `is_enter` physics event.
+fn dispatch_unity_collision_enters(
+    runtime: &mut engine_core::scene_runtime::SceneRuntime,
+    ecs: &mut engine_ecs::world::World,
+) {
+    let events: Vec<CollisionEvent> = ecs
+        .get_resource::<PhysicsWorld>()
+        .map(|p| p.collision_events.clone())
+        .unwrap_or_default();
+    if events.is_empty() {
+        return;
+    }
+    let time = ecs
+        .get_resource::<engine_core::time::Time>()
+        .cloned()
+        .unwrap_or_default();
+    let frame = time.frameCount();
+    let mut bus = engine_core::event::EventBus::new();
+
+    for ev in events.iter().filter(|e| e.is_enter) {
+        let Some(a) = go_for_physics_id(runtime, ev.entity_a) else {
+            continue;
+        };
+        let Some(b) = go_for_physics_id(runtime, ev.entity_b) else {
+            continue;
+        };
+        for (this, other) in [(a, b), (b, a)] {
+            let collision = engine_core::events::Collision {
+                other,
+                normal: ev.normal,
+                point: ev.point,
+                relative_velocity: engine_math::Vec3::ZERO,
+            };
+            runtime
+                .world
+                .invoke_collision_enter(this, collision, time.clone(), frame, &mut bus);
+        }
+    }
 }
 
 /// Plugin: Unity World-driven physics (requires SceneRuntime for GameObjects).

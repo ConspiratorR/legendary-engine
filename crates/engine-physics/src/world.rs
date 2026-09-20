@@ -234,10 +234,39 @@ impl PhysicsWorld {
             }
         }
 
-        // Phase 2: apply position updates
+        // Phase 2: apply position + rotation updates (semi-implicit Euler)
         for (idx, new_pos) in updates {
             if let Some(transform) = world.get_by_index_mut::<Transform>(idx) {
                 transform.SetPosition(new_pos);
+            }
+            // Angular integration (phase 19): q' = normalize(q + 0.5*dt*(ω⊗q))
+            let (omega, q) = match (
+                world.get_by_index::<RigidBody>(idx),
+                world.get_by_index::<Transform>(idx),
+            ) {
+                (Some(body), Some(t))
+                    if body.body_type == BodyType::Dynamic
+                        && !body.is_sleeping
+                        && body.angular_velocity.length_squared() > 0.0 =>
+                {
+                    (body.angular_velocity, t.Rotation())
+                }
+                _ => continue,
+            };
+            let omega_q = engine_math::Quat::from_xyzw(omega.x, omega.y, omega.z, 0.0);
+            let dq = omega_q * q;
+            let nx = q.x + 0.5 * dt * dq.x;
+            let ny = q.y + 0.5 * dt * dq.y;
+            let nz = q.z + 0.5 * dt * dq.z;
+            let nw = q.w + 0.5 * dt * dq.w;
+            let len = (nx * nx + ny * ny + nz * nz + nw * nw).sqrt();
+            if len > 1e-8 {
+                let nq = engine_math::Quat::from_xyzw(nx / len, ny / len, nz / len, nw / len);
+                if let Some(transform) = world.get_by_index_mut::<Transform>(idx) {
+                    transform.SetLocalRotation(nq);
+                    // Physics stores/reads world rotation via Rotation().
+                    transform.SetRotation(nq);
+                }
             }
         }
     }

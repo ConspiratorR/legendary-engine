@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 19 — 物理桥完善（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **旋转 / Sleep / OnCollisionEnter** | ✅ | angular 积分写回 World；`Rigidbody::Sleep()`；碰撞事件进 MonoBehaviour |
+
+规格：`docs/compose/spec/phase19-physics-polish.md`。
+
 ### 阶段 18 — Unity 物理桥（同分支）
 
 | 项目 | 状态 | 说明 |
