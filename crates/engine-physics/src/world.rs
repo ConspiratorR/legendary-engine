@@ -236,9 +236,18 @@ impl PhysicsWorld {
                     let speed_sq = vel.length_squared();
 
                     if has_ccd && speed_sq > threshold * threshold {
-                        let safe_pos =
-                            self.ccd_sweep(world, idx, transform.Position(), desired_pos);
-                        updates.push((idx, safe_pos));
+                        // Phase 28: sweep probe **world center** (pos + R*offset);
+                        // convert safe center back to body origin for SetPosition.
+                        let probe_off = world
+                            .get_by_index::<Collider>(idx)
+                            .map(|c| transform.Rotation() * c.offset)
+                            .unwrap_or(Vec3::ZERO);
+                        let center_start = transform.Position() + probe_off;
+                        let desired_origin = transform.Position() + vel * dt;
+                        let safe_center =
+                            self.ccd_sweep(world, idx, center_start, desired_origin + probe_off);
+                        let safe_origin = safe_center - probe_off;
+                        updates.push((idx, safe_origin));
                     } else {
                         updates.push((idx, desired_pos));
                     }
@@ -297,7 +306,11 @@ impl PhysicsWorld {
             return end;
         }
 
-        let radius = collider.shape.get_bounding_sphere();
+        // Probe radius: exact sphere radius when shape is sphere; else bounding sphere.
+        let radius = match &collider.shape {
+            ColliderShape::Sphere { radius } => *radius,
+            ref other => other.get_bounding_sphere(),
+        };
         let mut earliest_toi = 1.0f32;
 
         // Test against all static colliders

@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 28 — CCD 探针感知（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **探针 offset/半径** | ✅ | 扫掠用世界中心 `pos+R*offset`；Sphere 半径精确 |
+
+规格：`docs/compose/spec/phase28-ccd-probe-awareness.md`。
+
 ### 阶段 27 — CCD 旋转 AABB（同分支）
 
 | 项目 | 状态 | 说明 |

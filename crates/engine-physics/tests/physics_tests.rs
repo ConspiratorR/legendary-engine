@@ -745,6 +745,92 @@ fn ccd_world_sweep_rotated_offset_box() {
     );
 }
 
+/// Phase 28 — probe collider offset is included in CCD world-center sweep.
+#[test]
+fn ccd_probe_offset_world_center() {
+    use engine_core::transform::Transform;
+    use engine_ecs::world::World as EcsWorld;
+    use engine_math::{Quat, Vec3};
+    use engine_physics::RigidBody;
+    use engine_physics::body::BodyType;
+    use engine_physics::ccd::CcdBody;
+    use engine_physics::collider::{Collider, ColliderShape};
+    use engine_physics::world::PhysicsWorld;
+
+    let mut ecs = EcsWorld::new();
+    // Static wall: thin box in XZ at y=0, tall enough that only offset probe center hits it.
+    let wall = ecs.spawn();
+    ecs.add_component(
+        wall,
+        Transform::from_position_rotation_scale(Vec3::ZERO, Quat::IDENTITY, Vec3::ONE),
+    );
+    ecs.add_component(
+        wall,
+        Collider {
+            shape: ColliderShape::Box {
+                half_extents: Vec3::new(3.0, 0.2, 3.0),
+            },
+            ..Default::default()
+        },
+    );
+    ecs.add_component(
+        wall,
+        RigidBody {
+            body_type: BodyType::Static,
+            ..Default::default()
+        },
+    );
+
+    // Probe body origin at y=-2, collider offset +Y so world center starts at y=-1.
+    let probe = ecs.spawn();
+    let mut tp = Transform::from_position_rotation_scale(
+        Vec3::new(0.0, -2.0, 0.0),
+        Quat::IDENTITY,
+        Vec3::ONE,
+    );
+    tp.SetPosition(Vec3::new(0.0, -2.0, 0.0));
+    ecs.add_component(probe, tp);
+    let mut col = Collider {
+        shape: ColliderShape::Sphere { radius: 0.2 },
+        ..Default::default()
+    };
+    col.offset = Vec3::new(0.0, 1.0, 0.0);
+    ecs.add_component(probe, col);
+    ecs.add_component(
+        probe,
+        RigidBody {
+            body_type: BodyType::Dynamic,
+            linear_velocity: Vec3::new(0.0, 60.0, 0.0),
+            ..Default::default()
+        },
+    );
+    ecs.add_component(
+        probe,
+        CcdBody {
+            enabled: true,
+            activation_threshold: 1.0,
+            ..Default::default()
+        },
+    );
+
+    let mut pw = PhysicsWorld::default();
+    pw.delta_time = 0.1;
+    pw.sub_steps = 1;
+    pw.step(&mut ecs);
+
+    let origin = ecs
+        .get::<Transform>(probe)
+        .map(|t| t.Position())
+        .unwrap_or_default();
+    let offset = Vec3::new(0.0, 1.0, 0.0);
+    let center_y = origin.y + offset.y;
+    // Center should be clamped near wall (y≈0), not tunneled to +4.
+    assert!(
+        center_y < 2.5,
+        "probe world center should stop near wall; origin={origin:?} center_y={center_y}"
+    );
+}
+
 #[test]
 fn ccd_body_default_values() {
     let ccd = CcdBody::default();
