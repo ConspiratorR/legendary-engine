@@ -1,4 +1,4 @@
-# 分支索引 — `phase12-array-authority`（阶段 12–28）
+# 分支索引 — `phase12-array-authority`（阶段 12–30）
 
 合并/推送前核对用。规格均在 `docs/compose/spec/`。**git merge/push 由用户执行。**
 

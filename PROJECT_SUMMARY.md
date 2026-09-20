@@ -100,8 +100,9 @@
 - **Unity 物理桥（阶段 18–20）** — `unity_bridge` / `UnityPhysicsPlugin`；速度/旋转/Sleep；enter/exit + `is_trigger`→`is_sensor`
 - **WASM（阶段 21–22）** — engine-core wasm32 可编译；动态插件 `UnsupportedPlatform`；JSON SceneRuntime 面
 - **物理完善（阶段 23–28）** — Capsule axis/offset；Play MB 回调；旋转 AABB；CCD 障碍+探针感知
-- **分支索引** — `docs/compose/BRANCH_INDEX.md`（阶段 12–28）
-- **仍延后** — dyn MB 进 ECS；WASM SceneRuntime 全量；Android NDK；VR/AR；用户侧 merge/push
+- **分支索引（阶段 29）** — `docs/compose/BRANCH_INDEX.md`
+- **Android 基线（阶段 30）** — `android-activity` `game-activity` feature；本机缺 NDK（见 `docs/android-setup.md`）
+- **仍延后** — dyn MB 进 ECS；WASM SceneRuntime 浏览器全量；**Android 需本机安装 NDK**；VR/AR；用户侧 merge/push
 
 ### 9. 发布 & 生态 (阶段 9)
 - **CI/CD** — GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵)
