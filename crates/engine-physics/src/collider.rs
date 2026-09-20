@@ -88,6 +88,20 @@ impl ColliderShape {
     }
 }
 
+/// World-space AABB half-extents that contain an OBB of `local_half` under `rot`.
+///
+/// `e_i = Σ_j |R_ij| * h_j` via rotating each local axis (phase 26).
+pub fn rotated_aabb_half_extents(rot: Quat, local_half: Vec3) -> Vec3 {
+    let ax = rot * Vec3::new(local_half.x, 0.0, 0.0);
+    let ay = rot * Vec3::new(0.0, local_half.y, 0.0);
+    let az = rot * Vec3::new(0.0, 0.0, local_half.z);
+    Vec3::new(
+        ax.x.abs() + ay.x.abs() + az.x.abs(),
+        ax.y.abs() + ay.y.abs() + az.y.abs(),
+        ax.z.abs() + ay.z.abs() + az.z.abs(),
+    )
+}
+
 /// Collider component.
 #[derive(Debug, Clone)]
 pub struct Collider {
@@ -1446,6 +1460,39 @@ mod tests {
         assert!(
             hit_x.is_none(),
             "X capsule segment is along X at y=0 — must miss sphere at y=1.6"
+        );
+    }
+
+    /// Phase 26 — rotated AABB half-extents expand along world axes.
+    #[test]
+    fn test_rotated_aabb_half_extents() {
+        // Identity: unchanged.
+        let h = Vec3::new(2.0, 0.5, 0.5);
+        let id = rotated_aabb_half_extents(Quat::IDENTITY, h);
+        assert!((id - h).length() < 1e-4);
+
+        // 90° about Z: x↔y extents swap in world AABB.
+        let rot = Quat::from_euler(
+            engine_math::EulerRot::XYZ,
+            0.0,
+            0.0,
+            std::f32::consts::FRAC_PI_2,
+        );
+        let r90 = rotated_aabb_half_extents(rot, h);
+        assert!((r90.x - 0.5).abs() < 1e-3, "world x half={}", r90.x);
+        assert!((r90.y - 2.0).abs() < 1e-3, "world y half={}", r90.y);
+
+        // 45° about Z: both x and y grow vs local 2×0.5 box axis-aligned cases.
+        let rot45 = Quat::from_euler(
+            engine_math::EulerRot::XYZ,
+            0.0,
+            0.0,
+            std::f32::consts::FRAC_PI_4,
+        );
+        let r45 = rotated_aabb_half_extents(rot45, h);
+        assert!(
+            r45.x > 1.4 && r45.y > 1.4,
+            "45° long box should expand both axes; got {r45:?}"
         );
     }
 

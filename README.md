@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 26 — Broadphase 旋转 AABB（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **rotated_aabb_half_extents** | ✅ | 世界 AABB 含刚体旋转，减少旋转漏检 |
+
+规格：`docs/compose/spec/phase26-broadphase-world-aabb.md`。
+
 ### 阶段 25 — Oriented Capsule（同分支）
 
 | 项目 | 状态 | 说明 |

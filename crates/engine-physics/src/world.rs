@@ -442,9 +442,11 @@ impl PhysicsWorld {
             if let Some(transform) = world.get_by_index::<Transform>(idx)
                 && let Some(collider) = world.get_by_index::<Collider>(idx)
             {
-                let half_extents = collider.shape.half_extents();
-                // Broadphase center includes local collider offset (phase 24 critical).
-                let off = collider.offset;
+                let rot = transform.Rotation();
+                let local_half = collider.shape.half_extents();
+                // Phase 26: world AABB of rotated local OBB + rotated offset.
+                let half_extents = crate::collider::rotated_aabb_half_extents(rot, local_half);
+                let off = rot * collider.offset;
                 let off_abs = Vec3::new(off.x.abs(), off.y.abs(), off.z.abs());
                 self.broadphase.insert(BroadphaseEntry {
                     entity_index: idx,
