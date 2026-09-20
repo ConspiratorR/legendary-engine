@@ -499,6 +499,10 @@ fn my_system(app: &App) {
 
 规格：`docs/compose/spec/phase19-physics-polish.md`。
 
+### 阶段 17 — 编辑器动画 SceneData + 文档（见 BRANCH_INDEX）
+
+规格：`docs/compose/spec/phase17-editor-anim-docs.md`。
+
 ### 阶段 18 — Unity 物理桥（同分支）
 
 | 项目 | 状态 | 说明 |
@@ -515,6 +519,10 @@ fn my_system(app: &App) {
 | **unity_animation_demo** | ✅ | clip → prepared SceneData → SceneRuntime tick → World 位姿；`cargo run -p engine-core --example unity_animation_demo` |
 
 规格：`docs/compose/spec/phase16-unity-animation-demo.md`。
+
+### 阶段 14 — engine-scene 动画残余（见 BRANCH_INDEX）
+
+规格：`docs/compose/spec/phase14-engine-scene-residual.md`（`AnimationClipPlayer` + 再导出）。
 
 ### 阶段 15 — Scene I/O 卫生（同分支）
 

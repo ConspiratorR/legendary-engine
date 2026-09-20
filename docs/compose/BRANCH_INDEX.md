@@ -20,7 +20,7 @@
 | 25 | Oriented Capsule `CapsuleAxis` X/Y/Z | `phase25-oriented-capsule.md` | direction→axis；segment 轴向 |
 | 26 | Broadphase 旋转世界 AABB | `phase26-broadphase-world-aabb.md` | `rotated_aabb_half_extents`；center XOR half+offset |
 | 27 | CCD 旋转障碍 AABB | `phase27-ccd-rotated-aabb.md` | ccd_sweep 与 broadphase 同构 |
-| 28 | CCD 探针世界中心 + offset 写回 | `phase28-ccd-probe-awareness.md` | center&lt;0；origin writeback |
+| 28 | CCD 探针世界中心 + offset 写回 | `phase28-ccd-probe-awareness.md` | `center < 0`；origin writeback |
 
 ## 推荐门禁（合并前）
 

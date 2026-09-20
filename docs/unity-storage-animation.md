@@ -88,6 +88,10 @@ cargo run --example runtime_scene_demo -p engine-core
 - `docs/compose/spec/phase15-scene-io-hygiene.md` — prepared 调用收敛
 - `docs/compose/spec/phase16-unity-animation-demo.md` — 动画端到端示例
 - `docs/compose/spec/phase17-editor-anim-docs.md` — 编辑器 SceneData + 本文档
+- `docs/compose/spec/phase18-unity-physics-bridge.md` — 运行时物理桥
+- `docs/compose/spec/phase19-physics-polish.md` — 旋转/Sleep/Enter
+- `docs/compose/spec/phase20-collision-completeness.md` — rel-vel / trigger / e2e
+- `docs/compose/spec/phase21-wasm-engine-core.md` — wasm32 基线
 - `docs/compose/spec/phase22-wasm-scene-runtime.md` — WASM SceneRuntime API 面
 - `docs/compose/spec/phase23-collision-exit-capsule.md` — Exit 回调 + Capsule 桥
 - `docs/compose/spec/phase24-play-callbacks-capsule-offset.md` — Play 回调 + offset
