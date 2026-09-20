@@ -379,7 +379,7 @@ fn my_system(app: &App) {
 | **ScriptableObject** | ✅ | `.asset`+GUID 热重载（App/编辑器轮询）、AssetRef |
 | **P2.4 dual-write 切片** | ✅ | `unity-world-primary`：Transform/Hierarchy/MBInstances 写通；Destroy despawn；CI 双开测 |
 | **光源收集数据源** | ✅ | `light_collect_system` 优先 `TransformProxy`，回退 engine-scene `GlobalTransform` |
-| **双 World 存储权威合并** | ✅ 契约 | dual-write + dual-read + 写权威 + **阶段 12 R1-full**：feature on 时 Identity/Hierarchy/Pose/Scene I/O/MB 元数据权威在 ECS，数组为 cache；dyn MB holder 仍数组；默认 flag **off** |
+| **双 World 存储权威合并** | ✅ 契约 | dual-write + dual-read + 写权威 + **阶段 12–13**：默认 `unity-world-primary` 下 Identity/Hierarchy/Pose/Scene I/O/MB 元数据权威在 ECS，数组为 cache；dyn MB holder 仍数组；opt-out 见 migration-guide |
 
 ### 阶段 11 — R1 权威收敛（分支 `phase11-r1-read`）
 
