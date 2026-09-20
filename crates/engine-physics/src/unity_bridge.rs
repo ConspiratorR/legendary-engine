@@ -894,6 +894,22 @@ mod tests {
             ref other => panic!("expected Capsule shape; got {other:?}"),
         }
 
+        // direction=0 → CapsuleAxis::X through the runtime bridge.
+        if let Some(cc) = runtime
+            .world
+            .GetComponentMut::<engine_core::components::CapsuleCollider>(go)
+        {
+            cc.direction = 0;
+        }
+        sync_physics_from_unity(&mut runtime, &mut ecs);
+        let col = ecs.get::<Collider>(e).unwrap();
+        match &col.shape {
+            crate::collider::ColliderShape::Capsule { axis, .. } => {
+                assert_eq!(*axis, crate::collider::CapsuleAxis::X);
+            }
+            ref other => panic!("expected Capsule; got {other:?}"),
+        }
+
         // Inject enter then exit collision/sensor events and dispatch.
         let oe = runtime.entity_for(other).unwrap();
         {

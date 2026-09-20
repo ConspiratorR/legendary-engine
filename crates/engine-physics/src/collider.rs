@@ -1410,6 +1410,11 @@ mod tests {
     /// Phase 25 — X-axis capsule segment/shape.
     #[test]
     fn test_capsule_axis_x_half_extents() {
+        assert_eq!(CapsuleAxis::from_unity_direction(0), CapsuleAxis::X);
+        assert_eq!(CapsuleAxis::from_unity_direction(1), CapsuleAxis::Y);
+        assert_eq!(CapsuleAxis::from_unity_direction(2), CapsuleAxis::Z);
+        assert_eq!(CapsuleAxis::from_unity_direction(99), CapsuleAxis::Y);
+
         let c = Collider::capsule_with_axis(0.4, 2.0, CapsuleAxis::X);
         match &c.shape {
             ColliderShape::Capsule { axis, .. } => assert_eq!(*axis, CapsuleAxis::X),
@@ -1418,7 +1423,7 @@ mod tests {
         let he = c.shape.half_extents();
         assert!((he.x - (0.4 + 1.0)).abs() < 1e-3);
         assert!((he.y - 0.4).abs() < 1e-3);
-        // Two Y capsules side by side vs X capsule through them — segment differs.
+        // Sphere above origin: Y-capsule segment reaches it; X-capsule does not.
         let hit_y = check_sphere_capsule(
             Vec3::new(0.0, 1.6, 0.0),
             0.3,
@@ -1438,8 +1443,10 @@ mod tests {
             CapsuleAxis::X,
         );
         assert!(hit_y.is_some(), "Y capsule reaches y=1.6 along segment");
-        // X-axis segment is along X at y=0 — sphere at y=1.6 may miss if far.
-        let _ = hit_x;
+        assert!(
+            hit_x.is_none(),
+            "X capsule segment is along X at y=0 — must miss sphere at y=1.6"
+        );
     }
 
     // -----------------------------------------------------------------------
