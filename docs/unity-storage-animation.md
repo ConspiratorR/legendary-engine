@@ -56,7 +56,7 @@ use engine_core::animation_apply::Vec3Keyframe;
 |----|------|------|
 | Unity 组件 | `engine_core::components::Rigidbody` / colliders | 游戏侧数据 |
 | 桥 | `engine_physics::unity_bridge`（`sync_physics_from_unity` / `to_unity` / `unity_physics_fixed_step`） | World ↔ physics ECS |
-| 模拟 | `PhysicsWorld::step`（ECS `Transform` + physics `RigidBody`） | 积分/碰撞；broadphase **旋转感知 AABB**（phase 26） |
+| 模拟 | `PhysicsWorld::step`（ECS `Transform` + physics `RigidBody`） | 积分/碰撞；broadphase/CCD **旋转感知 AABB**（phase 26–27） |
 | 写回 | `World::SetLocalPosition` + `SetLocalRotation`（storage authority；world→local） | 位姿/旋转 |
 | 插件 | `engine_physics::UnityPhysicsPlugin` | FixedUpdate：from → step → **Collision/Trigger Enter+Exit** → to |
 | 碰撞载荷 | `Collision.relative_velocity = va − vb`；sensor → `OnTriggerEnter/Exit`；solid → `OnCollisionEnter/Exit` | phase 20/23 |

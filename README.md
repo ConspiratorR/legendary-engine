@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 27 — CCD 旋转 AABB（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **ccd_sweep 旋转感知** | ✅ | 扫掠障碍 AABB 与 broadphase 同构（rot + offset center） |
+
+规格：`docs/compose/spec/phase27-ccd-rotated-aabb.md`。
+
 ### 阶段 26 — Broadphase 旋转 AABB（同分支）
 
 | 项目 | 状态 | 说明 |

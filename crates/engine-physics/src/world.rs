@@ -323,30 +323,25 @@ impl PhysicsWorld {
             };
 
             let other_radius = other_collider.shape.get_bounding_sphere();
+            let rot = other_transform.Rotation();
+            let off = rot * other_collider.offset;
+            let world_center = other_transform.Position() + off;
 
             let result = match &other_collider.shape {
-                ColliderShape::Sphere { .. } => sweep_sphere_sphere(
-                    start,
-                    end,
-                    radius,
-                    other_transform.Position(),
-                    other_radius,
-                ),
-                ColliderShape::Box { half_extents } => {
-                    let other_pos = other_transform.Position();
-                    let aabb_min = other_pos - *half_extents;
-                    let aabb_max = other_pos + *half_extents;
-                    sweep_sphere_aabb(start, end, radius, aabb_min, aabb_max)
+                ColliderShape::Sphere { .. } => {
+                    sweep_sphere_sphere(start, end, radius, world_center, other_radius)
                 }
-                _ => {
-                    // Capsule/Cylinder: approximate as sphere sweep
-                    sweep_sphere_sphere(
-                        start,
-                        end,
-                        radius,
-                        other_transform.Position(),
-                        other_radius,
-                    )
+                ColliderShape::Box { .. }
+                | ColliderShape::Capsule { .. }
+                | ColliderShape::Cylinder { .. } => {
+                    // Phase 27: rotation-aware world AABB (same composition as broadphase).
+                    let half = crate::collider::rotated_aabb_half_extents(
+                        rot,
+                        other_collider.shape.half_extents(),
+                    );
+                    let aabb_min = world_center - half;
+                    let aabb_max = world_center + half;
+                    sweep_sphere_aabb(start, end, radius, aabb_min, aabb_max)
                 }
             };
 

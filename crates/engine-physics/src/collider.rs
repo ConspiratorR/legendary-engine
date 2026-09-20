@@ -1581,6 +1581,39 @@ mod tests {
         let _ = (a, b);
     }
 
+    /// Phase 27 — CCD world AABB uses same rotated composition as broadphase.
+    #[test]
+    fn test_ccd_rotated_box_aabb_composition() {
+        let rot = Quat::from_euler(
+            engine_math::EulerRot::XYZ,
+            0.0,
+            0.0,
+            std::f32::consts::FRAC_PI_2,
+        );
+        let local = Vec3::new(2.0, 0.5, 0.5);
+        let half = rotated_aabb_half_extents(rot, local);
+        // 90° Z: world x half ≈ 0.5, world y half ≈ 2.0
+        assert!((half.x - 0.5).abs() < 1e-3);
+        assert!((half.y - 2.0).abs() < 1e-3);
+
+        // Sphere sweeps along +Y through a long box rotated to be Y-aligned:
+        // unrotated local AABB (2,0.5,0.5) would miss a sweep at x=0,y from -3 to 3
+        // only if the box is thin in Y — rotated AABB (0.5,2,0.5) should catch it.
+        let aabb_min = Vec3::new(0.0, 0.0, 0.0) - half;
+        let aabb_max = Vec3::new(0.0, 0.0, 0.0) + half;
+        let sweep = crate::ccd::sweep_sphere_aabb(
+            Vec3::new(0.0, -3.0, 0.0),
+            Vec3::new(0.0, 3.0, 0.0),
+            0.1,
+            aabb_min,
+            aabb_max,
+        );
+        assert!(
+            sweep.hit,
+            "rotated Y-long AABB must be hit by vertical sweep"
+        );
+    }
+
     // -----------------------------------------------------------------------
     // Dispatcher integration (via check_collision)
     // -----------------------------------------------------------------------
