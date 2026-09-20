@@ -1515,7 +1515,8 @@ impl EditorState {
             }
 
             if let Some(sc) = host.runtime.world.GetComponent::<SphereCollider>(go) {
-                let col = Collider::sphere(sc.radius.max(0.01));
+                let mut col = Collider::sphere(sc.radius.max(0.01));
+                col.is_sensor = sc.is_trigger;
                 if host.ecs.get::<Collider>(entity).is_some() {
                     *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
                 } else {
@@ -1523,7 +1524,8 @@ impl EditorState {
                 }
             } else if let Some(bc) = host.runtime.world.GetComponent::<BoxCollider>(go) {
                 let h = bc.size * 0.5;
-                let col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
+                let mut col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
+                col.is_sensor = bc.is_trigger;
                 if host.ecs.get::<Collider>(entity).is_some() {
                     *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
                 } else {

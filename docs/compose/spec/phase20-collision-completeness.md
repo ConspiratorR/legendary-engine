@@ -10,20 +10,21 @@ commits: 8c33b95..HEAD
 
 ## Report
 
-**What was built** — Collision dispatch now fills `Collision.relative_velocity` from physics body linear-velocity difference (`va − vb`). `World::invoke_trigger_enter` added; `UnityPhysicsPlugin` dispatches `SensorEvent.is_enter` to `MonoBehaviour::OnTriggerEnter`. Bridge e2e test drops a dynamic sphere onto a kinematic floor through `sync_*` + `dispatch_unity_collision_enters_for_test` and asserts HitCounter increments. Docs updated.
+**What was built** — After review criticals: Unity `is_trigger` maps to physics `Collider.is_sensor` (runtime + editor bridges); `PhysicsWorld::step` clears/samples gameplay collision/sensor events **once per frame** with sub-step enter dedupe (`frame_entered_*`) so enter events survive multi-substep; dispatch fills `relative_velocity = va − vb` from ECS bodies; `World::invoke_trigger_enter` + sensor dispatch to `OnTriggerEnter`; e2e tests for solid collision (hit count) and trigger volume (`is_sensor` assert + OnTrigger hits); unit test asserts relative_velocity ±3 on X for known body velocities.
 
-**Verification**:
+**Verification** (after critical fixes):
 
 | Command | Result |
 |---------|--------|
-| `cargo test -p engine-physics --lib` | PASS **76** (incl. e2e collision dispatch) |
+| `cargo test -p engine-physics --lib` | PASS **78** |
 | `cargo test -p engine-core --lib` | PASS 261 |
 | `cargo test -p engine-editor --test editor_tests` | PASS 61 |
+| `cargo fmt -p engine-physics -p engine-core -p engine-editor --check` | PASS |
 
 **Journey log** —
-1. Sensor events share the same plugin dispatch path as solid collisions.
-2. e2e uses kinematic floor + dynamic ball; hit count on either GO is valid.
-3. `dispatch_unity_collision_enters_for_test` is a thin public alias for unit tests.
+1. Sub-steps used to `clear()` sensor/collision enter events; only the last substep remained with `is_enter=false` — frame-level event lifetime required.
+2. Unity trigger volumes never reached physics until `is_trigger` → `is_sensor` was copied in both bridges.
+3. e2e solid-collision relative_velocity is timing-sensitive; unit test with injected event is the reliable oracle.
 4. git merge/push not handled per user preference.
 
 ## [S1] Problem

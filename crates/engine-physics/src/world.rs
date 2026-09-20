@@ -116,6 +116,10 @@ pub struct PhysicsWorld {
     previous_collision_pairs: HashSet<PairKey>,
     /// Set of sensor pairs that were overlapping last frame.
     previous_sensor_pairs: HashSet<PairKey>,
+    /// Pairs that already emitted an enter event this frame (sub-step dedupe).
+    frame_entered_collision: HashSet<PairKey>,
+    /// Sensor pairs that already emitted enter this frame.
+    frame_entered_sensor: HashSet<PairKey>,
     /// Joint solver for hinge, ball-socket, and spring constraints.
     pub joint_solver: JointSolver,
 }
@@ -136,6 +140,8 @@ impl Default for PhysicsWorld {
             contact_solver: ContactSolver::new(),
             previous_collision_pairs: HashSet::new(),
             previous_sensor_pairs: HashSet::new(),
+            frame_entered_collision: HashSet::new(),
+            frame_entered_sensor: HashSet::new(),
             joint_solver: JointSolver::new(),
         }
     }
@@ -164,6 +170,12 @@ impl PhysicsWorld {
         // Update counts
         self.body_count = world.component_entities::<RigidBody>().len();
         self.collider_count = world.component_entities::<Collider>().len();
+
+        // Gameplay events are per-frame; sub-steps must not clear enter flags.
+        self.collision_events.clear();
+        self.sensor_events.clear();
+        self.frame_entered_collision.clear();
+        self.frame_entered_sensor.clear();
 
         // Apply forces once per frame (not per sub-step)
         self.apply_forces(world, self.delta_time);
@@ -411,9 +423,8 @@ impl PhysicsWorld {
 
     /// Detect collisions using spatial hash broadphase + parallel narrow-phase.
     fn detect_collisions(&mut self, world: &World) {
+        // Do not clear gameplay event vectors here — `step` owns frame lifetime.
         self.collisions.clear();
-        self.collision_events.clear();
-        self.sensor_events.clear();
         self.broadphase.clear();
 
         let collider_indices = world.component_entities::<Collider>();
@@ -511,7 +522,6 @@ impl PhysicsWorld {
 
         // Split results into collisions and sensor events with enter/exit tracking
         self.collisions.clear();
-        self.sensor_events.clear();
 
         let mut current_collision_pairs = HashSet::new();
         let mut current_sensor_pairs = HashSet::new();
@@ -520,23 +530,31 @@ impl PhysicsWorld {
             match result {
                 NarrowResult::Collision(a, b, info) => {
                     let key = PairKey::new(a, b);
-                    let is_enter = !self.previous_collision_pairs.contains(&key);
+                    let is_enter = !self.previous_collision_pairs.contains(&key)
+                        && !self.frame_entered_collision.contains(&key);
                     current_collision_pairs.insert(key);
-
-                    self.collision_events.push(CollisionEvent {
-                        entity_a: a,
-                        entity_b: b,
-                        normal: info.normal,
-                        depth: info.depth,
-                        point: info.point,
-                        is_enter,
-                    });
+                    if is_enter {
+                        self.frame_entered_collision.insert(key);
+                        self.collision_events.push(CollisionEvent {
+                            entity_a: a,
+                            entity_b: b,
+                            normal: info.normal,
+                            depth: info.depth,
+                            point: info.point,
+                            is_enter: true,
+                        });
+                    }
                     self.collisions.push((a, b, info));
                 }
                 NarrowResult::Sensor(a, b) => {
                     let key = PairKey::new(a, b);
-                    let is_enter = !self.previous_sensor_pairs.contains(&key);
+                    let is_enter = !self.previous_sensor_pairs.contains(&key)
+                        && !self.frame_entered_sensor.contains(&key);
                     current_sensor_pairs.insert(key);
+                    if !is_enter {
+                        continue;
+                    }
+                    self.frame_entered_sensor.insert(key);
 
                     // Determine which is the sensor
                     let (sensor_e, other_e) = {
@@ -550,7 +568,7 @@ impl PhysicsWorld {
                         sensor_entity: sensor_e,
                         other_entity: other_e,
                         overlapping: true,
-                        is_enter,
+                        is_enter: true,
                     });
                 }
             }

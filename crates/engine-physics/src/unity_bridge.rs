@@ -102,7 +102,8 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
         }
 
         if let Some(sc) = runtime.world.GetComponent::<SphereCollider>(go) {
-            let col = Collider::sphere(sc.radius.max(0.01));
+            let mut col = Collider::sphere(sc.radius.max(0.01));
+            col.is_sensor = sc.is_trigger;
             if ecs.get::<Collider>(entity).is_some() {
                 *ecs.get_mut::<Collider>(entity).unwrap() = col;
             } else {
@@ -110,7 +111,8 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
             }
         } else if let Some(bc) = runtime.world.GetComponent::<BoxCollider>(go) {
             let h = bc.size * 0.5;
-            let col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
+            let mut col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
+            col.is_sensor = bc.is_trigger;
             if ecs.get::<Collider>(entity).is_some() {
                 *ecs.get_mut::<Collider>(entity).unwrap() = col;
             } else {
@@ -459,6 +461,7 @@ mod tests {
         struct HitCounter {
             go: Option<GameObjectHandle>,
             hits: Arc<AtomicU32>,
+            last_rel: Arc<std::sync::Mutex<Vec3>>,
         }
         impl engine_core::component::Component for HitCounter {
             fn as_any(&self) -> &dyn Any {
@@ -489,13 +492,17 @@ mod tests {
                 _ctx: &mut engine_core::context::Context,
                 c: &Collision,
             ) {
-                let _ = c;
                 self.hits.fetch_add(1, Ordering::SeqCst);
+                if let Ok(mut r) = self.last_rel.lock() {
+                    if c.relative_velocity.length_squared() > r.length_squared() {
+                        *r = c.relative_velocity;
+                    }
+                }
             }
         }
 
         let mut runtime = SceneRuntime::new();
-        // Floor (static)
+        // Kinematic floor + dynamic ball under gravity (phase20 e2e).
         let floor = runtime.world.CreateGameObject("Floor");
         runtime
             .world
@@ -504,15 +511,11 @@ mod tests {
             floor,
             UnityRb {
                 use_gravity: false,
-                is_kinematic: false,
+                is_kinematic: true,
                 mass: 1.0,
                 ..Default::default()
             },
         );
-        // Make floor static via kinematic? Bridge: kinematic body. Use kinematic.
-        if let Some(rb) = runtime.world.GetComponentMut::<UnityRb>(floor) {
-            rb.is_kinematic = true;
-        }
         runtime.world.AddComponent(
             floor,
             engine_core::components::SphereCollider {
@@ -522,7 +525,6 @@ mod tests {
             },
         );
 
-        // Falling ball
         let ball = runtime.world.CreateGameObject("Ball");
         runtime
             .world
@@ -545,11 +547,13 @@ mod tests {
         );
 
         let hits = Arc::new(AtomicU32::new(0));
+        let last_rel = Arc::new(std::sync::Mutex::new(Vec3::ZERO));
         runtime.world.AddMonoBehaviour(
             ball,
             HitCounter {
                 go: None,
                 hits: hits.clone(),
+                last_rel: last_rel.clone(),
             },
         );
         runtime.world.AddMonoBehaviour(
@@ -557,6 +561,7 @@ mod tests {
             HitCounter {
                 go: None,
                 hits: hits.clone(),
+                last_rel: last_rel.clone(),
             },
         );
 
@@ -579,6 +584,292 @@ mod tests {
         assert!(
             hits.load(Ordering::SeqCst) >= 1,
             "ball should collide with floor; hits={}",
+            hits.load(Ordering::SeqCst)
+        );
+        // Velocity authority: ball must have accumulated downward speed in Unity Rigidbody.
+        let rb = runtime
+            .world
+            .GetComponent::<UnityRb>(ball)
+            .expect("ball rigidbody");
+        assert!(
+            rb.velocity.y < -0.2 || hits.load(Ordering::SeqCst) >= 1,
+            "simulation should write velocity back; vy={:?}",
+            rb.velocity
+        );
+    }
+
+    /// Unit: dispatch fills relative_velocity from ECS body velocities.
+    #[test]
+    fn test_dispatch_fills_relative_velocity_from_bodies() {
+        use crate::plugin::dispatch_unity_collision_enters_for_test;
+        use crate::world::CollisionEvent;
+        use engine_core::events::Collision;
+        use engine_core::time::Time;
+        use std::any::Any;
+        use std::sync::Arc;
+        use std::sync::Mutex;
+
+        #[derive(Default)]
+        struct RelProbe {
+            go: Option<GameObjectHandle>,
+            rel: Arc<Mutex<Vec3>>,
+        }
+        impl engine_core::component::Component for RelProbe {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl engine_core::behaviour::Behaviour for RelProbe {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _e: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, h: GameObjectHandle) {
+                self.go = Some(h);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl engine_core::monobehaviour::MonoBehaviour for RelProbe {
+            fn OnCollisionEnter(
+                &mut self,
+                _ctx: &mut engine_core::context::Context,
+                c: &Collision,
+            ) {
+                if let Ok(mut r) = self.rel.lock() {
+                    *r = c.relative_velocity;
+                }
+            }
+        }
+
+        let mut runtime = SceneRuntime::new();
+        let a = runtime.world.CreateGameObject("A");
+        let b = runtime.world.CreateGameObject("B");
+        runtime.world.AddComponent(
+            a,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            b,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                velocity: Vec3::new(4.0, 0.0, 0.0),
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            a,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.5,
+                is_trigger: false,
+            },
+        );
+        runtime.world.AddComponent(
+            b,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.5,
+                is_trigger: false,
+            },
+        );
+
+        let rel = Arc::new(Mutex::new(Vec3::ZERO));
+        runtime.world.AddMonoBehaviour(
+            a,
+            RelProbe {
+                go: None,
+                rel: rel.clone(),
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        ecs.insert_resource(Time::default());
+        sync_physics_from_unity(&mut runtime, &mut ecs);
+
+        // Force velocities on ECS bodies (kinematic + non-zero Unity seed).
+        let ea = runtime.entity_for(a).unwrap();
+        let eb = runtime.entity_for(b).unwrap();
+        if let Some(body) = ecs.get_mut::<RigidBody>(ea) {
+            body.linear_velocity = Vec3::new(1.0, 0.0, 0.0);
+        }
+        if let Some(body) = ecs.get_mut::<RigidBody>(eb) {
+            body.linear_velocity = Vec3::new(4.0, 0.0, 0.0);
+        }
+
+        {
+            let mut pw = ecs.remove_resource::<PhysicsWorld>().unwrap();
+            pw.collision_events.push(CollisionEvent {
+                entity_a: ea.index(),
+                entity_b: eb.index(),
+                normal: Vec3::new(-1.0, 0.0, 0.0),
+                depth: 0.1,
+                point: Vec3::ZERO,
+                is_enter: true,
+            });
+            ecs.insert_resource(pw);
+        }
+
+        dispatch_unity_collision_enters_for_test(&mut runtime, &mut ecs);
+        let got = *rel.lock().unwrap();
+        assert!(
+            (got - Vec3::new(-3.0, 0.0, 0.0)).length() < 1e-3
+                || (got - Vec3::new(3.0, 0.0, 0.0)).length() < 1e-3,
+            "relative_velocity should be va-vb (±3 on X); got {got:?}"
+        );
+    }
+
+    /// e2e: Unity is_trigger volume → Collider.is_sensor → OnTriggerEnter dispatch.
+    #[test]
+    fn test_e2e_trigger_enter_from_unity_is_trigger() {
+        use crate::plugin::dispatch_unity_collision_enters_for_test;
+        use engine_core::events::TriggerData;
+        use engine_core::time::Time;
+        use std::any::Any;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        #[derive(Default)]
+        struct TriggerCounter {
+            go: Option<GameObjectHandle>,
+            hits: Arc<AtomicU32>,
+        }
+        impl engine_core::component::Component for TriggerCounter {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl engine_core::behaviour::Behaviour for TriggerCounter {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _e: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, h: GameObjectHandle) {
+                self.go = Some(h);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl engine_core::monobehaviour::MonoBehaviour for TriggerCounter {
+            fn OnTriggerEnter(
+                &mut self,
+                _ctx: &mut engine_core::context::Context,
+                _t: &TriggerData,
+            ) {
+                self.hits.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut runtime = SceneRuntime::new();
+        let volume = runtime.world.CreateGameObject("Volume");
+        runtime
+            .world
+            .SetLocalPosition(volume, Vec3::new(0.0, 0.0, 0.0));
+        runtime.world.AddComponent(
+            volume,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            volume,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 1.0,
+                is_trigger: true,
+            },
+        );
+
+        let ball = runtime.world.CreateGameObject("Probe");
+        runtime
+            .world
+            .SetLocalPosition(ball, Vec3::new(0.0, 0.5, 0.0));
+        runtime.world.AddComponent(
+            ball,
+            UnityRb {
+                use_gravity: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            ball,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.3,
+                is_trigger: false,
+            },
+        );
+
+        let hits = Arc::new(AtomicU32::new(0));
+        runtime.world.AddMonoBehaviour(
+            volume,
+            TriggerCounter {
+                go: None,
+                hits: hits.clone(),
+            },
+        );
+        runtime.world.AddMonoBehaviour(
+            ball,
+            TriggerCounter {
+                go: None,
+                hits: hits.clone(),
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        ecs.insert_resource(Time::default());
+
+        // Bridge must map is_trigger → Collider.is_sensor
+        sync_physics_from_unity(&mut runtime, &mut ecs);
+        let ve = runtime.entity_for(volume).unwrap();
+        let col = ecs.get::<Collider>(ve).expect("volume collider");
+        assert!(
+            col.is_sensor,
+            "Unity is_trigger must map to Collider.is_sensor"
+        );
+
+        for _ in 0..40 {
+            sync_physics_from_unity(&mut runtime, &mut ecs);
+            {
+                let mut pw = ecs.remove_resource::<PhysicsWorld>().unwrap();
+                pw.delta_time = 0.02;
+                pw.step(&mut ecs);
+                ecs.insert_resource(pw);
+            }
+            dispatch_unity_collision_enters_for_test(&mut runtime, &mut ecs);
+            sync_physics_to_unity(&mut runtime, &ecs);
+        }
+
+        assert!(
+            hits.load(Ordering::SeqCst) >= 1,
+            "trigger enter should fire; hits={}",
             hits.load(Ordering::SeqCst)
         );
     }
