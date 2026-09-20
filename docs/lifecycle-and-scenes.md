@@ -85,7 +85,7 @@ rt.unload_scene(handle)?;
 
 | Unity API | RustEngine |
 |-----------|------------|
-| `SceneManager.LoadScene` | `SceneManager::LoadSceneJson` / `LoadSceneFromFile` |
+| `SceneManager.LoadScene` | `SceneManager::LoadSceneJson`（**WASM 推荐**）/ `LoadSceneFromFile`（native only） |
 | `LoadSceneMode.Single/Additive` | `LoadSceneMode::{Single, Additive}` |
 | `SceneManager.UnloadScene` | `UnloadSceneWithWorld`（销毁场景根） |
 | `Object.DontDestroyOnLoad` | `World::DontDestroyOnLoad`，卸载时跳过 |

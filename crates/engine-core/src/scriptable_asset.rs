@@ -183,9 +183,9 @@ pub fn load_scriptable_object<T: ScriptableObject>(asset_path: &Path) -> Result<
     #[cfg(target_arch = "wasm32")]
     {
         let _ = asset_path;
-        return Err(SoAssetError::NotFound(
-            "load_scriptable_object unsupported on WASM".to_string(),
-        ));
+        return Err(SoAssetError::Io(std::io::Error::other(
+            "load_scriptable_object unsupported on WASM",
+        )));
     }
     #[cfg(not(target_arch = "wasm32"))]
     {

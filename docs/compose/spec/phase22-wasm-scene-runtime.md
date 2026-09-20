@@ -22,8 +22,9 @@ commits: 6da4162..HEAD
 **Journey log** —
 1. wasm32 compiles `std::fs` but has no reliable host FS — gate file APIs explicitly.
 2. SceneRuntime gameplay on WASM = embed/load **JSON strings**, not disk paths.
-3. Browser WebGL SceneRuntime full remains later R3 work.
-4. git merge/push not handled per user preference.
+3. Review C1: native `poll_hot_reload` must still bump mtime on reload Err (no spin).
+4. Review C2: WASM SO load uses `SoAssetError::Io`, not `NotFound`.
+5. Browser WebGL SceneRuntime full remains later R3 work.
 
 ## [S1] Problem
 WASM compiles SceneRuntime but file-based scene/asset APIs are unusable without explicit gates/docs.

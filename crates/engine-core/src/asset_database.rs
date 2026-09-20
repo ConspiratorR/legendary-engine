@@ -376,7 +376,11 @@ impl AssetDatabase {
                         events.push(AssetReloadEvent { guid, name, path });
                     }
                     Err(err) => {
+                        // Keep old data; still bump mtime so we don't spin (native semantics).
                         log::warn!("Asset hot-reload failed for {}: {err}", path.display());
+                        if let Some(w) = self.watches.get_mut(&guid) {
+                            w.mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+                        }
                     }
                 }
             }
