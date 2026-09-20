@@ -87,6 +87,9 @@ cargo run --example complete_demo -p engine-core
 
 # 粒子系统演示
 cargo run --example particle_demo -p engine-core
+
+# Unity 动画权威路径（clip → SceneData → SceneRuntime → World 位姿）
+cargo run --example unity_animation_demo -p engine-core
 ```
 
 ### 俄罗斯方块
@@ -400,6 +403,14 @@ fn my_system(app: &App) {
 | **dyn MB 进 ECS** | ❌ | 明确不做 |
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
+
+### 阶段 16 — Unity 动画权威示例（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **unity_animation_demo** | ✅ | clip → prepared SceneData → SceneRuntime tick → World 位姿；`cargo run -p engine-core --example unity_animation_demo` |
+
+规格：`docs/compose/spec/phase16-unity-animation-demo.md`。
 
 ### 阶段 15 — Scene I/O 卫生（同分支）
 
