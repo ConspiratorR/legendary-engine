@@ -64,7 +64,11 @@ fn main() {
     rt.mark_needs_awake();
 
     let hero = rt.world.Find("AnimHero").expect("AnimHero");
-    let start = rt.world.GetTransform(hero).expect("transform").LocalPosition();
+    let start = rt
+        .world
+        .GetTransform(hero)
+        .expect("transform")
+        .LocalPosition();
     println!("Pose after load: {start:?}");
 
     // 4. Drive lifecycle frames so AnimationClipPlayer::Update runs.
@@ -79,20 +83,24 @@ fn main() {
         }
     }
 
-    let end = rt.world.GetTransform(hero).expect("transform").LocalPosition();
+    let end = rt
+        .world
+        .GetTransform(hero)
+        .expect("transform")
+        .LocalPosition();
     println!("\nPose after ticks: {end:?}");
-    println!(
-        "Delta X = {:.3} (clip target ~8.0 at t=1)",
-        end.x - start.x
-    );
+    println!("Delta X = {:.3} (clip target ~8.0 at t=1)", end.x - start.x);
 
-    // 5. Authority assertion: World pose must have been written by the player path.
+    // 5. Authority assertions: World pose written by the player path.
     assert!(
         end.x > start.x + 0.5,
         "AnimationClipPlayer should advance World local pose via apply_clip_pose; start={start:?} end={end:?}"
     );
-
-    // Non-looping clip: after duration, player stops; pose should sit at sampled end.
-    println!("playing would stop at clip end when time >= duration (non-looping)");
+    assert!(
+        (end.x - 8.0).abs() < 0.05,
+        "non-looping clip should park near track end (8.0), got {}",
+        end.x
+    );
+    println!("Non-looping clip parked at duration (playing stops when time >= duration).");
     println!("\n=== Demo Complete ===");
 }
