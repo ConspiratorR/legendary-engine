@@ -407,6 +407,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 23 — Exit 回调 + Capsule 桥（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **OnCollisionExit / OnTriggerExit** | ✅ | 插件分发 exit 事件 |
+| **CapsuleCollider 桥** | ✅ | `is_trigger` → `Collider::capsule` + `is_sensor` |
+
+规格：`docs/compose/spec/phase23-collision-exit-capsule.md`。
+
 ### 阶段 22 — WASM SceneRuntime API 面（同分支）
 
 | 项目 | 状态 | 说明 |

@@ -2041,6 +2041,62 @@ impl World {
         self.monobehaviours[index] = Some(monos);
     }
 
+    /// Dispatch `OnCollisionExit` on enabled MonoBehaviours of `handle`.
+    pub fn invoke_collision_exit(
+        &mut self,
+        handle: GameObjectHandle,
+        collision: crate::events::Collision,
+        time: Time,
+        frame: u64,
+        events: &mut crate::event::EventBus,
+    ) {
+        if !self.is_valid(handle) {
+            return;
+        }
+        let index = handle.index() as usize;
+        let Some(mut monos) = self.monobehaviours[index].take() else {
+            return;
+        };
+        {
+            let mut ctx = Context::new(self, time.clone(), frame, events);
+            for mono in monos.iter_mut() {
+                if !mono.Enabled() {
+                    continue;
+                }
+                mono.GetMut().OnCollisionExit(&mut ctx, &collision);
+            }
+        }
+        self.monobehaviours[index] = Some(monos);
+    }
+
+    /// Dispatch `OnTriggerExit` on enabled MonoBehaviours of `handle`.
+    pub fn invoke_trigger_exit(
+        &mut self,
+        handle: GameObjectHandle,
+        trigger: crate::events::TriggerData,
+        time: Time,
+        frame: u64,
+        events: &mut crate::event::EventBus,
+    ) {
+        if !self.is_valid(handle) {
+            return;
+        }
+        let index = handle.index() as usize;
+        let Some(mut monos) = self.monobehaviours[index].take() else {
+            return;
+        };
+        {
+            let mut ctx = Context::new(self, time.clone(), frame, events);
+            for mono in monos.iter_mut() {
+                if !mono.Enabled() {
+                    continue;
+                }
+                mono.GetMut().OnTriggerExit(&mut ctx, &trigger);
+            }
+        }
+        self.monobehaviours[index] = Some(monos);
+    }
+
     /// Get active state (matches `GameObject.activeSelf`).
     ///
     /// With `unity-world-primary`, prefers ECS `GameObjectActive` when linked.

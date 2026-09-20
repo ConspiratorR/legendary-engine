@@ -152,7 +152,7 @@ fn dispatch_unity_collision_enters(
     let frame = time.frameCount();
     let mut bus = engine_core::event::EventBus::new();
 
-    for ev in events.iter().filter(|e| e.is_enter) {
+    for ev in events.iter() {
         let Some(a) = go_for_physics_id(runtime, ev.entity_a) else {
             continue;
         };
@@ -175,13 +175,23 @@ fn dispatch_unity_collision_enters(
                 point: ev.point,
                 relative_velocity: rel,
             };
-            runtime
-                .world
-                .invoke_collision_enter(this, collision, time.clone(), frame, &mut bus);
+            if ev.is_enter {
+                runtime.world.invoke_collision_enter(
+                    this,
+                    collision,
+                    time.clone(),
+                    frame,
+                    &mut bus,
+                );
+            } else {
+                runtime
+                    .world
+                    .invoke_collision_exit(this, collision, time.clone(), frame, &mut bus);
+            }
         }
     }
 
-    for ev in sensor_events.iter().filter(|e| e.is_enter) {
+    for ev in sensor_events.iter() {
         let Some(a) = go_for_physics_id(runtime, ev.sensor_entity) else {
             continue;
         };
@@ -190,9 +200,15 @@ fn dispatch_unity_collision_enters(
         };
         for (this, other) in [(a, b), (b, a)] {
             let trigger = engine_core::events::TriggerData { other };
-            runtime
-                .world
-                .invoke_trigger_enter(this, trigger, time.clone(), frame, &mut bus);
+            if ev.is_enter {
+                runtime
+                    .world
+                    .invoke_trigger_enter(this, trigger, time.clone(), frame, &mut bus);
+            } else {
+                runtime
+                    .world
+                    .invoke_trigger_exit(this, trigger, time.clone(), frame, &mut bus);
+            }
         }
     }
 }

@@ -1531,6 +1531,18 @@ impl EditorState {
                 } else {
                     host.ecs.add_component(entity, col);
                 }
+            } else if let Some(cc) = host
+                .runtime
+                .world
+                .GetComponent::<engine_core::components::CapsuleCollider>(go)
+            {
+                let mut col = Collider::capsule(cc.radius.max(0.01), cc.height.max(0.02));
+                col.is_sensor = cc.is_trigger;
+                if host.ecs.get::<Collider>(entity).is_some() {
+                    *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
+                } else {
+                    host.ecs.add_component(entity, col);
+                }
             }
         }
     }

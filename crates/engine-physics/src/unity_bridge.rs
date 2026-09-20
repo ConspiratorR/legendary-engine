@@ -118,6 +118,17 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
             } else {
                 ecs.add_component(entity, col);
             }
+        } else if let Some(cc) = runtime
+            .world
+            .GetComponent::<engine_core::components::CapsuleCollider>(go)
+        {
+            let mut col = Collider::capsule(cc.radius.max(0.01), cc.height.max(0.02));
+            col.is_sensor = cc.is_trigger;
+            if ecs.get::<Collider>(entity).is_some() {
+                *ecs.get_mut::<Collider>(entity).unwrap() = col;
+            } else {
+                ecs.add_component(entity, col);
+            }
         }
         synced += 1;
     }
@@ -734,7 +745,185 @@ mod tests {
         );
     }
 
-    /// e2e: Unity is_trigger volume → Collider.is_sensor → OnTriggerEnter dispatch.
+    /// Exit + capsule: invoke_collision_exit / CapsuleCollider → Collider capsule + is_trigger.
+    #[test]
+    fn test_capsule_sync_and_invoke_exit_counts() {
+        use crate::plugin::dispatch_unity_collision_enters_for_test;
+        use crate::world::CollisionEvent;
+        use engine_core::components::CapsuleCollider;
+        use engine_core::events::{Collision, TriggerData};
+        use engine_core::time::Time;
+        use std::any::Any;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        #[derive(Default)]
+        struct ExitProbe {
+            go: Option<GameObjectHandle>,
+            col_exit: Arc<AtomicU32>,
+            trg_exit: Arc<AtomicU32>,
+        }
+        impl engine_core::component::Component for ExitProbe {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl engine_core::behaviour::Behaviour for ExitProbe {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _e: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, h: GameObjectHandle) {
+                self.go = Some(h);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl engine_core::monobehaviour::MonoBehaviour for ExitProbe {
+            fn OnCollisionExit(
+                &mut self,
+                _ctx: &mut engine_core::context::Context,
+                _c: &Collision,
+            ) {
+                self.col_exit.fetch_add(1, Ordering::SeqCst);
+            }
+            fn OnTriggerExit(
+                &mut self,
+                _ctx: &mut engine_core::context::Context,
+                _t: &TriggerData,
+            ) {
+                self.trg_exit.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut runtime = SceneRuntime::new();
+        let go = runtime.world.CreateGameObject("Cap");
+        runtime.world.SetLocalPosition(go, Vec3::new(0.0, 0.0, 0.0));
+        runtime.world.AddComponent(
+            go,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            go,
+            CapsuleCollider {
+                center: Vec3::ZERO,
+                radius: 0.4,
+                height: 2.0,
+                direction: 1,
+                is_trigger: true,
+            },
+        );
+
+        let other = runtime.world.CreateGameObject("Other");
+        runtime.world.AddComponent(
+            other,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            other,
+            SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.2,
+                is_trigger: false,
+            },
+        );
+
+        let col_exit = Arc::new(AtomicU32::new(0));
+        let trg_exit = Arc::new(AtomicU32::new(0));
+        runtime.world.AddMonoBehaviour(
+            go,
+            ExitProbe {
+                go: None,
+                col_exit: col_exit.clone(),
+                trg_exit: trg_exit.clone(),
+            },
+        );
+        runtime.world.AddMonoBehaviour(
+            other,
+            ExitProbe {
+                go: None,
+                col_exit: col_exit.clone(),
+                trg_exit: trg_exit.clone(),
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        ecs.insert_resource(Time::default());
+        sync_physics_from_unity(&mut runtime, &mut ecs);
+
+        let e = runtime.entity_for(go).unwrap();
+        let col = ecs.get::<Collider>(e).expect("capsule collider");
+        assert!(
+            col.is_sensor,
+            "CapsuleCollider.is_trigger must map to Collider.is_sensor"
+        );
+
+        // Inject enter then exit collision/sensor events and dispatch.
+        let oe = runtime.entity_for(other).unwrap();
+        {
+            let mut pw = ecs.remove_resource::<PhysicsWorld>().unwrap();
+            pw.collision_events.push(CollisionEvent {
+                entity_a: e.index(),
+                entity_b: oe.index(),
+                normal: Vec3::new(0.0, 1.0, 0.0),
+                depth: 0.05,
+                point: Vec3::ZERO,
+                is_enter: true,
+            });
+            pw.collision_events.push(CollisionEvent {
+                entity_a: e.index(),
+                entity_b: oe.index(),
+                normal: Vec3::ZERO,
+                depth: 0.0,
+                point: Vec3::ZERO,
+                is_enter: false,
+            });
+            pw.sensor_events.push(crate::world::SensorEvent {
+                sensor_entity: e.index(),
+                other_entity: oe.index(),
+                overlapping: true,
+                is_enter: true,
+            });
+            pw.sensor_events.push(crate::world::SensorEvent {
+                sensor_entity: e.index(),
+                other_entity: oe.index(),
+                overlapping: false,
+                is_enter: false,
+            });
+            ecs.insert_resource(pw);
+        }
+
+        dispatch_unity_collision_enters_for_test(&mut runtime, &mut ecs);
+
+        assert!(
+            col_exit.load(Ordering::SeqCst) >= 2,
+            "collision enter+exit should fire both sides; col_exit={}",
+            col_exit.load(Ordering::SeqCst)
+        );
+        assert!(
+            trg_exit.load(Ordering::SeqCst) >= 2,
+            "trigger enter+exit should fire both sides; trg_exit={}",
+            trg_exit.load(Ordering::SeqCst)
+        );
+    }
     #[test]
     fn test_e2e_trigger_enter_from_unity_is_trigger() {
         use crate::plugin::dispatch_unity_collision_enters_for_test;
