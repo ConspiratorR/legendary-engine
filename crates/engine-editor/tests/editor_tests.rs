@@ -305,7 +305,132 @@ fn open_scene_prefers_runtime_twin() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Phase 17 — AnimationClipPlayer survives editor SceneData prepared export/load.
+/// Phase 24 — Play host dispatches physics collision callbacks + capsule offset.
+#[test]
+fn play_host_physics_callbacks_and_capsule_offset() {
+    use engine_core::components::{CapsuleCollider, Rigidbody};
+    use engine_core::events::Collision;
+    use engine_math::Vec3;
+    use std::any::Any;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    #[derive(Default)]
+    struct Hit {
+        go: Option<engine_core::GameObjectHandle>,
+        n: Arc<AtomicU32>,
+    }
+    impl engine_core::Component for Hit {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+        fn as_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+    }
+    impl engine_core::Behaviour for Hit {
+        fn Enabled(&self) -> bool {
+            true
+        }
+        fn SetEnabled(&mut self, _e: bool) {}
+        fn IsActiveAndEnabled(&self) -> bool {
+            true
+        }
+        fn set_gameobject(&mut self, h: engine_core::GameObjectHandle) {
+            self.go = Some(h);
+        }
+        fn gameobject_handle(&self) -> Option<engine_core::GameObjectHandle> {
+            self.go
+        }
+    }
+    impl engine_core::monobehaviour::MonoBehaviour for Hit {
+        fn OnCollisionEnter(&mut self, _ctx: &mut engine_core::Context, _c: &Collision) {
+            self.n.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    engine_core::register_sample_scripts();
+    let mut state = EditorState::new();
+    let mut host = state.build_unity_play_host();
+
+    let floor = host.runtime.world.CreateGameObject("Floor");
+    host.runtime
+        .world
+        .SetLocalPosition(floor, Vec3::new(0.0, 0.0, 0.0));
+    host.runtime.world.AddComponent(
+        floor,
+        Rigidbody {
+            use_gravity: false,
+            is_kinematic: true,
+            mass: 1.0,
+            ..Default::default()
+        },
+    );
+    host.runtime.world.AddComponent(
+        floor,
+        engine_core::components::SphereCollider {
+            center: Vec3::ZERO,
+            radius: 2.0,
+            is_trigger: false,
+        },
+    );
+    let ball = host.runtime.world.CreateGameObject("Ball");
+    host.runtime
+        .world
+        .SetLocalPosition(ball, Vec3::new(0.0, 3.0, 0.0));
+    host.runtime.world.AddComponent(
+        ball,
+        Rigidbody {
+            use_gravity: true,
+            mass: 1.0,
+            ..Default::default()
+        },
+    );
+    host.runtime.world.AddComponent(
+        ball,
+        CapsuleCollider {
+            center: Vec3::new(0.0, 0.25, 0.0),
+            radius: 0.4,
+            height: 2.0,
+            direction: 1,
+            is_trigger: false,
+        },
+    );
+    let n = Arc::new(AtomicU32::new(0));
+    host.runtime.world.AddMonoBehaviour(
+        ball,
+        Hit {
+            go: None,
+            n: n.clone(),
+        },
+    );
+    host.runtime.world.AddMonoBehaviour(
+        floor,
+        Hit {
+            go: None,
+            n: n.clone(),
+        },
+    );
+
+    for _ in 0..50 {
+        state.tick_unity_play_host(&mut host, 0.02);
+    }
+
+    assert!(
+        n.load(Ordering::SeqCst) >= 1,
+        "play host should dispatch OnCollisionEnter; hits={}",
+        n.load(Ordering::SeqCst)
+    );
+
+    // Capsule center → physics collider offset after sync.
+    use engine_physics::Collider;
+    let be = host.runtime.entity_for(ball).expect("ball entity");
+    let col = host.ecs.get::<Collider>(be).expect("physics collider");
+    assert!((col.offset - Vec3::new(0.0, 0.25, 0.0)).length() < 1e-3);
+    let _ = format!("{:?}", col.shape);
+}
+
+/// AnimationClipPlayer survives editor SceneData prepared export/load.
 #[test]
 fn animation_clip_player_survives_editor_scene_data_roundtrip() {
     use engine_core::animation_apply::{AnimationClip, Vec3Keyframe};

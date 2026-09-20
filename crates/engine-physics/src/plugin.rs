@@ -133,7 +133,9 @@ fn go_for_physics_id(
 ///
 /// `is_enter` → `OnCollisionEnter` / `OnTriggerEnter`;
 /// `is_enter == false` → `OnCollisionExit` / `OnTriggerExit` (phase 23).
-fn dispatch_unity_collision_enters(
+///
+/// Public so editor `UnityPlayHost` can share the runtime path (phase 24).
+pub fn dispatch_unity_collision_enters(
     runtime: &mut engine_core::scene_runtime::SceneRuntime,
     ecs: &mut engine_ecs::world::World,
 ) {

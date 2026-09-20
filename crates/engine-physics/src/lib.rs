@@ -110,7 +110,9 @@ pub use collider::{
     check_sphere_capsule, check_sphere_obb, check_sphere_sphere,
 };
 pub use contact::{ContactManifold, ContactPoint, ContactSolver};
-pub use plugin::{Physics2DPlugin, PhysicsPlugin, UnityPhysicsPlugin};
+pub use plugin::{
+    Physics2DPlugin, PhysicsPlugin, UnityPhysicsPlugin, dispatch_unity_collision_enters,
+};
 pub use unity_bridge::{
     collect_unity_handles, sync_physics_from_unity, sync_physics_to_unity, unity_physics_fixed_step,
 };

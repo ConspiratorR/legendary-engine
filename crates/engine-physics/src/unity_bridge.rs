@@ -124,6 +124,14 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
         {
             let mut col = Collider::capsule(cc.radius.max(0.01), cc.height.max(0.02));
             col.is_sensor = cc.is_trigger;
+            // Phase 24: center → collider offset. Direction: physics capsule is Y-only.
+            col.offset = cc.center;
+            if cc.direction != 1 {
+                log::warn!(
+                    "CapsuleCollider.direction={} not Y — physics capsule remains Y-axis (phase 24)",
+                    cc.direction
+                );
+            }
             if ecs.get::<Collider>(entity).is_some() {
                 *ecs.get_mut::<Collider>(entity).unwrap() = col;
             } else {

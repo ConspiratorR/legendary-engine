@@ -604,6 +604,34 @@ impl EditorState {
                     } else {
                         "None"
                     };
+                    // is_trigger from actual Unity collider (phase 24).
+                    let is_sensor = if self
+                        .world
+                        .HasComponent::<engine_core::components::SphereCollider>(handle)
+                    {
+                        self.world
+                            .GetComponent::<engine_core::components::SphereCollider>(handle)
+                            .map(|c| c.is_trigger)
+                            .unwrap_or(false)
+                    } else if self
+                        .world
+                        .HasComponent::<engine_core::components::BoxCollider>(handle)
+                    {
+                        self.world
+                            .GetComponent::<engine_core::components::BoxCollider>(handle)
+                            .map(|c| c.is_trigger)
+                            .unwrap_or(false)
+                    } else if self
+                        .world
+                        .HasComponent::<engine_core::components::CapsuleCollider>(handle)
+                    {
+                        self.world
+                            .GetComponent::<engine_core::components::CapsuleCollider>(handle)
+                            .map(|c| c.is_trigger)
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    };
                     entity.physics = Some(PhysicsDataSer {
                         body_type: if rb.is_kinematic {
                             "Kinematic".into()
@@ -614,7 +642,7 @@ impl EditorState {
                         mass: rb.mass,
                         friction: 0.5,
                         restitution: 0.3,
-                        is_sensor: false,
+                        is_sensor,
                     });
                 }
                 if let Some(renderer) = self

@@ -1406,11 +1406,28 @@ impl EditorState {
         let fixed_steps = host.time.pending_fixed_steps();
         for _ in 0..fixed_steps {
             host.time.begin_fixed_update();
-            host.physics.delta_time = host.time.fixedDeltaTime();
             Self::sync_physics_from_unity(host);
-            host.physics.step(&mut host.ecs);
+            // Move PhysicsWorld onto ECS resource, step, dispatch, restore.
+            let mut pw =
+                std::mem::replace(&mut host.physics, engine_physics::PhysicsWorld::default());
+            pw.delta_time = host.time.fixedDeltaTime();
+            host.ecs.insert_resource(pw);
+            {
+                let mut pw = host
+                    .ecs
+                    .remove_resource::<engine_physics::PhysicsWorld>()
+                    .expect("PhysicsWorld resource");
+                pw.step(&mut host.ecs);
+                host.ecs.insert_resource(pw);
+            }
             Self::sync_physics_to_unity(host);
             host.runtime.world.sync_transforms();
+            // Phase 24: collision/trigger enter+exit → MonoBehaviour.
+            engine_physics::dispatch_unity_collision_enters(&mut host.runtime, &mut host.ecs);
+            host.physics = host
+                .ecs
+                .remove_resource::<engine_physics::PhysicsWorld>()
+                .unwrap_or_default();
             host.time.end_fixed_update();
         }
 
@@ -1538,6 +1555,7 @@ impl EditorState {
             {
                 let mut col = Collider::capsule(cc.radius.max(0.01), cc.height.max(0.02));
                 col.is_sensor = cc.is_trigger;
+                col.offset = cc.center;
                 if host.ecs.get::<Collider>(entity).is_some() {
                     *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
                 } else {

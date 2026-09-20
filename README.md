@@ -407,6 +407,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 24 — Play 回调 + Capsule 偏移（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **编辑器 Play 物理回调** | ✅ | enter/exit 分发到 MonoBehaviour |
+| **Capsule offset / 序列化 is_sensor** | ✅ | `center`→offset；scene 序列化读 is_trigger |
+
+规格：`docs/compose/spec/phase24-play-callbacks-capsule-offset.md`。
+
 ### 阶段 23 — Exit 回调 + Capsule 桥（同分支）
 
 | 项目 | 状态 | 说明 |

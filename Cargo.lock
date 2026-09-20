@@ -1565,6 +1565,7 @@ dependencies = [
  "engine-core",
  "engine-ecs",
  "engine-math",
+ "log",
  "rayon",
  "thiserror 2.0.18",
 ]
