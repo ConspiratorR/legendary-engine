@@ -657,6 +657,94 @@ fn ccd_sweep_sphere_aabb_miss() {
     assert!(!result.hit);
 }
 
+/// Phase 27 e2e — CCD against a rotated static box uses world AABB.
+#[test]
+fn ccd_world_sweep_rotated_offset_box() {
+    use engine_core::transform::Transform;
+    use engine_ecs::world::World as EcsWorld;
+    use engine_math::{Quat, Vec3};
+    use engine_physics::RigidBody;
+    use engine_physics::body::BodyType;
+    use engine_physics::ccd::CcdBody;
+    use engine_physics::collider::{Collider, ColliderShape};
+    use engine_physics::world::PhysicsWorld;
+
+    let mut ecs = EcsWorld::new();
+    // Static long box local (2,0.5,0.5) rotated 90° Z → world long-along-Y wall.
+    let wall = ecs.spawn();
+    let rot = Quat::from_euler(
+        engine_math::EulerRot::XYZ,
+        0.0,
+        0.0,
+        std::f32::consts::FRAC_PI_2,
+    );
+    let mut tw = Transform::from_position_rotation_scale(Vec3::ZERO, rot, Vec3::ONE);
+    tw.SetRotation(rot);
+    ecs.add_component(wall, tw);
+    ecs.add_component(
+        wall,
+        Collider {
+            shape: ColliderShape::Box {
+                half_extents: Vec3::new(2.0, 0.5, 0.5),
+            },
+            ..Default::default()
+        },
+    );
+    ecs.add_component(
+        wall,
+        RigidBody {
+            body_type: BodyType::Static,
+            ..Default::default()
+        },
+    );
+
+    let probe = ecs.spawn();
+    let mut tp = Transform::from_position_rotation_scale(
+        Vec3::new(0.0, -5.0, 0.0),
+        Quat::IDENTITY,
+        Vec3::ONE,
+    );
+    tp.SetPosition(Vec3::new(0.0, -5.0, 0.0));
+    ecs.add_component(probe, tp);
+    ecs.add_component(
+        probe,
+        Collider {
+            shape: ColliderShape::Sphere { radius: 0.2 },
+            ..Default::default()
+        },
+    );
+    ecs.add_component(
+        probe,
+        RigidBody {
+            body_type: BodyType::Dynamic,
+            linear_velocity: Vec3::new(0.0, 80.0, 0.0),
+            ..Default::default()
+        },
+    );
+    ecs.add_component(
+        probe,
+        CcdBody {
+            enabled: true,
+            activation_threshold: 1.0,
+            ..Default::default()
+        },
+    );
+
+    let mut pw = PhysicsWorld::default();
+    pw.delta_time = 0.1;
+    pw.sub_steps = 1;
+    pw.step(&mut ecs);
+
+    let y = ecs
+        .get::<Transform>(probe)
+        .map(|t| t.Position().y)
+        .unwrap_or_default();
+    assert!(
+        y < 4.0,
+        "CCD should stop probe near rotated wall; y={y} (tunnel if y ≫ wall)"
+    );
+}
+
 #[test]
 fn ccd_body_default_values() {
     let ccd = CcdBody::default();
