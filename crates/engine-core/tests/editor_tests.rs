@@ -267,7 +267,7 @@ fn serialization_workflow_transform_roundtrip() {
     });
 
     let serializer = SceneSerializer::new();
-    let scene = serializer.Save(&world, "TransformTest");
+    let scene = serializer.SavePrepared(&mut world, "TransformTest");
     assert_eq!(scene.game_objects[0].transform.local_position.x, 10.0);
 
     let mut loaded_world = World::new();

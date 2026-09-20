@@ -146,7 +146,12 @@ impl SceneSerializer {
             .insert(deserializer.type_name().to_string(), deserializer);
     }
 
-    /// Serialize a World into SceneData.
+    /// Serialize a World into SceneData **without** refreshing storage caches.
+    ///
+    /// Under `unity-world-primary` (default since phase 13), prefer
+    /// [`SceneSerializer::SavePrepared`] so pose/hierarchy caches are refreshed
+    /// from ECS authority first. Use this method only when the caller already
+    /// prepared caches or the feature is off.
     pub fn Save(&self, world: &World, name: &str) -> SceneData {
         let roots = world.GetRootGameObjects();
         let game_objects = roots
@@ -307,7 +312,7 @@ impl SceneSerializer {
         self.Save(world, name)
     }
 
-    /// Save a scene (snake_case alias for Save).
+    /// Snake-case alias of [`SceneSerializer::Save`] (unprepared; prefer `save_prepared`).
     pub fn save(&self, world: &World, name: &str) -> SceneData {
         self.Save(world, name)
     }
@@ -315,6 +320,11 @@ impl SceneSerializer {
     /// Load a scene (snake_case alias for Load).
     pub fn load(&self, scene: &SceneData, world: &mut World) -> Vec<GameObjectHandle> {
         self.Load(scene, world)
+    }
+
+    /// Snake-case alias of [`SceneSerializer::SavePrepared`].
+    pub fn save_prepared(&self, world: &mut World, name: &str) -> SceneData {
+        self.SavePrepared(world, name)
     }
 }
 
@@ -859,7 +869,7 @@ mod tests {
         );
 
         let s = SceneSerializer::new();
-        let scene = s.Save(&world, "Props");
+        let scene = s.SavePrepared(&mut world, "Props");
         assert_eq!(scene.game_objects[0].components.len(), 2);
 
         let mut world2 = World::new();
@@ -946,7 +956,7 @@ mod tests {
         }
 
         let s = SceneSerializer::new();
-        let scene = s.Save(&world, "Scripts");
+        let scene = s.SavePrepared(&mut world, "Scripts");
         let json = serde_json::to_string_pretty(&scene).unwrap();
         assert!(json.contains("SceneMarker"));
         assert!(json.contains("\"hits\": 7"));
@@ -963,9 +973,9 @@ mod tests {
 
     #[test]
     fn test_save_empty_world() {
-        let world = World::new();
+        let mut world = World::new();
         let s = SceneSerializer::new();
-        let scene = s.Save(&world, "EmptyScene");
+        let scene = s.SavePrepared(&mut world, "EmptyScene");
 
         assert_eq!(scene.name, "EmptyScene");
         assert_eq!(scene.version, 1);
@@ -978,7 +988,7 @@ mod tests {
         world.CreateGameObject("Player");
 
         let s = SceneSerializer::new();
-        let scene = s.Save(&world, "TestScene");
+        let scene = s.SavePrepared(&mut world, "TestScene");
 
         assert_eq!(scene.game_objects.len(), 1);
         assert_eq!(scene.game_objects[0].name, "Player");
@@ -997,7 +1007,7 @@ mod tests {
         world.SetParent(child2, Some(root));
 
         let s = SceneSerializer::new();
-        let scene = s.Save(&world, "Hierarchy");
+        let scene = s.SavePrepared(&mut world, "Hierarchy");
 
         assert_eq!(scene.game_objects.len(), 1);
         assert_eq!(scene.game_objects[0].children.len(), 2);
@@ -1013,7 +1023,7 @@ mod tests {
         world.SetParent(child, Some(root));
 
         let s = SceneSerializer::new();
-        let scene = s.Save(&world, "Test");
+        let scene = s.SavePrepared(&mut world, "Test");
 
         assert_eq!(scene.game_objects.len(), 1);
         assert_eq!(scene.game_objects[0].children.len(), 1);
@@ -1162,7 +1172,7 @@ mod tests {
         });
 
         let s = SceneSerializer::new();
-        let scene = s.Save(&world, "Test");
+        let scene = s.SavePrepared(&mut world, "Test");
 
         let data = &scene.game_objects[0];
         assert_eq!(data.transform.local_position, Vec3::new(1.0, 2.0, 3.0));
@@ -1214,7 +1224,7 @@ mod tests {
         world.AddComponent(go, Camera::default());
 
         let s = SceneSerializer::new();
-        let scene = s.Save(&world, "Props");
+        let scene = s.SavePrepared(&mut world, "Props");
         assert_eq!(scene.game_objects[0].components.len(), 4);
 
         let mut world2 = World::new();

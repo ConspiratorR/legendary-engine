@@ -609,7 +609,7 @@ fn test_scenedata_components_survive_runtime_load_and_tick() {
     author.SetParent(child, Some(root));
 
     let serializer = SceneSerializer::new();
-    let scene = serializer.Save(&author, "Level");
+    let scene = serializer.SavePrepared(&mut author, "Level");
     let json = serde_json::to_string_pretty(&scene).unwrap();
     assert!(json.contains("\"Material\""));
     assert!(json.contains("\"SpriteRenderer\""));

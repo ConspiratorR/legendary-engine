@@ -401,6 +401,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 15 — Scene I/O 卫生（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **Prepared save 收敛** | ✅ | 仓库内 tests/examples 使用 `SaveSceneJsonPrepared` / `SavePrepared` |
+| **低层 API** | ✅ | 自由函数 `SaveSceneJson` / `SceneSerializer::Save` 保留，文档标明 unprepared |
+
+规格：`docs/compose/spec/phase15-scene-io-hygiene.md`。
+
 ### 阶段 13 — 默认开 flag + 残余硬化（分支 `phase12-array-authority` 续写）
 
 | 项目 | 状态 | 说明 |

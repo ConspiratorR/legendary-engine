@@ -21,15 +21,16 @@ commits: f8dac1d..HEAD
 | `cargo test -p engine-core --test editor_tests` | PASS 24 (1 ignored) |
 | `cargo test -p engine-core --test unity_lifecycle_tests` | PASS 23 |
 | `cargo test -p engine-core --test unity_lifecycle_tests --no-default-features --features audio` | PASS 21 |
+| `cargo test -p engine-editor --test editor_tests` | PASS 60 |
 | `cargo build -p engine-core --examples` | PASS |
-| `cargo fmt -p engine-core --check` | PASS |
+| `cargo fmt -p engine-core -p engine-editor --check` | PASS |
 
 **Journey log** —
 1. Default-on makes bare `cargo test` = ECS authority; unprepared save can write stale array pose caches.
-2. In-repo tests/examples now demonstrate the prepared contract; free function stays for `&World` cases.
-3. PowerShell `Set-Content` without UTF-8 encoding corrupted `unity_lifecycle_tests.rs` — restored via git checkout and rewrote with UTF-8 no-BOM.
-4. `SaveSceneJsonPrepared(&mut x)` requires `let mut x`; editor tests needed `mut world`.
-5. git merge/push not handled per user preference.
+2. Free function + method-path callers in tests/examples migrated to Prepared; authority test in world.rs stays unprepared on purpose.
+3. PowerShell `Set-Content` without UTF-8 encoding corrupted lifecycle tests — restore via git + UTF-8 no-BOM rewrite.
+4. `SavePrepared` needs `&mut World`; editor/example mut bindings required.
+5. Residual: many unit tests in serialization.rs may still use method `Save` after `with_transform_mut` (ECS write-through lowers risk); free-fn call sites in-repo are migrated.
 
 ## [S1] Problem
 

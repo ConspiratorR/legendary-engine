@@ -234,7 +234,7 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 - **阶段 11（`phase11-r1-read`）**：dual-read ✅、写权威切片 ✅、动画位姿 ✅、编辑器 Play/拾取 ✅  
 - **阶段 12（`phase12-array-authority`）**：R1-full 存储权威契约 ✅（ECS 权威 + 数组 cache）；dyn MB 不进 ECS  
 - **阶段 13（同分支续写）**：hop-cap、prepared scene save、**默认 features 含 `unity-world-primary`** ✅；opt-out 为 `default-features=false, features=["audio"]`  
-- 门禁记录：`docs/compose/spec/phase13-default-on-hardening.md`  
+- 门禁记录：`docs/compose/spec/phase14-engine-scene-residual.md`、`docs/compose/spec/phase15-scene-io-hygiene.md`  
 - 本地已合分支清理：会话策略禁止 agent 删 ref，需用户/orchestrator 执行 `git branch -d`
 
 ### PR 描述草稿（P5.6，合并时用）

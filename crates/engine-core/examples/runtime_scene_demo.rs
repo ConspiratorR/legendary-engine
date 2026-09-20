@@ -80,7 +80,7 @@ fn main() {
 
     // 4. Optional: direct serializer round-trip without App
     let serializer = SceneSerializer::new();
-    let re = serializer.Save(&rt.world, "Echo");
+    let re = serializer.SavePrepared(&mut rt.world, "Echo");
     assert_eq!(re.game_objects.len(), 1);
     assert_eq!(re.game_objects[0].components.len(), 2);
     println!(
