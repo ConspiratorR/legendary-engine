@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 20 — 碰撞完善（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **relative_velocity / e2e / OnTriggerEnter** | ✅ | 碰撞速度差、插件路径 e2e、触发器回调 |
+
+规格：`docs/compose/spec/phase20-collision-completeness.md`。
+
 ### 阶段 19 — 物理桥完善（同分支）
 
 | 项目 | 状态 | 说明 |

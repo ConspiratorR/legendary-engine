@@ -444,4 +444,142 @@ mod tests {
         assert_eq!(hits.load(Ordering::SeqCst), 1);
         let _ = Quat::IDENTITY;
     }
+
+    /// e2e-ish: stacked spheres under gravity produce collision events + dispatch.
+    #[test]
+    fn test_e2e_collision_dispatch_through_bridge() {
+        use crate::plugin::dispatch_unity_collision_enters_for_test;
+        use engine_core::events::Collision;
+        use engine_core::time::Time;
+        use std::any::Any;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        #[derive(Default)]
+        struct HitCounter {
+            go: Option<GameObjectHandle>,
+            hits: Arc<AtomicU32>,
+        }
+        impl engine_core::component::Component for HitCounter {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl engine_core::behaviour::Behaviour for HitCounter {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _e: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, h: GameObjectHandle) {
+                self.go = Some(h);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl engine_core::monobehaviour::MonoBehaviour for HitCounter {
+            fn OnCollisionEnter(
+                &mut self,
+                _ctx: &mut engine_core::context::Context,
+                c: &Collision,
+            ) {
+                let _ = c;
+                self.hits.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut runtime = SceneRuntime::new();
+        // Floor (static)
+        let floor = runtime.world.CreateGameObject("Floor");
+        runtime
+            .world
+            .SetLocalPosition(floor, Vec3::new(0.0, 0.0, 0.0));
+        runtime.world.AddComponent(
+            floor,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: false,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        // Make floor static via kinematic? Bridge: kinematic body. Use kinematic.
+        if let Some(rb) = runtime.world.GetComponentMut::<UnityRb>(floor) {
+            rb.is_kinematic = true;
+        }
+        runtime.world.AddComponent(
+            floor,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 2.0,
+                is_trigger: false,
+            },
+        );
+
+        // Falling ball
+        let ball = runtime.world.CreateGameObject("Ball");
+        runtime
+            .world
+            .SetLocalPosition(ball, Vec3::new(0.0, 3.0, 0.0));
+        runtime.world.AddComponent(
+            ball,
+            UnityRb {
+                use_gravity: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            ball,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.4,
+                is_trigger: false,
+            },
+        );
+
+        let hits = Arc::new(AtomicU32::new(0));
+        runtime.world.AddMonoBehaviour(
+            ball,
+            HitCounter {
+                go: None,
+                hits: hits.clone(),
+            },
+        );
+        runtime.world.AddMonoBehaviour(
+            floor,
+            HitCounter {
+                go: None,
+                hits: hits.clone(),
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        ecs.insert_resource(Time::default());
+
+        for _ in 0..80 {
+            sync_physics_from_unity(&mut runtime, &mut ecs);
+            {
+                let mut pw = ecs.remove_resource::<PhysicsWorld>().unwrap();
+                pw.delta_time = 0.02;
+                pw.step(&mut ecs);
+                ecs.insert_resource(pw);
+            }
+            dispatch_unity_collision_enters_for_test(&mut runtime, &mut ecs);
+            sync_physics_to_unity(&mut runtime, &ecs);
+        }
+
+        assert!(
+            hits.load(Ordering::SeqCst) >= 1,
+            "ball should collide with floor; hits={}",
+            hits.load(Ordering::SeqCst)
+        );
+    }
 }

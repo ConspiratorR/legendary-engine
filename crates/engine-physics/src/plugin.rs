@@ -1,4 +1,5 @@
 //! Physics plugins for engine (3D and 2D).
+use crate::body::RigidBody;
 use crate::physics_2d::PhysicsWorld2D;
 use crate::world::{CollisionEvent, PhysicsWorld};
 use engine_core::app::AppBuilder;
@@ -105,6 +106,14 @@ fn unity_physics_step_system(world: &mut engine_ecs::world::World) {
     world.insert_resource(runtime);
 }
 
+/// Test-visible alias for dispatch (same as FixedUpdate plugin path).
+pub fn dispatch_unity_collision_enters_for_test(
+    runtime: &mut engine_core::scene_runtime::SceneRuntime,
+    ecs: &mut engine_ecs::world::World,
+) {
+    dispatch_unity_collision_enters(runtime, ecs);
+}
+
 /// Map physics entity index → GameObject via identity bridge links.
 fn go_for_physics_id(
     runtime: &engine_core::scene_runtime::SceneRuntime,
@@ -129,7 +138,11 @@ fn dispatch_unity_collision_enters(
         .get_resource::<PhysicsWorld>()
         .map(|p| p.collision_events.clone())
         .unwrap_or_default();
-    if events.is_empty() {
+    let sensor_events: Vec<crate::world::SensorEvent> = ecs
+        .get_resource::<PhysicsWorld>()
+        .map(|p| p.sensor_events.clone())
+        .unwrap_or_default();
+    if events.is_empty() && sensor_events.is_empty() {
         return;
     }
     let time = ecs
@@ -146,16 +159,40 @@ fn dispatch_unity_collision_enters(
         let Some(b) = go_for_physics_id(runtime, ev.entity_b) else {
             continue;
         };
-        for (this, other) in [(a, b), (b, a)] {
+        // relative_velocity ≈ va - vb (phase 20).
+        let (va, vb) = {
+            let ea = runtime.entity_for(a).and_then(|e| ecs.get::<RigidBody>(e));
+            let eb = runtime.entity_for(b).and_then(|e| ecs.get::<RigidBody>(e));
+            (
+                ea.map(|b| b.linear_velocity).unwrap_or_default(),
+                eb.map(|b| b.linear_velocity).unwrap_or_default(),
+            )
+        };
+        for (this, other, rel) in [(a, b, va - vb), (b, a, vb - va)] {
             let collision = engine_core::events::Collision {
                 other,
                 normal: ev.normal,
                 point: ev.point,
-                relative_velocity: engine_math::Vec3::ZERO,
+                relative_velocity: rel,
             };
             runtime
                 .world
                 .invoke_collision_enter(this, collision, time.clone(), frame, &mut bus);
+        }
+    }
+
+    for ev in sensor_events.iter().filter(|e| e.is_enter) {
+        let Some(a) = go_for_physics_id(runtime, ev.sensor_entity) else {
+            continue;
+        };
+        let Some(b) = go_for_physics_id(runtime, ev.other_entity) else {
+            continue;
+        };
+        for (this, other) in [(a, b), (b, a)] {
+            let trigger = engine_core::events::TriggerData { other };
+            runtime
+                .world
+                .invoke_trigger_enter(this, trigger, time.clone(), frame, &mut bus);
         }
     }
 }

@@ -2013,6 +2013,34 @@ impl World {
         self.monobehaviours[index] = Some(monos);
     }
 
+    /// Dispatch `OnTriggerEnter` on enabled MonoBehaviours of `handle`.
+    pub fn invoke_trigger_enter(
+        &mut self,
+        handle: GameObjectHandle,
+        trigger: crate::events::TriggerData,
+        time: Time,
+        frame: u64,
+        events: &mut crate::event::EventBus,
+    ) {
+        if !self.is_valid(handle) {
+            return;
+        }
+        let index = handle.index() as usize;
+        let Some(mut monos) = self.monobehaviours[index].take() else {
+            return;
+        };
+        {
+            let mut ctx = Context::new(self, time.clone(), frame, events);
+            for mono in monos.iter_mut() {
+                if !mono.Enabled() {
+                    continue;
+                }
+                mono.GetMut().OnTriggerEnter(&mut ctx, &trigger);
+            }
+        }
+        self.monobehaviours[index] = Some(monos);
+    }
+
     /// Get active state (matches `GameObject.activeSelf`).
     ///
     /// With `unity-world-primary`, prefers ECS `GameObjectActive` when linked.
