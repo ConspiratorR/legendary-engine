@@ -121,6 +121,43 @@ pub struct PhysicsDataSer {
     pub friction: f32,
     pub restitution: f32,
     pub is_sensor: bool,
+    /// Phase 33: durable collider/rigid-body fields (serde default for old files).
+    #[serde(default)]
+    pub drag: f32,
+    #[serde(default)]
+    pub angular_drag: f32,
+    #[serde(default = "default_true")]
+    pub use_gravity: bool,
+    #[serde(default)]
+    pub is_sleeping: bool,
+    #[serde(default)]
+    pub velocity: [f32; 3],
+    #[serde(default = "default_collider_radius")]
+    pub collider_radius: f32,
+    #[serde(default = "default_collider_height")]
+    pub collider_height: f32,
+    #[serde(default)]
+    pub collider_center: [f32; 3],
+    #[serde(default = "default_box_size")]
+    pub collider_size: [f32; 3],
+    #[serde(default = "default_axis_y")]
+    pub capsule_direction: i32,
+}
+
+fn default_true() -> bool {
+    true
+}
+fn default_collider_radius() -> f32 {
+    0.5
+}
+fn default_collider_height() -> f32 {
+    2.0
+}
+fn default_box_size() -> [f32; 3] {
+    [1.0, 1.0, 1.0]
+}
+fn default_axis_y() -> i32 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -586,16 +623,17 @@ impl EditorState {
                         .world
                         .GetComponent::<engine_core::components::Rigidbody>(handle)
                         .unwrap();
+                    // Phase 33: collider type priority Sphere → Box → Capsule (match unity_bridge).
                     let collider_type = if self
-                        .world
-                        .HasComponent::<engine_core::components::BoxCollider>(handle)
-                    {
-                        "Box"
-                    } else if self
                         .world
                         .HasComponent::<engine_core::components::SphereCollider>(handle)
                     {
                         "Sphere"
+                    } else if self
+                        .world
+                        .HasComponent::<engine_core::components::BoxCollider>(handle)
+                    {
+                        "Box"
                     } else if self
                         .world
                         .HasComponent::<engine_core::components::CapsuleCollider>(handle)
@@ -604,33 +642,52 @@ impl EditorState {
                     } else {
                         "None"
                     };
-                    // is_trigger from actual Unity collider (phase 24).
-                    let is_sensor = if self
+                    // is_trigger / shape params from actual Unity collider (phase 24/33).
+                    let (
+                        is_sensor,
+                        collider_radius,
+                        collider_height,
+                        collider_center,
+                        collider_size,
+                        capsule_direction,
+                    ) = if let Some(sc) = self
                         .world
-                        .HasComponent::<engine_core::components::SphereCollider>(handle)
+                        .GetComponent::<engine_core::components::SphereCollider>(handle)
                     {
-                        self.world
-                            .GetComponent::<engine_core::components::SphereCollider>(handle)
-                            .map(|c| c.is_trigger)
-                            .unwrap_or(false)
-                    } else if self
+                        (
+                            sc.is_trigger,
+                            sc.radius,
+                            0.0,
+                            [sc.center.x, sc.center.y, sc.center.z],
+                            [1.0, 1.0, 1.0],
+                            1,
+                        )
+                    } else if let Some(bc) = self
                         .world
-                        .HasComponent::<engine_core::components::BoxCollider>(handle)
+                        .GetComponent::<engine_core::components::BoxCollider>(handle)
                     {
-                        self.world
-                            .GetComponent::<engine_core::components::BoxCollider>(handle)
-                            .map(|c| c.is_trigger)
-                            .unwrap_or(false)
-                    } else if self
+                        (
+                            bc.is_trigger,
+                            0.5,
+                            0.0,
+                            [bc.center.x, bc.center.y, bc.center.z],
+                            [bc.size.x, bc.size.y, bc.size.z],
+                            1,
+                        )
+                    } else if let Some(cc) = self
                         .world
-                        .HasComponent::<engine_core::components::CapsuleCollider>(handle)
+                        .GetComponent::<engine_core::components::CapsuleCollider>(handle)
                     {
-                        self.world
-                            .GetComponent::<engine_core::components::CapsuleCollider>(handle)
-                            .map(|c| c.is_trigger)
-                            .unwrap_or(false)
+                        (
+                            cc.is_trigger,
+                            cc.radius,
+                            cc.height,
+                            [cc.center.x, cc.center.y, cc.center.z],
+                            [1.0, 1.0, 1.0],
+                            cc.direction,
+                        )
                     } else {
-                        false
+                        (false, 0.5, 2.0, [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], 1)
                     };
                     entity.physics = Some(PhysicsDataSer {
                         body_type: if rb.is_kinematic {
@@ -643,6 +700,16 @@ impl EditorState {
                         friction: 0.5,
                         restitution: 0.3,
                         is_sensor,
+                        drag: rb.drag,
+                        angular_drag: rb.angular_drag,
+                        use_gravity: rb.use_gravity,
+                        is_sleeping: rb.is_sleeping,
+                        velocity: [rb.velocity.x, rb.velocity.y, rb.velocity.z],
+                        collider_radius,
+                        collider_height,
+                        collider_center,
+                        collider_size,
+                        capsule_direction,
                     });
                 }
                 if let Some(renderer) = self
@@ -877,14 +944,24 @@ impl EditorState {
 
             // Add Physics components
             if let Some(ref physics) = entity.physics {
+                let v = physics.velocity;
                 self.world.AddComponent(
                     handle,
                     engine_core::components::Rigidbody {
                         mass: physics.mass,
                         is_kinematic: physics.body_type == "Kinematic",
-                        use_gravity: physics.body_type == "Dynamic",
+                        use_gravity: physics.use_gravity,
+                        drag: physics.drag,
+                        angular_drag: physics.angular_drag,
+                        is_sleeping: physics.is_sleeping,
+                        velocity: engine_math::Vec3::new(v[0], v[1], v[2]),
                         ..Default::default()
                     },
+                );
+                let center = engine_math::Vec3::new(
+                    physics.collider_center[0],
+                    physics.collider_center[1],
+                    physics.collider_center[2],
                 );
                 match physics.collider_type.as_str() {
                     "Box" => {
@@ -892,7 +969,12 @@ impl EditorState {
                             handle,
                             engine_core::components::BoxCollider {
                                 is_trigger: physics.is_sensor,
-                                ..Default::default()
+                                center,
+                                size: engine_math::Vec3::new(
+                                    physics.collider_size[0],
+                                    physics.collider_size[1],
+                                    physics.collider_size[2],
+                                ),
                             },
                         );
                     }
@@ -901,7 +983,8 @@ impl EditorState {
                             handle,
                             engine_core::components::SphereCollider {
                                 is_trigger: physics.is_sensor,
-                                ..Default::default()
+                                center,
+                                radius: physics.collider_radius,
                             },
                         );
                     }
@@ -910,7 +993,10 @@ impl EditorState {
                             handle,
                             engine_core::components::CapsuleCollider {
                                 is_trigger: physics.is_sensor,
-                                ..Default::default()
+                                center,
+                                radius: physics.collider_radius,
+                                height: physics.collider_height,
+                                direction: physics.capsule_direction,
                             },
                         );
                     }

@@ -123,6 +123,9 @@ impl SceneSerializer {
         s.AddFormatter(Box::new(MaterialFormatter));
         s.AddFormatter(Box::new(SpriteRendererFormatter));
         s.AddFormatter(Box::new(RigidbodyFormatter));
+        s.AddFormatter(Box::new(BoxColliderFormatter));
+        s.AddFormatter(Box::new(SphereColliderFormatter));
+        s.AddFormatter(Box::new(CapsuleColliderFormatter));
         s.AddFormatter(Box::new(AudioSourceFormatter));
         s.AddFormatter(Box::new(LightFormatter));
         s.AddFormatter(Box::new(CameraFormatter));
@@ -130,6 +133,9 @@ impl SceneSerializer {
         s.AddDeserializer(Box::new(MaterialDeserializer));
         s.AddDeserializer(Box::new(SpriteRendererDeserializer));
         s.AddDeserializer(Box::new(RigidbodyDeserializer));
+        s.AddDeserializer(Box::new(BoxColliderDeserializer));
+        s.AddDeserializer(Box::new(SphereColliderDeserializer));
+        s.AddDeserializer(Box::new(CapsuleColliderDeserializer));
         s.AddDeserializer(Box::new(AudioSourceDeserializer));
         s.AddDeserializer(Box::new(LightDeserializer));
         s.AddDeserializer(Box::new(CameraDeserializer));
@@ -509,6 +515,8 @@ impl ComponentFormatter for RigidbodyFormatter {
                 rb.angular_velocity.z
             ]),
         );
+        data.properties
+            .insert("is_sleeping".into(), serde_json::json!(rb.is_sleeping));
         Some(data)
     }
 }
@@ -550,7 +558,160 @@ impl ComponentDeserializer for RigidbodyDeserializer {
                 v[2].as_f64()? as f32,
             );
         }
+        if let Some(v) = data.properties.get("is_sleeping").and_then(|v| v.as_bool()) {
+            rb.is_sleeping = v;
+        }
         Some(Box::new(rb))
+    }
+}
+
+fn vec3_from_props(props: &HashMap<String, serde_json::Value>, key: &str) -> Vec3 {
+    props
+        .get(key)
+        .and_then(|v| v.as_array())
+        .and_then(|a| {
+            if a.len() == 3 {
+                Some(Vec3::new(
+                    a[0].as_f64().unwrap_or(0.0) as f32,
+                    a[1].as_f64().unwrap_or(0.0) as f32,
+                    a[2].as_f64().unwrap_or(0.0) as f32,
+                ))
+            } else {
+                None
+            }
+        })
+        .unwrap_or(Vec3::ZERO)
+}
+
+fn insert_vec3(data: &mut ComponentData, key: &str, v: Vec3) {
+    data.properties
+        .insert(key.into(), serde_json::json!([v.x, v.y, v.z]));
+}
+
+/// Phase 33 — BoxCollider scene I/O.
+struct BoxColliderFormatter;
+
+impl ComponentFormatter for BoxColliderFormatter {
+    fn type_name(&self) -> &str {
+        "BoxCollider"
+    }
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let c = component
+            .as_any()
+            .downcast_ref::<crate::components::BoxCollider>()?;
+        let mut data = ComponentData::new("BoxCollider");
+        insert_vec3(&mut data, "center", c.center);
+        insert_vec3(&mut data, "size", c.size);
+        data.properties
+            .insert("is_trigger".into(), serde_json::json!(c.is_trigger));
+        Some(data)
+    }
+}
+
+struct BoxColliderDeserializer;
+
+impl ComponentDeserializer for BoxColliderDeserializer {
+    fn type_name(&self) -> &str {
+        "BoxCollider"
+    }
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        let mut c = crate::components::BoxCollider::default();
+        c.center = vec3_from_props(&data.properties, "center");
+        if data.properties.contains_key("size") {
+            c.size = vec3_from_props(&data.properties, "size");
+        }
+        if let Some(v) = data.properties.get("is_trigger").and_then(|v| v.as_bool()) {
+            c.is_trigger = v;
+        }
+        Some(Box::new(c))
+    }
+}
+
+struct SphereColliderFormatter;
+
+impl ComponentFormatter for SphereColliderFormatter {
+    fn type_name(&self) -> &str {
+        "SphereCollider"
+    }
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let c = component
+            .as_any()
+            .downcast_ref::<crate::components::SphereCollider>()?;
+        let mut data = ComponentData::new("SphereCollider");
+        insert_vec3(&mut data, "center", c.center);
+        data.properties
+            .insert("radius".into(), serde_json::json!(c.radius));
+        data.properties
+            .insert("is_trigger".into(), serde_json::json!(c.is_trigger));
+        Some(data)
+    }
+}
+
+struct SphereColliderDeserializer;
+
+impl ComponentDeserializer for SphereColliderDeserializer {
+    fn type_name(&self) -> &str {
+        "SphereCollider"
+    }
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        let mut c = crate::components::SphereCollider::default();
+        c.center = vec3_from_props(&data.properties, "center");
+        if let Some(v) = data.properties.get("radius").and_then(|v| v.as_f64()) {
+            c.radius = v as f32;
+        }
+        if let Some(v) = data.properties.get("is_trigger").and_then(|v| v.as_bool()) {
+            c.is_trigger = v;
+        }
+        Some(Box::new(c))
+    }
+}
+
+struct CapsuleColliderFormatter;
+
+impl ComponentFormatter for CapsuleColliderFormatter {
+    fn type_name(&self) -> &str {
+        "CapsuleCollider"
+    }
+    fn format(&self, component: &dyn Component) -> Option<ComponentData> {
+        let c = component
+            .as_any()
+            .downcast_ref::<crate::components::CapsuleCollider>()?;
+        let mut data = ComponentData::new("CapsuleCollider");
+        insert_vec3(&mut data, "center", c.center);
+        data.properties
+            .insert("radius".into(), serde_json::json!(c.radius));
+        data.properties
+            .insert("height".into(), serde_json::json!(c.height));
+        data.properties
+            .insert("direction".into(), serde_json::json!(c.direction));
+        data.properties
+            .insert("is_trigger".into(), serde_json::json!(c.is_trigger));
+        Some(data)
+    }
+}
+
+struct CapsuleColliderDeserializer;
+
+impl ComponentDeserializer for CapsuleColliderDeserializer {
+    fn type_name(&self) -> &str {
+        "CapsuleCollider"
+    }
+    fn deserialize(&self, data: &ComponentData) -> Option<Box<dyn Component>> {
+        let mut c = crate::components::CapsuleCollider::default();
+        c.center = vec3_from_props(&data.properties, "center");
+        if let Some(v) = data.properties.get("radius").and_then(|v| v.as_f64()) {
+            c.radius = v as f32;
+        }
+        if let Some(v) = data.properties.get("height").and_then(|v| v.as_f64()) {
+            c.height = v as f32;
+        }
+        if let Some(v) = data.properties.get("direction").and_then(|v| v.as_i64()) {
+            c.direction = v as i32;
+        }
+        if let Some(v) = data.properties.get("is_trigger").and_then(|v| v.as_bool()) {
+            c.is_trigger = v;
+        }
+        Some(Box::new(c))
     }
 }
 
@@ -838,8 +999,8 @@ mod tests {
     fn test_scene_serializer_new() {
         let s = SceneSerializer::new();
         // Material, SpriteRenderer, Rigidbody, AudioSource, Light, Camera, ScriptBehaviour
-        assert_eq!(s.formatters.len(), 7);
-        assert_eq!(s.deserializers.len(), 7);
+        assert_eq!(s.formatters.len(), 10);
+        assert_eq!(s.deserializers.len(), 10);
     }
 
     #[test]
@@ -1182,8 +1343,8 @@ mod tests {
     #[test]
     fn test_default_impl() {
         let s = SceneSerializer::default();
-        assert_eq!(s.formatters.len(), 7);
-        assert_eq!(s.deserializers.len(), 7);
+        assert_eq!(s.formatters.len(), 10);
+        assert_eq!(s.deserializers.len(), 10);
     }
 
     #[test]

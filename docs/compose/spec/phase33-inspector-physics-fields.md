@@ -10,24 +10,27 @@ commits: 5393bc6..HEAD
 
 ## Report
 
-**What was built** — Editor Inspector physics section extended: Rigidbody **休眠** + **速度** vec3; Sphere radius/center/触发器; Box size/center/触发器; Capsule radius/height/center/axis (0/1/2)/触发器. Capsule axis uses a float slider rounded to i32. Test `physics_collider_fields_editable_on_world` asserts World component fields match Inspector data-path mutations (63 editor tests).
+**What was built** — Inspector physics: Rigidbody sleep (uses `Sleep()`/`WakeUp()`) + velocity; Sphere/Box/Capsule shape fields; section shows for Rigidbody **or** any collider; add-component menu includes 球/胶囊碰撞体. **Persistence (review C1)**: editor `PhysicsDataSer` stores drag/angular_drag/use_gravity/is_sleeping/velocity + collider center/size/radius/height/direction/is_trigger (serde defaults for old files); core `SceneSerializer` adds Box/Sphere/Capsule formatters + Rigidbody `is_sleeping`. Collider type priority aligned **Sphere → Box → Capsule** (bridge order). Test asserts core JSON + editor scene bundle roundtrip of shape params.
 
 **Verification**:
 
 | Command | Result |
 |---------|--------|
+| `cargo test -p engine-core --lib` | PASS **261** (formatters 10) |
 | `cargo test -p engine-editor --test editor_tests` | PASS **63** |
 
 **Journey log** —
-1. Inspector previously read-only collider **name** only — no shape params.
-2. Capsule `direction` is i32 — UI uses local f32 + round().
-3. git merge/push not handled per user preference.
+1. Review C1: authoring without persistence is lossy — schema + core formatters required.
+2. Review C3: physics panel gated on RB only hid colliders; menu lacked Sphere/Capsule.
+3. Review C4: Sleep checkbox must zero velocities via `Sleep()`.
+4. Review C5: collider type priority aligned with unity_bridge.
+5. git merge/push not handled per user preference.
 
 ## [S1] Problem
-Inspector missing collider/Sleep/velocity fields.
+Inspector fields + persistence gaps from phase33 review.
 
 ## [S2] Design
-Editable UI fields + World mutation test.
+UI + PhysicsDataSer + core collider formatters + Sleep semantics + menu items.
 
 ## [S3] Out of Scope
 Collision gizmos, WASM/Android, git merge/push
@@ -35,4 +38,4 @@ Collision gizmos, WASM/Android, git merge/push
 ## Tasks
 
 - [x] T1: Inspector 物理字段 UI (covers: S2)
-- [x] T2: 文档 + finalize (covers: S2)
+- [x] T2: 持久化 + 文档 + finalize (covers: S2)

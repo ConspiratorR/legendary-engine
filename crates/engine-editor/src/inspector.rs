@@ -598,26 +598,36 @@ impl InspectorPanel {
         }
 
         // ── Physics ──
+        // Phase 33: render when Rigidbody **or** any collider exists (collider-only editing).
         if Self::section_matches("物理 physics 刚体 碰撞 rigidbody collider", search_lower) {
             if let Some(handle) = state.GetHandle(id) {
-                if state
+                let has_rb = state
                     .world
-                    .HasComponent::<engine_core::components::Rigidbody>(handle)
-                {
+                    .HasComponent::<engine_core::components::Rigidbody>(handle);
+                let has_col = state
+                    .world
+                    .HasComponent::<engine_core::components::BoxCollider>(handle)
+                    || state
+                        .world
+                        .HasComponent::<engine_core::components::SphereCollider>(handle)
+                    || state
+                        .world
+                        .HasComponent::<engine_core::components::CapsuleCollider>(handle);
+                if has_rb || has_col {
                     Self::section_separator(gui);
                     Self::section_header(gui, "物理");
 
-                    // Query collider info before mutable borrow
+                    // Collider type priority matches unity_bridge (Sphere → Box → Capsule).
                     let collider_name = if state
-                        .world
-                        .HasComponent::<engine_core::components::BoxCollider>(handle)
-                    {
-                        "BoxCollider".to_string()
-                    } else if state
                         .world
                         .HasComponent::<engine_core::components::SphereCollider>(handle)
                     {
                         "SphereCollider".to_string()
+                    } else if state
+                        .world
+                        .HasComponent::<engine_core::components::BoxCollider>(handle)
+                    {
+                        "BoxCollider".to_string()
                     } else if state
                         .world
                         .HasComponent::<engine_core::components::CapsuleCollider>(handle)
@@ -636,7 +646,13 @@ impl InspectorPanel {
                         Self::slider_row(gui, "角阻力", &mut rb.angular_drag, 0.0, 10.0);
                         Self::checkbox_row(gui, "重力", &mut rb.use_gravity);
                         Self::checkbox_row(gui, "运动学", &mut rb.is_kinematic);
-                        Self::checkbox_row(gui, "休眠", &mut rb.is_sleeping);
+                        let mut sleeping = rb.is_sleeping;
+                        Self::checkbox_row(gui, "休眠", &mut sleeping);
+                        if sleeping && !rb.is_sleeping {
+                            rb.Sleep();
+                        } else if !sleeping && rb.is_sleeping {
+                            rb.WakeUp();
+                        }
                         let (mut vx, mut vy, mut vz) =
                             (rb.velocity.x, rb.velocity.y, rb.velocity.z);
                         Self::vec3_row(gui, "速度", &mut vx, &mut vy, &mut vz);
@@ -837,6 +853,8 @@ impl InspectorPanel {
                 ("音频", "audio"),
                 ("脚本", "script"),
                 ("物理", "physics"),
+                ("球碰撞体", "sphere_collider"),
+                ("胶囊碰撞体", "capsule_collider"),
                 ("标签", "tags"),
             ];
             egui::Frame::default()
@@ -1164,10 +1182,38 @@ impl InspectorPanel {
                     if !state
                         .world
                         .HasComponent::<engine_core::components::BoxCollider>(handle)
+                        && !state
+                            .world
+                            .HasComponent::<engine_core::components::SphereCollider>(handle)
+                        && !state
+                            .world
+                            .HasComponent::<engine_core::components::CapsuleCollider>(handle)
                     {
                         state
                             .world
                             .AddComponent(handle, engine_core::components::BoxCollider::default());
+                    }
+                }
+                "sphere_collider" => {
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::SphereCollider>(handle)
+                    {
+                        state.world.AddComponent(
+                            handle,
+                            engine_core::components::SphereCollider::default(),
+                        );
+                    }
+                }
+                "capsule_collider" => {
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::CapsuleCollider>(handle)
+                    {
+                        state.world.AddComponent(
+                            handle,
+                            engine_core::components::CapsuleCollider::default(),
+                        );
                     }
                 }
                 "sprite" => {
