@@ -453,7 +453,7 @@ MonoBehaviour 可进 SceneData：实现 `SerializeProps` / `DeserializeProps`，
 1. **P1 / P3 / P4 / 编辑器主路径** — ✅ 已在 main  
 2. **P2.4 dual-write + dual-read** — ✅ 写通 + feature 开读优先 ECS；**阶段 11 写权威/动画/编辑器拾取** 在分支 `phase11-r1-read` ✅  
 3. **完整数组权威迁 ECS / 默认开 flag** — 🔞 仍延后  
-4. **P2.5 engine-scene Transform** — 盘点 + 模块 doc；动画应用走 `engine_core::animation_apply`；keyframe 格式仍在 engine-scene  
+4. **P2.5 engine-scene Transform** — **包保留**；动画 apply 走 `engine_core::animation_apply` / `AnimationClipPlayer`；keyframe 格式仍在 engine-scene；gameplay 位姿权威是 Unity World（阶段 14 R2）  
 5. **D2 样例脚本** — ✅ `sample_scripts`（Mover/Rotator/Lifetime）随 `CorePlugins` 注册进 SceneData  
 
 试验开 flag 与双读契约见 [migration-guide.md](migration-guide.md)。

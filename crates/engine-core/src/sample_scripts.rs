@@ -431,4 +431,47 @@ mod tests {
         assert_eq!(props["speed"], 1.0);
         assert!(props.get("clip").is_some());
     }
+
+    /// Phase 14 review residual — Update path through World tick drives pose.
+    #[test]
+    fn test_animation_clip_player_update_writes_world_pose() {
+        use crate::animation_apply::{AnimationClip, Vec3Keyframe};
+        use crate::time::Time;
+
+        register_sample_scripts();
+        let clip = AnimationClip::new("u", 2.0)
+            .with_position_track(vec![
+                Vec3Keyframe::linear(0.0, Vec3::ZERO),
+                Vec3Keyframe::linear(2.0, Vec3::new(2.0, 0.0, 0.0)),
+            ])
+            .looping(false);
+
+        let mut world = World::new();
+        let go = world.CreateGameObject("Upd");
+        world.SetLocalPosition(go, Vec3::new(-1.0, 0.0, 0.0));
+        world.AddMonoBehaviour(
+            go,
+            AnimationClipPlayer {
+                clip: Some(clip),
+                time: 0.0,
+                speed: 1.0,
+                playing: true,
+                state: BehaviourState::new(),
+            },
+        );
+
+        let mut events = crate::event::EventBus::new();
+        for _ in 0..8 {
+            let mut t = Time::default();
+            t.update(0.25);
+            world.tick_update(t, 0, &mut events);
+        }
+
+        let x = world.GetTransform(go).expect("transform").LocalPosition().x;
+        // Player must have written a clip-sampled pose (not left at -1 forever).
+        assert!(
+            x > -1.0 + 0.01,
+            "Update should apply clip pose onto World, got x={x}"
+        );
+    }
 }
