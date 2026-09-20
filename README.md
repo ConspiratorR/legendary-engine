@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 32 — 合并前门禁脚本（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **run-compose-gates** | ✅ | `scripts/run-compose-gates.ps1` / `.sh`，与 BRANCH_INDEX 门禁一致 |
+
+规格：`docs/compose/spec/phase32-branch-gates-script.md`。
+
 ### 阶段 31 — WASM physics/CI（同分支）
 
 | 项目 | 状态 | 说明 |
