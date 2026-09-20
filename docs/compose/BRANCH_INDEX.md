@@ -1,4 +1,4 @@
-# 分支索引 — `phase12-array-authority`（阶段 12–32）
+# 分支索引 — `phase12-array-authority`（阶段 12–33）
 
 合并/推送前核对用。规格均在 `docs/compose/spec/`。**git merge/push 由用户执行。**
 
@@ -26,6 +26,7 @@
 | 30 | Android 基线探测 + `game-activity` feature | `phase30-android-baseline.md` | 本机缺 NDK；文档/feature 就绪 |
 | 31 | WASM physics + CI 编译面 | `phase31-wasm-physics-ci.md` | engine-physics wasm32 ✅；CI 增 core/physics |
 | 32 | 合并前门禁脚本 | `phase32-branch-gates-script.md` | `scripts/run-compose-gates.ps1/.sh` |
+| 33 | Inspector 物理字段 | `phase33-inspector-physics-fields.md` | 碰撞体尺寸/中心/轴向/触发器/Sleep |
 
 ## 推荐门禁（合并前）
 

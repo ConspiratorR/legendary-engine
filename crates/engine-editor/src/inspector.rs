@@ -636,8 +636,51 @@ impl InspectorPanel {
                         Self::slider_row(gui, "角阻力", &mut rb.angular_drag, 0.0, 10.0);
                         Self::checkbox_row(gui, "重力", &mut rb.use_gravity);
                         Self::checkbox_row(gui, "运动学", &mut rb.is_kinematic);
+                        Self::checkbox_row(gui, "休眠", &mut rb.is_sleeping);
+                        let (mut vx, mut vy, mut vz) =
+                            (rb.velocity.x, rb.velocity.y, rb.velocity.z);
+                        Self::vec3_row(gui, "速度", &mut vx, &mut vy, &mut vz);
+                        rb.velocity = engine_math::Vec3::new(vx, vy, vz);
 
                         Self::read_only_row(gui, "碰撞体", &collider_name);
+                    }
+
+                    // Collider-shape fields (phase 33).
+                    if let Some(sc) = state
+                        .world
+                        .GetComponentMut::<engine_core::components::SphereCollider>(handle)
+                    {
+                        Self::slider_row(gui, "半径", &mut sc.radius, 0.01, 50.0);
+                        let (mut cx, mut cy, mut cz) = (sc.center.x, sc.center.y, sc.center.z);
+                        Self::vec3_row(gui, "中心", &mut cx, &mut cy, &mut cz);
+                        sc.center = engine_math::Vec3::new(cx, cy, cz);
+                        Self::checkbox_row(gui, "触发器", &mut sc.is_trigger);
+                    }
+                    if let Some(bc) = state
+                        .world
+                        .GetComponentMut::<engine_core::components::BoxCollider>(handle)
+                    {
+                        let (mut sx, mut sy, mut sz) = (bc.size.x, bc.size.y, bc.size.z);
+                        Self::vec3_row(gui, "尺寸", &mut sx, &mut sy, &mut sz);
+                        bc.size = engine_math::Vec3::new(sx, sy, sz);
+                        let (mut cx, mut cy, mut cz) = (bc.center.x, bc.center.y, bc.center.z);
+                        Self::vec3_row(gui, "中心", &mut cx, &mut cy, &mut cz);
+                        bc.center = engine_math::Vec3::new(cx, cy, cz);
+                        Self::checkbox_row(gui, "触发器", &mut bc.is_trigger);
+                    }
+                    if let Some(cc) = state
+                        .world
+                        .GetComponentMut::<engine_core::components::CapsuleCollider>(handle)
+                    {
+                        Self::slider_row(gui, "半径", &mut cc.radius, 0.01, 50.0);
+                        Self::slider_row(gui, "高度", &mut cc.height, 0.01, 100.0);
+                        let (mut cx, mut cy, mut cz) = (cc.center.x, cc.center.y, cc.center.z);
+                        Self::vec3_row(gui, "中心", &mut cx, &mut cy, &mut cz);
+                        cc.center = engine_math::Vec3::new(cx, cy, cz);
+                        let mut axis = cc.direction as f32;
+                        Self::slider_row(gui, "轴向 (0X/1Y/2Z)", &mut axis, 0.0, 2.0);
+                        cc.direction = axis.round().clamp(0.0, 2.0) as i32;
+                        Self::checkbox_row(gui, "触发器", &mut cc.is_trigger);
                     }
                 }
             }

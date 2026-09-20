@@ -60,7 +60,7 @@ use engine_core::animation_apply::Vec3Keyframe;
 | 写回 | `World::SetLocalPosition` + `SetLocalRotation`（storage authority；world→local） | 位姿/旋转 |
 | 插件 | `engine_physics::UnityPhysicsPlugin` | FixedUpdate：from → step → **Collision/Trigger Enter+Exit** → to |
 | 碰撞载荷 | `Collision.relative_velocity = va − vb`；sensor → `OnTriggerEnter/Exit`；solid → `OnCollisionEnter/Exit` | phase 20/23 |
-| 编辑器 Play | `tick_unity_play_host` | 物理 from→step→**分发 MB 回调**→to（phase 24） |
+| 编辑器 Inspector | 物理区 | Rigidbody + sleep/velocity；Sphere/Box/Capsule 尺寸/中心/轴向/触发器（phase 33） |
 | Capsule | `direction` → `CapsuleAxis` X/Y/Z；`center`→offset | phase 23–25 |
 | Sleep | `Rigidbody::Sleep()` / `is_sleeping` | 桥强制休眠并清速度 |
 | 示例 | `cargo run --example unity_physics_demo -p engine-core` | 重力下落写 World |

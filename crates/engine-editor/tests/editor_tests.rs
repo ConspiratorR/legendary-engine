@@ -430,6 +430,63 @@ fn play_host_physics_callbacks_and_capsule_offset() {
     let _ = format!("{:?}", col.shape);
 }
 
+/// Phase 33 — physics collider fields exist and are mutable via World (Inspector data path).
+#[test]
+fn physics_collider_fields_editable_on_world() {
+    use engine_core::components::{BoxCollider, CapsuleCollider, Rigidbody, SphereCollider};
+    use engine_math::Vec3;
+    let mut state = EditorState::new();
+    let go = state.world.CreateGameObject("Phys");
+    state.world.AddComponent(
+        go,
+        Rigidbody {
+            ..Default::default()
+        },
+    );
+    state.world.AddComponent(go, SphereCollider::default());
+    {
+        let sc = state.world.GetComponentMut::<SphereCollider>(go).unwrap();
+        sc.radius = 2.5;
+        sc.center = Vec3::new(0.0, 1.0, 0.0);
+        sc.is_trigger = true;
+    }
+    let sc = state.world.GetComponent::<SphereCollider>(go).unwrap();
+    assert!((sc.radius - 2.5).abs() < 1e-4);
+    assert!(sc.is_trigger);
+    assert!((sc.center.y - 1.0).abs() < 1e-4);
+
+    state.world.AddComponent(go, BoxCollider::default());
+    {
+        let bc = state.world.GetComponentMut::<BoxCollider>(go).unwrap();
+        bc.size = Vec3::new(2.0, 4.0, 6.0);
+        bc.is_trigger = true;
+    }
+    let bc = state.world.GetComponent::<BoxCollider>(go).unwrap();
+    assert!((bc.size.y - 4.0).abs() < 1e-4);
+
+    state.world.AddComponent(go, CapsuleCollider::default());
+    {
+        let cc = state.world.GetComponentMut::<CapsuleCollider>(go).unwrap();
+        cc.radius = 0.3;
+        cc.height = 3.0;
+        cc.direction = 0;
+        cc.is_trigger = true;
+    }
+    let cc = state.world.GetComponent::<CapsuleCollider>(go).unwrap();
+    assert_eq!(cc.direction, 0);
+    assert!(cc.is_trigger);
+
+    // Rigidbody sleep + velocity writable (Inspector path).
+    {
+        let rb = state.world.GetComponentMut::<Rigidbody>(go).unwrap();
+        rb.is_sleeping = true;
+        rb.velocity = Vec3::new(1.0, 2.0, 3.0);
+    }
+    let rb = state.world.GetComponent::<Rigidbody>(go).unwrap();
+    assert!(rb.is_sleeping);
+    assert!((rb.velocity.y - 2.0).abs() < 1e-4);
+}
+
 /// AnimationClipPlayer survives editor SceneData prepared export/load.
 #[test]
 fn animation_clip_player_survives_editor_scene_data_roundtrip() {
