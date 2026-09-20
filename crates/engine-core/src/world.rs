@@ -3362,7 +3362,7 @@ mod tests {
     #[cfg(feature = "unity-world-primary")]
     #[test]
     fn test_r1_scene_load_seeds_ecs_mirrors() {
-        use crate::serialization::{LoadSceneJson, SaveSceneJson};
+        use crate::serialization::{LoadSceneJson, SaveSceneJsonPrepared};
 
         let mut author = World::new();
         let root = author.CreateGameObject("Root");
@@ -3372,7 +3372,7 @@ mod tests {
         let _ = author.with_transform_mut(child, |t| {
             t.SetLocalPosition(Vec3::new(2.0, 0.0, 0.0));
         });
-        let json = SaveSceneJson(&author, "R1Scene").unwrap();
+        let json = SaveSceneJsonPrepared(&mut author, "R1Scene").unwrap();
 
         let mut world = World::new();
         let handles = LoadSceneJson(&json, &mut world).unwrap();

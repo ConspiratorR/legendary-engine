@@ -1,5 +1,7 @@
 use engine_core::prefab::{Prefab, PrefabRegistry, PrefabValue};
-use engine_core::serialization::{LoadSceneJson, SaveSceneJson, SceneData, SceneSerializer};
+use engine_core::serialization::{
+    LoadSceneJson, SaveSceneJsonPrepared, SceneData, SceneSerializer,
+};
 use engine_core::transform::Transform;
 use engine_core::undo::{CreateObjectCommand, DestroyObjectCommand, UndoSystem};
 use engine_core::world::World;
@@ -65,7 +67,7 @@ fn prefab_workflow_create_and_instantiate() {
 #[test]
 fn prefab_workflow_registry_lifecycle() {
     let mut registry = PrefabRegistry::new();
-    let world = World::new();
+    let mut world = World::new();
 
     let go = GameObject::new_with_name("Enemy");
     let prefab = Prefab::Create("EnemyPrefab", &go, &world);
@@ -203,8 +205,8 @@ fn prefab_workflow_override_overwrite_and_value_types() {
 
 #[test]
 fn serialization_workflow_empty_scene_roundtrip() {
-    let world = World::new();
-    let json = SaveSceneJson(&world, "Empty").unwrap();
+    let mut world = World::new();
+    let json = SaveSceneJsonPrepared(&mut world, "Empty").unwrap();
     let mut loaded_world = World::new();
     let handles = LoadSceneJson(&json, &mut loaded_world).unwrap();
     assert!(handles.is_empty());
@@ -218,7 +220,7 @@ fn serialization_workflow_single_object_roundtrip() {
     world.SetLayer(handle, 10);
     world.SetActive(handle, true);
 
-    let json = SaveSceneJson(&world, "Level1").unwrap();
+    let json = SaveSceneJsonPrepared(&mut world, "Level1").unwrap();
     assert!(json.contains("Player"));
     assert!(json.contains("Hero"));
 
@@ -242,7 +244,7 @@ fn serialization_workflow_hierarchy_roundtrip() {
     let grandchild = world.CreateGameObject("Weapon");
     world.SetParent(grandchild, Some(child1));
 
-    let json = SaveSceneJson(&world, "GameScene").unwrap();
+    let json = SaveSceneJsonPrepared(&mut world, "GameScene").unwrap();
     let mut loaded_world = World::new();
     let handles = LoadSceneJson(&json, &mut loaded_world).unwrap();
 
@@ -284,7 +286,7 @@ fn serialization_workflow_json_roundtrip_preserves_structure() {
     let child = world.CreateGameObject("Prop");
     world.SetParent(child, Some(root));
 
-    let json = SaveSceneJson(&world, "JsonTest").unwrap();
+    let json = SaveSceneJsonPrepared(&mut world, "JsonTest").unwrap();
     let scene: SceneData = serde_json::from_str(&json).unwrap();
     assert_eq!(scene.name, "JsonTest");
     assert_eq!(scene.game_objects.len(), 1);
@@ -303,7 +305,7 @@ fn serialization_workflow_multiple_roots() {
     world.CreateGameObject("Enemy");
     world.CreateGameObject("Environment");
 
-    let json = SaveSceneJson(&world, "MultiRoot").unwrap();
+    let json = SaveSceneJsonPrepared(&mut world, "MultiRoot").unwrap();
     let mut loaded_world = World::new();
     let handles = LoadSceneJson(&json, &mut loaded_world).unwrap();
     assert_eq!(handles.len(), 3);
@@ -319,7 +321,7 @@ fn serialization_workflow_inactive_objects_preserved() {
         t.SetLocalScale(Vec3::new(0.5, 0.5, 0.5));
     });
 
-    let json = SaveSceneJson(&world, "Inactive").unwrap();
+    let json = SaveSceneJsonPrepared(&mut world, "Inactive").unwrap();
     let mut loaded_world = World::new();
     let handles = LoadSceneJson(&json, &mut loaded_world).unwrap();
     assert!(!loaded_world.IsActive(handles[0]));

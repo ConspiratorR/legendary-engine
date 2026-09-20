@@ -642,7 +642,7 @@ fn test_scenedata_components_survive_runtime_load_and_tick() {
 #[test]
 fn test_app_load_scenedata_json_into_unity_world() {
     use engine_core::components::Material;
-    use engine_core::serialization::SaveSceneJson;
+    use engine_core::serialization::SaveSceneJsonPrepared;
 
     let mut builder = AppBuilder::new();
     builder.add_plugin(CorePlugins);
@@ -658,7 +658,7 @@ fn test_app_load_scenedata_json_into_unity_world() {
                 ..Default::default()
             },
         );
-        SaveSceneJson(&author, "CrateScene").unwrap()
+        SaveSceneJsonPrepared(&mut author, "CrateScene").unwrap()
     };
 
     {
@@ -744,7 +744,7 @@ fn test_setname_setactive_gettransform_stable_under_any_storage_mode() {
 fn test_lifecycle_with_unity_world_primary_dual_read() {
     use engine_core::components::Material;
     use engine_core::scene_management::LoadSceneMode;
-    use engine_core::serialization::SaveSceneJson;
+    use engine_core::serialization::SaveSceneJsonPrepared;
 
     let mut builder = AppBuilder::new();
     builder.add_plugin(CorePlugins);
@@ -761,7 +761,7 @@ fn test_lifecycle_with_unity_world_primary_dual_read() {
                 ..Default::default()
             },
         );
-        SaveSceneJson(&author, "FlaggedScene").unwrap()
+        SaveSceneJsonPrepared(&mut author, "FlaggedScene").unwrap()
     };
 
     {

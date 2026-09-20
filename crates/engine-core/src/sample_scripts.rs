@@ -336,7 +336,7 @@ pub fn register_sample_scripts() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::serialization::{LoadSceneJson, SaveSceneJson};
+    use crate::serialization::{LoadSceneJson, SaveSceneJsonPrepared};
     use crate::world::World;
 
     #[test]
@@ -361,7 +361,7 @@ mod tests {
             },
         );
 
-        let json = SaveSceneJson(&world, "SampleScripts").unwrap();
+        let json = SaveSceneJsonPrepared(&mut world, "SampleScripts").unwrap();
         assert!(json.contains("Mover"));
         assert!(json.contains("Rotator"));
 
@@ -417,7 +417,7 @@ mod tests {
         );
 
         // SceneData props roundtrip restores player + clip JSON.
-        let json = SaveSceneJson(&world, "Anim").unwrap();
+        let json = SaveSceneJsonPrepared(&mut world, "Anim").unwrap();
         assert!(json.contains("AnimationClipPlayer"));
         assert!(json.contains("move"));
         let mut loaded = World::new();

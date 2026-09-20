@@ -621,7 +621,7 @@ Prefer prepared scene I/O under default-on: `SceneSerializer::SavePrepared` / `S
 - Dyn MonoBehaviour holders (`Box<dyn MonoBehaviour>`) are **not** migrated into ECS — array remains the runtime instance store; ECS `MonoBehaviourInstances` holds recoverable metadata only
 - engine-scene `Transform` **type remains** for package-internal scene graph + editor legacy `scene_bridge`; gameplay pose authority is `engine_core::World` / `apply_clip_pose` / `AnimationClipPlayer` (phase 14 R2)
 - VR/AR / Android NDK / WASM SceneRuntime full
-- Unprepared free-function `SaveSceneJson` callers who skip cache refresh (prefer `SaveSceneJsonPrepared` / `SceneManager::SaveSceneJson`)
+- Unprepared free-function `SaveSceneJson(&World)` — **kept** as low-level immutable API; in-repo tests/examples use `SaveSceneJsonPrepared`; prefer prepared APIs under default-on
 
 ### Phase 14 R2 — animation residual
 

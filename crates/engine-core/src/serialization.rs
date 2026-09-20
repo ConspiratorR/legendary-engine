@@ -324,8 +324,17 @@ impl Default for SceneSerializer {
     }
 }
 
-/// Save a scene to JSON string (does not refresh caches; prefer
-/// [`SaveSceneJsonPrepared`] when `unity-world-primary` may be on).
+/// Save a scene to JSON string **without** refreshing storage caches.
+///
+/// Low-level path: takes `&World` so it cannot call
+/// [`World::prepare_scene_io_cache`]. Under `unity-world-primary`
+/// (engine-core **default** since phase 13), array pose/link caches may be
+/// stale relative to ECS authority.
+///
+/// Prefer [`SaveSceneJsonPrepared`] (or [`SceneSerializer::SavePrepared`] /
+/// `engine_core::scene_management::SceneManager::SaveSceneJson`) for gameplay
+/// and tools. Keep this free function only for immutable or already-prepared
+/// worlds.
 pub fn SaveSceneJson(world: &World, name: &str) -> Result<String, serde_json::Error> {
     let serializer = SceneSerializer::new();
     let scene = serializer.Save(world, name);
@@ -333,7 +342,7 @@ pub fn SaveSceneJson(world: &World, name: &str) -> Result<String, serde_json::Er
 }
 
 /// Save a scene to JSON after refreshing pose/hierarchy caches from ECS
-/// authority when `unity-world-primary` is enabled (phase 13).
+/// authority when `unity-world-primary` is enabled (phase 13+ recommended path).
 pub fn SaveSceneJsonPrepared(world: &mut World, name: &str) -> Result<String, serde_json::Error> {
     let serializer = SceneSerializer::new();
     let scene = serializer.SavePrepared(world, name);
@@ -1127,7 +1136,7 @@ mod tests {
         let child = world.CreateGameObject("Gun");
         world.SetParent(child, Some(root));
 
-        let json = SaveSceneJson(&world, "GameScene").unwrap();
+        let json = SaveSceneJsonPrepared(&mut world, "GameScene").unwrap();
         assert!(json.contains("Player"));
         assert!(json.contains("Gun"));
 

@@ -9,7 +9,7 @@ use engine_core::SceneRuntime;
 use engine_core::components::{Material, SpriteRenderer};
 use engine_core::event::EventBus;
 use engine_core::scene_management::LoadSceneMode;
-use engine_core::serialization::{SaveSceneJson, SceneSerializer};
+use engine_core::serialization::{SaveSceneJsonPrepared, SceneSerializer};
 use engine_core::time::Time;
 use engine_core::world::World;
 
@@ -44,7 +44,7 @@ fn main() {
         t.SetLocalPosition(engine_math::Vec3::new(0.5, 0.0, 0.0));
     });
 
-    let json = SaveSceneJson(&author, "DemoLevel").expect("serialize");
+    let json = SaveSceneJsonPrepared(&mut author, "DemoLevel").expect("serialize");
     println!("Scene JSON ({} bytes):\n{}", json.len(), json);
 
     // 2. Load into a SceneRuntime (standalone or editor Play host)
