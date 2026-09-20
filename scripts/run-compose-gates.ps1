@@ -1,20 +1,20 @@
 #!/usr/bin/env pwsh
 # Pre-merge compose gates for branch phase12-array-authority (phase 32).
-# Mirrors docs/compose/BRANCH_INDEX.md. Exits 1 on first failure summary.
+# Mirrors docs/compose/BRANCH_INDEX.md. Runs all gates; exit 1 if any failed.
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$results = @()
+$script:results = [System.Collections.Generic.List[object]]::new()
+
 function Invoke-Gate {
     param([string]$Name, [string[]]$Cmd)
     Write-Host "`n=== $Name ===" -ForegroundColor Cyan
-    $cmdLine = $Cmd -join " "
-    Write-Host $cmdLine
+    Write-Host ($Cmd -join " ")
     & $Cmd[0] @($Cmd | Select-Object -Skip 1)
     $code = $LASTEXITCODE
     $ok = ($code -eq 0)
-    $results += [pscustomobject]@{ Name = $Name; Ok = $ok; Exit = $code }
+    [void]$script:results.Add([pscustomobject]@{ Name = $Name; Ok = $ok; Exit = $code })
     if (-not $ok) {
         Write-Host "FAIL $Name (exit $code)" -ForegroundColor Red
     } else {
@@ -35,11 +35,15 @@ Invoke-Gate "fmt check" @("cargo","fmt","-p","engine-core","-p","engine-physics"
 
 Write-Host "`n========== Gate summary ==========" -ForegroundColor Yellow
 $failed = 0
-foreach ($r in $results) {
+foreach ($r in $script:results) {
     $tag = if ($r.Ok) { "PASS" } else { "FAIL" }
     $color = if ($r.Ok) { "Green" } else { "Red" }
     Write-Host ("{0,-4} {1} (exit {2})" -f $tag, $r.Name, $r.Exit) -ForegroundColor $color
     if (-not $r.Ok) { $failed++ }
+}
+if ($script:results.Count -eq 0) {
+    Write-Host "No gates recorded — script error." -ForegroundColor Red
+    exit 1
 }
 if ($failed -gt 0) {
     Write-Host "`n$failed gate(s) failed." -ForegroundColor Red

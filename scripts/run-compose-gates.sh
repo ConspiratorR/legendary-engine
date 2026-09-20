@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pre-merge compose gates for branch phase12-array-authority (phase 32).
-# Mirrors docs/compose/BRANCH_INDEX.md. Exits 1 on first failure summary.
+# Mirrors docs/compose/BRANCH_INDEX.md. Runs all gates; exit 1 if any failed.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

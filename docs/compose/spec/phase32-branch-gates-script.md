@@ -10,22 +10,22 @@ commits: 34dc3cd..HEAD
 
 ## Report
 
-**What was built** — `scripts/run-compose-gates.ps1` and `scripts/run-compose-gates.sh` execute the BRANCH_INDEX pre-merge checklist (core dual-mode tests, physics lib+integration, editor tests, examples build, wasm core/physics/editor-lib, fmt --check). Script prints PASS/FAIL per gate and exits non-zero on any failure. BRANCH_INDEX and README document the one-liner.
+**What was built** — `scripts/run-compose-gates.ps1` / `.sh` run the BRANCH_INDEX pre-merge list. After review critical: PS1 uses `$script:results` **List.Add** so the summary/exit path is not function-local (always-exit-0 bug fixed). Scripts run all gates then `exit 1` if any failed. Smoke: injected `cmd /c exit 2` aggregates as FAIL. Parent full run: all 10 gates PASS.
 
 **Verification**:
 
 | Command | Result |
 |---------|--------|
-| `pwsh scripts/run-compose-gates.ps1` | **All gates passed** |
+| `pwsh scripts/run-compose-gates.ps1` | All gates passed (10/10 in summary) |
 | core lib default / opt-out | 261 / 240 |
 | physics lib / physics_tests | 83 / 66 |
 | editor_tests | 62 |
-| wasm core / physics / editor-lib | PASS |
-| fmt --check | PASS |
+| wasm core/physics/editor + fmt | PASS |
+| PS1 fail-closed smoke | FAIL-DETECTED + exit 1 |
 
 **Journey log** —
-1. One script mirrors BRANCH_INDEX so merge checklist is executable.
-2. Feature-off core uses `--no-default-features --features audio`.
+1. PowerShell `$arr +=` inside functions is script-local — use `$script:list.Add`.
+2. Gate scripts must fail-closed (summary + non-zero exit), not only print FAIL.
 3. git merge/push not handled per user preference.
 
 ## [S1] Problem
