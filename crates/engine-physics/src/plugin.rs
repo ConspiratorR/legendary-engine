@@ -75,3 +75,44 @@ impl Plugin for Physics2DPlugin {
         app.add_fixed_ecs_system(physics_2d_step_system);
     }
 }
+
+/// FixedUpdate system: Unity World Rigidbody ↔ physics ECS ↔ World pose (phase 18).
+///
+/// Runs only when [`engine_core::scene_runtime::SceneRuntime`] is present
+/// (CorePlugins / SceneRuntimePlugin). Simulates on identity-bridge entities
+/// and writes results back with storage-authority `SetLocalPosition`.
+fn unity_physics_step_system(world: &mut engine_ecs::world::World) {
+    let fixed_dt = world
+        .get_resource::<engine_core::time::Time>()
+        .map(|t| t.fixedDeltaTime())
+        .unwrap_or(1.0 / 50.0);
+
+    let Some(mut runtime) = world.remove_resource::<engine_core::scene_runtime::SceneRuntime>()
+    else {
+        return;
+    };
+
+    // Ensure PhysicsWorld resource exists.
+    if world.get_resource::<PhysicsWorld>().is_none() {
+        world.insert_resource(PhysicsWorld::default());
+    }
+
+    crate::unity_bridge::unity_physics_fixed_step(&mut runtime, world, fixed_dt);
+
+    world.insert_resource(runtime);
+}
+
+/// Plugin: Unity World-driven physics (requires SceneRuntime for GameObjects).
+///
+/// Prefer this over bare [`PhysicsPlugin`] when gameplay uses Unity
+/// Rigidbody/MonoBehaviour rather than raw ECS physics components.
+pub struct UnityPhysicsPlugin;
+
+impl Plugin for UnityPhysicsPlugin {
+    fn build(&self, app: &mut AppBuilder) {
+        if app.world_mut().get_resource::<PhysicsWorld>().is_none() {
+            app.insert_resource(PhysicsWorld::default());
+        }
+        app.add_fixed_ecs_system(unity_physics_step_system);
+    }
+}

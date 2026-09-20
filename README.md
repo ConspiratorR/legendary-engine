@@ -90,6 +90,9 @@ cargo run --example particle_demo -p engine-core
 
 # Unity 动画权威路径（clip → SceneData → SceneRuntime → World 位姿）
 cargo run --example unity_animation_demo -p engine-core
+
+# Unity 物理桥（Rigidbody 重力 → World 位姿）
+cargo run --example unity_physics_demo -p engine-core
 ```
 
 ### 俄罗斯方块
@@ -403,6 +406,15 @@ fn my_system(app: &App) {
 | **dyn MB 进 ECS** | ❌ | 明确不做 |
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
+
+### 阶段 18 — Unity 物理桥（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **unity_bridge + UnityPhysicsPlugin** | ✅ | SceneRuntime Rigidbody ↔ physics ECS ↔ `SetLocalPosition` |
+| **unity_physics_demo** | ✅ | `cargo run -p engine-core --example unity_physics_demo` |
+
+规格：`docs/compose/spec/phase18-unity-physics-bridge.md`。
 
 ### 阶段 16 — Unity 动画权威示例（同分支）
 

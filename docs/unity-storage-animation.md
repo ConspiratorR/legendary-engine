@@ -50,11 +50,27 @@ use engine_core::{AnimationClip, apply_clip_pose, AnimationClipPlayer};
 use engine_core::animation_apply::Vec3Keyframe;
 ```
 
+## 物理与 World（阶段 18）
+
+| 层 | 位置 | 角色 |
+|----|------|------|
+| Unity 组件 | `engine_core::components::Rigidbody` / colliders | 游戏侧数据 |
+| 桥 | `engine_physics::unity_bridge`（`sync_physics_from_unity` / `to_unity` / `unity_physics_fixed_step`） | World ↔ physics ECS |
+| 模拟 | `PhysicsWorld::step`（ECS `Transform` + physics `RigidBody`） | 积分/碰撞 |
+| 写回 | `World::SetLocalPosition`（storage authority） | 位姿权威路径 |
+| 插件 | `engine_physics::UnityPhysicsPlugin` | FixedUpdate：from → step → to |
+| 示例 | `cargo run --example unity_physics_demo -p engine-core` | 重力下落写 World |
+
+编辑器 Play 仍使用 `UnityPlayHost` 内的同构同步；运行时优先 `UnityPhysicsPlugin` + SceneRuntime。
+
 ## 可运行示例
 
 ```bash
 # clip → prepared SceneData → SceneRuntime tick → World 位姿
 cargo run --example unity_animation_demo -p engine-core
+
+# Rigidbody 重力 → physics step → World 位姿
+cargo run --example unity_physics_demo -p engine-core
 
 # SceneData / Material 往返
 cargo run --example runtime_scene_demo -p engine-core
