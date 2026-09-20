@@ -337,46 +337,51 @@ impl AssetDatabase {
     /// or on a timer. Without a background `notify` watcher this is cheap
     /// (stat per watched file).
     pub fn poll_hot_reload(&mut self) -> Vec<AssetReloadEvent> {
-        let mut dirty: Vec<(String, PathBuf, String)> = Vec::new(); // guid, path, name
-
-        for (guid, watch) in self.watches.iter() {
-            let Ok(meta) = std::fs::metadata(&watch.path) else {
-                continue;
-            };
-            let Ok(mtime) = meta.modified() else {
-                continue;
-            };
-            if watch.mtime.map(|old| mtime > old).unwrap_or(true) {
-                // First poll after watch or file newer
-                if watch.mtime.is_some() {
-                    dirty.push((guid.clone(), watch.path.clone(), watch.name.clone()));
-                }
-            }
+        // WASM: no reliable filesystem mtime — hot-reload is a no-op (phase 22).
+        #[cfg(target_arch = "wasm32")]
+        {
+            return Vec::new();
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut dirty: Vec<(String, PathBuf, String)> = Vec::new(); // guid, path, name
 
-        let mut events = Vec::new();
-        for (guid, path, name) in dirty {
-            let Some(watch) = self.watches.get(&guid) else {
-                continue;
-            };
-            let reload = &watch.reload;
-            match reload(&path) {
-                Ok(payload) => {
-                    if let Some(w) = self.watches.get_mut(&guid) {
-                        w.mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
-                    }
-                    self.entries.insert(name.clone(), payload);
-                    events.push(AssetReloadEvent { guid, name, path });
-                }
-                Err(_) => {
-                    // Keep old data; still bump mtime so we don't spin
-                    if let Some(w) = self.watches.get_mut(&guid) {
-                        w.mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+            for (guid, watch) in self.watches.iter() {
+                let Ok(meta) = std::fs::metadata(&watch.path) else {
+                    continue;
+                };
+                let Ok(mtime) = meta.modified() else {
+                    continue;
+                };
+                if watch.mtime.map(|old| mtime > old).unwrap_or(true) {
+                    // First poll after watch or file newer
+                    if watch.mtime.is_some() {
+                        dirty.push((guid.clone(), watch.path.clone(), watch.name.clone()));
                     }
                 }
             }
+
+            let mut events = Vec::new();
+            for (guid, path, name) in dirty {
+                let Some(watch) = self.watches.get(&guid) else {
+                    continue;
+                };
+                let reload = &watch.reload;
+                match reload(&path) {
+                    Ok(payload) => {
+                        if let Some(w) = self.watches.get_mut(&guid) {
+                            w.mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+                        }
+                        self.entries.insert(name.clone(), payload);
+                        events.push(AssetReloadEvent { guid, name, path });
+                    }
+                    Err(err) => {
+                        log::warn!("Asset hot-reload failed for {}: {err}", path.display());
+                    }
+                }
+            }
+            events
         }
-        events
     }
 
     /// Number of watched assets (hot-reload).

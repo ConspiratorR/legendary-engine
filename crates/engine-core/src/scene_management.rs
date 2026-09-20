@@ -170,20 +170,33 @@ impl SceneManager {
     }
 
     /// Load a scene from a file path into `world`.
+    ///
+    /// WASM: unsupported — use [`SceneManager::LoadSceneJson`] with a JSON string.
     pub fn LoadSceneFromFile(
         &mut self,
         world: &mut World,
         path: &Path,
         mode: LoadSceneMode,
     ) -> Result<SceneHandle, String> {
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read scene file {}: {e}", path.display()))?;
-        let name = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("Scene")
-            .to_string();
-        self.LoadSceneJson(world, &name, &json, mode)
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = (world, path, mode);
+            return Err(
+                "LoadSceneFromFile unsupported on WASM — use LoadSceneJson with a JSON string"
+                    .to_string(),
+            );
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let json = std::fs::read_to_string(path)
+                .map_err(|e| format!("Failed to read scene file {}: {e}", path.display()))?;
+            let name = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("Scene")
+                .to_string();
+            self.LoadSceneJson(world, &name, &json, mode)
+        }
     }
 
     /// Save the current Unity World as a scene JSON string.

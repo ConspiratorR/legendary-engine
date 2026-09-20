@@ -17,7 +17,18 @@
 - `libloading` 仅在 **非 wasm32** 目标依赖（`cfg(not(target_arch = "wasm32"))`）。
 - `DynamicPlugin::load` / `PluginLoader::load_all` / `AppBuilder::load_dynamic_plugins`：wasm 返回 `PluginLoadError::UnsupportedPlatform`。
 - `PluginLoader::register_all`：wasm **no-op**（不返回错误）；manifest/registry 类型仍可用。
-- **未做**：SceneRuntime 全量 WASM 跑通 / 浏览器生命周期（后续切片）。
+
+### Phase 22 — WASM SceneRuntime API 面
+
+| 路径 | WASM | 说明 |
+|------|------|------|
+| `SceneRuntime::new` / spawn / `LoadSceneJson` / `tick` | ✅ 推荐 | **JSON 字符串**场景；无文件系统 |
+| `SceneManager::LoadSceneFromFile` | ❌ | 返回 `Err`，提示改用 `LoadSceneJson` |
+| `AssetDatabase::poll_hot_reload` | ⭕ no-op | 恒返回空事件 |
+| `save_scriptable_object` / `load_scriptable_object` | ❌ | 返回错误（native 不变） |
+| 浏览器 WebGL 实机 SceneRuntime | ❌ | 后续切片 |
+
+**未做**：SceneRuntime 全量浏览器运行 / 生命周期实机验证。
 
 ### 实际运行测试
 

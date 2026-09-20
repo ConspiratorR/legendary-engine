@@ -130,60 +130,80 @@ pub fn save_scriptable_object<T: ScriptableObject>(
     name: &str,
     asset: &T,
 ) -> Result<AssetMeta, SoAssetError> {
-    if let Some(parent) = asset_path.parent() {
-        if !parent.as_os_str().is_empty() {
-            std::fs::create_dir_all(parent)?;
-        }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (asset_path, name, asset);
+        return Err(SoAssetError::Io(std::io::Error::other(
+            "save_scriptable_object unsupported on WASM",
+        )));
     }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if let Some(parent) = asset_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
 
-    let type_name = std::any::type_name::<T>()
-        .rsplit("::")
-        .next()
-        .unwrap_or("Unknown")
-        .to_string();
+        let type_name = std::any::type_name::<T>()
+            .rsplit("::")
+            .next()
+            .unwrap_or("Unknown")
+            .to_string();
 
-    let file = AssetFile {
-        format: ASSET_FORMAT_VERSION,
-        type_name: type_name.clone(),
-        name: name.to_string(),
-        data: asset,
-    };
-    let json = serde_json::to_string_pretty(&file)?;
-    std::fs::write(asset_path, json)?;
+        let file = AssetFile {
+            format: ASSET_FORMAT_VERSION,
+            type_name: type_name.clone(),
+            name: name.to_string(),
+            data: asset,
+        };
+        let json = serde_json::to_string_pretty(&file)?;
+        std::fs::write(asset_path, json)?;
 
-    // Reuse existing GUID if meta already exists (stability across saves).
-    let meta_path = meta_path_for(asset_path);
-    let meta = if meta_path.exists() {
-        let text = std::fs::read_to_string(&meta_path)?;
-        let mut m: AssetMeta = serde_json::from_str(&text)?;
-        m.name = name.to_string();
-        m.type_name = type_name;
-        m
-    } else {
-        AssetMeta::new(type_name, name)
-    };
+        // Reuse existing GUID if meta already exists (stability across saves).
+        let meta_path = meta_path_for(asset_path);
+        let meta = if meta_path.exists() {
+            let text = std::fs::read_to_string(&meta_path)?;
+            let mut m: AssetMeta = serde_json::from_str(&text)?;
+            m.name = name.to_string();
+            m.type_name = type_name;
+            m
+        } else {
+            AssetMeta::new(type_name, name)
+        };
 
-    let meta_json = serde_json::to_string_pretty(&meta)?;
-    std::fs::write(&meta_path, meta_json)?;
-    Ok(meta)
+        let meta_json = serde_json::to_string_pretty(&meta)?;
+        std::fs::write(&meta_path, meta_json)?;
+        Ok(meta)
+    }
 }
 
 /// Load a ScriptableObject from `.asset` (validates type name).
 pub fn load_scriptable_object<T: ScriptableObject>(asset_path: &Path) -> Result<T, SoAssetError> {
-    let text = std::fs::read_to_string(asset_path)?;
-    let file: AssetFile<T> = serde_json::from_str(&text)?;
-
-    let expected = std::any::type_name::<T>()
-        .rsplit("::")
-        .next()
-        .unwrap_or("Unknown");
-    if file.type_name != expected {
-        return Err(SoAssetError::TypeMismatch {
-            expected: expected.to_string(),
-            found: file.type_name,
-        });
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = asset_path;
+        return Err(SoAssetError::NotFound(
+            "load_scriptable_object unsupported on WASM".to_string(),
+        ));
     }
-    Ok(file.data)
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let text = std::fs::read_to_string(asset_path)?;
+        let file: AssetFile<T> = serde_json::from_str(&text)?;
+
+        let expected = std::any::type_name::<T>()
+            .rsplit("::")
+            .next()
+            .unwrap_or("Unknown");
+        if file.type_name != expected {
+            return Err(SoAssetError::TypeMismatch {
+                expected: expected.to_string(),
+                found: file.type_name,
+            });
+        }
+        Ok(file.data)
+    }
 }
 
 /// Load the `.meta` for an asset, if present.

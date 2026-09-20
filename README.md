@@ -407,6 +407,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 22 — WASM SceneRuntime API 面（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **JSON 场景路径** | ✅ | `LoadSceneJson` / tick 为 WASM 推荐面 |
+| **文件场景 / SO 资产 / 热重载** | ❌/no-op | 显式 Err 或 no-op；见 WASM_STATUS |
+
+规格：`docs/compose/spec/phase22-wasm-scene-runtime.md`。
+
 ### 阶段 21 — WASM 构建基线（同分支）
 
 | 项目 | 状态 | 说明 |
