@@ -193,7 +193,7 @@ Depend on Layers 0–3. Central integration point.
 
 | Crate | Purpose | Key Dependencies |
 |-------|---------|-----------------|
-| **engine-core** | `AppBuilder`, plugin system, time management, config, logging, profiler, Unity-like API (GameObject, MonoBehaviour, PlayerLoop, EventBus) | engine-asset, engine-audio, engine-ecs, engine-input, engine-math, engine-render, engine-scene, engine-window, libloading, serde, serde_json |
+| **engine-core** | `AppBuilder`, plugin system, time management, config, logging, profiler, Unity-like API (GameObject, MonoBehaviour, PlayerLoop, EventBus) | engine-asset, engine-audio, engine-ecs, engine-input, engine-math, engine-render, engine-scene, engine-window, libloading (native-only), serde, serde_json |
 
 ### Layer 5 — Systems
 
@@ -346,7 +346,7 @@ app.add_plugin_stored(MyPlugin);
 
 Dynamic plugins:
 - Are compiled as shared libraries (.dll, .so, .dylib)
-- Use `libloading` for runtime loading
+- Use `libloading` for runtime loading (native targets only; WASM → `UnsupportedPlatform`)
 - Have version compatibility checking
 - Can be installed/uninstalled without recompilation
 
@@ -544,7 +544,7 @@ RustEngine includes Unity-like built-in events:
 ### Dynamic Plugin Features
 
 Dynamic plugins require:
-- `libloading` for runtime library loading
+- `libloading` for runtime library loading (not wasm32)
 - `serde` and `serde_json` for manifest serialization
 - Plugin manifests (`plugin.json`) with version compatibility
 

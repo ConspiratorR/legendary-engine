@@ -965,12 +965,29 @@ mod tests {
         assert!(app.build().parallel_schedule.is_some());
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn test_load_dynamic_plugins_empty_dir() {
         let dir = tempfile::tempdir().unwrap();
         let mut builder = AppBuilder::new();
         let result = builder.load_dynamic_plugins(dir.path());
         assert!(result.is_ok());
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[test]
+    fn test_load_dynamic_plugins_unsupported_on_wasm() {
+        use crate::plugin_loader::PluginLoadError;
+        let dir = tempfile::tempdir().unwrap();
+        let mut builder = AppBuilder::new();
+        let result = builder.load_dynamic_plugins(dir.path());
+        assert!(result.is_err());
+        let err = result.err().unwrap();
+        assert!(
+            err.to_string().contains("not supported")
+                || err.downcast_ref::<PluginLoadError>().is_some(),
+            "expected UnsupportedPlatform on wasm; got {err}"
+        );
     }
 
     #[test]

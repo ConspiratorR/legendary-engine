@@ -15,8 +15,8 @@
 ### Phase 21 — engine-core WASM 门控
 
 - `libloading` 仅在 **非 wasm32** 目标依赖（`cfg(not(target_arch = "wasm32"))`）。
-- `DynamicPlugin::load` / `PluginLoader::load_all` / `register_all`：wasm 返回 `PluginLoadError::UnsupportedPlatform`；manifest/registry 类型仍可用。
-- `AppBuilder::load_dynamic_plugins`：wasm 返回 `UnsupportedPlatform`。
+- `DynamicPlugin::load` / `PluginLoader::load_all` / `AppBuilder::load_dynamic_plugins`：wasm 返回 `PluginLoadError::UnsupportedPlatform`。
+- `PluginLoader::register_all`：wasm **no-op**（不返回错误）；manifest/registry 类型仍可用。
 - **未做**：SceneRuntime 全量 WASM 跑通 / 浏览器生命周期（后续切片）。
 
 ### 实际运行测试
