@@ -100,8 +100,11 @@ fn unity_physics_step_system(world: &mut engine_ecs::world::World) {
 
     crate::unity_bridge::unity_physics_fixed_step(&mut runtime, world, fixed_dt);
 
-    // Phase 19: dispatch collision enter events to Unity MonoBehaviours.
-    dispatch_unity_collision_enters(&mut runtime, world);
+    // Phase 19/23/24: dispatch collision/trigger enter+exit to Unity MonoBehaviours.
+    {
+        let mut bus = engine_core::event::EventBus::new();
+        dispatch_unity_collision_enters(&mut runtime, world, &mut bus);
+    }
 
     world.insert_resource(runtime);
 }
@@ -111,7 +114,8 @@ pub fn dispatch_unity_collision_enters_for_test(
     runtime: &mut engine_core::scene_runtime::SceneRuntime,
     ecs: &mut engine_ecs::world::World,
 ) {
-    dispatch_unity_collision_enters(runtime, ecs);
+    let mut bus = engine_core::event::EventBus::new();
+    dispatch_unity_collision_enters(runtime, ecs, &mut bus);
 }
 
 /// Map physics entity index → GameObject via identity bridge links.
@@ -138,6 +142,7 @@ fn go_for_physics_id(
 pub fn dispatch_unity_collision_enters(
     runtime: &mut engine_core::scene_runtime::SceneRuntime,
     ecs: &mut engine_ecs::world::World,
+    bus: &mut engine_core::event::EventBus,
 ) {
     let events: Vec<CollisionEvent> = ecs
         .get_resource::<PhysicsWorld>()
@@ -155,7 +160,6 @@ pub fn dispatch_unity_collision_enters(
         .cloned()
         .unwrap_or_default();
     let frame = time.frameCount();
-    let mut bus = engine_core::event::EventBus::new();
 
     for ev in events.iter() {
         let Some(a) = go_for_physics_id(runtime, ev.entity_a) else {
@@ -181,17 +185,13 @@ pub fn dispatch_unity_collision_enters(
                 relative_velocity: rel,
             };
             if ev.is_enter {
-                runtime.world.invoke_collision_enter(
-                    this,
-                    collision,
-                    time.clone(),
-                    frame,
-                    &mut bus,
-                );
+                runtime
+                    .world
+                    .invoke_collision_enter(this, collision, time.clone(), frame, bus);
             } else {
                 runtime
                     .world
-                    .invoke_collision_exit(this, collision, time.clone(), frame, &mut bus);
+                    .invoke_collision_exit(this, collision, time.clone(), frame, bus);
             }
         }
     }
@@ -208,11 +208,11 @@ pub fn dispatch_unity_collision_enters(
             if ev.is_enter {
                 runtime
                     .world
-                    .invoke_trigger_enter(this, trigger, time.clone(), frame, &mut bus);
+                    .invoke_trigger_enter(this, trigger, time.clone(), frame, bus);
             } else {
                 runtime
                     .world
-                    .invoke_trigger_exit(this, trigger, time.clone(), frame, &mut bus);
+                    .invoke_trigger_exit(this, trigger, time.clone(), frame, bus);
             }
         }
     }

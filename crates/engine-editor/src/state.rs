@@ -1422,8 +1422,13 @@ impl EditorState {
             }
             Self::sync_physics_to_unity(host);
             host.runtime.world.sync_transforms();
-            // Phase 24: collision/trigger enter+exit → MonoBehaviour.
-            engine_physics::dispatch_unity_collision_enters(&mut host.runtime, &mut host.ecs);
+            // Phase 24: collision/trigger enter+exit → MonoBehaviour (shared Time + bus).
+            host.ecs.insert_resource(host.time.clone());
+            engine_physics::dispatch_unity_collision_enters(
+                &mut host.runtime,
+                &mut host.ecs,
+                &mut host.events,
+            );
             host.physics = host
                 .ecs
                 .remove_resource::<engine_physics::PhysicsWorld>()
@@ -1534,6 +1539,7 @@ impl EditorState {
             if let Some(sc) = host.runtime.world.GetComponent::<SphereCollider>(go) {
                 let mut col = Collider::sphere(sc.radius.max(0.01));
                 col.is_sensor = sc.is_trigger;
+                col.offset = sc.center;
                 if host.ecs.get::<Collider>(entity).is_some() {
                     *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
                 } else {
@@ -1543,6 +1549,7 @@ impl EditorState {
                 let h = bc.size * 0.5;
                 let mut col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
                 col.is_sensor = bc.is_trigger;
+                col.offset = bc.center;
                 if host.ecs.get::<Collider>(entity).is_some() {
                     *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
                 } else {
@@ -1556,6 +1563,12 @@ impl EditorState {
                 let mut col = Collider::capsule(cc.radius.max(0.01), cc.height.max(0.02));
                 col.is_sensor = cc.is_trigger;
                 col.offset = cc.center;
+                if cc.direction != 1 {
+                    log::warn!(
+                        "CapsuleCollider.direction={} not Y — physics capsule remains Y-axis (phase 24)",
+                        cc.direction
+                    );
+                }
                 if host.ecs.get::<Collider>(entity).is_some() {
                     *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
                 } else {

@@ -452,10 +452,13 @@ impl PhysicsWorld {
                         Vec3::new(*radius, height * 0.5, *radius)
                     }
                 };
+                // Broadphase center includes local collider offset (phase 24 critical).
+                let off = collider.offset;
+                let off_abs = Vec3::new(off.x.abs(), off.y.abs(), off.z.abs());
                 self.broadphase.insert(BroadphaseEntry {
                     entity_index: idx,
-                    center: transform.Position(),
-                    half_extents,
+                    center: transform.Position() + off,
+                    half_extents: half_extents + off_abs,
                     collision_layers: collider.collision_layers,
                     collision_mask: collider.collision_mask,
                 });

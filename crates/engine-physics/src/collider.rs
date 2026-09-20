@@ -862,8 +862,9 @@ pub fn check_collision(
     rot_b: Quat,
     collider_b: &Collider,
 ) -> Option<CollisionInfo> {
-    let a_pos = pos_a + collider_a.offset;
-    let b_pos = pos_b + collider_b.offset;
+    // Collider offset is **local space**; rotate into world before adding (phase 24).
+    let a_pos = pos_a + rot_a * collider_a.offset;
+    let b_pos = pos_b + rot_b * collider_b.offset;
 
     match (&collider_a.shape, &collider_b.shape) {
         (ColliderShape::Sphere { radius: r1 }, ColliderShape::Sphere { radius: r2 }) => {

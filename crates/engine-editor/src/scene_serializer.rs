@@ -888,19 +888,30 @@ impl EditorState {
                 );
                 match physics.collider_type.as_str() {
                     "Box" => {
-                        self.world
-                            .AddComponent(handle, engine_core::components::BoxCollider::default());
+                        self.world.AddComponent(
+                            handle,
+                            engine_core::components::BoxCollider {
+                                is_trigger: physics.is_sensor,
+                                ..Default::default()
+                            },
+                        );
                     }
                     "Sphere" => {
                         self.world.AddComponent(
                             handle,
-                            engine_core::components::SphereCollider::default(),
+                            engine_core::components::SphereCollider {
+                                is_trigger: physics.is_sensor,
+                                ..Default::default()
+                            },
                         );
                     }
                     "Capsule" => {
                         self.world.AddComponent(
                             handle,
-                            engine_core::components::CapsuleCollider::default(),
+                            engine_core::components::CapsuleCollider {
+                                is_trigger: physics.is_sensor,
+                                ..Default::default()
+                            },
                         );
                     }
                     _ => {}

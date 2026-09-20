@@ -104,6 +104,7 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
         if let Some(sc) = runtime.world.GetComponent::<SphereCollider>(go) {
             let mut col = Collider::sphere(sc.radius.max(0.01));
             col.is_sensor = sc.is_trigger;
+            col.offset = sc.center;
             if ecs.get::<Collider>(entity).is_some() {
                 *ecs.get_mut::<Collider>(entity).unwrap() = col;
             } else {
@@ -113,6 +114,7 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
             let h = bc.size * 0.5;
             let mut col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
             col.is_sensor = bc.is_trigger;
+            col.offset = bc.center;
             if ecs.get::<Collider>(entity).is_some() {
                 *ecs.get_mut::<Collider>(entity).unwrap() = col;
             } else {

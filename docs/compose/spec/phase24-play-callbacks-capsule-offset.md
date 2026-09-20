@@ -21,10 +21,11 @@ commits: 8e94ae3..HEAD
 | `cargo test -p engine-editor --test editor_tests` | PASS **62** |
 
 **Journey log** —
-1. `PhysicsWorld` is not `Clone` — Play host moves resource onto ECS via `mem::replace` + restore.
-2. Dispatch function must be public for editor reuse.
-3. Capsule non-Y direction is warn-only until oriented capsule shape exists.
-4. git merge/push not handled per user preference.
+1. `PhysicsWorld` is not `Clone` — Play host moves resource via `mem::replace` + restore.
+2. Broadphase must add `Collider.offset` to AABB center or offset shapes miss narrow-phase.
+3. Offset is **local** space: `pos + rot * offset` in `check_collision`.
+4. Scene load restores `is_sensor` onto Sphere/Box/Capsule `is_trigger`.
+5. Play dispatch uses host `Time` + `host.events`; git merge/push not handled.
 
 ## [S1] Problem
 Phase 23 residuals: Play callbacks, capsule center, serialized is_sensor.
