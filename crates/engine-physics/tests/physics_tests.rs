@@ -824,10 +824,16 @@ fn ccd_probe_offset_world_center() {
         .unwrap_or_default();
     let offset = Vec3::new(0.0, 1.0, 0.0);
     let center_y = origin.y + offset.y;
-    // Center should be clamped near wall (y≈0), not tunneled to +4.
+    // Phase 28 discriminators:
+    // - World-center sweep parks **center** just below the wall (not ~0.54 from origin-sweep).
+    // - Origin writeback: body origin stays well below -1 (offset 1.0 pulled back).
     assert!(
-        center_y < 2.5,
-        "probe world center should stop near wall; origin={origin:?} center_y={center_y}"
+        center_y < 0.0,
+        "probe world center must stop below wall after CCD; center_y={center_y} origin={origin:?}"
+    );
+    assert!(
+        origin.y < -1.0,
+        "origin writeback must subtract probe offset from safe center; origin={origin:?}"
     );
 }
 
