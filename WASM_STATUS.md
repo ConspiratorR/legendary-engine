@@ -1,4 +1,4 @@
-## WASM 构建状态 (更新于 2026-07-13, phase 22)
+## WASM 构建状态 (更新于 2026-07-13, phase 31)
 
 ### 编译状态
 
@@ -8,7 +8,7 @@
 | engine-ecs | ✅ | `cargo build -p engine-ecs --target wasm32-unknown-unknown` |
 | engine-render | ✅ | `cargo build -p engine-render --target wasm32-unknown-unknown` |
 | **engine-core (lib)** | ✅ **phase 21** | `cargo build -p engine-core --target wasm32-unknown-unknown --no-default-features --features unity-world-primary`（或默认 features，见 phase 21） |
-| **engine-physics** | ✅ **phase 31** | `cargo build -p engine-physics --target wasm32-unknown-unknown` |
+| **engine-physics** | ✅ **phase 31** | `cargo build -p engine-physics --target wasm32-unknown-unknown`；core 依赖 **无 audio**；`rayon` 仅 native，wasm 走顺序 `for` |
 | engine-editor (lib) | ✅ | `cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib` |
 | engine-editor (bin) | ❌ | 需要原生事件循环, WASM 使用 `start_wasm()` 入口点 |
 | web-demo | ✅ | `wasm-pack build --target web --release` |

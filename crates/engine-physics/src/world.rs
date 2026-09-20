@@ -8,9 +8,42 @@ use crate::joint::JointSolver;
 use engine_core::transform::Transform;
 use engine_ecs::world::World;
 use engine_math::Vec3;
+#[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicPtr;
+
+/// Collect via rayon on native; sequential on wasm32 (phase 31).
+fn collect_pairs_parallel<T, U, F>(items: &[T], f: F) -> Vec<U>
+where
+    T: Sync,
+    F: Fn(&T) -> Option<U> + Sync + Send,
+    U: Send,
+{
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        items.par_iter().filter_map(f).collect()
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        items.iter().filter_map(f).collect()
+    }
+}
+
+/// Parallel/sequential for_each over islands (phase 31 wasm gate).
+fn for_each_island<F>(items: &HashMap<usize, Vec<usize>>, f: F)
+where
+    F: Fn((&usize, &Vec<usize>)) + Sync + Send,
+{
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        items.par_iter().for_each(|pair| f(pair));
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        items.iter().for_each(|pair| f(pair));
+    }
+}
 
 /// Union-Find data structure for grouping collision pairs into independent islands.
 struct UnionFind {
@@ -476,54 +509,51 @@ impl PhysicsWorld {
             Sensor(u32, u32),
         }
 
-        let results: Vec<NarrowResult> = pairs
-            .par_iter()
-            .filter_map(|pair| {
-                let idx_a = pair.index_a;
-                let idx_b = pair.index_b;
+        let results: Vec<NarrowResult> = collect_pairs_parallel(&pairs, |pair| {
+            let idx_a = pair.index_a;
+            let idx_b = pair.index_b;
 
-                let transform_a = world.get_by_index::<Transform>(idx_a)?;
-                let transform_b = world.get_by_index::<Transform>(idx_b)?;
-                let collider_a = world.get_by_index::<Collider>(idx_a)?;
-                let collider_b = world.get_by_index::<Collider>(idx_b)?;
+            let transform_a = world.get_by_index::<Transform>(idx_a)?;
+            let transform_b = world.get_by_index::<Transform>(idx_b)?;
+            let collider_a = world.get_by_index::<Collider>(idx_a)?;
+            let collider_b = world.get_by_index::<Collider>(idx_b)?;
 
-                // Layer mask filtering is already done in broadphase,
-                // but double-check for safety
-                if !collider_a.can_collide_with(collider_b) {
-                    return None;
-                }
+            // Layer mask filtering is already done in broadphase,
+            // but double-check for safety
+            if !collider_a.can_collide_with(collider_b) {
+                return None;
+            }
 
-                let rot_a = transform_a.Rotation();
-                let rot_b = transform_b.Rotation();
+            let rot_a = transform_a.Rotation();
+            let rot_b = transform_b.Rotation();
 
-                // Sensor pairs: overlap test only
-                if collider_a.is_sensor || collider_b.is_sensor {
-                    let overlap = check_collision(
-                        transform_a.Position(),
-                        rot_a,
-                        collider_a,
-                        transform_b.Position(),
-                        rot_b,
-                        collider_b,
-                    );
-                    if overlap.is_some() {
-                        return Some(NarrowResult::Sensor(idx_a, idx_b));
-                    }
-                    return None;
-                }
-
-                let mut info = check_collision(
+            // Sensor pairs: overlap test only
+            if collider_a.is_sensor || collider_b.is_sensor {
+                let overlap = check_collision(
                     transform_a.Position(),
                     rot_a,
                     collider_a,
                     transform_b.Position(),
                     rot_b,
                     collider_b,
-                )?;
-                info.other_entity = idx_b as u64;
-                Some(NarrowResult::Collision(idx_a, idx_b, info))
-            })
-            .collect();
+                );
+                if overlap.is_some() {
+                    return Some(NarrowResult::Sensor(idx_a, idx_b));
+                }
+                return None;
+            }
+
+            let mut info = check_collision(
+                transform_a.Position(),
+                rot_a,
+                collider_a,
+                transform_b.Position(),
+                rot_b,
+                collider_b,
+            )?;
+            info.other_entity = idx_b as u64;
+            Some(NarrowResult::Collision(idx_a, idx_b, info))
+        });
 
         // Split results into collisions and sensor events with enter/exit tracking
         self.collisions.clear();
@@ -714,7 +744,7 @@ impl PhysicsWorld {
         let solver = &self.contact_solver;
         let world_ptr = AtomicPtr::new(world as *mut World);
 
-        islands.par_iter().for_each(|(_, manifold_indices)| {
+        for_each_island(&islands, |(_, manifold_indices)| {
             // SAFETY: see invariants above — all tasks receive the same pointer
             // and access disjoint entity sets.
             let world_ref = unsafe { &mut *world_ptr.load(std::sync::atomic::Ordering::Relaxed) };

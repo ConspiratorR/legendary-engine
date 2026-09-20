@@ -1,4 +1,4 @@
-# 分支索引 — `phase12-array-authority`（阶段 12–30）
+# 分支索引 — `phase12-array-authority`（阶段 12–31）
 
 合并/推送前核对用。规格均在 `docs/compose/spec/`。**git merge/push 由用户执行。**
 
@@ -35,7 +35,9 @@ cargo test -p engine-physics --lib
 cargo test -p engine-physics --test physics_tests
 cargo test -p engine-editor --test editor_tests
 cargo build -p engine-core --examples
-cargo build -p engine-core --target wasm32-unknown-unknown
+cargo build -p engine-core --target wasm32-unknown-unknown --no-default-features --features unity-world-primary
+cargo build -p engine-physics --target wasm32-unknown-unknown
+cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
 cargo fmt -p engine-core -p engine-physics -p engine-editor --check
 ```
 

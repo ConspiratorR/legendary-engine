@@ -98,7 +98,7 @@
 - **Scene I/O 卫生（阶段 15–16）** — prepared save；`unity_animation_demo`
 - **编辑器动画 SceneData（阶段 17）** — player 往返测试；`docs/unity-storage-animation.md`
 - **Unity 物理桥（阶段 18–20）** — `unity_bridge` / `UnityPhysicsPlugin`；速度/旋转/Sleep；enter/exit + `is_trigger`→`is_sensor`
-- **WASM（阶段 21–22）** — engine-core wasm32 可编译；动态插件 `UnsupportedPlatform`；JSON SceneRuntime 面
+- **WASM（阶段 21–22, 31）** — engine-core/engine-physics wasm32 可编译；动态插件 UnsupportedPlatform；JSON SceneRuntime 面；CI wasm job 覆盖 core+physics；physics `rayon` 门控单线程
 - **物理完善（阶段 23–28）** — Capsule axis/offset；Play MB 回调；旋转 AABB；CCD 障碍+探针感知
 - **分支索引（阶段 29）** — `docs/compose/BRANCH_INDEX.md`
 - **Android 基线（阶段 30）** — `android-activity` `game-activity` feature；本机缺 NDK（见 `docs/android-setup.md`）

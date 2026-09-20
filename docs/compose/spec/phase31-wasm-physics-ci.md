@@ -10,7 +10,7 @@ commits: b1220fd..HEAD
 
 ## Report
 
-**What was built** — Probe: `engine-physics` and `engine-editor` lib build for `wasm32-unknown-unknown` on this machine. CI `wasm` job now builds **engine-core** (`--no-default-features --features unity-world-primary`) and **engine-physics** in addition to render/editor lib. WASM_STATUS lists engine-physics ✅ + phase 31 notes; BRANCH_INDEX/README row 31. SceneRuntime JSON path remains in engine-core (phase 22); browser full runtime still deferred.
+**What was built** — After review criticals: `engine-core` dep in engine-physics is `default-features = false` (**no audio/rodio**); `rayon` is a **non-wasm** dependency and `par_iter` paths (`collect_pairs_parallel`, `for_each_island`) fall back to sequential iter on wasm32. CI wasm job builds engine-core (`--no-default-features --features unity-world-primary`) + engine-physics + render + editor lib. WASM_STATUS phase 31 notes single-thread physics on wasm; BRANCH_INDEX title 12–31 + gate list includes wasm physics/editor steps.
 
 **Verification**:
 
@@ -18,18 +18,21 @@ commits: b1220fd..HEAD
 |---------|--------|
 | `cargo build -p engine-physics --target wasm32-unknown-unknown` | PASS |
 | `cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib` | PASS |
+| `cargo test -p engine-physics --lib` | PASS 83 |
+| `cargo test -p engine-physics --test physics_tests` | PASS 66 |
 | `cargo test -p engine-core --lib` | PASS 261 |
 
 **Journey log** —
-1. engine-physics wasm succeeds via engine-core `default-features=false, features=["audio"]`.
-2. CI wasm coverage expanded so regressions fail before merge.
-3. git merge/push not handled per user preference.
+1. `features=["audio"]` on engine-core dep re-enabled rodio on wasm — drop audio for physics.
+2. `rayon::par_iter` must not be used on wasm32 — cfg-gate + sequential fallback.
+3. Compile surface ≠ runtime-ready browser physics (single-thread noted in WASM_STATUS).
+4. git merge/push not handled per user preference.
 
 ## [S1] Problem
-WASM compile surface undocumented for physics; CI omitted core/physics.
+WASM physics compile surface / CI / audio+rayon deps undocumented or risky.
 
 ## [S2] Design
-Probe + CI steps + WASM_STATUS/BRANCH_INDEX.
+No-audio core dep; native-only rayon; CI wasm steps; docs.
 
 ## [S3] Out of Scope
 Browser SceneRuntime full, Android NDK, git merge/push
@@ -37,4 +40,4 @@ Browser SceneRuntime full, Android NDK, git merge/push
 ## Tasks
 
 - [x] T1: 探测 + CI wasm steps (covers: S2)
-- [x] T2: WASM_STATUS + BRANCH_INDEX + finalize (covers: S2)
+- [x] T2: WASM_STATUS + BRANCH_INDEX + criticals (covers: S2)
