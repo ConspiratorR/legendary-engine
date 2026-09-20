@@ -58,9 +58,9 @@ use engine_core::animation_apply::Vec3Keyframe;
 | 桥 | `engine_physics::unity_bridge`（`sync_physics_from_unity` / `to_unity` / `unity_physics_fixed_step`） | World ↔ physics ECS |
 | 模拟 | `PhysicsWorld::step`（ECS `Transform` + physics `RigidBody`） | 积分/碰撞 |
 | 写回 | `World::SetLocalPosition` + `SetLocalRotation`（storage authority；world→local） | 位姿/旋转 |
-| 插件 | `engine_physics::UnityPhysicsPlugin` | FixedUpdate：from → step → **OnCollisionEnter / OnTriggerEnter** → to |
+| 插件 | `engine_physics::UnityPhysicsPlugin` | FixedUpdate：from → step → **Collision/Trigger Enter+Exit** → to |
 | 碰撞载荷 | `Collision.relative_velocity = va − vb`；sensor → `OnTriggerEnter/Exit`；solid → `OnCollisionEnter/Exit` | phase 20/23 |
-| Capsule | `CapsuleCollider` → `Collider::capsule` + `is_trigger`→`is_sensor` | phase 23 |
+| Capsule | `CapsuleCollider` → `Collider::capsule` + `is_trigger`→`is_sensor`（axis/center 仍 Y 默认） | phase 23 |
 | Sleep | `Rigidbody::Sleep()` / `is_sleeping` | 桥强制休眠并清速度 |
 | 示例 | `cargo run --example unity_physics_demo -p engine-core` | 重力下落写 World |
 
@@ -87,5 +87,6 @@ cargo run --example runtime_scene_demo -p engine-core
 - `docs/compose/spec/phase15-scene-io-hygiene.md` — prepared 调用收敛
 - `docs/compose/spec/phase16-unity-animation-demo.md` — 动画端到端示例
 - `docs/compose/spec/phase17-editor-anim-docs.md` — 编辑器 SceneData + 本文档
-- `docs/compose/spec/phase18-unity-physics-bridge.md` — 运行时物理桥
+- `docs/compose/spec/phase22-wasm-scene-runtime.md` — WASM SceneRuntime API 面
+- `docs/compose/spec/phase23-collision-exit-capsule.md` — Exit 回调 + Capsule 桥
 - 契约表：`docs/migration-guide.md` §P2.4

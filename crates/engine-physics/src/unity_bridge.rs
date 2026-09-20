@@ -875,6 +875,12 @@ mod tests {
             col.is_sensor,
             "CapsuleCollider.is_trigger must map to Collider.is_sensor"
         );
+        match col.shape {
+            crate::collider::ColliderShape::Capsule { radius, height } => {
+                assert!((radius - 0.4).abs() < 1e-3 && (height - 2.0).abs() < 1e-3);
+            }
+            ref other => panic!("expected Capsule shape; got {other:?}"),
+        }
 
         // Inject enter then exit collision/sensor events and dispatch.
         let oe = runtime.entity_for(other).unwrap();

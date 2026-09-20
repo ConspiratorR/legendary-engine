@@ -129,7 +129,10 @@ fn go_for_physics_id(
     None
 }
 
-/// Fire `MonoBehaviour::OnCollisionEnter` for each `is_enter` physics event.
+/// Dispatch Unity physics collision/sensor events to MonoBehaviours.
+///
+/// `is_enter` → `OnCollisionEnter` / `OnTriggerEnter`;
+/// `is_enter == false` → `OnCollisionExit` / `OnTriggerExit` (phase 23).
 fn dispatch_unity_collision_enters(
     runtime: &mut engine_core::scene_runtime::SceneRuntime,
     ecs: &mut engine_ecs::world::World,
