@@ -444,14 +444,15 @@ impl PhysicsWorld {
             {
                 let rot = transform.Rotation();
                 let local_half = collider.shape.half_extents();
-                // Phase 26: world AABB of rotated local OBB + rotated offset.
+                // Phase 26: world AABB of rotated local OBB.
+                // Center already includes R*offset — do **not** also add |off| to half
+                // (composition rule: shift center XOR inflate half, not both).
                 let half_extents = crate::collider::rotated_aabb_half_extents(rot, local_half);
                 let off = rot * collider.offset;
-                let off_abs = Vec3::new(off.x.abs(), off.y.abs(), off.z.abs());
                 self.broadphase.insert(BroadphaseEntry {
                     entity_index: idx,
                     center: transform.Position() + off,
-                    half_extents: half_extents + off_abs,
+                    half_extents,
                     collision_layers: collider.collision_layers,
                     collision_mask: collider.collision_mask,
                 });

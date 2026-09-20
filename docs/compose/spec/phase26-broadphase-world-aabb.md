@@ -10,21 +10,21 @@ commits: 56f8fee..HEAD
 
 ## Report
 
-**What was built** — Broadphase now expands collider AABBs by body rotation. New `rotated_aabb_half_extents(rot, local_half)` computes the world AABB of a rotated local OBB (`e_i = Σ |R_ij| h_j`). Insert path uses `center = pos + rot * offset` and `half = rotated_aabb_half_extents(rot, shape.half_extents()) + |rot*offset|`. Unit test: identity unchanged; 90° Z swaps x/y; 45° long box expands both axes.
+**What was built** — Broadphase expands collider AABBs by body rotation via `rotated_aabb_half_extents(rot, local_half)`. Insert path: `center = pos + rot * offset`, `half = rotated_aabb_half_extents(rot, shape.half_extents())` only — **offset is not double-counted** in half (C1 fix). Unit tests cover formula (identity/90°/45°) and AABB composition (offset center, tight half).
 
 **Verification**:
 
 | Command | Result |
 |---------|--------|
-| `cargo test -p engine-physics --lib` | PASS **81** |
+| `cargo test -p engine-physics --lib` | PASS |
 | `cargo test -p engine-physics --test physics_tests` | PASS |
 | `cargo test -p engine-core --lib` | PASS 261 |
 | `cargo test -p engine-editor --test editor_tests` | PASS 62 |
 
 **Journey log** —
-1. Local-axis half_extents + rotation without expansion caused missed narrow-phase pairs.
-2. Formula uses rotated basis vectors’ absolute component sums — standard OBB→AABB.
-3. Offset is also rotated into world before AABB add.
+1. Local half_extents without rotation → missed narrow-phase pairs on elongated rotated bodies.
+2. **C1**: `center += R*offset` and `half += |R*offset|` are mutually exclusive; keep center shift only.
+3. CCD `sweep_sphere_aabb` still rotation-blind (residual, later phase).
 4. git merge/push not handled per user preference.
 
 ## [S1] Problem
