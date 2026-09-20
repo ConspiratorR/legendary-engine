@@ -396,7 +396,7 @@ fn my_system(app: &App) {
 | **Identity 写权威** | ✅ | 公 Set* 确保 entity 后写通；数组 dirty 时公读仍跟 ECS |
 | **Scene I/O** | ✅ | Serialize dual-read；`prepare_scene_io_cache` / `SavePrepared`；Load seed 后 ECS 权威 |
 | **MB 元数据** | ✅ | `CollectMonoBehaviours` feature on 读 Instances；holder 仍为 dyn 运行时存储 |
-| **默认开 flag** | ❌ | 本阶段只评估 ready，不改 workspace default |
+| **默认开 flag** | ❌ 历史 | 阶段 12 只评估 ready；**阶段 13 已默认开启**（见下） |
 | **dyn MB 进 ECS** | ❌ | 明确不做 |
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
