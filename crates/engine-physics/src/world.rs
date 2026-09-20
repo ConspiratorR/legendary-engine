@@ -442,16 +442,7 @@ impl PhysicsWorld {
             if let Some(transform) = world.get_by_index::<Transform>(idx)
                 && let Some(collider) = world.get_by_index::<Collider>(idx)
             {
-                let half_extents = match &collider.shape {
-                    crate::collider::ColliderShape::Sphere { radius } => Vec3::splat(*radius),
-                    crate::collider::ColliderShape::Box { half_extents } => *half_extents,
-                    crate::collider::ColliderShape::Capsule { radius, height } => {
-                        Vec3::new(*radius, radius + height * 0.5, *radius)
-                    }
-                    crate::collider::ColliderShape::Cylinder { radius, height } => {
-                        Vec3::new(*radius, height * 0.5, *radius)
-                    }
-                };
+                let half_extents = collider.shape.half_extents();
                 // Broadphase center includes local collider offset (phase 24 critical).
                 let off = collider.offset;
                 let off_abs = Vec3::new(off.x.abs(), off.y.abs(), off.z.abs());

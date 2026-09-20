@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 25 — Oriented Capsule（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **CapsuleAxis X/Y/Z** | ✅ | Unity `direction` → 物理轴向；segment/broadphase 轴向感知 |
+
+规格：`docs/compose/spec/phase25-oriented-capsule.md`。
+
 ### 阶段 24 — Play 回调 + Capsule 偏移（同分支）
 
 | 项目 | 状态 | 说明 |

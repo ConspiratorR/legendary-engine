@@ -124,16 +124,13 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
             .world
             .GetComponent::<engine_core::components::CapsuleCollider>(go)
         {
-            let mut col = Collider::capsule(cc.radius.max(0.01), cc.height.max(0.02));
+            let mut col = Collider::capsule_with_axis(
+                cc.radius.max(0.01),
+                cc.height.max(0.02),
+                crate::collider::CapsuleAxis::from_unity_direction(cc.direction),
+            );
             col.is_sensor = cc.is_trigger;
-            // Phase 24: center → collider offset. Direction: physics capsule is Y-only.
             col.offset = cc.center;
-            if cc.direction != 1 {
-                log::warn!(
-                    "CapsuleCollider.direction={} not Y — physics capsule remains Y-axis (phase 24)",
-                    cc.direction
-                );
-            }
             if ecs.get::<Collider>(entity).is_some() {
                 *ecs.get_mut::<Collider>(entity).unwrap() = col;
             } else {
@@ -886,8 +883,13 @@ mod tests {
             "CapsuleCollider.is_trigger must map to Collider.is_sensor"
         );
         match col.shape {
-            crate::collider::ColliderShape::Capsule { radius, height } => {
+            crate::collider::ColliderShape::Capsule {
+                radius,
+                height,
+                axis,
+            } => {
                 assert!((radius - 0.4).abs() < 1e-3 && (height - 2.0).abs() < 1e-3);
+                assert_eq!(axis, crate::collider::CapsuleAxis::Y);
             }
             ref other => panic!("expected Capsule shape; got {other:?}"),
         }

@@ -128,9 +128,14 @@ fn cuboid_collider_shape() {
 fn capsule_collider_shape() {
     let c = Collider::capsule(0.5, 2.0);
     match &c.shape {
-        engine_physics::collider::ColliderShape::Capsule { radius, height } => {
+        engine_physics::collider::ColliderShape::Capsule {
+            radius,
+            height,
+            axis,
+        } => {
             assert!((radius - 0.5).abs() < 1e-6);
             assert!((height - 2.0).abs() < 1e-6);
+            assert_eq!(*axis, engine_physics::CapsuleAxis::Y);
         }
         _ => panic!("Expected Capsule shape"),
     }

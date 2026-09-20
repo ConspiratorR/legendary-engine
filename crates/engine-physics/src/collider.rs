@@ -3,6 +3,38 @@
 #![allow(clippy::too_many_arguments)]
 use engine_math::{Quat, Vec3};
 
+/// Capsule long-axis in local space (Unity `CapsuleCollider.direction`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CapsuleAxis {
+    /// Direction 0 — local X.
+    X,
+    /// Direction 1 — local Y (default).
+    #[default]
+    Y,
+    /// Direction 2 — local Z.
+    Z,
+}
+
+impl CapsuleAxis {
+    /// Unity CapsuleCollider.direction (0/1/2) → axis.
+    pub fn from_unity_direction(d: i32) -> Self {
+        match d {
+            0 => CapsuleAxis::X,
+            2 => CapsuleAxis::Z,
+            _ => CapsuleAxis::Y,
+        }
+    }
+
+    /// Unit vector along the long axis.
+    pub fn unit(self) -> Vec3 {
+        match self {
+            CapsuleAxis::X => Vec3::new(1.0, 0.0, 0.0),
+            CapsuleAxis::Y => Vec3::new(0.0, 1.0, 0.0),
+            CapsuleAxis::Z => Vec3::new(0.0, 0.0, 1.0),
+        }
+    }
+}
+
 /// Shape of the collider.
 #[derive(Debug, Clone)]
 pub enum ColliderShape {
@@ -10,8 +42,12 @@ pub enum ColliderShape {
     Sphere { radius: f32 },
     /// Box shape with half-extents.
     Box { half_extents: Vec3 },
-    /// Capsule shape.
-    Capsule { radius: f32, height: f32 },
+    /// Capsule shape with optional long-axis (default Y).
+    Capsule {
+        radius: f32,
+        height: f32,
+        axis: CapsuleAxis,
+    },
     /// Cylinder shape.
     Cylinder { radius: f32, height: f32 },
 }
@@ -22,10 +58,32 @@ impl ColliderShape {
         match self {
             ColliderShape::Sphere { radius } => *radius,
             ColliderShape::Box { half_extents } => half_extents.length(),
-            ColliderShape::Capsule { radius, height } => radius + height * 0.5,
+            ColliderShape::Capsule { radius, height, .. } => radius + height * 0.5,
             ColliderShape::Cylinder { radius, height } => {
                 (radius * radius + (height * 0.5) * (height * 0.5)).sqrt()
             }
+        }
+    }
+
+    /// AABB half-extents for broadphase (local space, axis-aware capsules).
+    pub fn half_extents(&self) -> Vec3 {
+        match self {
+            ColliderShape::Sphere { radius } => Vec3::splat(*radius),
+            ColliderShape::Box { half_extents } => *half_extents,
+            ColliderShape::Capsule {
+                radius,
+                height,
+                axis,
+            } => {
+                let r = *radius;
+                let y = r + height * 0.5;
+                match axis {
+                    CapsuleAxis::X => Vec3::new(y, r, r),
+                    CapsuleAxis::Y => Vec3::new(r, y, r),
+                    CapsuleAxis::Z => Vec3::new(r, r, y),
+                }
+            }
+            ColliderShape::Cylinder { radius, height } => Vec3::new(*radius, height * 0.5, *radius),
         }
     }
 }
@@ -81,10 +139,19 @@ impl Collider {
         }
     }
 
-    /// Create a capsule collider (cylinder with hemispherical caps along local Y).
+    /// Create a capsule collider along local Y.
     pub fn capsule(radius: f32, height: f32) -> Self {
+        Self::capsule_with_axis(radius, height, CapsuleAxis::Y)
+    }
+
+    /// Create a capsule collider along a local axis (phase 25).
+    pub fn capsule_with_axis(radius: f32, height: f32, axis: CapsuleAxis) -> Self {
         Self {
-            shape: ColliderShape::Capsule { radius, height },
+            shape: ColliderShape::Capsule {
+                radius,
+                height,
+                axis,
+            },
             ..Default::default()
         }
     }
@@ -424,11 +491,12 @@ pub fn check_sphere_obb(
 // Capsule helpers and collision
 // ---------------------------------------------------------------------------
 
-/// Capsule segment endpoints in world space (axis is local Y).
-fn capsule_segment(pos: Vec3, rot: Quat, height: f32) -> (Vec3, Vec3) {
+/// Capsule segment endpoints in world space (axis-aware; default Y).
+fn capsule_segment(pos: Vec3, rot: Quat, height: f32, axis: CapsuleAxis) -> (Vec3, Vec3) {
     let half = height * 0.5;
-    let a = pos + rot * Vec3::new(0.0, -half, 0.0);
-    let b = pos + rot * Vec3::new(0.0, half, 0.0);
+    let dir = axis.unit() * half;
+    let a = pos + rot * -dir;
+    let b = pos + rot * dir;
     (a, b)
 }
 
@@ -502,13 +570,15 @@ pub fn check_capsule_capsule(
     rot_a: Quat,
     radius_a: f32,
     height_a: f32,
+    axis_a: CapsuleAxis,
     pos_b: Vec3,
     rot_b: Quat,
     radius_b: f32,
     height_b: f32,
+    axis_b: CapsuleAxis,
 ) -> Option<CollisionInfo> {
-    let (a1, a2) = capsule_segment(pos_a, rot_a, height_a);
-    let (b1, b2) = capsule_segment(pos_b, rot_b, height_b);
+    let (a1, a2) = capsule_segment(pos_a, rot_a, height_a, axis_a);
+    let (b1, b2) = capsule_segment(pos_b, rot_b, height_b, axis_b);
 
     let (cp_a, cp_b, dist) = closest_points_segment_segment(a1, a2, b1, b2);
     let combined = radius_a + radius_b;
@@ -545,8 +615,9 @@ pub fn check_sphere_capsule(
     cap_rot: Quat,
     cap_radius: f32,
     cap_height: f32,
+    cap_axis: CapsuleAxis,
 ) -> Option<CollisionInfo> {
-    let (c1, c2) = capsule_segment(cap_pos, cap_rot, cap_height);
+    let (c1, c2) = capsule_segment(cap_pos, cap_rot, cap_height, cap_axis);
     let closest = closest_point_on_segment(sphere_pos, c1, c2);
 
     let delta = sphere_pos - closest;
@@ -592,8 +663,9 @@ pub fn check_obb_capsule(
     cap_rot: Quat,
     cap_radius: f32,
     cap_height: f32,
+    cap_axis: CapsuleAxis,
 ) -> Option<CollisionInfo> {
-    let (c1, c2) = capsule_segment(cap_pos, cap_rot, cap_height);
+    let (c1, c2) = capsule_segment(cap_pos, cap_rot, cap_height, cap_axis);
     let inv_obb = obb_rot.inverse();
     let local_c1 = inv_obb * (c1 - obb_pos);
     let local_c2 = inv_obb * (c2 - obb_pos);
@@ -897,26 +969,30 @@ pub fn check_collision(
             ColliderShape::Capsule {
                 radius: r1,
                 height: h1,
+                axis: ax1,
             },
             ColliderShape::Capsule {
                 radius: r2,
                 height: h2,
+                axis: ax2,
             },
-        ) => check_capsule_capsule(a_pos, rot_a, *r1, *h1, b_pos, rot_b, *r2, *h2),
+        ) => check_capsule_capsule(a_pos, rot_a, *r1, *h1, *ax1, b_pos, rot_b, *r2, *h2, *ax2),
         (
             ColliderShape::Sphere { radius },
             ColliderShape::Capsule {
                 radius: cr,
                 height: ch,
+                axis: cax,
             },
-        ) => check_sphere_capsule(a_pos, *radius, b_pos, rot_b, *cr, *ch),
+        ) => check_sphere_capsule(a_pos, *radius, b_pos, rot_b, *cr, *ch, *cax),
         (
             ColliderShape::Capsule {
                 radius: cr,
                 height: ch,
+                axis: cax,
             },
             ColliderShape::Sphere { radius },
-        ) => check_sphere_capsule(b_pos, *radius, a_pos, rot_a, *cr, *ch).map(|mut info| {
+        ) => check_sphere_capsule(b_pos, *radius, a_pos, rot_a, *cr, *ch, *cax).map(|mut info| {
             info.normal = -info.normal;
             info
         }),
@@ -927,17 +1003,19 @@ pub fn check_collision(
             ColliderShape::Capsule {
                 radius: cr,
                 height: ch,
+                axis: cax,
             },
-        ) => check_obb_capsule(a_pos, rot_a, *h, b_pos, rot_b, *cr, *ch),
+        ) => check_obb_capsule(a_pos, rot_a, *h, b_pos, rot_b, *cr, *ch, *cax),
         (
             ColliderShape::Capsule {
                 radius: cr,
                 height: ch,
+                axis: cax,
             },
             ColliderShape::Box {
                 half_extents: h, ..
             },
-        ) => check_obb_capsule(b_pos, rot_b, *h, a_pos, rot_a, *cr, *ch).map(|mut info| {
+        ) => check_obb_capsule(b_pos, rot_b, *h, a_pos, rot_a, *cr, *ch, *cax).map(|mut info| {
             info.normal = -info.normal;
             info
         }),
@@ -1161,10 +1239,12 @@ mod tests {
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
             Vec3::new(0.6, 0.0, 0.0),
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
         );
         assert!(result.is_some());
         let info = result.unwrap();
@@ -1179,10 +1259,12 @@ mod tests {
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
             Vec3::new(3.0, 0.0, 0.0),
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
         );
         assert!(result.is_none());
     }
@@ -1195,10 +1277,12 @@ mod tests {
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
             Vec3::ZERO,
             rot,
             0.5,
             2.0,
+            CapsuleAxis::Y,
         );
         // Both at same position with perpendicular axes
         assert!(result.is_some());
@@ -1212,10 +1296,12 @@ mod tests {
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
             Vec3::new(0.0, 2.0, 0.0),
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
         );
         // End-to-end with hemispheres touching
         assert!(result.is_some());
@@ -1234,6 +1320,7 @@ mod tests {
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
         );
         assert!(result.is_some());
         let info = result.unwrap();
@@ -1249,6 +1336,7 @@ mod tests {
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
         );
         assert!(result.is_none());
     }
@@ -1262,6 +1350,7 @@ mod tests {
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
         );
         assert!(result.is_some());
     }
@@ -1280,6 +1369,7 @@ mod tests {
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
         );
         assert!(result.is_some());
         let info = result.unwrap();
@@ -1296,6 +1386,7 @@ mod tests {
             Quat::IDENTITY,
             0.5,
             2.0,
+            CapsuleAxis::Y,
         );
         assert!(result.is_none());
     }
@@ -1311,8 +1402,44 @@ mod tests {
             Quat::IDENTITY,
             0.3,
             1.0,
+            CapsuleAxis::Y,
         );
         assert!(result.is_some());
+    }
+
+    /// Phase 25 — X-axis capsule segment/shape.
+    #[test]
+    fn test_capsule_axis_x_half_extents() {
+        let c = Collider::capsule_with_axis(0.4, 2.0, CapsuleAxis::X);
+        match &c.shape {
+            ColliderShape::Capsule { axis, .. } => assert_eq!(*axis, CapsuleAxis::X),
+            _ => panic!("expected capsule"),
+        }
+        let he = c.shape.half_extents();
+        assert!((he.x - (0.4 + 1.0)).abs() < 1e-3);
+        assert!((he.y - 0.4).abs() < 1e-3);
+        // Two Y capsules side by side vs X capsule through them — segment differs.
+        let hit_y = check_sphere_capsule(
+            Vec3::new(0.0, 1.6, 0.0),
+            0.3,
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            0.4,
+            2.0,
+            CapsuleAxis::Y,
+        );
+        let hit_x = check_sphere_capsule(
+            Vec3::new(0.0, 1.6, 0.0),
+            0.3,
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            0.4,
+            2.0,
+            CapsuleAxis::X,
+        );
+        assert!(hit_y.is_some(), "Y capsule reaches y=1.6 along segment");
+        // X-axis segment is along X at y=0 — sphere at y=1.6 may miss if far.
+        let _ = hit_x;
     }
 
     // -----------------------------------------------------------------------

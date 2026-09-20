@@ -86,6 +86,7 @@ fuzz_target!(|test: CollisionTest| {
             let result = check_sphere_capsule(
                 sanitize_vec3(sp), sr,
                 sanitize_vec3(cp), Quat::IDENTITY, cr, ch,
+                engine_physics::CapsuleAxis::Y,
             );
             if let Some(info) = result {
                 assert!(info.depth > 0.0, "depth must be positive: {}", info.depth);
@@ -98,7 +99,9 @@ fuzz_target!(|test: CollisionTest| {
             let h2 = sanitize_f32(h2).abs().max(0.001);
             let result = check_capsule_capsule(
                 sanitize_vec3(p1), Quat::IDENTITY, r1, h1,
+                engine_physics::CapsuleAxis::Y,
                 sanitize_vec3(p2), Quat::IDENTITY, r2, h2,
+                engine_physics::CapsuleAxis::Y,
             );
             if let Some(info) = result {
                 assert!(info.depth > 0.0, "depth must be positive: {}", info.depth);
@@ -108,7 +111,11 @@ fuzz_target!(|test: CollisionTest| {
             let shapes = [
                 ColliderShape::Sphere { radius: 0.5 },
                 ColliderShape::Box { half_extents: Vec3::splat(0.5) },
-                ColliderShape::Capsule { radius: 0.3, height: 1.0 },
+                ColliderShape::Capsule {
+                    radius: 0.3,
+                    height: 1.0,
+                    axis: engine_physics::CapsuleAxis::Y,
+                },
                 ColliderShape::Cylinder { radius: 0.3, height: 1.0 },
             ];
             let col_a = Collider {

@@ -1560,15 +1560,13 @@ impl EditorState {
                 .world
                 .GetComponent::<engine_core::components::CapsuleCollider>(go)
             {
-                let mut col = Collider::capsule(cc.radius.max(0.01), cc.height.max(0.02));
+                let mut col = Collider::capsule_with_axis(
+                    cc.radius.max(0.01),
+                    cc.height.max(0.02),
+                    engine_physics::collider::CapsuleAxis::from_unity_direction(cc.direction),
+                );
                 col.is_sensor = cc.is_trigger;
                 col.offset = cc.center;
-                if cc.direction != 1 {
-                    log::warn!(
-                        "CapsuleCollider.direction={} not Y — physics capsule remains Y-axis (phase 24)",
-                        cc.direction
-                    );
-                }
                 if host.ecs.get::<Collider>(entity).is_some() {
                     *host.ecs.get_mut::<Collider>(entity).unwrap() = col;
                 } else {
