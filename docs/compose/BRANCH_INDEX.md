@@ -22,6 +22,9 @@
 | 27 | CCD 旋转障碍 AABB | `phase27-ccd-rotated-aabb.md` | ccd_sweep 与 broadphase 同构 |
 | 28 | CCD 探针世界中心 + offset 写回 | `phase28-ccd-probe-awareness.md` | `center < 0`；origin writeback |
 
+| 29 | 分支索引 12–28 | `phase29-branch-index.md` | BRANCH_INDEX + PROJECT_SUMMARY |
+| 30 | Android 基线探测 + `game-activity` feature | `phase30-android-baseline.md` | 本机缺 NDK；文档/feature 就绪 |
+
 ## 推荐门禁（合并前）
 
 ```powershell

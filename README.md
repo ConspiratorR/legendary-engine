@@ -407,6 +407,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 30 — Android 基线探测（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **android-activity game-activity** | ✅ | workspace feature 就绪 |
+| **本机 NDK** | ❌ | 缺 clang；见 `docs/android-setup.md` Phase 30 |
+
+规格：`docs/compose/spec/phase30-android-baseline.md`。
+
 ### 阶段 29 — 分支索引（同分支）
 
 | 项目 | 状态 | 说明 |
