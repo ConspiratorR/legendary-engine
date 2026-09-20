@@ -74,7 +74,7 @@ jobs:
           cargo run --example basic -p engine-core --timeout 10s || true
 
   unity-world-primary:
-    name: Unity World Primary
+    name: Unity World dual-mode
     needs: [fmt, clippy]
     runs-on: ubuntu-latest
     steps:
@@ -89,17 +89,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwayland-dev libxkbcommon-dev libudev-dev libasound2-dev
 
-      - name: engine-core lib tests (feature on)
-        run: cargo test -p engine-core --lib --features unity-world-primary
-
-      - name: engine-core lifecycle tests (feature on)
-        run: cargo test -p engine-core --test unity_lifecycle_tests --features unity-world-primary
-
-      - name: engine-core lib tests (feature off)
+      # Phase 13: default includes unity-world-primary — "on" is the default build.
+      - name: engine-core lib tests (default / feature on)
         run: cargo test -p engine-core --lib
 
-      - name: engine-core lifecycle tests (feature off)
+      - name: engine-core lifecycle tests (default / feature on)
         run: cargo test -p engine-core --test unity_lifecycle_tests
+
+      # Opt-out path: must disable default features (bare cargo test is NOT feature-off).
+      - name: engine-core lib tests (feature off / array authority)
+        run: cargo test -p engine-core --lib --no-default-features --features audio
+
+      - name: engine-core lifecycle tests (feature off / array authority)
+        run: cargo test -p engine-core --test unity_lifecycle_tests --no-default-features --features audio
 
   wasm:
     name: WASM Build

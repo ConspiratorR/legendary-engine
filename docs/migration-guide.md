@@ -505,7 +505,7 @@ When `unity-world-primary` is enabled, public Unity World **read** APIs follow s
 | `GetParent` | hierarchy authority (ECS Parent; Children-without-Parent = root) | `GetParentArray` |
 | `GetChildren` | ECS `GameObjectChildren` | `GetChildrenArray` |
 
-When the feature is **off** (workspace default), the same public APIs always read **array / GameObject** storage even if ECS mirrors exist.
+When the feature is **off** (`default-features = false, features = ["audio"]` opt-out), the same public APIs always read **array / GameObject** storage even if ECS mirrors exist. **Workspace default is feature ON** since phase 13.
 
 **Array accessors under feature on (R1-full):**
 
@@ -515,7 +515,7 @@ When the feature is **off** (workspace default), the same public APIs always rea
 
 Do **not** use dual-read `GetTransform` to compute world coordinates when you need the composed world pose cache — use refreshed `GetTransformArray` after `sync_transforms` / `prepare_scene_io_cache`.
 
-Phase 12 (R1-full) note: dual-read + write-authority + full authority contract for Identity/Hierarchy/Pose/Scene I/O/MB metadata are delivered on branch `phase12-array-authority`. Dyn holders are **not** migrated into ECS. Workspace default features stay `["audio"]`.
+Phase 12–13 note: R1-full authority contract is delivered; `engine-core` default features are `["audio", "unity-world-primary"]`. Dyn holders are **not** migrated into ECS. Opt-out is documented above.
 
 ### Write-through contract
 
@@ -544,8 +544,8 @@ world.with_ecs_transform_mut(handle, |t| {
 
 | Mode | Transform public writers | Identity (`SetName`/`SetTag`/`SetActive`/`SetLayer`) | Hierarchy (`SetParent`) | MB metadata (Serialize/Collect) | Public reads after write |
 |------|--------------------------|------------------------------------------------------|-------------------------|----------------------------------|--------------------------|
-| feature **off** (default) | array authority (`with_ecs_transform_mut` → `with_transform_mut`) | array + best-effort ECS mirrors | array authority + ECS mirror | array holders | **array** |
-| feature **on** | ECS authority + array pose cache (`with_ecs_transform_mut`) | ECS write authority + array/lookup cache | ECS Parent/Children authority + array link cache | ECS `MonoBehaviourInstances` authority; dyn holders remain array | **ECS** |
+| feature **off** (opt-out: `default-features=false` + `audio`) | array authority (`with_ecs_transform_mut` → `with_transform_mut`) | array + best-effort ECS mirrors | array authority + ECS mirror | array holders | **array** |
+| feature **on** (default) | ECS authority + array pose cache (`with_ecs_transform_mut`) | ECS write authority + array/lookup cache | ECS Parent/Children authority + array link cache | ECS `MonoBehaviourInstances` authority; dyn holders remain array | **ECS** |
 
 `with_ecs_transform_mut` falls back to `with_transform_mut` when the feature is off. After ECS-only edits, call `sync_transform_from_ecs` / `sync_all_transforms_from_ecs` (or `prepare_scene_io_cache`) to refresh array cache for any remaining array consumers.
 
@@ -597,31 +597,31 @@ Empty animation tracks leave existing pose components unchanged (no zeroing).
 | `sync_hierarchy_to_ecs` | seed/export path only (array → ECS) | write-through mirror |
 | `sync_hierarchy_from_ecs` | public hierarchy write path (ECS → array cache) | no-op |
 
-#### Experimental default-on builds (D1)
+#### Default-on builds (phase 13)
 
-`unity-world-primary` stays **off** in workspace `Cargo.toml`. For a local trial build that exercises dual-read/write-through:
+`engine-core` default features are `["audio", "unity-world-primary"]`. ECS storage authority is the **default** build.
+
+Opt-out (array authority):
 
 ```toml
-# engine-editor or a game crate Cargo.toml — only for experiment binaries
 [dependencies]
-engine-core = { path = "../engine-core", features = ["unity-world-primary"] }
+engine-core = { path = "../engine-core", default-features = false, features = ["audio"] }
 ```
 
-Or from the CLI without editing Cargo.toml:
+CLI opt-out for tests:
 
 ```bash
-cargo test -p engine-core --features unity-world-primary
-cargo run -p engine-core --example unity_gameplay_demo --features unity-world-primary
+cargo test -p engine-core --lib --no-default-features --features audio
 ```
 
-Do **not** flip `default = ["audio"]` / remove it in favor of this flag until phase 12 gate is green and a separate default-on review is approved.
+Prefer prepared scene I/O under default-on: `SceneSerializer::SavePrepared` / `SaveSceneJsonPrepared` / editor `export_core_scene_json`. Bare `SaveSceneJson` does not refresh caches first.
 
 ## Still deferred
 
 - Dyn MonoBehaviour holders (`Box<dyn MonoBehaviour>`) are **not** migrated into ECS — array remains the runtime instance store; ECS `MonoBehaviourInstances` holds recoverable metadata only
-- Enabling the flag by default (phase 12 may only **assess** readiness; flip is a separate decision)
 - engine-scene `Transform` deprecation (see roadmap P2.5)
 - VR/AR / Android NDK / WASM SceneRuntime full
+- Unprepared `SaveSceneJson` callers who skip `prepare_scene_io_cache` under default-on (prefer prepared APIs)
 
 `engine_core::TransformProxy` is re-exported from `engine_render::proxy::TransformProxy` so render systems can consume the same component type without a core→render cycle.
 

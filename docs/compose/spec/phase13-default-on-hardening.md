@@ -1,65 +1,58 @@
 ---
 feature: phase13-default-on-hardening
-status: designed
+status: delivered
 updated: 2026-07-13
 branch: phase12-array-authority
-commits: # filled at delivery
+commits: feffdb9..HEAD
 ---
 
 # Phase 13 — 默认开 flag 验收 + 残余硬化
 
 ## Report
 
-（设计阶段留空）
+**What was built** — Continuation on `phase12-array-authority` after phase 12 R1-full. Parent walks (`hierarchy::get_ancestors/get_root/is_ancestor/get_depth`, `IsActiveInHierarchy`, `is_descendant_of`) are hop-capped so corrupt parent cycles terminate. Scene I/O prefers prepared saves: `SaveSceneJsonPrepared` / `SceneSerializer::SavePrepared`; editor `to_core_scene_data` / `export_core_scene_json` / `save_scene_bundle` refresh caches first; `SceneManager::SaveSceneJson` takes `&mut World` and uses prepared. `write_transform_to_ecs` root detection uses `hierarchy_authority_parent` when the feature is on.
+
+`engine-core` default features are now `["audio", "unity-world-primary"]`. Opt-out: `default-features = false, features = ["audio"]`. In-repo feature-off test isolation: `engine-framework` / `engine-physics` / `engine-script` depend on engine-core with `default-features = false, features = ["audio"]`; `engine-editor` enables `unity-world-primary` explicitly. CI dual-mode job runs default (on) **and** `--no-default-features --features audio` (off). Docs (migration-guide, README 阶段 13, roadmap, architecture) record default-on + opt-out. Dyn MB holders remain array-backed.
+
+**Verification** (after review critical fixes):
+
+| Command | Result |
+|---------|--------|
+| `cargo test -p engine-core --lib` (default ON) | PASS **259** |
+| `cargo test -p engine-core --lib --no-default-features --features audio` (OFF) | PASS **238** |
+| `cargo test -p engine-core --test unity_lifecycle_tests` (ON) | PASS 23 |
+| `cargo test -p engine-core --test unity_lifecycle_tests --no-default-features --features audio` | PASS 21 |
+| `cargo test -p engine-core --test identity_bridge_tests` | PASS 10 |
+| `cargo test -p engine-core --test editor_tests` | PASS 24 (1 ignored pre-existing) |
+| `cargo test -p engine-editor --test editor_tests` | PASS 60 |
+| `cargo fmt -p engine-core -p engine-editor -p engine-render -p engine-scene --check` | PASS |
+
+**Journey log** —
+1. Bare `cargo test -p engine-core --lib` after default flip is **feature ON**; feature-off CI must use `--no-default-features --features audio`.
+2. Feature-off unit-test isolation requires workspace dependents that reverse-depend on engine-core to set `default-features = false` (dev-deps feature unification).
+3. `SaveSceneJson` without prepare remains a footgun under default-on — prefer prepared APIs / SceneManager wrapper.
+4. Historical phase11/12 specs still describe default-off as of those phases; current contract is migration-guide + this spec.
+5. Branch still `phase12-array-authority` (user chose direct continuation); merge/push not done by agent.
 
 ## [S1] Problem
 
-阶段 12 在 `unity-world-primary` 下交付了 R1-full 存储权威契约，但：
-
-1. 复审遗留：除 `is_descendant_of` 外，父链遍历（`IsActiveInHierarchy`、`hierarchy::get_ancestors/get_root/is_ancestor/get_depth`）无 hop 上限，损坏的 parent 环会挂起。
-2. 编辑器场景导出仍走 `Save`/`SaveSceneJson`，未在序列化前 `prepare_scene_io_cache`（feature on 时 pose cache 可能陈旧）。
-3. `write_transform_to_ecs` 根节点判定用数组 `parent.is_none()`，seed 路径可能写入错误 world pose。
-4. workspace/`engine-core` 默认 features 仍为 `["audio"]`，`unity-world-primary` 需手动打开；阶段 13 验收要求默认构建即 ECS 权威契约。
+Phase 12 left residual hop-cap gaps, unprepared editor save, seed root using array parent, and `unity-world-primary` default **off** despite dual-mode readiness.
 
 ## [S2] Design
 
-### 残余硬化
-
-| 项 | 契约 |
-|----|------|
-| 父链 hop-cap | 统一上限（沿用 `MAX_HOPS = 4096`）；超限/自环视为断链（root/无祖先），不挂起 |
-| 层级工具 | `hierarchy::get_ancestors/get_root/is_ancestor/get_depth` 使用带 cap 的 `GetParent` 行走 |
-| `IsActiveInHierarchy` | 父链 walk 使用 cap |
-| 编辑器 Save | `to_core_scene_data`/`export_core_scene_json` 及 bundle 保存：先 `world.prepare_scene_io_cache()`，再序列化；提供 mut 路径或在调用前刷新 |
-| seed 根判定 | feature on 时 `write_transform_to_ecs` 用 `hierarchy_authority_parent` 是否为 None 判断 root |
-| `SaveSceneJson` | 增加 `SaveSceneJsonPrepared(&mut World)` 或文档要求调用方 prepare；编辑器改走 prepared |
-
-### 默认开启 flag
-
-1. `engine-core` Cargo.toml：`default = ["audio", "unity-world-primary"]`。
-2. Feature **仍存在**：`default-features = false` + `features = ["audio"]` 可退回数组权威（迁移/兼容）。
-3. 文档：migration-guide / README / roadmap 说明默认 on，以及如何 opt-out。
-4. 门禁：默认构建（现等于 feature on）全绿；显式 `--no-default-features --features audio`（或仅 default-features off）仍可编译测试 feature-off 语义（若 CI 成本高则至少本地跑 core lib）。
-5. **不**删除 feature，**不**改 dyn MB 进 ECS，**不** push/merge 除非用户要求。
-
-### 验证
-
-- 默认：`cargo test -p engine-core --lib` 等（将启用 unity-world-primary）
-- 兼容：`cargo test -p engine-core --lib --no-default-features --features audio`（feature-off 语义）
-- 编辑器：`cargo test -p engine-editor --test editor_tests`
-- fmt + 相关 crate 测试与阶段 12 门禁对齐
+Hardening + default-on as specified: hop-capped parent walks; prepared scene I/O; hierarchy-authority seed roots; `engine-core` default includes `unity-world-primary`; opt-out + CI dual-mode with explicit feature-off commands; docs aligned.
 
 ## [S3] Out of Scope
 
-- 删除 `unity-world-primary` feature 或数组 cache 槽
-- dyn MB 迁 ECS
-- engine-scene 删除 / VR/AR / Android NDK / WASM SceneRuntime 全量
-- 未经要求 push / 把 phase12 合入 main（用户已选续写分支）
+- Delete `unity-world-primary` feature or array cache slots
+- Dyn MB into ECS
+- engine-scene deletion / VR/AR / Android NDK / WASM SceneRuntime full
+- Push / merge to main / branch delete
 
 ## Tasks
 
-- [ ] T1: 父链 hop-cap — `hierarchy.rs` 四函数 + `IsActiveInHierarchy` — acceptance: 自环/互环 parent 下调用返回且不挂；有单测（covers: S2）
-- [ ] T2: 编辑器/序列化 prepared save — `prepare_scene_io_cache` + prepared JSON；编辑器导出路径 — acceptance: feature-on 下 ECS pose 变更后 export 与 ECS 一致（covers: S2；depends: T1）
-- [ ] T3: seed 根判定用 hierarchy authority — `write_transform_to_ecs` — acceptance: feature-on dirty array parent 不影响 seed world pose 根刷新（covers: S2）
-- [ ] T4: 默认 features 打开 `unity-world-primary` + opt-out 文档 — Cargo.toml + migration-guide/README/roadmap — acceptance: 默认 `cargo test -p engine-core --lib` 含 R1full 契约；`--no-default-features --features audio` 仍绿（covers: S2；depends: T1,T2,T3）
-- [ ] T5: 门禁 + spec finalize — 双模态（default / feature-off）记录 — acceptance: Report 写入命令与计数（covers: S2；depends: T4）
+- [x] T1: 父链 hop-cap — hierarchy + IsActiveInHierarchy；自环/互环单测 (covers: S2)
+- [x] T2: Prepared scene save + 编辑器导出 (covers: S2; depends: T1)
+- [x] T3: seed 根判定 hierarchy authority + 测试 (covers: S2)
+- [x] T4: 默认 features 含 unity-world-primary + opt-out 文档 + CI 修正 (covers: S2; depends: T1,T2,T3)
+- [x] T5: 门禁 + spec finalize (covers: S2; depends: T4)

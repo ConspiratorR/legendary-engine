@@ -100,7 +100,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 **P2.b — 存储合并（后做，大）**
 | ID | 任务 | 说明 |
 |----|------|------|
-| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read + dual-write + 写权威切片 + **阶段 12 R1-full**：feature on 时 Identity/Hierarchy/Pose/Scene I/O/MB 元数据权威在 ECS，数组为 cache；dyn MB holder 仍数组；默认 flag **off**（`phase12-array-authority`） |
+| P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read + dual-write + R1-full + **阶段 13 默认开 `unity-world-primary`**：默认构建 Identity/Hierarchy/Pose/Scene I/O/MB 元数据权威在 ECS，数组为 cache；dyn MB holder 仍数组；opt-out 见 migration-guide |
 | P2.5 | 弃用 `engine-scene` 中重复 Transform | **盘点 + 模块 doc 完成**；`scene_bridge` 为可选桥；动画 keyframe 仍依赖 engine-scene（阶段 11 S4）；`light_collect_system` 已优先 TransformProxy（P2.13 ✅） |
 | P2.6 | Editor 只依赖 `engine_core::world::World` | 视口/命令/`new_scene` 已对齐 World；打开优先 `.runtime.json` 孪生；自动保存走 `save_scene_bundle`；旧 ECS Scene 仅作回退 | 大部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
@@ -116,7 +116,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 | P2.17 | R1d：ECS 主写路径 | `with_ecs_transform_mut` / `sync_transform_from_ecs` / `sync_all_transforms_from_ecs`；feature 下数组为 pose 缓存 | ✅ 切片 |
 
 ### 风险控制
-1. 全程用 feature flag：`unity-world-primary`（默认 off）
+1. Feature flag `unity-world-primary` 在 phase 13 已进 `engine-core` **default**；回归验证用 `--no-default-features --features audio`
 2. 每步保证 `cargo test -p engine-core -p engine-editor` 绿
 3. **禁止** 同时改渲染 Pass 内部；只改「数据从哪来」
 
@@ -232,8 +232,9 @@ Day 6+ P2.b 存储合并（可延后到下个迭代）              → 独立 P
 - 示例：`coroutine_demo`、`runtime_scene_demo`、`unity_gameplay_demo`、`so_asset`  
 - Unity 主路径：`main`（`unity-lifecycle-refactor`、`p2-viewport-unity-source` 等均已合入，无未合提交）  
 - **阶段 11（`phase11-r1-read`）**：dual-read ✅、写权威切片 ✅、动画位姿 ✅、编辑器 Play/拾取 ✅  
-- **阶段 12（`phase12-array-authority`）**：R1-full 存储权威契约 ✅（feature on ECS 权威 + 数组 cache）；dyn MB 不进 ECS；默认 flag 仍 off  
-- 门禁记录：`docs/compose/spec/phase12-array-authority.md`  
+- **阶段 12（`phase12-array-authority`）**：R1-full 存储权威契约 ✅（ECS 权威 + 数组 cache）；dyn MB 不进 ECS  
+- **阶段 13（同分支续写）**：hop-cap、prepared scene save、**默认 features 含 `unity-world-primary`** ✅；opt-out 为 `default-features=false, features=["audio"]`  
+- 门禁记录：`docs/compose/spec/phase13-default-on-hardening.md`  
 - 本地已合分支清理：会话策略禁止 agent 删 ref，需用户/orchestrator 执行 `git branch -d`
 
 ### PR 描述草稿（P5.6，合并时用）

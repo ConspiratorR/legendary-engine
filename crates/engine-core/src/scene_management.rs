@@ -187,8 +187,10 @@ impl SceneManager {
     }
 
     /// Save the current Unity World as a scene JSON string.
-    pub fn SaveSceneJson(&mut self, world: &World, name: &str) -> Result<String, String> {
-        serialization::SaveSceneJson(world, name).map_err(|e| e.to_string())
+    ///
+    /// Refreshes pose/hierarchy caches from ECS when `unity-world-primary` is on.
+    pub fn SaveSceneJson(&mut self, world: &mut World, name: &str) -> Result<String, String> {
+        serialization::SaveSceneJsonPrepared(world, name).map_err(|e| e.to_string())
     }
 
     /// Register existing root handles as a loaded scene (editor/runtime bridge).

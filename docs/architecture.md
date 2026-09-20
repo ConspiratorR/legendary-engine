@@ -534,7 +534,7 @@ RustEngine includes Unity-like built-in events:
 
 | Crate | Feature | Description |
 |-------|---------|-------------|
-| `engine-core` | `audio` (default) | Enable audio system via `engine-audio` |
+| `engine-core` | `audio` + `unity-world-primary` (default) | Audio via `engine-audio`; ECS storage authority (phase 13). Opt-out: `default-features = false, features = ["audio"]` |
 | `engine-ecs` | `jobs-backend` | Use `engine-jobs` for parallel system execution |
 | `engine-editor` | `scripting` (default) | Lua scripting support via `mlua` |
 | `engine-editor` | `native-dialogs` (default) | Native file dialogs via `rfd` |

@@ -4483,4 +4483,76 @@ mod tests {
         let TransformData { local_position, .. } = scene.game_objects[0].transform;
         assert_eq!(local_position.x, 2.0);
     }
+
+    /// Phase 13 — mutual parent cycle terminates (hop-cap), does not hang.
+    #[test]
+    fn test_phase13_mutual_parent_cycle_terminates() {
+        let mut world = World::new();
+        let a = world.CreateGameObject("A");
+        let b = world.CreateGameObject("B");
+        world.SetParent(b, Some(a));
+
+        // Plant A↔B cycle on the storage authority path used by GetParent.
+        if World::unity_world_primary_feature() {
+            if let Some(ea) = world.entity_for(a) {
+                if world.ecs.get::<GameObjectParent>(ea).is_some() {
+                    *world.ecs.get_mut::<GameObjectParent>(ea).unwrap() = GameObjectParent(b);
+                } else {
+                    world.ecs.add_component(ea, GameObjectParent(b));
+                }
+            }
+            if let Some(eb) = world.entity_for(b) {
+                if world.ecs.get::<GameObjectParent>(eb).is_some() {
+                    *world.ecs.get_mut::<GameObjectParent>(eb).unwrap() = GameObjectParent(a);
+                } else {
+                    world.ecs.add_component(eb, GameObjectParent(a));
+                }
+            }
+            // Ensure Children mirrors exist so authority parent is used.
+            let _ = world.GetChildren(a);
+            let _ = world.GetChildren(b);
+        } else if let Some(Some(t)) = world.transforms.get_mut(a.index() as usize) {
+            t.parent = Some(b);
+        }
+
+        let _ = crate::hierarchy::get_root(&world, a);
+        let _ = crate::hierarchy::get_ancestors(&world, a);
+        let _ = crate::hierarchy::get_depth(&world, a);
+        let _ = world.IsActiveInHierarchy(a);
+        world.SetParent(a, Some(b));
+    }
+
+    /// Phase 13 — seed root uses hierarchy authority (dirty array parent on ECS root).
+    #[cfg(feature = "unity-world-primary")]
+    #[test]
+    fn test_phase13_seed_root_uses_hierarchy_authority() {
+        let mut world = World::new();
+        let root = world.CreateGameObject("SeedRoot");
+        world.SetLocalPosition(root, Vec3::new(4.0, 5.0, 6.0));
+        world.seed_ecs_from_array(root);
+        let ghost = world.CreateGameObject("Ghost");
+
+        // Dirty array parent so root looks parented; ECS hierarchy still root.
+        if let Some(Some(t)) = world.transforms.get_mut(root.index() as usize) {
+            t.parent = Some(ghost);
+        }
+
+        let e = world.entity_for(root).unwrap();
+        if world.ecs.get::<Transform>(e).is_some() {
+            *world.ecs.get_mut::<Transform>(e).unwrap() = Transform::from_xyz(0.0, 0.0, 0.0);
+        } else {
+            world
+                .ecs
+                .add_component(e, Transform::from_xyz(0.0, 0.0, 0.0));
+        }
+
+        world.write_transform_to_ecs(root);
+        let t = world.ecs.get::<Transform>(e).expect("ecs transform");
+        // Root path refreshes world from local (authority parent is None).
+        assert!((t.LocalPosition().x - 4.0).abs() < 1e-4);
+        assert!(
+            (t.Position().x - 4.0).abs() < 1e-4,
+            "world pose from local root"
+        );
+    }
 }
