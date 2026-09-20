@@ -19,6 +19,7 @@ use engine_core::gameobject::GameObjectHandle;
 use engine_core::scene_runtime::SceneRuntime;
 use engine_core::transform::Transform as CoreTransform;
 use engine_ecs::world::World as EcsWorld;
+use engine_math::Vec3;
 use std::collections::HashMap;
 
 /// Collect every valid GameObject handle under SceneRuntime World roots.
@@ -77,10 +78,17 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
             RigidBody::new_static()
         };
         body.mass = unity_rb.mass.max(0.001);
-        body.linear_velocity = unity_rb.velocity;
-        body.angular_velocity = unity_rb.angular_velocity;
         body.linear_damping = unity_rb.drag;
         body.angular_damping = unity_rb.angular_drag;
+        // Velocity authority: simulation owns velocity on existing bodies.
+        // Only seed from Unity on first insert (or when Unity publishes a non-zero velocity).
+        let is_new = ecs.get::<RigidBody>(entity).is_none();
+        if is_new || unity_rb.velocity != Vec3::ZERO {
+            body.linear_velocity = unity_rb.velocity;
+        }
+        if is_new || unity_rb.angular_velocity != Vec3::ZERO {
+            body.angular_velocity = unity_rb.angular_velocity;
+        }
         if ecs.get::<RigidBody>(entity).is_some() {
             *ecs.get_mut::<RigidBody>(entity).unwrap() = body;
         } else {
@@ -108,10 +116,12 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
     synced
 }
 
-/// Write simulated ECS world positions back onto Unity World for bodies.
+/// Write simulated ECS world pose **and velocity** back onto Unity World.
 ///
-/// Uses `SetLocalPosition` / `with_ecs_transform_mut` (storage authority path).
-/// Only objects that have both a linked entity and a physics `RigidBody` are written.
+/// Pose: physics stores world position; convert to parent-local before
+/// `SetLocalPosition` so parented bodies stay coherent. Velocity is written
+/// back onto Unity `Rigidbody` so the next `from_unity` does not zero the
+/// simulation state.
 pub fn sync_physics_to_unity(runtime: &mut SceneRuntime, ecs: &EcsWorld) -> usize {
     let handles = collect_unity_handles(&runtime.world);
     let mut written = 0usize;
@@ -125,12 +135,35 @@ pub fn sync_physics_to_unity(runtime: &mut SceneRuntime, ecs: &EcsWorld) -> usiz
         let Some(ecs_t) = ecs.get::<CoreTransform>(entity) else {
             continue;
         };
-        let pos = ecs_t.Position();
-        runtime.world.SetLocalPosition(go, pos);
+        let world_pos = ecs_t.Position();
+        let local = world_to_local_position(&runtime.world, go, world_pos);
+        runtime.world.SetLocalPosition(go, local);
+
+        // Round-trip velocity onto Unity Rigidbody (simulation → gameplay view).
+        if let Some(body) = ecs.get::<RigidBody>(entity)
+            && let Some(rb) = runtime.world.GetComponentMut::<Rigidbody>(go)
+        {
+            rb.velocity = body.linear_velocity;
+            rb.angular_velocity = body.angular_velocity;
+        }
         written += 1;
     }
     runtime.world.sync_transforms();
     written
+}
+
+/// Convert a world-space point into `go` local space using the parent's inverse.
+fn world_to_local_position(
+    unity: &engine_core::world::World,
+    go: GameObjectHandle,
+    world_pos: engine_math::Vec3,
+) -> engine_math::Vec3 {
+    if let Some(parent) = unity.GetParent(go)
+        && let Some(pt) = unity.GetTransform(parent)
+    {
+        return pt.InverseTransformPoint(world_pos);
+    }
+    world_pos
 }
 
 /// Fixed-step: Unity → physics, step, physics → Unity.
@@ -154,7 +187,7 @@ mod tests {
     fn test_unity_physics_gravity_writes_world_pose() {
         let mut runtime = SceneRuntime::new();
         let go = runtime.world.CreateGameObject("Falling");
-        runtime.world.SetLocalPosition(go, Vec3::new(0.0, 5.0, 0.0));
+        runtime.world.SetLocalPosition(go, Vec3::new(0.0, 8.0, 0.0));
         runtime.world.AddComponent(
             go,
             UnityRb {
@@ -166,24 +199,33 @@ mod tests {
         runtime.world.AddComponent(
             go,
             engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
                 radius: 0.5,
-                ..Default::default()
+                is_trigger: false,
             },
         );
 
         let mut ecs = EcsWorld::new();
         ecs.insert_resource(PhysicsWorld::default());
 
-        let y0 = runtime.world.GetTransform(go).unwrap().LocalPosition().y;
-
-        for _ in 0..10 {
+        // ~0.5 s free-fall with velocity accumulation (not n·g·dt² zero-reset).
+        for _ in 0..25 {
             unity_physics_fixed_step(&mut runtime, &mut ecs, 0.02);
         }
 
         let y1 = runtime.world.GetTransform(go).unwrap().LocalPosition().y;
         assert!(
-            y1 < y0 - 0.01,
-            "gravity should pull World Y down; y0={y0} y1={y1}"
+            y1 < 8.0 - 0.5,
+            "velocity must accumulate under gravity; end Y={y1}"
+        );
+        let rb = runtime
+            .world
+            .GetComponent::<UnityRb>(go)
+            .expect("Rigidbody");
+        assert!(
+            rb.velocity.y < -0.5,
+            "to_unity should write back downward linear_velocity; got {:?}",
+            rb.velocity
         );
     }
 

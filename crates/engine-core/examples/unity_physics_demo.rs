@@ -1,9 +1,8 @@
-//! Unity physics bridge demo — Rigidbody gravity → World pose via fixed step.
+//! Unity physics bridge demo — Rigidbody gravity → World pose via `UnityPhysicsPlugin`.
 //!
 //! Run: `cargo run -p engine-core --example unity_physics_demo`
 //!
-//! Uses `engine_physics::unity_physics_fixed_step` (runtime counterpart of
-//! editor Play-host physics sync). No GPU / window.
+//! Uses only the plugin FixedUpdate path (no manual double-step). No GPU/window.
 
 use engine_core::app::AppBuilder;
 use engine_core::components::{Rigidbody, SphereCollider};
@@ -21,8 +20,6 @@ fn main() {
     let mut app = builder.build();
     app.set_running(true);
 
-    // Spawn a falling body on the first lifecycle frame via Phase::Update? Prefer
-    // mutate SceneRuntime directly after build.
     {
         let runtime = app
             .world_mut()
@@ -48,26 +45,18 @@ fn main() {
         );
     }
 
-    println!("Start Y = 8.0");
+    println!("Start Y = 8.0 (plugin FixedUpdate only)");
     for frame in 0..30 {
         app.run_with_lifecycle(0.02);
-
-        // Deterministic extra bridge step (plugin FixedUpdate may also run).
-        {
-            let ecs = app.world_mut();
-            if let Some(mut runtime) = ecs.remove_resource::<SceneRuntime>() {
-                engine_physics::unity_physics_fixed_step(&mut runtime, ecs, 0.02);
-                ecs.insert_resource(runtime);
-            }
-        }
-
         if frame % 5 == 0 || frame == 29 {
-            let y = {
+            let (y, vy) = {
                 let rt = app.unity_world_ref().expect("unity world");
                 let h = rt.Find("Ball").expect("Ball");
-                rt.GetTransform(h).unwrap().LocalPosition().y
+                let t = rt.GetTransform(h).unwrap();
+                let rb = rt.GetComponent::<Rigidbody>(h).unwrap();
+                (t.LocalPosition().y, rb.velocity.y)
             };
-            println!("  frame {:>2} Y = {:.4}", frame + 1, y);
+            println!("  frame {:>2} Y = {:.4}  vy = {:.4}", frame + 1, y, vy);
         }
     }
 
@@ -77,9 +66,10 @@ fn main() {
         rt.GetTransform(h).unwrap().LocalPosition().y
     };
     println!("\nEnd Y = {end_y:.4}");
+    // 30 × 0.02 s ≈ 0.6 s free-fall → Δy ≳ 1 m when velocity accumulates.
     assert!(
-        end_y < 8.0 - 0.1,
-        "World Y should fall under gravity via unity physics bridge"
+        end_y < 7.0,
+        "World Y must fall substantially under accumulated gravity; got {end_y}"
     );
     println!("=== Demo Complete ===");
 }

@@ -1490,10 +1490,17 @@ impl EditorState {
                 RigidBody::new_static()
             };
             body.mass = unity_rb.mass.max(0.001);
-            body.linear_velocity = unity_rb.velocity;
-            body.angular_velocity = unity_rb.angular_velocity;
             body.linear_damping = unity_rb.drag;
             body.angular_damping = unity_rb.angular_drag;
+            // Simulation owns velocity once the body exists; seed only on create
+            // or when Unity publishes a non-zero velocity (phase18 critical fix).
+            let is_new = host.ecs.get::<RigidBody>(entity).is_none();
+            if is_new || unity_rb.velocity != engine_math::Vec3::ZERO {
+                body.linear_velocity = unity_rb.velocity;
+            }
+            if is_new || unity_rb.angular_velocity != engine_math::Vec3::ZERO {
+                body.angular_velocity = unity_rb.angular_velocity;
+            }
             if host.ecs.get::<RigidBody>(entity).is_some() {
                 *host.ecs.get_mut::<RigidBody>(entity).unwrap() = body;
             } else {
@@ -1541,11 +1548,30 @@ impl EditorState {
             if host.ecs.get::<engine_physics::RigidBody>(entity).is_none() {
                 continue;
             }
-            let pos = ecs_t.Position();
-            // Write local position so the next World::sync_transforms rebuilds world space.
-            let _ = host.runtime.world.with_transform_mut(go, |t| {
-                t.SetLocalPosition(pos);
+            let world_pos = ecs_t.Position();
+            // Parent-aware local conversion (phase18 critical: world ≠ local when parented).
+            let local_pos = {
+                if let Some(parent) = host.runtime.world.GetParent(go)
+                    && let Some(pt) = host.runtime.world.GetTransform(parent)
+                {
+                    pt.InverseTransformPoint(world_pos)
+                } else {
+                    world_pos
+                }
+            };
+            let _ = host.runtime.world.with_ecs_transform_mut(go, |t| {
+                t.SetLocalPosition(local_pos);
             });
+            // Write velocity back so from_unity does not zero simulation state.
+            if let Some(body) = host.ecs.get::<engine_physics::RigidBody>(entity)
+                && let Some(rb) = host
+                    .runtime
+                    .world
+                    .GetComponentMut::<engine_core::components::Rigidbody>(go)
+            {
+                rb.velocity = body.linear_velocity;
+                rb.angular_velocity = body.angular_velocity;
+            }
         }
     }
 

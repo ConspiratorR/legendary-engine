@@ -82,5 +82,7 @@ cargo run --example runtime_scene_demo -p engine-core
 - `docs/compose/spec/phase13-default-on-hardening.md` — 默认开 flag
 - `docs/compose/spec/phase14-engine-scene-residual.md` — 播放器与再导出
 - `docs/compose/spec/phase15-scene-io-hygiene.md` — prepared 调用收敛
-- `docs/compose/spec/phase16-unity-animation-demo.md` — 端到端示例
+- `docs/compose/spec/phase16-unity-animation-demo.md` — 动画端到端示例
+- `docs/compose/spec/phase17-editor-anim-docs.md` — 编辑器 SceneData + 本文档
+- `docs/compose/spec/phase18-unity-physics-bridge.md` — 运行时物理桥
 - 契约表：`docs/migration-guide.md` §P2.4

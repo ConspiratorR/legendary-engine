@@ -10,24 +10,23 @@ commits: 95647a9..HEAD
 
 ## Report
 
-**What was built** — Runtime Unity↔physics bridge in `engine-physics` (`unity_bridge.rs`): `sync_physics_from_unity` copies SceneRuntime Unity `Rigidbody`/colliders + world pose onto identity-bridge ECS entities; `PhysicsWorld::step` simulates; `sync_physics_to_unity` writes simulated world position via `World::SetLocalPosition` (storage authority). `UnityPhysicsPlugin` registers a FixedUpdate system that no-ops without SceneRuntime. Headless example `unity_physics_demo` spawns a falling ball and asserts World Y decreases. Docs updated (`unity-storage-animation.md`, README run list + 阶段 18).
+**What was built** — Runtime Unity↔physics bridge in `engine-physics` (`unity_bridge.rs`): `sync_physics_from_unity` copies SceneRuntime Unity `Rigidbody`/colliders + pose onto identity-bridge ECS entities; `PhysicsWorld::step` simulates; `sync_physics_to_unity` writes **world pose → parent-local** via `InverseTransformPoint` + `SetLocalPosition`, and **round-trips linear/angular velocity** onto Unity `Rigidbody`. Velocity authority: existing bodies keep simulation velocity; Unity non-zero velocity seeds when published. `UnityPhysicsPlugin` FixedUpdate runs from→step→to when SceneRuntime exists. Headless `unity_physics_demo` uses **plugin only** (no double-step). Editor Play-host sync applies the same velocity/parent-local fixes.
 
-**Verification**:
+**Verification** (after review critical fixes):
 
 | Command | Result |
 |---------|--------|
-| `cargo test -p engine-physics --lib` | PASS **72** (incl. gravity writes World pose; skip-without-rigidbody) |
-| `cargo run -p engine-core --example unity_physics_demo` | **PASS** — Y 8.0 → 7.76 over 30 frames; assert held |
+| `cargo test -p engine-physics --lib` | PASS **72** (gravity test asserts ΔY > 0.5 **and** Unity `velocity.y < -0.5`) |
+| `cargo run -p engine-core --example unity_physics_demo` | **PASS** — plugin-only: Y **8.0 → 6.18**, vy **0 → −5.89** (≈ g·t); assert `end_y < 7.0` |
+| `cargo test -p engine-editor --test editor_tests` | PASS 61 |
 | `cargo test -p engine-core --lib` | PASS 261 |
-| `cargo build -p engine-core --examples` | PASS |
-| `cargo fmt -p engine-physics -p engine-core` | PASS |
 
 **Journey log** —
-1. engine-core cannot depend on engine-physics (cycle) — bridge lives in `engine-physics`.
-2. Editor Play-host sync pattern reused for runtime SceneRuntime.
-3. `AppBuilder` needs `.build()` before `run_with_lifecycle` / `unity_world_ref`.
-4. Write-back uses `SetLocalPosition` (works feature on/off); do not dual-write array-only.
-5. git merge/push not handled per user preference.
+1. Bridge lives in `engine-physics` (engine-core → physics would cycle).
+2. **Critical:** copying Unity `velocity` every step without writeback zeroed simulation — fixed: sim owns velocity; `to_unity` writes velocity back.
+3. **Critical:** world pose written as local corrupts parented bodies — fixed: `InverseTransformPoint` under parent.
+4. Demo must not double-step (plugin FixedUpdate + manual step inflated weak asserts).
+5. Signature of zero-reset gravity: ΔY ≈ n·g·dt² (tiny); free-fall ΔY ≈ ½g t².
 
 ## [S1] Problem
 
