@@ -95,9 +95,12 @@
 - **R1-full（阶段 12）** — `SetParent` ECS-first；`sync_transforms` 先刷新 cache；层级权威 helper
 - **默认开 flag（阶段 13）** — hop-cap 父链；prepared scene save；CI 双模态
 - **动画 R2（阶段 14）** — `AnimationClip` 再导出 + `AnimationClipPlayer`；engine-scene 包保留
-- **Scene I/O 卫生（阶段 15）** — 测试/示例走 `SaveSceneJsonPrepared`
-- **示例（阶段 16）** — `cargo run -p engine-core --example unity_animation_demo`
-- **文档** — `docs/unity-storage-animation.md`；契约 `docs/migration-guide.md` §P2.4
+- **Scene I/O 卫生（阶段 15–16）** — prepared save；`unity_animation_demo`
+- **编辑器动画 SceneData（阶段 17）** — player 往返测试；`docs/unity-storage-animation.md`
+- **Unity 物理桥（阶段 18–20）** — `unity_bridge` / `UnityPhysicsPlugin`；速度/旋转/Sleep；enter/exit + `is_trigger`→`is_sensor`
+- **WASM（阶段 21–22）** — engine-core wasm32 可编译；动态插件 `UnsupportedPlatform`；JSON SceneRuntime 面
+- **物理完善（阶段 23–28）** — Capsule axis/offset；Play MB 回调；旋转 AABB；CCD 障碍+探针感知
+- **分支索引** — `docs/compose/BRANCH_INDEX.md`（阶段 12–28）
 - **仍延后** — dyn MB 进 ECS；WASM SceneRuntime 全量；Android NDK；VR/AR；用户侧 merge/push
 
 ### 9. 发布 & 生态 (阶段 9)

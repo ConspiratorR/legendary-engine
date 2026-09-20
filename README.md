@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 29 — 分支索引（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **BRANCH_INDEX + PROJECT_SUMMARY** | ✅ | 阶段 12–28 一页式索引与合并前门禁 |
+
+规格：`docs/compose/spec/phase29-branch-index.md`。
+
 ### 阶段 28 — CCD 探针感知（同分支）
 
 | 项目 | 状态 | 说明 |
@@ -586,6 +594,8 @@ cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-featur
 ## 文档
 
 - [快速开始](docs/quick-start.md) — 从零开始创建项目
+- [存储权威与动画/物理](docs/unity-storage-animation.md) — 默认 `unity-world-primary`、物理桥、CCD
+- [分支索引 12–28](docs/compose/BRANCH_INDEX.md) — phase12-array-authority 阶段清单与合并前门禁
 - [ECS 教程](docs/ecs-tutorial.md) — 学习实体组件系统
 - [渲染管线](docs/rendering-pipeline.md) — 设置渲染
 - [物理系统](docs/physics-system.md) — 添加物理模拟

@@ -90,4 +90,10 @@ cargo run --example runtime_scene_demo -p engine-core
 - `docs/compose/spec/phase17-editor-anim-docs.md` — 编辑器 SceneData + 本文档
 - `docs/compose/spec/phase22-wasm-scene-runtime.md` — WASM SceneRuntime API 面
 - `docs/compose/spec/phase23-collision-exit-capsule.md` — Exit 回调 + Capsule 桥
+- `docs/compose/spec/phase24-play-callbacks-capsule-offset.md` — Play 回调 + offset
+- `docs/compose/spec/phase25-oriented-capsule.md` — CapsuleAxis
+- `docs/compose/spec/phase26-broadphase-world-aabb.md` — 旋转世界 AABB
+- `docs/compose/spec/phase27-ccd-rotated-aabb.md` — CCD 障碍 AABB
+- `docs/compose/spec/phase28-ccd-probe-awareness.md` — CCD 探针中心
+- **分支总索引**：`docs/compose/BRANCH_INDEX.md`
 - 契约表：`docs/migration-guide.md` §P2.4
