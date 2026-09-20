@@ -1,17 +1,19 @@
 //! Scene-graph node transform (legacy editor path).
 //!
-//! **P2.5 / phase 11 S4 migration note:** `engine_scene::transform::Transform`
+//! **P2.5 / phase 11 S4 + phase 14 R2:** `engine_scene::transform::Transform`
 //! is a lightweight editor/scene-graph pose (translation/rotation/scale only).
 //! Gameplay and the Unity World path use `engine_core::transform::Transform`
-//! (local + cached world + hierarchy). Animation **clip format** still lives in
-//! [`crate::keyframe`], but applying sampled poses goes through
-//! `engine_core::World` (`engine_core::animation_apply`) — this type is a
-//! **fallback**, not pose authority.
+//! (local + cached world + hierarchy). Animation **clip format** lives in
+//! [`crate::keyframe`]; applying sampled poses goes through
+//! `engine_core::World` (`engine_core::animation_apply::apply_clip_pose` and
+//! `AnimationClipPlayer`). This type is a **fallback**, not pose authority.
 //!
 //! Relationship:
 //! - Viewport mesh building already reads poses from `engine_core::World`.
 //! - `engine-render::collect_system` prefers `TransformProxy`, then this type.
+//! - Editor `scene_bridge` is the remaining legacy ECS scene path.
 //! - Do not dual-write both transform types for the same GameObject.
+//! - The **package is kept**; R2 does not delete this module.
 //!
 //! Prefer `engine_core::transform::Transform` for new code.
 

@@ -1,9 +1,10 @@
-//! Built-in sample MonoBehaviours registered for SceneData roundtrip (D2).
+//! Built-in sample MonoBehaviours registered for SceneData roundtrip (D2 / phase 14 R2).
 //!
 //! These types are intentionally small and `Default` so
 //! [`crate::monobehaviour::MonoBehaviourRegistry`] can rebuild them from
 //! `script_type` + props after scene load.
 
+use crate::animation_apply::{AnimationClip, apply_clip_pose};
 use crate::behaviour::BehaviourState;
 use crate::context::Context;
 use crate::gameobject::GameObjectHandle;
@@ -204,6 +205,100 @@ impl MonoBehaviour for Lifetime {
     }
 }
 
+/// Runtime animation clip player — samples [`AnimationClip`] onto Unity World
+/// via [`apply_clip_pose`] (phase 14 R2). Clip format stays engine-scene
+/// keyframe math; pose authority is `World` / storage-authority path.
+#[derive(Debug, Default, Clone)]
+pub struct AnimationClipPlayer {
+    pub clip: Option<AnimationClip>,
+    pub time: f32,
+    pub speed: f32,
+    pub playing: bool,
+    pub state: BehaviourState,
+}
+
+impl Component for AnimationClipPlayer {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+impl Behaviour for AnimationClipPlayer {
+    fn Enabled(&self) -> bool {
+        self.state.enabled()
+    }
+    fn SetEnabled(&mut self, enabled: bool) {
+        self.state.set_enabled(enabled);
+    }
+    fn IsActiveAndEnabled(&self) -> bool {
+        self.state.enabled()
+    }
+    fn set_gameobject(&mut self, handle: GameObjectHandle) {
+        self.state.set_gameobject(handle);
+    }
+    fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+        self.state.gameobject()
+    }
+}
+
+impl MonoBehaviour for AnimationClipPlayer {
+    fn TypeName(&self) -> &str {
+        "AnimationClipPlayer"
+    }
+
+    fn SerializeProps(&self) -> Option<serde_json::Value> {
+        Some(serde_json::json!({
+            "clip": self.clip,
+            "time": self.time,
+            "speed": self.speed,
+            "playing": self.playing,
+        }))
+    }
+
+    fn DeserializeProps(&mut self, props: &serde_json::Value) {
+        self.clip = props
+            .get("clip")
+            .and_then(|c| serde_json::from_value(c.clone()).ok());
+        self.time = props.get("time").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+        self.speed = props
+            .get("speed")
+            .and_then(|v| v.as_f64())
+            .map(|v| v as f32)
+            .filter(|s| *s != 0.0)
+            .unwrap_or(1.0);
+        self.playing = props
+            .get("playing")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+    }
+
+    fn Update(&mut self, ctx: &mut Context) {
+        if !self.playing {
+            return;
+        }
+        let Some(me) = self.gameobject_handle() else {
+            return;
+        };
+        let Some(clip) = self.clip.clone() else {
+            return;
+        };
+        let speed = if self.speed == 0.0 { 1.0 } else { self.speed };
+        self.time += ctx.DeltaTime() * speed;
+        if clip.duration > 0.0 {
+            if clip.looping {
+                self.time = self.time.rem_euclid(clip.duration);
+            } else if self.time >= clip.duration {
+                self.time = clip.duration;
+                self.playing = false;
+            }
+        }
+        apply_clip_pose(ctx.world, me, &clip, self.time);
+    }
+}
+
 /// Register sample scripts under their short [`MonoBehaviour::TypeName`] keys.
 ///
 /// Called from [`crate::plugins::CorePlugins`] so SceneData load can rebuild them.
@@ -232,6 +327,9 @@ pub fn register_sample_scripts() {
             elapsed: 0.0,
             state: BehaviourState::new(),
         })
+    });
+    reg.register("AnimationClipPlayer", || {
+        Box::new(AnimationClipPlayer::default())
     });
 }
 
@@ -282,5 +380,55 @@ mod tests {
             .find(|(n, _, _)| n == "Rotator")
             .expect("Rotator restored");
         assert_eq!(rot.2.as_ref().unwrap()["degrees_per_second"], 45.0);
+    }
+
+    #[test]
+    fn test_animation_clip_player_applies_pose_and_roundtrip() {
+        use crate::animation_apply::{AnimationClip, Vec3Keyframe};
+
+        register_sample_scripts();
+
+        let clip = AnimationClip::new("move", 1.0)
+            .with_position_track(vec![
+                Vec3Keyframe::linear(0.0, Vec3::ZERO),
+                Vec3Keyframe::linear(1.0, Vec3::new(10.0, 0.0, 0.0)),
+            ])
+            .looping(false);
+
+        let mut world = World::new();
+        let go = world.CreateGameObject("AnimGO");
+        let mut player = AnimationClipPlayer {
+            clip: Some(clip.clone()),
+            time: 0.0,
+            speed: 1.0,
+            playing: true,
+            state: BehaviourState::new(),
+        };
+        player.set_gameobject(go);
+        world.AddMonoBehaviour(go, player);
+        assert_eq!(world.MonoBehaviourCount(go), 1);
+
+        // Authority write path: apply at known sample time.
+        crate::animation_apply::apply_clip_pose(&mut world, go, &clip, 0.5);
+        let t = world.GetTransform(go).expect("transform");
+        assert!(
+            (t.LocalPosition().x - 5.0).abs() < 0.5,
+            "clip sample should write World pose"
+        );
+
+        // SceneData props roundtrip restores player + clip JSON.
+        let json = SaveSceneJson(&world, "Anim").unwrap();
+        assert!(json.contains("AnimationClipPlayer"));
+        assert!(json.contains("move"));
+        let mut loaded = World::new();
+        let handles = LoadSceneJson(&json, &mut loaded).unwrap();
+        let collected = loaded.CollectMonoBehaviours(handles[0]);
+        let p = collected
+            .iter()
+            .find(|(n, _, _)| n == "AnimationClipPlayer")
+            .expect("player restored");
+        let props = p.2.as_ref().unwrap();
+        assert_eq!(props["speed"], 1.0);
+        assert!(props.get("clip").is_some());
     }
 }

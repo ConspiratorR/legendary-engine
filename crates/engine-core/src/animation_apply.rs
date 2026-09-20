@@ -1,16 +1,23 @@
-//! Apply sampled keyframe poses onto a Unity World GameObject (phase 11 S4).
+//! Apply sampled keyframe poses onto a Unity World GameObject (phase 11 S4 / phase 14 R2).
 //!
 //! Keyframe **format** remains `engine_scene::keyframe` (clip/interpolation).
 //! Pose **authority** when applying is `engine_core::World`:
-//! - feature on → `with_ecs_transform_mut` (ECS primary + array cache)
-//! - feature off → array primary via the same helper's fallback
+//! - `unity-world-primary` (default since phase 13) → `with_ecs_transform_mut`
+//!   (ECS primary + array cache)
+//! - feature opt-out → array primary via the same helper's fallback
+//!
+//! Gameplay code should import clip types from **this module** (re-exports) so
+//! it does not need a direct `engine_scene` dependency:
+//! `use engine_core::animation_apply::{apply_clip_pose, AnimationClip}`.
 //!
 //! `engine_scene::transform::Transform` is a scene-graph fallback for legacy
 //! editor paths only — do not treat it as gameplay pose authority.
 
 use crate::gameobject::GameObjectHandle;
 use crate::world::World;
-use engine_scene::keyframe::AnimationClip;
+
+/// Keyframe clip format re-exported for gameplay (phase 14 R2).
+pub use engine_scene::keyframe::{AnimationClip, Interpolation, RotationKeyframe, Vec3Keyframe};
 
 /// Sample `clip` at `time` and write local pose onto `handle`.
 ///

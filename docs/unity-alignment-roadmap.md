@@ -101,7 +101,7 @@ engine-scene       → 自己的 Node/Transform (第三套)
 | ID | 任务 | 说明 |
 |----|------|------|
 | P2.4 | 将 `gameobject_data`/`transforms`/`monobehaviours` 迁入 ECS 资源或组件 | dual-read + dual-write + R1-full + **阶段 13 默认开 `unity-world-primary`**：默认构建 Identity/Hierarchy/Pose/Scene I/O/MB 元数据权威在 ECS，数组为 cache；dyn MB holder 仍数组；opt-out 见 migration-guide |
-| P2.5 | 弃用 `engine-scene` 中重复 Transform | **盘点 + 模块 doc 完成**；`scene_bridge` 为可选桥；动画 keyframe 仍依赖 engine-scene（阶段 11 S4）；`light_collect_system` 已优先 TransformProxy（P2.13 ✅） |
+| P2.5 | 弃用 `engine-scene` 中重复 Transform | **盘点 + 模块 doc 完成**；`scene_bridge` 为可选桥；动画 keyframe 格式仍在 engine-scene；**阶段 14 R2**：engine-core 再导出 clip 类型 + `AnimationClipPlayer` 运行时接线；**不删包**；`collect_system` 仍 Proxy 优先（C1 ✅） |
 | P2.6 | Editor 只依赖 `engine_core::world::World` | 视口/命令/`new_scene` 已对齐 World；打开优先 `.runtime.json` 孪生；自动保存走 `save_scene_bundle`；旧 ECS Scene 仅作回退 | 大部分 ✅ |
 | P2.7 | 自动链接全部 Unity 对象 | `IdentityBridge::ensure_all_linked`；`sync_all` / `run_with_lifecycle` 自动 adopt ✅ |
 | P2.8 | 统一 App 入口 | `unity_world` / `unity_world_ref` / `require_unity_world` / `link_unity_scene` ✅ |

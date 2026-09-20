@@ -76,7 +76,7 @@ pub mod behaviour;
 /// Transform — built-in component for position, rotation, scale, and hierarchy.
 pub mod transform;
 
-/// Apply `engine_scene::keyframe::AnimationClip` samples onto Unity World poses.
+/// Apply animation clip samples onto Unity World poses (re-exports keyframe types).
 pub mod animation_apply;
 
 /// GameObject — fundamental building block of Unity scenes.
@@ -194,7 +194,8 @@ pub use world::{
     GameObjectTag, MonoBehaviourInstance, MonoBehaviourInstances, MonoBehaviourTypes, World,
 };
 
-pub use sample_scripts::{Lifetime, Mover, Rotator, register_sample_scripts};
+pub use animation_apply::{AnimationClip, apply_clip_pose};
+pub use sample_scripts::{AnimationClipPlayer, Lifetime, Mover, Rotator, register_sample_scripts};
 
 // Re-export macros - impl_component is defined in component.rs with #[macro_export]
 // It's automatically available at crate root

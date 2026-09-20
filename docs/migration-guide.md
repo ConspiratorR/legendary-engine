@@ -619,9 +619,20 @@ Prefer prepared scene I/O under default-on: `SceneSerializer::SavePrepared` / `S
 ## Still deferred
 
 - Dyn MonoBehaviour holders (`Box<dyn MonoBehaviour>`) are **not** migrated into ECS — array remains the runtime instance store; ECS `MonoBehaviourInstances` holds recoverable metadata only
-- engine-scene `Transform` deprecation (see roadmap P2.5)
+- engine-scene `Transform` **type remains** for package-internal scene graph + editor legacy `scene_bridge`; gameplay pose authority is `engine_core::World` / `apply_clip_pose` / `AnimationClipPlayer` (phase 14 R2)
 - VR/AR / Android NDK / WASM SceneRuntime full
-- Unprepared `SaveSceneJson` callers who skip `prepare_scene_io_cache` under default-on (prefer prepared APIs)
+- Unprepared free-function `SaveSceneJson` callers who skip cache refresh (prefer `SaveSceneJsonPrepared` / `SceneManager::SaveSceneJson`)
+
+### Phase 14 R2 — animation residual
+
+| Piece | Location | Role |
+|-------|----------|------|
+| Keyframe format | `engine_scene::keyframe` | Pure sample math + serde |
+| Re-exports | `engine_core::animation_apply::{AnimationClip, Vec3Keyframe, …}` / `engine_core::AnimationClip` | Gameplay need not depend on engine-scene directly |
+| Apply | `engine_core::animation_apply::apply_clip_pose` | World pose authority write |
+| Runtime player | `engine_core::sample_scripts::AnimationClipPlayer` | Update → time → apply_clip_pose; SceneData `script_type` |
+| Legacy editor ECS path | `engine-editor::scene_bridge` | Uses `engine_scene::transform` only; primary path is World + SceneData |
+| Render collect | `engine_render::collect_system` | TransformProxy first; `GlobalTransform` fallback |
 
 `engine_core::TransformProxy` is re-exported from `engine_render::proxy::TransformProxy` so render systems can consume the same component type without a core→render cycle.
 

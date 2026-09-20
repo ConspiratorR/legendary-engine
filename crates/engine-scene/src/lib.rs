@@ -3,6 +3,16 @@
 //! Scene management for the RustEngine — scene graph, transforms, animation,
 //! serialization, and streaming.
 //!
+//! ## Unity World relationship (phase 14 R2)
+//!
+//! Gameplay pose authority is **`engine_core::World`**, not this crate's
+//! [`transform::Transform`]. Animation clip **format** stays in
+//! [`keyframe`]; applying clips uses `engine_core::animation_apply` /
+//! `AnimationClipPlayer`. This package keeps its own scene-graph
+//! `SceneManager` + `Transform`/`GlobalTransform` for editor legacy paths and
+//! package-local tools — do not treat them as gameplay authority. New
+//! gameplay code should import clip types from `engine_core`.
+//!
 //! ## Scene Graph Model
 //!
 //! The scene is a **tree of [`SceneNode`](node::Node)s**, each backed by
