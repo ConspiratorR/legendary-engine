@@ -240,4 +240,61 @@ mod tests {
         let p = runtime.world.GetTransform(go).unwrap().LocalPosition();
         assert_eq!(p, Vec3::new(1.0, 2.0, 3.0));
     }
+
+    /// Parented body: world sim pose → local via parent inverse (phase18 residual).
+    #[test]
+    fn test_to_unity_parented_body_uses_local_space() {
+        let mut runtime = SceneRuntime::new();
+        let parent = runtime.world.CreateGameObject("Parent");
+        runtime
+            .world
+            .SetLocalPosition(parent, Vec3::new(10.0, 0.0, 0.0));
+        let child = runtime.world.CreateGameObject("Child");
+        runtime.world.SetParent(child, Some(parent));
+        runtime
+            .world
+            .SetLocalPosition(child, Vec3::new(0.0, 1.0, 0.0)); // world (10,1,0)
+        runtime.world.AddComponent(
+            child,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: false,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.sync_transforms();
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        let n = sync_physics_from_unity(&mut runtime, &mut ecs);
+        assert!(n >= 1);
+
+        // Put simulation world position at (10, 4, 0) → local should be (0,4,0).
+        let entity = runtime.entity_for(child).expect("child entity");
+        if let Some(t) = ecs.get_mut::<CoreTransform>(entity) {
+            t.SetPosition(Vec3::new(10.0, 4.0, 0.0));
+        } else {
+            let mut t = CoreTransform::from_position_rotation_scale(
+                Vec3::new(10.0, 4.0, 0.0),
+                engine_math::Quat::IDENTITY,
+                Vec3::ONE,
+            );
+            t.SetPosition(Vec3::new(10.0, 4.0, 0.0));
+            ecs.add_component(entity, t);
+        }
+
+        let w = sync_physics_to_unity(&mut runtime, &ecs);
+        assert!(w >= 1);
+        let local = runtime.world.GetTransform(child).unwrap().LocalPosition();
+        assert!(
+            (local - Vec3::new(0.0, 4.0, 0.0)).length() < 0.05,
+            "parented writeback must convert world→local; got {local:?}"
+        );
+        let world_pos = runtime.world.GetTransform(child).unwrap().Position();
+        assert!(
+            (world_pos - Vec3::new(10.0, 4.0, 0.0)).length() < 0.05,
+            "world pose after sync_transforms; got {world_pos:?}"
+        );
+    }
 }
