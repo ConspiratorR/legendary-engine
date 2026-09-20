@@ -305,6 +305,72 @@ fn open_scene_prefers_runtime_twin() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Phase 17 — AnimationClipPlayer survives editor SceneData prepared export/load.
+#[test]
+fn animation_clip_player_survives_editor_scene_data_roundtrip() {
+    use engine_core::animation_apply::{AnimationClip, Vec3Keyframe};
+    use engine_core::behaviour::BehaviourState;
+    use engine_core::sample_scripts::{AnimationClipPlayer, register_sample_scripts};
+    use engine_core::serialization::{LoadSceneJson, SaveSceneJsonPrepared};
+
+    register_sample_scripts();
+
+    let clip = AnimationClip::new("editor_walk", 1.0)
+        .with_position_track(vec![
+            Vec3Keyframe::linear(0.0, engine_math::Vec3::ZERO),
+            Vec3Keyframe::linear(1.0, engine_math::Vec3::new(3.0, 0.0, 0.0)),
+        ])
+        .looping(false);
+
+    let mut state = EditorState::new();
+    let go = state.world.CreateGameObject("AnimNode");
+    state.world.AddMonoBehaviour(
+        go,
+        AnimationClipPlayer {
+            clip: Some(clip),
+            time: 0.0,
+            speed: 1.5,
+            playing: true,
+            state: BehaviourState::new(),
+        },
+    );
+
+    // Editor prepared export path
+    let scene_data = state.to_core_scene_data("AnimEdit");
+    let json = serde_json::to_string_pretty(&scene_data).expect("scene json");
+    assert!(json.contains("AnimationClipPlayer"));
+    assert!(json.contains("editor_walk"));
+
+    // Reload into a fresh World (registry restore, same as SceneRuntime)
+    let mut loaded = engine_core::world::World::new();
+    let handles = LoadSceneJson(&json, &mut loaded).expect("load");
+    assert!(!handles.is_empty());
+    // Editor default scene has multiple roots — find AnimNode.
+    let h = handles
+        .iter()
+        .copied()
+        .find(|&x| loaded.GetName(x) == "AnimNode")
+        .expect("AnimNode in SceneData");
+    let collected = loaded.CollectMonoBehaviours(h);
+    let player = collected
+        .iter()
+        .find(|(n, _, _)| n == "AnimationClipPlayer")
+        .expect("player restored");
+    let props = player.2.as_ref().expect("player props");
+    assert_eq!(props["speed"], 1.5);
+    assert!(
+        props
+            .get("clip")
+            .and_then(|c| c.get("name"))
+            .and_then(|n| n.as_str())
+            == Some("editor_walk")
+    );
+
+    // Prepared free-function still coherent
+    let mut author = loaded;
+    let _ = SaveSceneJsonPrepared(&mut author, "Again").expect("resave");
+}
+
 #[test]
 fn editor_state_default_tool_is_translate() {
     let state = EditorState::new();

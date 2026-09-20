@@ -497,6 +497,7 @@ cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-featur
 - [编辑器指南](docs/editor-guide.md) — 使用编辑器
 - [架构概述](docs/architecture.md) — 引擎架构设计
 - [生命周期与场景](docs/lifecycle-and-scenes.md) — Unity 对齐的 PlayerLoop / SceneManager / MonoBehaviour
+- [存储权威与动画](docs/unity-storage-animation.md) — 默认 `unity-world-primary`、prepared Scene I/O、`AnimationClipPlayer`
 - [资产管线](docs/asset-pipeline.md) — 资产加载和管理
 - [插件系统](docs/plugin-system.md) — 扩展引擎功能
 - [迁移指南](docs/migration-guide.md) — 从 Unity/Godot/Bevy 迁移

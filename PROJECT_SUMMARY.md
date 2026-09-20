@@ -91,9 +91,14 @@
 - **热重载** — App lifecycle / 编辑器每帧 `poll_hot_reload`；场景 AssetRef 只存 GUID
 - **内置序列化** — Material / SpriteRenderer / Rigidbody / AudioSource / Light / Camera
 - **so_asset CLI** — `pack` / `list` 递归补 `.meta`
-- **Dual-read（feature 开）** — `GetTransform/Name/Tag/Active/Layer/Parent/Children` 优先 ECS 镜像；关 feature 仍读数组
-- **写权威 / 动画 / 编辑器（阶段 11, `phase11-r1-read`）** — `World.SetLocal*` via `with_ecs_transform_mut`；`animation_apply`；编辑器 Play stop 恢复 World；视口拾取对齐 `img_rect`
-- **仍延后** — 数组存储权威完全迁 ECS；默认打开 `unity-world-primary`；WASM SceneRuntime 全量；本地已合分支清理需用户执行 `git branch -d`
+- **Dual-read / 写权威** — 默认构建 `unity-world-primary`：Identity/Hierarchy/Pose/Scene I/O/MB 元数据权威在 ECS；数组为 cache；opt-out `default-features=false, features=["audio"]`
+- **R1-full（阶段 12）** — `SetParent` ECS-first；`sync_transforms` 先刷新 cache；层级权威 helper
+- **默认开 flag（阶段 13）** — hop-cap 父链；prepared scene save；CI 双模态
+- **动画 R2（阶段 14）** — `AnimationClip` 再导出 + `AnimationClipPlayer`；engine-scene 包保留
+- **Scene I/O 卫生（阶段 15）** — 测试/示例走 `SaveSceneJsonPrepared`
+- **示例（阶段 16）** — `cargo run -p engine-core --example unity_animation_demo`
+- **文档** — `docs/unity-storage-animation.md`；契约 `docs/migration-guide.md` §P2.4
+- **仍延后** — dyn MB 进 ECS；WASM SceneRuntime 全量；Android NDK；VR/AR；用户侧 merge/push
 
 ### 9. 发布 & 生态 (阶段 9)
 - **CI/CD** — GitHub Actions (fmt + clippy + build + test, Ubuntu/Windows 矩阵)
