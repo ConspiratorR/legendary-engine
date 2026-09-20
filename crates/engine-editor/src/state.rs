@@ -1484,21 +1484,28 @@ impl EditorState {
                 host.ecs.get_mut::<RigidBody>(entity).unwrap().clone()
             } else if unity_rb.is_kinematic {
                 RigidBody::new_kinematic()
-            } else if unity_rb.use_gravity {
-                RigidBody::new_dynamic()
             } else {
-                RigidBody::new_static()
+                // Unity: use_gravity=false still Dynamic (phase19 parity with runtime bridge).
+                RigidBody::new_dynamic()
             };
             body.mass = unity_rb.mass.max(0.001);
             body.linear_damping = unity_rb.drag;
             body.angular_damping = unity_rb.angular_drag;
+            body.gravity_scale = if unity_rb.use_gravity { 1.0 } else { 0.0 };
             // Simulation owns velocity once the body exists; seed only on create
             // or when Unity publishes a non-zero velocity (phase18 critical fix).
             let is_new = host.ecs.get::<RigidBody>(entity).is_none();
-            if is_new || unity_rb.velocity != engine_math::Vec3::ZERO {
+            if unity_rb.is_sleeping {
+                body.is_sleeping = true;
+                body.linear_velocity = engine_math::Vec3::ZERO;
+                body.angular_velocity = engine_math::Vec3::ZERO;
+            } else if is_new || unity_rb.velocity != engine_math::Vec3::ZERO {
+                body.is_sleeping = false;
                 body.linear_velocity = unity_rb.velocity;
             }
-            if is_new || unity_rb.angular_velocity != engine_math::Vec3::ZERO {
+            if !unity_rb.is_sleeping
+                && (is_new || unity_rb.angular_velocity != engine_math::Vec3::ZERO)
+            {
                 body.angular_velocity = unity_rb.angular_velocity;
             }
             if host.ecs.get::<RigidBody>(entity).is_some() {
@@ -1549,6 +1556,7 @@ impl EditorState {
                 continue;
             }
             let world_pos = ecs_t.Position();
+            let world_rot = ecs_t.Rotation();
             // Parent-aware local conversion (phase18 critical: world ≠ local when parented).
             let local_pos = {
                 if let Some(parent) = host.runtime.world.GetParent(go)
@@ -1559,10 +1567,22 @@ impl EditorState {
                     world_pos
                 }
             };
+            let local_rot = {
+                if let Some(parent) = host.runtime.world.GetParent(go)
+                    && let Some(pt) = host.runtime.world.GetTransform(parent)
+                {
+                    pt.Rotation().inverse() * world_rot
+                } else {
+                    world_rot
+                }
+            };
             let _ = host.runtime.world.with_ecs_transform_mut(go, |t| {
                 t.SetLocalPosition(local_pos);
+                t.SetPosition(world_pos);
+                t.SetLocalRotation(local_rot);
+                t.SetRotation(world_rot);
             });
-            // Write velocity back so from_unity does not zero simulation state.
+            // Write velocity + sleep back so from_unity does not zero simulation state.
             if let Some(body) = host.ecs.get::<engine_physics::RigidBody>(entity)
                 && let Some(rb) = host
                     .runtime
@@ -1571,8 +1591,10 @@ impl EditorState {
             {
                 rb.velocity = body.linear_velocity;
                 rb.angular_velocity = body.angular_velocity;
+                rb.is_sleeping = body.is_sleeping;
             }
         }
+        host.runtime.world.sync_transforms();
     }
 
     fn all_handles(world: &engine_core::world::World) -> Vec<GameObjectHandle> {

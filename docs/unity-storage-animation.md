@@ -62,7 +62,7 @@ use engine_core::animation_apply::Vec3Keyframe;
 | Sleep | `Rigidbody::Sleep()` / `is_sleeping` | 桥强制休眠并清速度 |
 | 示例 | `cargo run --example unity_physics_demo -p engine-core` | 重力下落写 World |
 
-编辑器 Play 仍使用 `UnityPlayHost` 内的同构同步；运行时优先 `UnityPhysicsPlugin` + SceneRuntime。
+编辑器 Play（`UnityPlayHost`）与运行时 `unity_bridge` 对齐 phase18–19：Dynamic + `gravity_scale`、Sleep 门闩、位姿/旋转 world↔local 写回、速度回写。运行时优先 `UnityPhysicsPlugin` + SceneRuntime；编辑器仍通过 Play host 驱动。
 
 ## 可运行示例
 

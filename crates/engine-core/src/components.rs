@@ -100,6 +100,7 @@ impl Default for ForceMode {
 
 impl Rigidbody {
     pub fn AddForceWithMode(&mut self, force: Vec3, mode: ForceMode) {
+        self.is_sleeping = false;
         match mode {
             ForceMode::Force => self.velocity += force / self.mass,
             ForceMode::Impulse => self.velocity += force / self.mass,
