@@ -3,7 +3,7 @@ feature: phase42-multi-collider-bridge
 status: delivered
 updated: 2026-07-13
 branch: main
-commits: 375c29c6eb9816ddd594e5deeb87dea8ea14dff1..impl
+commits: 375c29c6eb9816ddd594e5deeb87dea8ea14dff1..5481bcf183a78f67957cfe737d4234a95be041e5
 ---
 
 # Phase 42 — 多碰撞体进物理桥
