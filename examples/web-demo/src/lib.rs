@@ -6,6 +6,59 @@ use winit::{
     window::WindowAttributes,
 };
 
+/// Phase 36 — SceneRuntime JSON smoke on wasm (no file I/O).
+///
+/// Loads an inline SceneData JSON via `LoadSceneJson`, ticks once, returns pose.
+#[wasm_bindgen]
+pub fn scene_runtime_json_smoke() -> Result<String, JsValue> {
+    use engine_core::sample_scripts::register_sample_scripts;
+    use engine_core::scene_management::LoadSceneMode;
+    use engine_core::scene_runtime::SceneRuntime;
+    use engine_core::serialization::LoadSceneJson;
+    use engine_core::time::Time;
+    use engine_core::world::World;
+    use engine_core::event::EventBus;
+
+    register_sample_scripts();
+    let json = r#"{
+      "name": "WasmSmoke",
+      "version": 1,
+      "game_objects": [{
+        "name": "Probe",
+        "tag": "Untagged",
+        "layer": 0,
+        "active": true,
+        "transform": {
+          "translation": [1.0, 2.0, 3.0],
+          "rotation": [0.0, 0.0, 0.0, 1.0],
+          "scale": [1.0, 1.0, 1.0]
+        },
+        "components": [],
+        "children": []
+      }]
+    }"#;
+
+    let mut rt = SceneRuntime::new();
+    rt.load_scene_json("WasmSmoke", json, LoadSceneMode::Single)
+        .map_err(|e| JsValue::from_str(&e))?;
+    rt.mark_needs_awake();
+    let time = Time::default();
+    let mut bus = EventBus::new();
+    rt.tick(&time, 1, &mut bus);
+
+    let go = rt.world.Find("Probe").ok_or_else(|| JsValue::from_str("Probe missing"))?;
+    let p = rt
+        .world
+        .GetTransform(go)
+        .ok_or_else(|| JsValue::from_str("transform missing"))?
+        .LocalPosition();
+    let flag = World::unity_world_primary_feature();
+    Ok(format!(
+        "SceneRuntime json smoke ok; unity_world_primary={flag}; Probe=({:.1},{:.1},{:.1})",
+        p.x, p.y, p.z
+    ))
+}
+
 #[wasm_bindgen(start)]
 pub fn start() {
     console_error_panic_hook::set_once();
@@ -67,6 +120,17 @@ async fn run() {
     surface.configure(&device, &config);
 
     status.set_text_content(Some("Ready! Rendering..."));
+
+    // Phase 36: SceneRuntime JSON smoke (compile-time wasm evidence; log only).
+    match scene_runtime_json_smoke() {
+        Ok(msg) => {
+            log::info!("{msg}");
+            let _ = msg;
+        }
+        Err(e) => {
+            log::warn!("scene_runtime_json_smoke failed: {e:?}");
+        }
+    }
 
     let style = status
         .dyn_ref::<web_sys::HtmlElement>()

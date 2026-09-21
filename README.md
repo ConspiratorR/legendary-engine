@@ -410,6 +410,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 36 — web-demo SceneRuntime WASM（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **scene_runtime_json_smoke** | ✅ | web-demo 编译含 SceneRuntime JSON 切片 |
+
+规格：`docs/compose/spec/phase36-wasm-scene-runtime-demo.md`。
+
 ### 阶段 35 — unity_sim_demo 综合示例（同分支）
 
 | 项目 | 状态 | 说明 |

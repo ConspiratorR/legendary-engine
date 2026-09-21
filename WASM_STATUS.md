@@ -11,7 +11,7 @@
 | **engine-physics** | ✅ **phase 31** | `cargo build -p engine-physics --target wasm32-unknown-unknown`；core 依赖 **无 audio**；`rayon` 仅 native，wasm 走顺序 `for` |
 | engine-editor (lib) | ✅ | `cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib` |
 | engine-editor (bin) | ❌ | 需要原生事件循环, WASM 使用 `start_wasm()` 入口点 |
-| web-demo | ✅ | `wasm-pack build --target web --release` |
+| web-demo | ✅ **phase 36** | `cargo build --manifest-path examples/web-demo/Cargo.toml --target wasm32-unknown-unknown --lib`；含 `scene_runtime_json_smoke` |
 
 ### Phase 31 — WASM 编译面扩展
 
@@ -36,6 +36,13 @@
 | 浏览器 WebGL 实机 SceneRuntime | ❌ | 后续切片 |
 
 **未做**：SceneRuntime 全量浏览器运行 / 生命周期实机验证。
+
+### Phase 36 — web-demo SceneRuntime 切片
+
+- `examples/web-demo` 依赖 `engine-core`（`default-features=false`, `features=["unity-world-primary"]`）。
+- 导出 `scene_runtime_json_smoke()`：内嵌 SceneData JSON → `LoadSceneJson` → `tick` → 返回 Probe 位姿。
+- **编译证据**：`cargo build --manifest-path examples/web-demo/Cargo.toml --target wasm32-unknown-unknown --lib` **PASS**。
+- **非目标**：浏览器 UI 全量 SceneRuntime / 文件系统场景加载。
 
 ### 实际运行测试
 

@@ -17,3 +17,5 @@ wasm-bindgen-futures = "0.4"
 web-sys = "0.3"
 console_error_panic_hook = "0.1"
 log = "0.4"
+# Phase 36: SceneRuntime JSON smoke on wasm (no audio; see engine-core features).
+engine-core = { path = "../../crates/engine-core", default-features = false, features = ["unity-world-primary"] }
