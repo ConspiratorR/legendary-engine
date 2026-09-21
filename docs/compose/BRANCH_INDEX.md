@@ -1,4 +1,4 @@
-# 分支索引 — Unity 对齐长分支（阶段 12–46）
+# 分支索引 — Unity 对齐长分支（阶段 12–47）
 
 合并/推送前核对用。规格均在 `docs/compose/spec/`。**已出现在本地 `main` 时以 main 为准；远程 merge/push 由用户执行。**
 
@@ -40,6 +40,7 @@
 | 44 | 同 GO 碰撞对事件抑制 | `phase44-same-go-event-suppress.md` | dispatch a==b skip（Unity 对齐） |
 | 45 | SceneData 多碰撞体往返→桥 | `phase45-scenedata-multicollider-roundtrip.md` | prepared save/load 后 primary+secondary |
 | 46 | compound-lite secondary 支撑 | `phase46-compound-lite-support.md` | parent_entity + 支撑冲量/位置抬升 |
+| 47 | fixed_step 全路径回归 | `phase47-fixed-step-wiring-regression.md` | 支撑+回调经 unity_physics_fixed_step |
 
 ## 推荐门禁（合并前）
 

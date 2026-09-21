@@ -410,6 +410,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 47 — fixed_step 全路径回归（本地 main）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **支撑/回调经 fixed_step** | ✅ | 不手写 step 顺序；生产入口 `unity_physics_fixed_step` |
+
+规格：`docs/compose/spec/phase47-fixed-step-wiring-regression.md`。
+
 ### 阶段 46 — compound-lite secondary 支撑（本地 main）
 
 | 项目 | 状态 | 说明 |

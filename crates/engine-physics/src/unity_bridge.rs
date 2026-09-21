@@ -1976,4 +1976,206 @@ mod tests {
             "parent should settle near feet contact, not float; Walker y={y}"
         );
     }
+
+    /// Phase 47 — compound-lite support must work through `unity_physics_fixed_step`.
+    #[test]
+    fn test_fixed_step_secondary_support_wiring() {
+        let mut runtime = SceneRuntime::new();
+
+        let floor = runtime.world.CreateGameObject("Floor");
+        runtime
+            .world
+            .SetLocalPosition(floor, Vec3::new(0.0, -0.5, 0.0));
+        runtime.world.AddComponent(
+            floor,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            floor,
+            engine_core::components::BoxCollider {
+                center: Vec3::ZERO,
+                size: Vec3::new(20.0, 1.0, 20.0),
+                is_trigger: false,
+            },
+        );
+
+        let multi = runtime.world.CreateGameObject("Walker");
+        runtime
+            .world
+            .SetLocalPosition(multi, Vec3::new(0.0, 0.48, 0.0));
+        runtime.world.AddComponent(
+            multi,
+            UnityRb {
+                use_gravity: true,
+                mass: 2.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::SphereCollider {
+                center: Vec3::new(0.0, 0.4, 0.0),
+                radius: 0.2,
+                is_trigger: false,
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::BoxCollider {
+                center: Vec3::new(0.0, -0.45, 0.0),
+                size: Vec3::new(1.0, 0.2, 1.0),
+                is_trigger: false,
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        ecs.insert_resource(engine_core::time::Time::default());
+
+        // Only the production fixed-step entry — no manual step/support order.
+        for _ in 0..80 {
+            unity_physics_fixed_step(&mut runtime, &mut ecs, 0.02);
+        }
+
+        let go = runtime.world.Find("Walker").expect("Walker");
+        let y = runtime
+            .world
+            .GetTransform(go)
+            .expect("transform")
+            .Position()
+            .y;
+        assert!(
+            y > 0.35 && y < 0.75,
+            "fixed_step must keep secondary support wiring; Walker y={y}"
+        );
+    }
+
+    /// Phase 47 — secondary→parent trigger callbacks via fixed_step + dispatch.
+    #[test]
+    fn test_fixed_step_secondary_trigger_callback_wiring() {
+        use crate::plugin::dispatch_unity_collision_enters_for_test;
+        use engine_core::events::TriggerData;
+        use engine_core::time::Time;
+        use std::any::Any;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        struct ParentHits {
+            go: Option<GameObjectHandle>,
+            hits: Arc<AtomicU32>,
+        }
+        impl engine_core::component::Component for ParentHits {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl engine_core::behaviour::Behaviour for ParentHits {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _e: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, h: GameObjectHandle) {
+                self.go = Some(h);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl engine_core::monobehaviour::MonoBehaviour for ParentHits {
+            fn OnTriggerEnter(
+                &mut self,
+                _ctx: &mut engine_core::context::Context,
+                _t: &TriggerData,
+            ) {
+                self.hits.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut runtime = SceneRuntime::new();
+        let multi = runtime.world.CreateGameObject("Multi");
+        runtime
+            .world
+            .SetLocalPosition(multi, Vec3::new(0.0, 0.0, 0.0));
+        runtime.world.AddComponent(
+            multi,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.2,
+                is_trigger: false,
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::BoxCollider {
+                center: Vec3::ZERO,
+                size: Vec3::new(2.0, 2.0, 2.0),
+                is_trigger: true,
+            },
+        );
+
+        let probe = runtime.world.CreateGameObject("Probe");
+        runtime
+            .world
+            .SetLocalPosition(probe, Vec3::new(0.8, 0.0, 0.0));
+        runtime.world.AddComponent(
+            probe,
+            UnityRb {
+                use_gravity: false,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            probe,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.3,
+                is_trigger: false,
+            },
+        );
+
+        let parent_hits = Arc::new(AtomicU32::new(0));
+        runtime.world.AddMonoBehaviour(
+            multi,
+            ParentHits {
+                go: None,
+                hits: parent_hits.clone(),
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        ecs.insert_resource(Time::default());
+
+        for _ in 0..20 {
+            unity_physics_fixed_step(&mut runtime, &mut ecs, 0.02);
+            dispatch_unity_collision_enters_for_test(&mut runtime, &mut ecs);
+        }
+
+        assert!(
+            parent_hits.load(Ordering::SeqCst) >= 1,
+            "fixed_step+dispatch must deliver secondary trigger to parent; hits={}",
+            parent_hits.load(Ordering::SeqCst)
+        );
+    }
 }
