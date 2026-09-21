@@ -16,14 +16,14 @@ commits: 84a30f3..HEAD
 
 | Gate | Result |
 |------|--------|
-| core lib default / feature-off | PASS |
+| core lib default / feature-off (`audio`) | PASS（262 / 基线 opt-out） |
 | physics lib / physics_tests | PASS |
 | editor_tests | PASS |
 | core examples | PASS |
 | wasm engine-core / physics / editor-lib | PASS |
 | wasm web-demo (SceneRuntime smoke) | PASS |
 | fmt --check | PASS |
-| **Summary** | **All gates passed** |
+| **Summary** | **All gates passed（11/11）** |
 
 **Journey log** —
 1. One script = merge checklist; record the summary in the phase spec.
