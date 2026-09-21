@@ -3,7 +3,7 @@ feature: phase43-secondary-callback-map
 status: delivered
 updated: 2026-07-13
 branch: main
-commits: a05787155a5be5f02249a63e80f0a2cea3665451..impl
+commits: a05787155a5be5f02249a63e80f0a2cea3665451..e0ca7644a19f45f23d5cd79ab9daee6e76f3cd22
 ---
 
 # Phase 43 — secondary 碰撞事件映射父 MB
