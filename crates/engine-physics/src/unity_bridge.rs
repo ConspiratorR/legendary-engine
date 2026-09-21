@@ -14,13 +14,143 @@
 use crate::body::RigidBody;
 use crate::collider::Collider;
 use crate::world::PhysicsWorld;
-use engine_core::components::{BoxCollider, Rigidbody, SphereCollider};
+use engine_core::components::{BoxCollider, CapsuleCollider, Rigidbody, SphereCollider};
 use engine_core::gameobject::GameObjectHandle;
 use engine_core::scene_runtime::SceneRuntime;
 use engine_core::transform::Transform as CoreTransform;
+use engine_ecs::entity::Entity;
 use engine_ecs::world::World as EcsWorld;
 use engine_math::Vec3;
 use std::collections::HashMap;
+
+/// Multi-collider secondary shape identity (phase 42).
+///
+/// Primary collider (Sphere → Box → Capsule priority) stays on the Rigidbody
+/// entity. Each additional collider gets its own kinematic ECS entity tagged
+/// with this component so `sync_physics_from_unity` can reuse slots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SecondaryCollider {
+    /// Unity GameObject that owns the source collider.
+    pub parent: GameObjectHandle,
+    /// Stable slot index within the parent's secondary list (0-based).
+    pub slot: u32,
+}
+
+/// Priority rank for Unity multi-collider selection (phase 33–34 / 42).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ColliderPriority {
+    Sphere = 0,
+    Box = 1,
+    Capsule = 2,
+}
+
+fn sphere_to_physics(sc: &SphereCollider) -> Collider {
+    let mut col = Collider::sphere(sc.radius.max(0.01));
+    col.is_sensor = sc.is_trigger;
+    col.offset = sc.center;
+    col
+}
+
+fn box_to_physics(bc: &BoxCollider) -> Collider {
+    let h = bc.size * 0.5;
+    let mut col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
+    col.is_sensor = bc.is_trigger;
+    col.offset = bc.center;
+    col
+}
+
+fn capsule_to_physics(cc: &CapsuleCollider) -> Collider {
+    let mut col = Collider::capsule_with_axis(
+        cc.radius.max(0.01),
+        cc.height.max(0.02),
+        crate::collider::CapsuleAxis::from_unity_direction(cc.direction),
+    );
+    col.is_sensor = cc.is_trigger;
+    col.offset = cc.center;
+    col
+}
+
+/// Collect Unity colliders on `go` in **priority order** (Sphere → Box → Capsule).
+///
+/// Same-shape multiples keep relative component order. Only the first entry is
+/// written onto the Rigidbody entity; the rest spawn as secondary entities.
+fn collect_colliders_by_priority(
+    unity: &engine_core::world::World,
+    go: GameObjectHandle,
+) -> Vec<(ColliderPriority, Collider)> {
+    let mut out: Vec<(ColliderPriority, Collider)> = Vec::new();
+    for sc in unity.GetComponents::<SphereCollider>(go) {
+        out.push((ColliderPriority::Sphere, sphere_to_physics(sc)));
+    }
+    for bc in unity.GetComponents::<BoxCollider>(go) {
+        out.push((ColliderPriority::Box, box_to_physics(bc)));
+    }
+    for cc in unity.GetComponents::<CapsuleCollider>(go) {
+        out.push((ColliderPriority::Capsule, capsule_to_physics(cc)));
+    }
+    out.sort_by_key(|(p, _)| *p);
+    out
+}
+
+/// Index existing secondary entities by (parent, slot).
+fn index_secondary_entities(ecs: &EcsWorld) -> HashMap<(GameObjectHandle, u32), Entity> {
+    let mut map = HashMap::new();
+    for &idx in &ecs.component_entities::<SecondaryCollider>() {
+        if let Some(tag) = ecs.get_by_index::<SecondaryCollider>(idx)
+            && let Some(e) = ecs.entity_from_index(idx)
+        {
+            map.insert((tag.parent, tag.slot), e);
+        }
+    }
+    map
+}
+
+fn upsert_secondary_collider(
+    ecs: &mut EcsWorld,
+    slot_map: &mut HashMap<(GameObjectHandle, u32), Entity>,
+    parent: GameObjectHandle,
+    slot: u32,
+    col: Collider,
+    parent_pos: Vec3,
+    parent_rot: engine_math::Quat,
+    parent_scale: Vec3,
+) -> Entity {
+    let entity = match slot_map.get(&(parent, slot)) {
+        Some(&e) => e,
+        None => {
+            let e = ecs.spawn();
+            ecs.add_component(e, SecondaryCollider { parent, slot });
+            slot_map.insert((parent, slot), e);
+            e
+        }
+    };
+    let mut proxy =
+        CoreTransform::from_position_rotation_scale(parent_pos, parent_rot, parent_scale);
+    proxy.SetPosition(parent_pos);
+    proxy.SetRotation(parent_rot);
+    if ecs.get::<CoreTransform>(entity).is_some() {
+        *ecs.get_mut::<CoreTransform>(entity).unwrap() = proxy;
+    } else {
+        ecs.add_component(entity, proxy);
+    }
+    // Kinematic follow-body: pose driven from parent each sync; no force response.
+    if ecs.get::<RigidBody>(entity).is_some() {
+        let mut body = ecs.get::<RigidBody>(entity).unwrap().clone();
+        body.body_type = crate::body::BodyType::Kinematic;
+        body.is_sleeping = false;
+        body.linear_velocity = Vec3::ZERO;
+        body.angular_velocity = Vec3::ZERO;
+        *ecs.get_mut::<RigidBody>(entity).unwrap() = body;
+    } else {
+        ecs.add_component(entity, RigidBody::new_kinematic());
+    }
+    if ecs.get::<Collider>(entity).is_some() {
+        *ecs.get_mut::<Collider>(entity).unwrap() = col;
+    } else {
+        ecs.add_component(entity, col);
+    }
+    entity
+}
 
 /// Collect every valid GameObject handle under SceneRuntime World roots.
 pub fn collect_unity_handles(unity: &engine_core::world::World) -> Vec<GameObjectHandle> {
@@ -50,6 +180,8 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
     }
 
     let mut synced = 0usize;
+    let mut live_secondary: std::collections::HashSet<(GameObjectHandle, u32)> =
+        std::collections::HashSet::new();
     for (&go, &entity) in &go_to_entity {
         let Some(unity_rb) = runtime.world.GetComponent::<Rigidbody>(go) else {
             continue;
@@ -101,43 +233,47 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
             ecs.add_component(entity, body);
         }
 
-        if let Some(sc) = runtime.world.GetComponent::<SphereCollider>(go) {
-            let mut col = Collider::sphere(sc.radius.max(0.01));
-            col.is_sensor = sc.is_trigger;
-            col.offset = sc.center;
-            if ecs.get::<Collider>(entity).is_some() {
-                *ecs.get_mut::<Collider>(entity).unwrap() = col;
-            } else {
-                ecs.add_component(entity, col);
-            }
-        } else if let Some(bc) = runtime.world.GetComponent::<BoxCollider>(go) {
-            let h = bc.size * 0.5;
-            let mut col = Collider::cuboid(h.x.max(0.01), h.y.max(0.01), h.z.max(0.01));
-            col.is_sensor = bc.is_trigger;
-            col.offset = bc.center;
-            if ecs.get::<Collider>(entity).is_some() {
-                *ecs.get_mut::<Collider>(entity).unwrap() = col;
-            } else {
-                ecs.add_component(entity, col);
-            }
-        } else if let Some(cc) = runtime
+        let (pos, rot, scale) = runtime
             .world
-            .GetComponent::<engine_core::components::CapsuleCollider>(go)
-        {
-            let mut col = Collider::capsule_with_axis(
-                cc.radius.max(0.01),
-                cc.height.max(0.02),
-                crate::collider::CapsuleAxis::from_unity_direction(cc.direction),
-            );
-            col.is_sensor = cc.is_trigger;
-            col.offset = cc.center;
+            .GetTransform(go)
+            .map(|t| (t.Position(), t.Rotation(), t.LossyScale()))
+            .unwrap_or((Vec3::ZERO, engine_math::Quat::IDENTITY, Vec3::ONE));
+
+        // Phase 42: all colliders enter the bridge; priority shape is primary.
+        let colliders = collect_colliders_by_priority(&runtime.world, go);
+        if colliders.is_empty() {
+            // Drop stale primary geometry when Unity colliders are removed.
+            ecs.remove_component::<Collider>(entity);
+        } else if let Some((_, primary)) = colliders.first() {
             if ecs.get::<Collider>(entity).is_some() {
-                *ecs.get_mut::<Collider>(entity).unwrap() = col;
+                *ecs.get_mut::<Collider>(entity).unwrap() = primary.clone();
             } else {
-                ecs.add_component(entity, col);
+                ecs.add_component(entity, primary.clone());
             }
         }
+        let mut slot_map = index_secondary_entities(ecs);
+        for (slot, (_, col)) in colliders.iter().skip(1).enumerate() {
+            let slot_u = slot as u32;
+            upsert_secondary_collider(ecs, &mut slot_map, go, slot_u, col.clone(), pos, rot, scale);
+            live_secondary.insert((go, slot_u));
+        }
         synced += 1;
+    }
+
+    // GC: despawn secondaries whose (parent, slot) is no longer live this sync
+    // (collider shrink/removed, Rigidbody gone, or GameObject destroyed).
+    let stale: Vec<u32> = ecs
+        .component_entities::<SecondaryCollider>()
+        .into_iter()
+        .filter(|&idx| match ecs.get_by_index::<SecondaryCollider>(idx) {
+            Some(tag) => !live_secondary.contains(&(tag.parent, tag.slot)),
+            None => false,
+        })
+        .collect();
+    for idx in stale {
+        if let Some(e) = ecs.entity_from_index(idx) {
+            ecs.despawn(e);
+        }
     }
     synced
 }
@@ -1095,5 +1231,137 @@ mod tests {
             "trigger enter should fire; hits={}",
             hits.load(Ordering::SeqCst)
         );
+    }
+
+    /// Phase 42 — multi-collider: all shapes enter bridge; priority is primary.
+    #[test]
+    fn test_multi_collider_bridge_primary_and_secondary() {
+        use crate::body::BodyType;
+        use crate::collider::ColliderShape;
+        use engine_core::components::{BoxCollider, Rigidbody as UnityRb, SphereCollider};
+
+        let mut runtime = SceneRuntime::new();
+        let go = runtime.world.CreateGameObject("MultiCol");
+        runtime.world.SetLocalPosition(go, Vec3::new(3.0, 4.0, 5.0));
+        runtime.world.AddComponent(
+            go,
+            UnityRb {
+                use_gravity: true,
+                mass: 2.0,
+                ..Default::default()
+            },
+        );
+        // Box first in component list — priority still prefers Sphere.
+        runtime.world.AddComponent(
+            go,
+            BoxCollider {
+                center: Vec3::new(0.0, 1.0, 0.0),
+                size: Vec3::new(2.0, 2.0, 2.0),
+                is_trigger: false,
+            },
+        );
+        runtime.world.AddComponent(
+            go,
+            SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.4,
+                is_trigger: false,
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        sync_physics_from_unity(&mut runtime, &mut ecs);
+
+        let primary_e = runtime.entity_for(go).expect("primary entity");
+        let primary_col = ecs.get::<Collider>(primary_e).expect("primary collider");
+        assert!(
+            matches!(primary_col.shape, ColliderShape::Sphere { .. }),
+            "priority primary must be Sphere; got {:?}",
+            primary_col.shape
+        );
+        let primary_body = ecs.get::<RigidBody>(primary_e).expect("primary body");
+        assert_eq!(primary_body.body_type, BodyType::Dynamic);
+        assert!((primary_body.mass - 2.0).abs() < 1e-4);
+
+        let mut secondaries = Vec::new();
+        for &idx in &ecs.component_entities::<SecondaryCollider>() {
+            let tag = ecs.get_by_index::<SecondaryCollider>(idx).unwrap().clone();
+            if tag.parent == go {
+                let e = ecs.entity_from_index(idx).expect("entity handle");
+                secondaries.push((tag.slot, e));
+            }
+        }
+        assert_eq!(
+            secondaries.len(),
+            1,
+            "exactly one secondary collider expected; got {secondaries:?}"
+        );
+        secondaries.sort_by_key(|(s, _)| *s);
+        let (slot, sec_e) = secondaries[0];
+        assert_eq!(slot, 0);
+        let sec_col = ecs.get::<Collider>(sec_e).expect("secondary collider");
+        assert!(
+            matches!(sec_col.shape, ColliderShape::Box { .. }),
+            "secondary should be Box; got {:?}",
+            sec_col.shape
+        );
+        assert!((sec_col.offset - Vec3::new(0.0, 1.0, 0.0)).length() < 1e-4);
+        let sec_body = ecs.get::<RigidBody>(sec_e).expect("secondary body");
+        assert_eq!(sec_body.body_type, BodyType::Kinematic);
+        let sec_t = ecs
+            .get::<CoreTransform>(sec_e)
+            .expect("secondary transform");
+        assert!(
+            (sec_t.Position() - Vec3::new(3.0, 4.0, 5.0)).length() < 1e-3,
+            "secondary transform must follow parent world pose; got {:?}",
+            sec_t.Position()
+        );
+
+        // Slot reuse: second sync must not spawn another secondary entity.
+        runtime
+            .world
+            .SetLocalPosition(go, Vec3::new(10.0, 0.0, 0.0));
+        sync_physics_from_unity(&mut runtime, &mut ecs);
+        let mut count = 0usize;
+        let mut seen_e = None;
+        for &idx in &ecs.component_entities::<SecondaryCollider>() {
+            let tag = ecs.get_by_index::<SecondaryCollider>(idx).unwrap();
+            if tag.parent == go {
+                count += 1;
+                seen_e = Some(ecs.entity_from_index(idx).unwrap());
+            }
+        }
+        assert_eq!(count, 1, "secondary slot must be reused, not duplicated");
+        let sec_t2 = ecs
+            .get::<CoreTransform>(seen_e.expect("secondary"))
+            .expect("secondary transform after follow");
+        assert!(
+            (sec_t2.Position() - Vec3::new(10.0, 0.0, 0.0)).length() < 1e-3,
+            "secondary must track parent; got {:?}",
+            sec_t2.Position()
+        );
+
+        // Phase 42 critical: shrink — remove Box; secondary must despawn (no phantom).
+        assert!(
+            runtime.world.RemoveComponent::<BoxCollider>(go),
+            "BoxCollider should be present before shrink"
+        );
+        sync_physics_from_unity(&mut runtime, &mut ecs);
+        let mut stale_count = 0usize;
+        for &idx in &ecs.component_entities::<SecondaryCollider>() {
+            let tag = ecs.get_by_index::<SecondaryCollider>(idx).unwrap();
+            if tag.parent == go {
+                stale_count += 1;
+            }
+        }
+        assert_eq!(
+            stale_count, 0,
+            "secondary entities must despawn when colliders shrink"
+        );
+        // Primary remains Sphere.
+        let pc = ecs
+            .get::<Collider>(primary_e)
+            .expect("primary after shrink");
+        assert!(matches!(pc.shape, ColliderShape::Sphere { .. }));
     }
 }

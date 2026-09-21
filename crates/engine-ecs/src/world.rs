@@ -145,6 +145,14 @@ impl World {
         self.components.try_get_storage::<T>()?.get(index)
     }
 
+    /// Reconstruct a generation-correct [`Entity`] handle from a dense index.
+    ///
+    /// Returns `None` when the index was never spawned or is out of range.
+    pub fn entity_from_index(&self, index: u32) -> Option<Entity> {
+        let generation = self.generations.get(index as usize).copied()?;
+        Some(Entity::new(index, generation))
+    }
+
     /// Get a mutable component by raw entity index (bypasses generation check).
     pub fn get_by_index_mut<T: 'static>(&mut self, index: u32) -> Option<&mut T> {
         self.components.try_get_storage_mut::<T>()?.get_mut(index)

@@ -410,6 +410,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 42 — 多碰撞体进物理桥（本地 main）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **primary + secondary** | ✅ | Sphere→Box→Capsule primary；其余进 kinematic secondary（`SecondaryCollider`） |
+| **跟随 / slot 复用** | ✅ | Transform 跟父 GO；二次 sync 不重复 spawn |
+
+规格：`docs/compose/spec/phase42-multi-collider-bridge.md`。边界：无 compound 冲量 / 无 secondary→MB 回调。
+
 ### 阶段 41 — web-demo 动画 tick smoke（本地 main）
 
 | 项目 | 状态 | 说明 |
