@@ -10,7 +10,7 @@ commits: 1edb57c..HEAD
 
 ## Report
 
-**What was built** — `examples/web-demo/index.html` adds a persistent `#scene-smoke` overlay (success green / failure `.err` red). `lib.rs` writes `scene_runtime_json_smoke` result into that element; the centered `#status` loader still hides after init. `wasm-pack` rebuilt `pkg/`. WASM_STATUS documents how to open the page and what to expect on the overlay.
+**What was built** — `#scene-smoke` overlay on web-demo; smoke runs **before wgpu init** so overlay shows SceneRuntime result even if GPU fails. Success/failure text + `.err` class; `#status` loader hides after init. wasm-pack refreshed pkg; WASM_STATUS phase 39 view steps + header bumped.
 
 **Verification**:
 

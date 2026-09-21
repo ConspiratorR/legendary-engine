@@ -69,14 +69,30 @@ pub fn start() {
 }
 
 async fn run() {
-    let status = web_sys::window()
-        .unwrap()
-        .document()
-        .unwrap()
-        .get_element_by_id("status")
-        .unwrap();
+    let doc = web_sys::window().unwrap().document().unwrap();
+    let status = doc.get_element_by_id("status").unwrap();
 
     status.set_text_content(Some("Creating window..."));
+
+    // Phase 39: SceneRuntime JSON smoke **before** wgpu — evidence even if GPU fails.
+    {
+        let smoke_el = doc.get_element_by_id("scene-smoke");
+        match scene_runtime_json_smoke() {
+            Ok(msg) => {
+                log::info!("{msg}");
+                if let Some(el) = &smoke_el {
+                    el.set_text_content(Some(&format!("SceneRuntime smoke: {msg}")));
+                }
+            }
+            Err(e) => {
+                log::warn!("scene_runtime_json_smoke failed: {e:?}");
+                if let Some(el) = &smoke_el {
+                    el.set_text_content(Some(&format!("SceneRuntime smoke FAILED: {e:?}")));
+                    el.set_class_name("err");
+                }
+            }
+        }
+    }
 
     let event_loop = EventLoop::new().unwrap();
     let window = Arc::new(
@@ -124,33 +140,7 @@ async fn run() {
 
     status.set_text_content(Some("Ready! Rendering..."));
 
-    // Phase 36/39: SceneRuntime JSON smoke — visible panel (#scene-smoke).
-    let smoke_el = web_sys::window()
-        .unwrap()
-        .document()
-        .unwrap()
-        .get_element_by_id("scene-smoke");
-    match scene_runtime_json_smoke() {
-        Ok(msg) => {
-            log::info!("{msg}");
-            if let Some(el) = &smoke_el {
-                el.set_text_content(Some(&format!("SceneRuntime smoke: {msg}")));
-            }
-        }
-        Err(e) => {
-            log::warn!("scene_runtime_json_smoke failed: {e:?}");
-            if let Some(el) = &smoke_el {
-                el.set_text_content(Some(&format!("SceneRuntime smoke FAILED: {e:?}")));
-                if let Some(html) = el.dyn_ref::<web_sys::HtmlElement>() {
-                    let _ = html.style().set_property("display", "block");
-                    // error color via class if present
-                    el.set_class_name("err");
-                }
-            }
-        }
-    }
-
-    // Hide centered loader; keep #scene-smoke overlay for landing evidence.
+    // Smoke already written before wgpu (phase 39); hide centered loader only.
     let style = status
         .dyn_ref::<web_sys::HtmlElement>()
         .unwrap()
