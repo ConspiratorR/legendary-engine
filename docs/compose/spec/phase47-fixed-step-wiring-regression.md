@@ -3,7 +3,7 @@ feature: phase47-fixed-step-wiring-regression
 status: delivered
 updated: 2026-07-13
 branch: main
-commits: eb27dadf0a9b9310ebedd86583eed40d9aa105e8..impl
+commits: eb27dadf0a9b9310ebedd86583eed40d9aa105e8..904e237d8adefafc60256c7333a5faae0437164e
 ---
 
 # Phase 47 — unity_physics_fixed_step 全路径回归
