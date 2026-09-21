@@ -3,7 +3,7 @@ feature: phase44-same-go-event-suppress
 status: delivered
 updated: 2026-07-13
 branch: main
-commits: 42784eb5ebb7db97a1d50f6cf8c44ef19c334ebf..impl
+commits: 42784eb5ebb7db97a1d50f6cf8c44ef19c334ebf..334567a2247ebf88eca15eed9a028312ee8de893
 ---
 
 # Phase 44 — 同 GO 碰撞对事件抑制
