@@ -78,6 +78,9 @@ cargo run --example unity_animation_demo -p engine-core
 # Rigidbody 重力 → physics step → World 位姿
 cargo run --example unity_physics_demo -p engine-core
 
+# 综合仿真（动画 + 物理 + SceneData）
+cargo run --example unity_sim_demo -p engine-core
+
 # SceneData / Material 往返
 cargo run --example runtime_scene_demo -p engine-core
 ```

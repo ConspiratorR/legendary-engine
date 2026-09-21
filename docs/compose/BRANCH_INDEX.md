@@ -1,4 +1,4 @@
-# 分支索引 — `phase12-array-authority`（阶段 12–34）
+# 分支索引 — `phase12-array-authority`（阶段 12–35）
 
 合并/推送前核对用。规格均在 `docs/compose/spec/`。**git merge/push 由用户执行。**
 
@@ -28,6 +28,7 @@
 | 32 | 合并前门禁脚本 | `phase32-branch-gates-script.md` | `scripts/run-compose-gates.ps1/.sh` |
 | 33 | Inspector 物理字段 | `phase33-inspector-physics-fields.md` | 碰撞体尺寸/中心/轴向/触发器/Sleep |
 | 34 | 移除菜单 + 多碰撞体说明 | `phase34-editor-menu-docs.md` | 粒度移除；Sphere→Box→Capsule |
+| 35 | unity_sim_demo 综合示例 | `phase35-unity-sim-demo.md` | 动画+物理+SceneData 一跑 |
 
 ## 推荐门禁（合并前）
 
