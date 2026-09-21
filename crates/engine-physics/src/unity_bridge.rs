@@ -2178,4 +2178,88 @@ mod tests {
             parent_hits.load(Ordering::SeqCst)
         );
     }
+
+    /// Phase 48 — App FixedUpdate + UnityPhysicsPlugin drives multi-collider support.
+    #[test]
+    fn test_app_fixedupdate_unity_physics_plugin_support() {
+        use crate::plugin::UnityPhysicsPlugin;
+        use engine_core::app::AppBuilder;
+        use engine_core::plugin::Plugin;
+        use engine_core::time::Time;
+
+        let mut runtime = SceneRuntime::new();
+
+        let floor = runtime.world.CreateGameObject("Floor");
+        runtime
+            .world
+            .SetLocalPosition(floor, Vec3::new(0.0, -0.5, 0.0));
+        runtime.world.AddComponent(
+            floor,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            floor,
+            engine_core::components::BoxCollider {
+                center: Vec3::ZERO,
+                size: Vec3::new(20.0, 1.0, 20.0),
+                is_trigger: false,
+            },
+        );
+
+        let multi = runtime.world.CreateGameObject("Walker");
+        runtime
+            .world
+            .SetLocalPosition(multi, Vec3::new(0.0, 0.48, 0.0));
+        runtime.world.AddComponent(
+            multi,
+            UnityRb {
+                use_gravity: true,
+                mass: 2.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::SphereCollider {
+                center: Vec3::new(0.0, 0.4, 0.0),
+                radius: 0.2,
+                is_trigger: false,
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::BoxCollider {
+                center: Vec3::new(0.0, -0.45, 0.0),
+                size: Vec3::new(1.0, 0.2, 1.0),
+                is_trigger: false,
+            },
+        );
+
+        let mut builder = AppBuilder::new();
+        builder.world_mut().insert_resource(Time::default());
+        builder.world_mut().insert_resource(runtime);
+        builder.add_plugin(UnityPhysicsPlugin);
+        let mut app = builder.build();
+
+        // Drive only through App lifecycle FixedUpdate (plugin owns physics step).
+        for _ in 0..80 {
+            app.run_with_lifecycle(0.02);
+        }
+
+        let rt = app
+            .world
+            .get_resource::<SceneRuntime>()
+            .expect("SceneRuntime resource");
+        let go = rt.world.Find("Walker").expect("Walker");
+        let y = rt.world.GetTransform(go).expect("transform").Position().y;
+        assert!(
+            y > 0.35 && y < 0.75,
+            "App FixedUpdate + UnityPhysicsPlugin must keep secondary support; Walker y={y}"
+        );
+    }
 }

@@ -410,6 +410,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 48 — App FixedUpdate e2e（本地 main）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **UnityPhysicsPlugin + App** | ✅ | SceneRuntime 作 resource；`run_with_lifecycle` 驱动支撑 |
+
+规格：`docs/compose/spec/phase48-app-fixedupdate-e2e.md`。
+
 ### 阶段 47 — fixed_step 全路径回归（本地 main）
 
 | 项目 | 状态 | 说明 |
