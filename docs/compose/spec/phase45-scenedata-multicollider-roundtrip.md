@@ -3,7 +3,7 @@ feature: phase45-scenedata-multicollider-roundtrip
 status: delivered
 updated: 2026-07-13
 branch: main
-commits: 3db5e88d48d29344e89eb49e8b94763bd18b99ee..impl
+commits: 3db5e88d48d29344e89eb49e8b94763bd18b99ee..5e00562934cda209210ad92ae2bd6eb1c30de5cf
 ---
 
 # Phase 45 — SceneData 多碰撞体往返 → 物理桥
