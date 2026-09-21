@@ -6,7 +6,7 @@ branch: phase12-array-authority
 commits: aefe06c..HEAD
 ---
 
-# Phase 34 — 移除菜单对齐 + 分支文档 12–33
+# Phase 34 — 移除菜单对齐 + 分支文档 12–34
 
 ## Report
 

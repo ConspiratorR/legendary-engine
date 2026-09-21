@@ -101,5 +101,6 @@ cargo run --example runtime_scene_demo -p engine-core
 - `docs/compose/spec/phase26-broadphase-world-aabb.md` — 旋转世界 AABB
 - `docs/compose/spec/phase27-ccd-rotated-aabb.md` — CCD 障碍 AABB
 - `docs/compose/spec/phase28-ccd-probe-awareness.md` — CCD 探针中心
+- `docs/compose/spec/phase29-branch-index.md` … `phase34-editor-menu-docs.md` — 索引/WASM/门禁/Inspector/菜单
 - **分支总索引**：`docs/compose/BRANCH_INDEX.md`
 - 契约表：`docs/migration-guide.md` §P2.4

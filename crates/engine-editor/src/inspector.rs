@@ -853,6 +853,7 @@ impl InspectorPanel {
                 ("音频", "audio"),
                 ("脚本", "script"),
                 ("物理", "physics"),
+                ("盒碰撞体", "box_collider"),
                 ("球碰撞体", "sphere_collider"),
                 ("胶囊碰撞体", "capsule_collider"),
                 ("标签", "tags"),
@@ -1240,6 +1241,16 @@ impl InspectorPanel {
                         && !state
                             .world
                             .HasComponent::<engine_core::components::CapsuleCollider>(handle)
+                    {
+                        state
+                            .world
+                            .AddComponent(handle, engine_core::components::BoxCollider::default());
+                    }
+                }
+                "box_collider" => {
+                    if !state
+                        .world
+                        .HasComponent::<engine_core::components::BoxCollider>(handle)
                     {
                         state
                             .world
