@@ -1642,4 +1642,145 @@ mod tests {
             hits.load(Ordering::SeqCst)
         );
     }
+
+    /// Phase 45 — SceneData prepared save/load rebuilds multi-collider bridge.
+    #[test]
+    fn test_scenedata_multicollider_roundtrip_rebuilds_bridge() {
+        use crate::collider::ColliderShape;
+        use engine_core::components::{
+            BoxCollider, CapsuleCollider, Rigidbody as UnityRb, SphereCollider,
+        };
+        use engine_core::serialization::{LoadSceneJson, SaveSceneJsonPrepared};
+        use engine_core::world::World as UnityWorld;
+
+        // Author multi-collider GO in a plain Unity World (editor-like path).
+        let mut author = UnityWorld::new();
+        let go = author.CreateGameObject("MultiCol");
+        author.SetLocalPosition(go, Vec3::new(1.0, 2.0, 3.0));
+        author.AddComponent(
+            go,
+            UnityRb {
+                use_gravity: true,
+                mass: 3.0,
+                ..Default::default()
+            },
+        );
+        author.AddComponent(
+            go,
+            BoxCollider {
+                center: Vec3::new(0.0, 0.5, 0.0),
+                size: Vec3::new(1.0, 2.0, 1.0),
+                is_trigger: false,
+            },
+        );
+        author.AddComponent(
+            go,
+            SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.35,
+                is_trigger: false,
+            },
+        );
+        author.AddComponent(
+            go,
+            CapsuleCollider {
+                center: Vec3::new(0.0, 0.0, 0.25),
+                radius: 0.1,
+                height: 1.5,
+                direction: 1,
+                is_trigger: true,
+            },
+        );
+
+        let json = SaveSceneJsonPrepared(&mut author, "MultiColScene").expect("prepared save");
+        for key in [
+            "BoxCollider",
+            "SphereCollider",
+            "CapsuleCollider",
+            "Rigidbody",
+        ] {
+            assert!(
+                json.contains(key),
+                "SceneData JSON must contain {key}; json={json}"
+            );
+        }
+
+        let mut runtime = SceneRuntime::new();
+        runtime
+            .load_scene_json(
+                "MultiColScene",
+                &json,
+                engine_core::scene_management::LoadSceneMode::Single,
+            )
+            .expect("load scene");
+        let loaded = runtime.world.Find("MultiCol").expect("MultiCol loaded");
+        runtime
+            .world
+            .SetLocalPosition(loaded, Vec3::new(1.0, 2.0, 3.0));
+        runtime.world.sync_transforms();
+
+        let mut ecs = EcsWorld::new();
+        sync_physics_from_unity(&mut runtime, &mut ecs);
+
+        let primary_e = runtime.entity_for(loaded).expect("primary entity");
+        let primary_col = ecs.get::<Collider>(primary_e).expect("primary collider");
+        assert!(
+            matches!(primary_col.shape, ColliderShape::Sphere { .. }),
+            "priority primary after SceneData load must be Sphere; got {:?}",
+            primary_col.shape
+        );
+        let body = ecs.get::<RigidBody>(primary_e).expect("body");
+        assert!((body.mass - 3.0).abs() < 1e-4);
+
+        let mut shapes = Vec::new();
+        for &idx in &ecs.component_entities::<SecondaryCollider>() {
+            let tag = ecs.get_by_index::<SecondaryCollider>(idx).unwrap();
+            if tag.parent != loaded {
+                continue;
+            }
+            let e = ecs.entity_from_index(idx).expect("sec entity");
+            let c = ecs.get::<Collider>(e).expect("sec collider");
+            shapes.push((tag.slot, c.shape.clone(), c.is_sensor, c.offset));
+        }
+        shapes.sort_by_key(|(s, _, _, _)| *s);
+        assert_eq!(
+            shapes.len(),
+            2,
+            "Box + Capsule secondaries expected after roundtrip; got {shapes:?}"
+        );
+        // slot 0 = Box (priority after Sphere), slot 1 = Capsule
+        assert!(
+            matches!(shapes[0].1, ColliderShape::Box { .. }),
+            "slot0 should be Box; got {:?}",
+            shapes[0].1
+        );
+        assert!(
+            (shapes[0].3 - Vec3::new(0.0, 0.5, 0.0)).length() < 1e-3,
+            "box offset from SceneData center; got {:?}",
+            shapes[0].3
+        );
+        assert!(
+            matches!(shapes[1].1, ColliderShape::Capsule { .. }),
+            "slot1 should be Capsule; got {:?}",
+            shapes[1].1
+        );
+        assert!(
+            shapes[1].2,
+            "capsule is_trigger must survive SceneData → bridge is_sensor"
+        );
+        assert!(
+            (shapes[1].3 - Vec3::new(0.0, 0.0, 0.25)).length() < 1e-3,
+            "capsule center offset; got {:?}",
+            shapes[1].3
+        );
+
+        // LoadSceneJson free path also restores components (not only SceneRuntime).
+        let mut bare = UnityWorld::new();
+        let handles = LoadSceneJson(&json, &mut bare).expect("bare load");
+        assert!(!handles.is_empty());
+        let h = bare.Find("MultiCol").expect("bare MultiCol");
+        assert!(bare.GetComponent::<SphereCollider>(h).is_some());
+        assert!(bare.GetComponent::<BoxCollider>(h).is_some());
+        assert!(bare.GetComponent::<CapsuleCollider>(h).is_some());
+    }
 }

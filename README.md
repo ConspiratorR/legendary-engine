@@ -410,6 +410,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 45 — SceneData 多碰撞体往返→桥（本地 main）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **prepared 往返 + 桥重建** | ✅ | Sphere+Box+Capsule 经 JSON 后仍 primary+secondary |
+
+规格：`docs/compose/spec/phase45-scenedata-multicollider-roundtrip.md`。
+
 ### 阶段 44 — 同 GO 碰撞对事件抑制（本地 main）
 
 | 项目 | 状态 | 说明 |

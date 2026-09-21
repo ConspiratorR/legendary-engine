@@ -61,7 +61,7 @@ use engine_core::animation_apply::Vec3Keyframe;
 | 插件 | `engine_physics::UnityPhysicsPlugin` | FixedUpdate：from → step → **Collision/Trigger Enter+Exit** → to |
 | 碰撞载荷 | `Collision.relative_velocity = va − vb`；sensor → `OnTriggerEnter/Exit`；solid → `OnCollisionEnter/Exit` | phase 20/23 |
 | 编辑器 Inspector | 物理区 | Rigidbody + sleep/velocity；Sphere/Box/Capsule 尺寸/中心/轴向/触发器（phase 33） |
-| 多碰撞体 | 优先级 + secondary | 桥/序列化/Inspector 名称为 **Sphere → Box → Capsule**。**phase 42**：优先级形状为 primary（挂 Rigidbody 实体）；其余碰撞体生成 kinematic **secondary** ECS 实体（`SecondaryCollider`），Transform 跟随父 GO。secondary 参与 broadphase/sensor；**不**合成 compound 冲量。**phase 43**：secondary 碰撞/trigger 事件解析到 **父 GO** 的 MonoBehaviour 回调（`other` 为对方 GO）。**phase 44**：同 GO 上 primary↔secondary 对 **不派发** 回调（对齐 Unity） |
+| 多碰撞体 | 优先级 + secondary | 桥/序列化/Inspector 名称为 **Sphere → Box → Capsule**。**phase 42**：优先级形状为 primary（挂 Rigidbody 实体）；其余碰撞体生成 kinematic **secondary** ECS 实体（`SecondaryCollider`），Transform 跟随父 GO。secondary 参与 broadphase/sensor；**不**合成 compound 冲量。**phase 43**：secondary 碰撞/trigger 事件解析到 **父 GO** 的 MonoBehaviour 回调（`other` 为对方 GO）。**phase 44**：同 GO 上 primary↔secondary 对 **不派发** 回调（对齐 Unity）。**phase 45**：`SaveSceneJsonPrepared`/`LoadSceneJson` 往返后桥仍按优先级重建 primary+secondary |
 | 移除组件 | 物理 | 「物理」移除 RB+全部碰撞体；可单独移除盒/球/胶囊（phase 34） |
 | Capsule | `direction` → `CapsuleAxis` X/Y/Z；`center`→offset | phase 23–25 |
 | Sleep | `Rigidbody::Sleep()` / `is_sleeping` | 桥强制休眠并清速度 |
