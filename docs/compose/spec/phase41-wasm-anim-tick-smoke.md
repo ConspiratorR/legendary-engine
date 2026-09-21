@@ -3,7 +3,7 @@ feature: phase41-wasm-anim-tick-smoke
 status: delivered
 updated: 2026-07-13
 branch: main
-commits: a3830e8cc83e308b109f845e6b256efa0b74304f..impl
+commits: a3830e8cc83e308b109f845e6b256efa0b74304f..9612b2790006c1caf94a5c6aeedb5cc0ce30bed1
 ---
 
 # Phase 41 — web-demo 动画 tick smoke
