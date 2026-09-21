@@ -1,4 +1,4 @@
-# 分支索引 — `phase12-array-authority`（阶段 12–36）
+# 分支索引 — `phase12-array-authority`（阶段 12–37）
 
 合并/推送前核对用。规格均在 `docs/compose/spec/`。**git merge/push 由用户执行。**
 
@@ -30,6 +30,7 @@
 | 34 | 移除菜单 + 多碰撞体说明 | `phase34-editor-menu-docs.md` | 粒度移除；Sphere→Box→Capsule |
 | 35 | unity_sim_demo 综合示例 | `phase35-unity-sim-demo.md` | 动画+物理+SceneData 一跑 |
 | 36 | web-demo SceneRuntime WASM | `phase36-wasm-scene-runtime-demo.md` | JSON smoke 编译进 web-demo |
+| 37 | SceneData smoke 回归 + wasm-pack | `phase37-scenedata-smoke-regression.md` | native 262；pkg 含 smoke 导出 |
 
 ## 推荐门禁（合并前）
 

@@ -1340,6 +1340,45 @@ mod tests {
         assert_eq!(data.transform.local_scale, Vec3::new(2.0, 2.0, 2.0));
     }
 
+    /// Phase 37 — web-demo smoke JSON schema (local_* keys) must load.
+    #[test]
+    fn test_scenedata_smoke_json_local_transform_keys() {
+        use crate::event::EventBus;
+        use crate::scene_management::LoadSceneMode;
+        use crate::scene_runtime::SceneRuntime;
+        use crate::time::Time;
+
+        let json = r#"{
+          "name": "WasmSmoke",
+          "version": 1,
+          "game_objects": [{
+            "name": "Probe",
+            "tag": "Untagged",
+            "layer": 0,
+            "active": true,
+            "transform": {
+              "local_position": [1.0, 2.0, 3.0],
+              "local_rotation": [0.0, 0.0, 0.0, 1.0],
+              "local_scale": [1.0, 1.0, 1.0]
+            },
+            "components": [],
+            "children": []
+          }]
+        }"#;
+        let mut rt = SceneRuntime::new();
+        rt.load_scene_json("WasmSmoke", json, LoadSceneMode::Single)
+            .expect("load smoke scene");
+        rt.mark_needs_awake();
+        let time = Time::default();
+        let mut bus = EventBus::new();
+        rt.tick(&time, 1, &mut bus);
+        let go = rt.world.Find("Probe").expect("Probe");
+        let p = rt.world.GetTransform(go).unwrap().LocalPosition();
+        assert!((p.x - 1.0).abs() < 1e-4);
+        assert!((p.y - 2.0).abs() < 1e-4);
+        assert!((p.z - 3.0).abs() < 1e-4);
+    }
+
     #[test]
     fn test_default_impl() {
         let s = SceneSerializer::default();

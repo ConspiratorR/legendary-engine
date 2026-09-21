@@ -410,6 +410,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 37 — SceneData smoke 回归（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **local_* JSON 回归** | ✅ | engine-core 测试锁定 web-demo smoke schema |
+| **wasm-pack pkg** | ✅ | `examples/web-demo/pkg` 含 `scene_runtime_json_smoke` |
+
+规格：`docs/compose/spec/phase37-scenedata-smoke-regression.md`。
+
 ### 阶段 36 — web-demo SceneRuntime WASM（同分支）
 
 | 项目 | 状态 | 说明 |
