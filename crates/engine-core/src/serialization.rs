@@ -1404,6 +1404,107 @@ mod tests {
         );
     }
 
+    /// Phase 41 — web-demo anim smoke: AnimationClipPlayer + multi-tick drives pose.
+    #[test]
+    fn test_scenedata_anim_smoke_multitick() {
+        use crate::event::EventBus;
+        use crate::scene_management::LoadSceneMode;
+        use crate::scene_runtime::SceneRuntime;
+        use crate::time::Time;
+
+        crate::sample_scripts::register_sample_scripts();
+
+        // Same SceneData shape as examples/web-demo `scene_runtime_json_smoke`
+        // (local_* keys + script_type + clip props; position 0→6 @1s).
+        let json = r#"{
+          "name": "WasmAnimSmoke",
+          "version": 1,
+          "game_objects": [{
+            "name": "AnimProbe",
+            "tag": "Untagged",
+            "layer": 0,
+            "active": true,
+            "transform": {
+              "local_position": [0.0, 0.0, 0.0],
+              "local_rotation": [0.0, 0.0, 0.0, 1.0],
+              "local_scale": [1.0, 1.0, 1.0]
+            },
+            "components": [{
+              "type_name": "AnimationClipPlayer",
+              "properties": {
+                "script_type": "AnimationClipPlayer",
+                "enabled": true,
+                "props": {
+                  "clip": {
+                    "name": "wasm_move",
+                    "duration": 1.0,
+                    "looping": false,
+                    "position_track": [
+                      {
+                        "time": 0.0,
+                        "value": [0.0, 0.0, 0.0],
+                        "interpolation": "Linear",
+                        "tangent_in": [0.0, 0.0, 0.0],
+                        "tangent_out": [0.0, 0.0, 0.0]
+                      },
+                      {
+                        "time": 1.0,
+                        "value": [6.0, 0.0, 0.0],
+                        "interpolation": "Linear",
+                        "tangent_in": [0.0, 0.0, 0.0],
+                        "tangent_out": [0.0, 0.0, 0.0]
+                      }
+                    ]
+                  },
+                  "time": 0.0,
+                  "speed": 1.0,
+                  "playing": true
+                }
+              }
+            }],
+            "children": []
+          }]
+        }"#;
+
+        let mut rt = SceneRuntime::new();
+        rt.load_scene_json("WasmAnimSmoke", json, LoadSceneMode::Single)
+            .expect("load anim smoke scene");
+        rt.mark_needs_awake();
+
+        let go = rt.world.Find("AnimProbe").expect("AnimProbe");
+        let start = rt
+            .world
+            .GetTransform(go)
+            .expect("transform")
+            .LocalPosition();
+        assert!(
+            start.x.abs() < 1e-3,
+            "load pose should stay at clip start, got {start:?}"
+        );
+
+        let mut time = Time::default();
+        let mut bus = EventBus::new();
+        for _ in 0..20 {
+            time.update(0.05);
+            rt.tick(&time, time.frameCount(), &mut bus);
+        }
+
+        let end = rt
+            .world
+            .GetTransform(go)
+            .expect("transform")
+            .LocalPosition();
+        assert!(
+            end.x > start.x + 1.0,
+            "AnimationClipPlayer multi-tick should advance World X; start={start:?} end={end:?}"
+        );
+        assert!(
+            (end.x - 6.0).abs() < 0.15,
+            "non-looping clip should park near 6.0 after 20×0.05s, got {}",
+            end.x
+        );
+    }
+
     #[test]
     fn test_default_impl() {
         let s = SceneSerializer::default();

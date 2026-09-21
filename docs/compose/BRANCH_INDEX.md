@@ -1,4 +1,4 @@
-# 分支索引 — Unity 对齐长分支（阶段 12–40）
+# 分支索引 — Unity 对齐长分支（阶段 12–41）
 
 合并/推送前核对用。规格均在 `docs/compose/spec/`。**已出现在本地 `main` 时以 main 为准；远程 merge/push 由用户执行。**
 
@@ -34,6 +34,7 @@
 | 38 | 全量门禁落地记录 | `phase38-landing-gates.md` | compose-gates **11/11 PASS** |
 | 39 | web-demo smoke 可视化 | `phase39-web-demo-smoke-ui.md` | `#scene-smoke`；smoke 先于 wgpu |
 | 40 | 落地验证 wasm-pack + 门禁 | `phase40-landing-verify.md` | pkg 刷新；gates **11/11 PASS**（main） |
+| 41 | web-demo 动画 tick smoke | `phase41-wasm-anim-tick-smoke.md` | AnimationClipPlayer multi-tick；native + wasm overlay |
 
 ## 推荐门禁（合并前）
 
@@ -73,5 +74,5 @@ cargo fmt -p engine-core -p engine-physics -p engine-editor --check
 ## 仍延后（非本分支承诺）
 
 - dyn `MonoBehaviour` 进 ECS
-- WASM 浏览器 SceneRuntime **全量** / Android NDK / VR·AR
+- WASM 浏览器 SceneRuntime **全量 UI**（phase 41 仅动画 tick 证据）/ Android NDK / VR·AR
 - git merge → `main` / push / PR（用户自理）

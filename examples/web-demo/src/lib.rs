@@ -8,7 +8,8 @@ use winit::{
 
 /// Phase 36 — SceneRuntime JSON smoke on wasm (no file I/O).
 ///
-/// Loads an inline SceneData JSON via `LoadSceneJson`, ticks once, returns pose.
+/// Phase 41: loads SceneData with `AnimationClipPlayer` (position track 0→6 @1s),
+/// multi-ticks Time + SceneRuntime, returns start/end world X for overlay.
 #[wasm_bindgen]
 pub fn scene_runtime_json_smoke() -> Result<String, JsValue> {
     use engine_core::event::EventBus;
@@ -20,20 +21,53 @@ pub fn scene_runtime_json_smoke() -> Result<String, JsValue> {
 
     register_sample_scripts();
     // SceneData TransformData keys: local_position / local_rotation / local_scale
+    // ComponentData: type_name + properties.{script_type,enabled,props}
     let json = r#"{
       "name": "WasmSmoke",
       "version": 1,
       "game_objects": [{
-        "name": "Probe",
+        "name": "AnimProbe",
         "tag": "Untagged",
         "layer": 0,
         "active": true,
         "transform": {
-          "local_position": [1.0, 2.0, 3.0],
+          "local_position": [0.0, 0.0, 0.0],
           "local_rotation": [0.0, 0.0, 0.0, 1.0],
           "local_scale": [1.0, 1.0, 1.0]
         },
-        "components": [],
+        "components": [{
+          "type_name": "AnimationClipPlayer",
+          "properties": {
+            "script_type": "AnimationClipPlayer",
+            "enabled": true,
+            "props": {
+              "clip": {
+                "name": "wasm_move",
+                "duration": 1.0,
+                "looping": false,
+                "position_track": [
+                  {
+                    "time": 0.0,
+                    "value": [0.0, 0.0, 0.0],
+                    "interpolation": "Linear",
+                    "tangent_in": [0.0, 0.0, 0.0],
+                    "tangent_out": [0.0, 0.0, 0.0]
+                  },
+                  {
+                    "time": 1.0,
+                    "value": [6.0, 0.0, 0.0],
+                    "interpolation": "Linear",
+                    "tangent_in": [0.0, 0.0, 0.0],
+                    "tangent_out": [0.0, 0.0, 0.0]
+                  }
+                ]
+              },
+              "time": 0.0,
+              "speed": 1.0,
+              "playing": true
+            }
+          }
+        }],
         "children": []
       }]
     }"#;
@@ -42,23 +76,34 @@ pub fn scene_runtime_json_smoke() -> Result<String, JsValue> {
     rt.load_scene_json("WasmSmoke", json, LoadSceneMode::Single)
         .map_err(|e| JsValue::from_str(&e))?;
     rt.mark_needs_awake();
-    let time = Time::default();
-    let mut bus = EventBus::new();
-    rt.tick(&time, 1, &mut bus);
 
     let go = rt
         .world
-        .Find("Probe")
-        .ok_or_else(|| JsValue::from_str("Probe missing"))?;
-    let p = rt
+        .Find("AnimProbe")
+        .ok_or_else(|| JsValue::from_str("AnimProbe missing"))?;
+    let start = rt
         .world
         .GetTransform(go)
         .ok_or_else(|| JsValue::from_str("transform missing"))?
         .LocalPosition();
+
+    let mut time = Time::default();
+    let mut bus = EventBus::new();
+    let frames = 20u32;
+    for _ in 0..frames {
+        time.update(0.05);
+        rt.tick(&time, time.frameCount(), &mut bus);
+    }
+
+    let end = rt
+        .world
+        .GetTransform(go)
+        .ok_or_else(|| JsValue::from_str("transform missing after ticks"))?
+        .LocalPosition();
     let flag = World::unity_world_primary_feature();
     Ok(format!(
-        "SceneRuntime json smoke ok; unity_world_primary={flag}; Probe=({:.1},{:.1},{:.1})",
-        p.x, p.y, p.z
+        "anim tick ok; unity_world_primary={flag}; frames={frames}; start_x={:.2} end_x={:.2}",
+        start.x, end.x
     ))
 }
 

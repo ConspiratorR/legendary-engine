@@ -410,6 +410,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 41 — web-demo 动画 tick smoke（本地 main）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **AnimationClipPlayer multi-tick** | ✅ | SceneData JSON + 20×0.05s tick；overlay start/end X |
+| **native 回归** | ✅ | `test_scenedata_anim_smoke_multitick`（core lib 263） |
+
+规格：`docs/compose/spec/phase41-wasm-anim-tick-smoke.md`。
+
 ### 阶段 40 — 落地验证（本地 main）
 
 | 项目 | 状态 | 说明 |

@@ -1,4 +1,4 @@
-## WASM 构建状态 (更新于 2026-07-13, phase 39)
+## WASM 构建状态 (更新于 2026-07-13, phase 41)
 
 ### 编译状态
 
@@ -11,7 +11,7 @@
 | **engine-physics** | ✅ **phase 31** | `cargo build -p engine-physics --target wasm32-unknown-unknown`；core 依赖 **无 audio**；`rayon` 仅 native，wasm 走顺序 `for` |
 | engine-editor (lib) | ✅ | `cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib` |
 | engine-editor (bin) | ❌ | 需要原生事件循环, WASM 使用 `start_wasm()` 入口点 |
-| web-demo | ✅ **phase 36–37** | `cargo build --manifest-path examples/web-demo/Cargo.toml --target wasm32-unknown-unknown --lib`；`wasm-pack` pkg 含 `scene_runtime_json_smoke`；native 回归锁 `local_*` schema |
+| web-demo | ✅ **phase 36–41** | `cargo build --manifest-path examples/web-demo/Cargo.toml --target wasm32-unknown-unknown --lib`；`wasm-pack` pkg 含 `scene_runtime_json_smoke`；native 回归锁 `local_*` schema + 动画多 tick |
 
 ### Phase 31 — WASM 编译面扩展
 
@@ -36,6 +36,14 @@
 | 浏览器 WebGL 实机 SceneRuntime | ❌ | 后续切片 |
 
 **未做**：SceneRuntime 全量浏览器运行 / 生命周期实机验证。
+
+### Phase 41 — web-demo 动画 tick smoke
+
+- `scene_runtime_json_smoke` 加载含 **`AnimationClipPlayer`** 的 SceneData（`script_type` + clip props，position track 0→6 @1s）。
+- 逻辑：`register_sample_scripts` → `LoadSceneJson` → 20×`Time::update(0.05)` + `SceneRuntime::tick` → 返回 **start_x / end_x**。
+- `#scene-smoke` overlay 显示 `anim tick ok; … start_x=… end_x=…`（非循环 clip 应停在 ~6.0）。
+- Native 回归：`engine-core` `test_scenedata_anim_smoke_multitick`（同一 JSON + 多 tick 路径）。
+- **非目标**：浏览器内动画可视化渲染 / Android。
 
 ### Phase 36–39 — web-demo SceneRuntime 切片与可视化
 
