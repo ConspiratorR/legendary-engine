@@ -3,7 +3,7 @@ feature: phase48-app-fixedupdate-e2e
 status: delivered
 updated: 2026-07-13
 branch: main
-commits: b772cf2379dfd15480229639a31737fd5f4ca1d1..impl
+commits: b772cf2379dfd15480229639a31737fd5f4ca1d1..eca09b2f6ef75bed5b4965a2bca84240b89453b3
 ---
 
 # Phase 48 — App FixedUpdate e2e（UnityPhysicsPlugin）
