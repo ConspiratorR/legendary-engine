@@ -410,6 +410,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 39 — web-demo smoke 可视化（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **#scene-smoke 面板** | ✅ | 浏览器左上角显示 SceneRuntime smoke 结果 |
+
+规格：`docs/compose/spec/phase39-web-demo-smoke-ui.md`。
+
 ### 阶段 38 — 全量门禁落地（同分支）
 
 | 项目 | 状态 | 说明 |

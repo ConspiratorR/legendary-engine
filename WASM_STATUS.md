@@ -37,12 +37,20 @@
 
 **未做**：SceneRuntime 全量浏览器运行 / 生命周期实机验证。
 
-### Phase 36 — web-demo SceneRuntime 切片
+### Phase 36–39 — web-demo SceneRuntime 切片与可视化
 
 - `examples/web-demo` 依赖 `engine-core`（`default-features=false`, `features=["unity-world-primary"]`）。
-- 导出 `scene_runtime_json_smoke()`：内嵌 SceneData JSON → `LoadSceneJson` → `tick` → 返回 Probe 位姿。
-- **编译证据**：`cargo build --manifest-path examples/web-demo/Cargo.toml --target wasm32-unknown-unknown --lib` **PASS**。
-- **非目标**：浏览器 UI 全量 SceneRuntime / 文件系统场景加载。
+- 导出 `scene_runtime_json_smoke()`：内嵌 SceneData JSON（`local_*` 键）→ `LoadSceneJson` → `tick` → 位姿字符串。
+- **浏览器可视化（phase 39）**：结果写入页面左上角 `#scene-smoke`（失败标红 `#scene-smoke.err`）；`#status` 加载后仍隐藏。
+- **查看方式**：
+  ```powershell
+  cd examples/web-demo
+  wasm-pack build --target web --release
+  python -m http.server 8080
+  # 打开 http://localhost:8080 — 左上角应显示 SceneRuntime smoke: …
+  ```
+- **编译证据**：wasm32 cargo / wasm-pack **PASS**；native `engine-core --lib` 含 smoke 正/负向回归。
+- **非目标**：浏览器内编辑 SceneRuntime / 文件系统场景加载。
 
 ### 实际运行测试
 

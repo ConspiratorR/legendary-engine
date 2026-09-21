@@ -28,10 +28,29 @@
             font-size: 18px;
             text-align: center;
         }
+        #scene-smoke {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            max-width: min(92vw, 42em);
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: rgba(20, 24, 40, 0.85);
+            color: #9fe6a0;
+            font-family: ui-monospace, monospace;
+            font-size: 12px;
+            line-height: 1.45;
+            z-index: 10;
+            pointer-events: none;
+        }
+        #scene-smoke.err {
+            color: #f0a0a0;
+        }
     </style>
 </head>
 <body>
     <div id="status">Loading RustEngine...</div>
+    <div id="scene-smoke">SceneRuntime smoke: pending…</div>
     <canvas id="canvas"></canvas>
     <script type="module">
         import init, { start } from './pkg/web_demo.js';
