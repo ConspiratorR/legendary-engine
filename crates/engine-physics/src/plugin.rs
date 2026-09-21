@@ -119,8 +119,12 @@ pub fn dispatch_unity_collision_enters_for_test(
 }
 
 /// Map physics entity index → GameObject via identity bridge links.
+///
+/// Phase 43: unlinked indices may still be **secondary colliders** — resolve
+/// to their parent GameObject so multi-shape GOs receive callbacks.
 fn go_for_physics_id(
     runtime: &engine_core::scene_runtime::SceneRuntime,
+    ecs: &engine_ecs::world::World,
     id: u32,
 ) -> Option<engine_core::gameobject::GameObjectHandle> {
     for go in crate::unity_bridge::collect_unity_handles(&runtime.world) {
@@ -130,6 +134,10 @@ fn go_for_physics_id(
             return Some(go);
         }
     }
+    // Secondary collider entities are not identity-linked; map to parent GO.
+    if let Some(tag) = ecs.get_by_index::<crate::unity_bridge::SecondaryCollider>(id) {
+        return Some(tag.parent);
+    }
     None
 }
 
@@ -137,6 +145,8 @@ fn go_for_physics_id(
 ///
 /// `is_enter` → `OnCollisionEnter` / `OnTriggerEnter`;
 /// `is_enter == false` → `OnCollisionExit` / `OnTriggerExit` (phase 23).
+///
+/// Phase 43: events on **secondary** colliders resolve to the parent GameObject.
 ///
 /// Public so editor `UnityPlayHost` can share the runtime path (phase 24).
 pub fn dispatch_unity_collision_enters(
@@ -162,13 +172,13 @@ pub fn dispatch_unity_collision_enters(
     let frame = time.frameCount();
 
     for ev in events.iter() {
-        let Some(a) = go_for_physics_id(runtime, ev.entity_a) else {
+        let Some(a) = go_for_physics_id(runtime, ecs, ev.entity_a) else {
             continue;
         };
-        let Some(b) = go_for_physics_id(runtime, ev.entity_b) else {
+        let Some(b) = go_for_physics_id(runtime, ecs, ev.entity_b) else {
             continue;
         };
-        // relative_velocity ≈ va - vb (phase 20).
+        // relative_velocity ≈ va - vb (phase 20); both sides use primary body.
         let (va, vb) = {
             let ea = runtime.entity_for(a).and_then(|e| ecs.get::<RigidBody>(e));
             let eb = runtime.entity_for(b).and_then(|e| ecs.get::<RigidBody>(e));
@@ -197,10 +207,10 @@ pub fn dispatch_unity_collision_enters(
     }
 
     for ev in sensor_events.iter() {
-        let Some(a) = go_for_physics_id(runtime, ev.sensor_entity) else {
+        let Some(a) = go_for_physics_id(runtime, ecs, ev.sensor_entity) else {
             continue;
         };
-        let Some(b) = go_for_physics_id(runtime, ev.other_entity) else {
+        let Some(b) = go_for_physics_id(runtime, ecs, ev.other_entity) else {
             continue;
         };
         for (this, other) in [(a, b), (b, a)] {

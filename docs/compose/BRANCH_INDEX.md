@@ -1,4 +1,4 @@
-# 分支索引 — Unity 对齐长分支（阶段 12–42）
+# 分支索引 — Unity 对齐长分支（阶段 12–43）
 
 合并/推送前核对用。规格均在 `docs/compose/spec/`。**已出现在本地 `main` 时以 main 为准；远程 merge/push 由用户执行。**
 
@@ -36,6 +36,7 @@
 | 40 | 落地验证 wasm-pack + 门禁 | `phase40-landing-verify.md` | pkg 刷新；gates **11/11 PASS**（main） |
 | 41 | web-demo 动画 tick smoke | `phase41-wasm-anim-tick-smoke.md` | AnimationClipPlayer multi-tick；native + wasm overlay |
 | 42 | 多碰撞体进物理桥 | `phase42-multi-collider-bridge.md` | primary 优先级 + secondary kinematic 实体 |
+| 43 | secondary 事件映射父 MB | `phase43-secondary-callback-map.md` | go_for_physics_id → SecondaryCollider.parent |
 
 ## 推荐门禁（合并前）
 
@@ -76,5 +77,5 @@ cargo fmt -p engine-core -p engine-physics -p engine-editor --check
 
 - dyn `MonoBehaviour` 进 ECS
 - WASM 浏览器 SceneRuntime **全量 UI**（phase 41 仅动画 tick 证据）/ Android NDK / VR·AR
-- compound 冲量 / secondary MB 回调映射（phase 42 边界）
+- compound 冲量（phase 42 边界；phase 43 已补 secondary→父 MB 回调）
 - git merge → `main` / push / PR（用户自理）

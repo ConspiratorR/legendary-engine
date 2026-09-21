@@ -1364,4 +1364,163 @@ mod tests {
             .expect("primary after shrink");
         assert!(matches!(pc.shape, ColliderShape::Sphere { .. }));
     }
+
+    /// Phase 43 — secondary trigger events must map to parent GameObject MB.
+    #[test]
+    fn test_secondary_trigger_maps_to_parent_monobehaviour() {
+        use crate::plugin::dispatch_unity_collision_enters_for_test;
+        use engine_core::events::TriggerData;
+        use engine_core::time::Time;
+        use std::any::Any;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        struct ParentHits {
+            go: Option<GameObjectHandle>,
+            hits: Arc<AtomicU32>,
+        }
+        impl engine_core::component::Component for ParentHits {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl engine_core::behaviour::Behaviour for ParentHits {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _e: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, h: GameObjectHandle) {
+                self.go = Some(h);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl engine_core::monobehaviour::MonoBehaviour for ParentHits {
+            fn OnTriggerEnter(
+                &mut self,
+                _ctx: &mut engine_core::context::Context,
+                _t: &TriggerData,
+            ) {
+                self.hits.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut runtime = SceneRuntime::new();
+        // Multi: primary small non-trigger Sphere; secondary large trigger Box.
+        let multi = runtime.world.CreateGameObject("Multi");
+        runtime
+            .world
+            .SetLocalPosition(multi, Vec3::new(0.0, 0.0, 0.0));
+        runtime.world.AddComponent(
+            multi,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.2,
+                is_trigger: false,
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::BoxCollider {
+                center: Vec3::ZERO,
+                size: Vec3::new(2.0, 2.0, 2.0),
+                is_trigger: true,
+            },
+        );
+
+        // Probe overlaps Box half-extent 1.0 but not primary sphere (0.2+0.3 < 0.8).
+        let probe = runtime.world.CreateGameObject("Probe");
+        runtime
+            .world
+            .SetLocalPosition(probe, Vec3::new(0.8, 0.0, 0.0));
+        runtime.world.AddComponent(
+            probe,
+            UnityRb {
+                use_gravity: false,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            probe,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.3,
+                is_trigger: false,
+            },
+        );
+
+        let parent_hits = Arc::new(AtomicU32::new(0));
+        let probe_hits = Arc::new(AtomicU32::new(0));
+        runtime.world.AddMonoBehaviour(
+            multi,
+            ParentHits {
+                go: None,
+                hits: parent_hits.clone(),
+            },
+        );
+        runtime.world.AddMonoBehaviour(
+            probe,
+            ParentHits {
+                go: None,
+                hits: probe_hits.clone(),
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        ecs.insert_resource(Time::default());
+        sync_physics_from_unity(&mut runtime, &mut ecs);
+
+        let mut found_sec = false;
+        for &idx in &ecs.component_entities::<SecondaryCollider>() {
+            let tag = ecs.get_by_index::<SecondaryCollider>(idx).unwrap();
+            if tag.parent == multi {
+                found_sec = true;
+                let e = ecs.entity_from_index(idx).unwrap();
+                let c = ecs.get::<Collider>(e).expect("sec col");
+                assert!(c.is_sensor, "box secondary must be sensor/trigger");
+            }
+        }
+        assert!(found_sec, "secondary box must exist on Multi");
+
+        for _ in 0..20 {
+            sync_physics_from_unity(&mut runtime, &mut ecs);
+            {
+                let mut pw = ecs.remove_resource::<PhysicsWorld>().unwrap();
+                pw.delta_time = 0.02;
+                pw.step(&mut ecs);
+                ecs.insert_resource(pw);
+            }
+            dispatch_unity_collision_enters_for_test(&mut runtime, &mut ecs);
+            sync_physics_to_unity(&mut runtime, &ecs);
+        }
+
+        assert!(
+            parent_hits.load(Ordering::SeqCst) >= 1,
+            "parent Multi must receive OnTriggerEnter from secondary box; parent_hits={}",
+            parent_hits.load(Ordering::SeqCst)
+        );
+        assert!(
+            probe_hits.load(Ordering::SeqCst) >= 1,
+            "probe must also receive trigger enter; probe_hits={}",
+            probe_hits.load(Ordering::SeqCst)
+        );
+    }
 }

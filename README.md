@@ -410,6 +410,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 43 — secondary 事件映射父 MB（本地 main）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **dispatch 解析 secondary** | ✅ | `go_for_physics_id` 未命中 bridge 时查 `SecondaryCollider.parent` |
+| **父 GO 回调** | ✅ | secondary trigger/collision 投递父 MonoBehaviour |
+
+规格：`docs/compose/spec/phase43-secondary-callback-map.md`。
+
 ### 阶段 42 — 多碰撞体进物理桥（本地 main）
 
 | 项目 | 状态 | 说明 |
