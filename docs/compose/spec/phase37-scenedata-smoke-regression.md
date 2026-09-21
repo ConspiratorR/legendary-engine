@@ -10,15 +10,15 @@ commits: f9f8211..HEAD
 
 ## Report
 
-**What was built** — Native regression `test_scenedata_smoke_json_local_transform_keys` locks the exact web-demo SceneData JSON schema (`local_position`/`local_rotation`/`local_scale`) via SceneRuntime `LoadSceneJson` + pose assert (1,2,3). `wasm-pack build --target web --release` in `examples/web-demo` succeeded; `pkg/web_demo.d.ts` exports `scene_runtime_json_smoke`. BRANCH_INDEX 12–37 + README 阶段 37.
+**What was built** — Native regression `test_scenedata_smoke_json_local_transform_keys` loads the **engine SceneData schema** used by web-demo smoke (`local_position`/`local_rotation`/`local_scale`) and asserts Probe pose (1,2,3); negative case: legacy `translation`/`rotation`/`scale` keys **must fail** parse. `wasm-pack build` refreshed `examples/web-demo/pkg` exporting `scene_runtime_json_smoke`. BRANCH_INDEX 12–37 + README/WASM_STATUS 阶段 37.
 
 **Verification**:
 
 | Command | Result |
 |---------|--------|
 | `cargo test -p engine-core --lib` | PASS **262** |
-| `wasm-pack build` (web-demo release) | PASS (Done in 2m 50s) |
-| pkg export smoke | present |
+| `wasm-pack build` (web-demo release) | PASS |
+| pkg export smoke | `web_demo.d.ts` exports `scene_runtime_json_smoke` |
 
 **Journey log** —
 1. Phase36 critical: wrong transform JSON keys — locked by native test in phase37.

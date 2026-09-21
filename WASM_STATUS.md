@@ -11,7 +11,7 @@
 | **engine-physics** | ✅ **phase 31** | `cargo build -p engine-physics --target wasm32-unknown-unknown`；core 依赖 **无 audio**；`rayon` 仅 native，wasm 走顺序 `for` |
 | engine-editor (lib) | ✅ | `cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib` |
 | engine-editor (bin) | ❌ | 需要原生事件循环, WASM 使用 `start_wasm()` 入口点 |
-| web-demo | ✅ **phase 36** | `cargo build --manifest-path examples/web-demo/Cargo.toml --target wasm32-unknown-unknown --lib`；含 `scene_runtime_json_smoke` |
+| web-demo | ✅ **phase 36–37** | `cargo build --manifest-path examples/web-demo/Cargo.toml --target wasm32-unknown-unknown --lib`；`wasm-pack` pkg 含 `scene_runtime_json_smoke`；native 回归锁 `local_*` schema |
 
 ### Phase 31 — WASM 编译面扩展
 

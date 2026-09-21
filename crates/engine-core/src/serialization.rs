@@ -1368,7 +1368,6 @@ mod tests {
         let mut rt = SceneRuntime::new();
         rt.load_scene_json("WasmSmoke", json, LoadSceneMode::Single)
             .expect("load smoke scene");
-        rt.mark_needs_awake();
         let time = Time::default();
         let mut bus = EventBus::new();
         rt.tick(&time, 1, &mut bus);
@@ -1377,6 +1376,32 @@ mod tests {
         assert!((p.x - 1.0).abs() < 1e-4);
         assert!((p.y - 2.0).abs() < 1e-4);
         assert!((p.z - 3.0).abs() < 1e-4);
+
+        // Negative: legacy keys must NOT parse (phase36 critical regression).
+        let bad = r#"{
+          "name": "Bad",
+          "version": 1,
+          "game_objects": [{
+            "name": "P",
+            "tag": "Untagged",
+            "layer": 0,
+            "active": true,
+            "transform": {
+              "translation": [1.0, 2.0, 3.0],
+              "rotation": [0.0, 0.0, 0.0, 1.0],
+              "scale": [1.0, 1.0, 1.0]
+            },
+            "components": [],
+            "children": []
+          }]
+        }"#;
+        let mut rt_bad = SceneRuntime::new();
+        assert!(
+            rt_bad
+                .load_scene_json("Bad", bad, LoadSceneMode::Single)
+                .is_err(),
+            "legacy translation/rotation/scale keys must fail SceneData parse"
+        );
     }
 
     #[test]
