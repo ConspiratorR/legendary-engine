@@ -410,6 +410,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 40 — 落地验证（本地 main）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **wasm-pack + 门禁 11/11** | ✅ | pkg 含 smoke；gates 全 PASS |
+
+规格：`docs/compose/spec/phase40-landing-verify.md`。
+
 ### 阶段 39 — web-demo smoke 可视化（同分支）
 
 | 项目 | 状态 | 说明 |

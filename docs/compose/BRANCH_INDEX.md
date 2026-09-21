@@ -1,6 +1,6 @@
-# 分支索引 — `phase12-array-authority`（阶段 12–39）
+# 分支索引 — Unity 对齐长分支（阶段 12–40）
 
-合并/推送前核对用。规格均在 `docs/compose/spec/`。**git merge/push 由用户执行。**
+合并/推送前核对用。规格均在 `docs/compose/spec/`。**已出现在本地 `main` 时以 main 为准；远程 merge/push 由用户执行。**
 
 | 阶段 | 主题 | 规格 | 门禁摘要 |
 |------|------|------|----------|
@@ -32,7 +32,8 @@
 | 36 | web-demo SceneRuntime WASM | `phase36-wasm-scene-runtime-demo.md` | JSON smoke 编译进 web-demo |
 | 37 | SceneData smoke 回归 + wasm-pack | `phase37-scenedata-smoke-regression.md` | native 262；pkg 含 smoke 导出 |
 | 38 | 全量门禁落地记录 | `phase38-landing-gates.md` | compose-gates **11/11 PASS** |
-| 39 | web-demo smoke 可视化 | `phase39-web-demo-smoke-ui.md` | `#scene-smoke` 面板；wasm-pack 刷新 |
+| 39 | web-demo smoke 可视化 | `phase39-web-demo-smoke-ui.md` | `#scene-smoke`；smoke 先于 wgpu |
+| 40 | 落地验证 wasm-pack + 门禁 | `phase40-landing-verify.md` | pkg 刷新；gates **11/11 PASS**（main） |
 
 ## 推荐门禁（合并前）
 
