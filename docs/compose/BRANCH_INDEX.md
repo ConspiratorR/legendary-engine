@@ -55,6 +55,7 @@ cargo build -p engine-core --examples
 cargo build -p engine-core --target wasm32-unknown-unknown --no-default-features --features unity-world-primary
 cargo build -p engine-physics --target wasm32-unknown-unknown
 cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
+cargo build --manifest-path examples/web-demo/Cargo.toml --target wasm32-unknown-unknown --lib
 cargo fmt -p engine-core -p engine-physics -p engine-editor --check
 ```
 

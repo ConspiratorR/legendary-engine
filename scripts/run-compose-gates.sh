@@ -38,6 +38,8 @@ run_gate "wasm engine-physics" \
   cargo build -p engine-physics --target wasm32-unknown-unknown
 run_gate "wasm engine-editor lib" \
   cargo build -p engine-editor --target wasm32-unknown-unknown --no-default-features --lib
+run_gate "wasm web-demo (SceneRuntime smoke)" \
+  cargo build --manifest-path examples/web-demo/Cargo.toml --target wasm32-unknown-unknown --lib
 run_gate "fmt check" \
   cargo fmt -p engine-core -p engine-physics -p engine-editor --check
 

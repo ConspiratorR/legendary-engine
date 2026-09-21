@@ -31,6 +31,7 @@ Invoke-Gate "core examples" @("cargo","build","-p","engine-core","--examples")
 Invoke-Gate "wasm engine-core" @("cargo","build","-p","engine-core","--target","wasm32-unknown-unknown","--no-default-features","--features","unity-world-primary")
 Invoke-Gate "wasm engine-physics" @("cargo","build","-p","engine-physics","--target","wasm32-unknown-unknown")
 Invoke-Gate "wasm engine-editor lib" @("cargo","build","-p","engine-editor","--target","wasm32-unknown-unknown","--no-default-features","--lib")
+Invoke-Gate "wasm web-demo (SceneRuntime smoke)" @("cargo","build","--manifest-path","examples/web-demo/Cargo.toml","--target","wasm32-unknown-unknown","--lib")
 Invoke-Gate "fmt check" @("cargo","fmt","-p","engine-core","-p","engine-physics","-p","engine-editor","--check")
 
 Write-Host "`n========== Gate summary ==========" -ForegroundColor Yellow

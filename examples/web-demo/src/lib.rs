@@ -11,15 +11,15 @@ use winit::{
 /// Loads an inline SceneData JSON via `LoadSceneJson`, ticks once, returns pose.
 #[wasm_bindgen]
 pub fn scene_runtime_json_smoke() -> Result<String, JsValue> {
+    use engine_core::event::EventBus;
     use engine_core::sample_scripts::register_sample_scripts;
     use engine_core::scene_management::LoadSceneMode;
     use engine_core::scene_runtime::SceneRuntime;
-    use engine_core::serialization::LoadSceneJson;
     use engine_core::time::Time;
     use engine_core::world::World;
-    use engine_core::event::EventBus;
 
     register_sample_scripts();
+    // SceneData TransformData keys: local_position / local_rotation / local_scale
     let json = r#"{
       "name": "WasmSmoke",
       "version": 1,
@@ -29,9 +29,9 @@ pub fn scene_runtime_json_smoke() -> Result<String, JsValue> {
         "layer": 0,
         "active": true,
         "transform": {
-          "translation": [1.0, 2.0, 3.0],
-          "rotation": [0.0, 0.0, 0.0, 1.0],
-          "scale": [1.0, 1.0, 1.0]
+          "local_position": [1.0, 2.0, 3.0],
+          "local_rotation": [0.0, 0.0, 0.0, 1.0],
+          "local_scale": [1.0, 1.0, 1.0]
         },
         "components": [],
         "children": []
@@ -46,7 +46,10 @@ pub fn scene_runtime_json_smoke() -> Result<String, JsValue> {
     let mut bus = EventBus::new();
     rt.tick(&time, 1, &mut bus);
 
-    let go = rt.world.Find("Probe").ok_or_else(|| JsValue::from_str("Probe missing"))?;
+    let go = rt
+        .world
+        .Find("Probe")
+        .ok_or_else(|| JsValue::from_str("Probe missing"))?;
     let p = rt
         .world
         .GetTransform(go)
@@ -121,14 +124,17 @@ async fn run() {
 
     status.set_text_content(Some("Ready! Rendering..."));
 
-    // Phase 36: SceneRuntime JSON smoke (compile-time wasm evidence; log only).
+    // Phase 36: SceneRuntime JSON smoke — surface result on the status element.
     match scene_runtime_json_smoke() {
         Ok(msg) => {
             log::info!("{msg}");
-            let _ = msg;
+            let _ = status.set_text_content(Some(&format!("Wgpu ready | {msg}")));
         }
         Err(e) => {
             log::warn!("scene_runtime_json_smoke failed: {e:?}");
+            let _ = status.set_text_content(Some(&format!(
+                "Wgpu ready | SceneRuntime smoke failed: {e:?}"
+            )));
         }
     }
 
