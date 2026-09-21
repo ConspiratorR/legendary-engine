@@ -3,7 +3,7 @@ feature: phase46-compound-lite-support
 status: delivered
 updated: 2026-07-13
 branch: main
-commits: 8cab67116d26f22486952a7281b389ab358ebd3a..impl
+commits: 8cab67116d26f22486952a7281b389ab358ebd3a..ccbabcd8fc1b354227007d2ffb6bda3f74235418
 ---
 
 # Phase 46 — compound-lite：secondary 支撑冲量
