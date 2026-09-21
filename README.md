@@ -410,6 +410,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 38 — 全量门禁落地（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **compose-gates 11/11** | ✅ | 含 core 双模态、physics、editor、wasm×4、fmt |
+
+规格：`docs/compose/spec/phase38-landing-gates.md`。
+
 ### 阶段 37 — SceneData smoke 回归（同分支）
 
 | 项目 | 状态 | 说明 |

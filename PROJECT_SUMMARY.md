@@ -102,7 +102,10 @@
 - **物理完善（阶段 23–28）** — Capsule axis/offset；Play MB 回调；旋转 AABB；CCD 障碍+探针感知
 - **分支索引（阶段 29）** — `docs/compose/BRANCH_INDEX.md`
 - **Android 基线（阶段 30）** — `android-activity` `game-activity` feature；本机缺 NDK（见 `docs/android-setup.md`）
-- **WASM/门禁/Inspector（阶段 31–33）** — physics wasm 无 audio + rayon 门控；`run-compose-gates`；Inspector 碰撞体字段 + 场景持久化
+- **WASM/门禁/Inspector（阶段 31–34）** — physics wasm 无 audio + rayon 门控；`run-compose-gates`；Inspector 碰撞体字段 + 场景持久化；粒度移除菜单
+- **综合证据（阶段 35–37）** — `unity_sim_demo`；web-demo SceneRuntime JSON smoke（wasm-pack）；native `local_*` schema 正/负向回归（core lib **262**）
+- **落地门禁（阶段 38）** — `pwsh scripts/run-compose-gates.ps1` **11/11 PASS**（含 web-demo wasm）
+- **仍延后** — dyn MB 进 ECS；WASM 浏览器全量 UI；Android 需 NDK；VR/AR；用户侧 merge/push
 - **仍延后** — dyn MB 进 ECS；WASM SceneRuntime 浏览器全量；**Android 需本机安装 NDK**；VR/AR；用户侧 merge/push
 
 ### 9. 发布 & 生态 (阶段 9)
