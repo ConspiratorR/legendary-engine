@@ -922,6 +922,33 @@ impl InspectorPanel {
                     .unwrap_or(false),
                 ),
                 (
+                    "盒碰撞体",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::BoxCollider>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "球碰撞体",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::SphereCollider>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
+                    "胶囊碰撞体",
+                    wh.map(|h| {
+                        state
+                            .world
+                            .HasComponent::<engine_core::components::CapsuleCollider>(h)
+                    })
+                    .unwrap_or(false),
+                ),
+                (
                     "精灵",
                     wh.map(|h| {
                         state
@@ -964,7 +991,17 @@ impl InspectorPanel {
                 ),
             ];
             let comp_types = [
-                "material", "render", "light", "physics", "sprite", "particle", "audio", "script",
+                "material",
+                "render",
+                "light",
+                "physics",
+                "box_collider",
+                "sphere_collider",
+                "capsule_collider",
+                "sprite",
+                "particle",
+                "audio",
+                "script",
                 "tags",
             ];
 
@@ -1102,6 +1139,21 @@ impl InspectorPanel {
                     state
                         .world
                         .RemoveComponent::<engine_core::components::SphereCollider>(handle);
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::CapsuleCollider>(handle);
+                }
+                "box_collider" => {
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::BoxCollider>(handle);
+                }
+                "sphere_collider" => {
+                    state
+                        .world
+                        .RemoveComponent::<engine_core::components::SphereCollider>(handle);
+                }
+                "capsule_collider" => {
                     state
                         .world
                         .RemoveComponent::<engine_core::components::CapsuleCollider>(handle);

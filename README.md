@@ -407,6 +407,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 34 — 移除菜单 + 多碰撞体说明（同分支）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **移除盒/球/胶囊** | ✅ | 粒度化移除；优先级文档化 |
+
+规格：`docs/compose/spec/phase34-editor-menu-docs.md`。
+
 ### 阶段 33 — Inspector 物理字段（同分支）
 
 | 项目 | 状态 | 说明 |
