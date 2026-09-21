@@ -178,6 +178,11 @@ pub fn dispatch_unity_collision_enters(
         let Some(b) = go_for_physics_id(runtime, ecs, ev.entity_b) else {
             continue;
         };
+        // Phase 44: Unity does not dispatch collisions between colliders on the
+        // same GameObject (primary ↔ secondary overlap resolves to a == b).
+        if a == b {
+            continue;
+        }
         // relative_velocity ≈ va - vb (phase 20); both sides use primary body.
         let (va, vb) = {
             let ea = runtime.entity_for(a).and_then(|e| ecs.get::<RigidBody>(e));
@@ -213,6 +218,10 @@ pub fn dispatch_unity_collision_enters(
         let Some(b) = go_for_physics_id(runtime, ecs, ev.other_entity) else {
             continue;
         };
+        // Phase 44: same-GO sensor pairs are not dispatched (Unity contract).
+        if a == b {
+            continue;
+        }
         for (this, other) in [(a, b), (b, a)] {
             let trigger = engine_core::events::TriggerData { other };
             if ev.is_enter {

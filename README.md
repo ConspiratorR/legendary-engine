@@ -410,6 +410,14 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 44 — 同 GO 碰撞对事件抑制（本地 main）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **a==b skip** | ✅ | 解析为同一 GO 的 collision/sensor 对不派发（Unity） |
+
+规格：`docs/compose/spec/phase44-same-go-event-suppress.md`。
+
 ### 阶段 43 — secondary 事件映射父 MB（本地 main）
 
 | 项目 | 状态 | 说明 |

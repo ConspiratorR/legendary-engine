@@ -1523,4 +1523,123 @@ mod tests {
             probe_hits.load(Ordering::SeqCst)
         );
     }
+
+    /// Phase 44 — same-GO primary↔secondary overlap must not self-dispatch.
+    #[test]
+    fn test_same_go_collider_pair_does_not_self_dispatch() {
+        use crate::plugin::dispatch_unity_collision_enters_for_test;
+        use engine_core::events::{Collision, TriggerData};
+        use engine_core::time::Time;
+        use std::any::Any;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        struct HitCounter {
+            go: Option<GameObjectHandle>,
+            hits: Arc<AtomicU32>,
+        }
+        impl engine_core::component::Component for HitCounter {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+        impl engine_core::behaviour::Behaviour for HitCounter {
+            fn Enabled(&self) -> bool {
+                true
+            }
+            fn SetEnabled(&mut self, _e: bool) {}
+            fn IsActiveAndEnabled(&self) -> bool {
+                true
+            }
+            fn set_gameobject(&mut self, h: GameObjectHandle) {
+                self.go = Some(h);
+            }
+            fn gameobject_handle(&self) -> Option<GameObjectHandle> {
+                self.go
+            }
+        }
+        impl engine_core::monobehaviour::MonoBehaviour for HitCounter {
+            fn OnCollisionEnter(
+                &mut self,
+                _ctx: &mut engine_core::context::Context,
+                _c: &Collision,
+            ) {
+                self.hits.fetch_add(1, Ordering::SeqCst);
+            }
+            fn OnTriggerEnter(
+                &mut self,
+                _ctx: &mut engine_core::context::Context,
+                _t: &TriggerData,
+            ) {
+                self.hits.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let mut runtime = SceneRuntime::new();
+        // Same GO: primary sphere + secondary box fully overlapping at origin.
+        let multi = runtime.world.CreateGameObject("SelfOverlap");
+        runtime
+            .world
+            .SetLocalPosition(multi, Vec3::new(0.0, 0.0, 0.0));
+        runtime.world.AddComponent(
+            multi,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::SphereCollider {
+                center: Vec3::ZERO,
+                radius: 0.5,
+                is_trigger: false,
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::BoxCollider {
+                center: Vec3::ZERO,
+                size: Vec3::new(2.0, 2.0, 2.0),
+                is_trigger: true,
+            },
+        );
+
+        let hits = Arc::new(AtomicU32::new(0));
+        runtime.world.AddMonoBehaviour(
+            multi,
+            HitCounter {
+                go: None,
+                hits: hits.clone(),
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        ecs.insert_resource(Time::default());
+
+        for _ in 0..20 {
+            sync_physics_from_unity(&mut runtime, &mut ecs);
+            {
+                let mut pw = ecs.remove_resource::<PhysicsWorld>().unwrap();
+                pw.delta_time = 0.02;
+                pw.step(&mut ecs);
+                ecs.insert_resource(pw);
+            }
+            dispatch_unity_collision_enters_for_test(&mut runtime, &mut ecs);
+            sync_physics_to_unity(&mut runtime, &ecs);
+        }
+
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            0,
+            "same-GO primary↔secondary must not dispatch self-callbacks; hits={}",
+            hits.load(Ordering::SeqCst)
+        );
+    }
 }
