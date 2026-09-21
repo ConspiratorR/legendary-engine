@@ -114,7 +114,7 @@ pub use plugin::{
     Physics2DPlugin, PhysicsPlugin, UnityPhysicsPlugin, dispatch_unity_collision_enters,
 };
 pub use unity_bridge::{
-    ColliderPriority, SecondaryCollider, collect_unity_handles, sync_physics_from_unity,
-    sync_physics_to_unity, unity_physics_fixed_step,
+    ColliderPriority, SecondaryCollider, apply_secondary_contact_support, collect_unity_handles,
+    sync_physics_from_unity, sync_physics_to_unity, unity_physics_fixed_step,
 };
 pub use world::{CollisionEvent, PhysicsWorld, SensorEvent};

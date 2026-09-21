@@ -410,6 +410,15 @@ fn my_system(app: &App) {
 
 契约：[docs/migration-guide.md](docs/migration-guide.md)。阶段规格：`docs/compose/spec/phase12-array-authority.md`。
 
+### 阶段 46 — compound-lite secondary 支撑（本地 main）
+
+| 项目 | 状态 | 说明 |
+|------|------|------|
+| **支撑冲量 + 位置抬升** | ✅ | 非 sensor secondary 接触 → 父 Dynamic 速度/位置支撑 |
+| **parent_entity** | ✅ | `SecondaryCollider` 记录 primary 实体 |
+
+规格：`docs/compose/spec/phase46-compound-lite-support.md`。边界：非完整 compound COM。
+
 ### 阶段 45 — SceneData 多碰撞体往返→桥（本地 main）
 
 | 项目 | 状态 | 说明 |

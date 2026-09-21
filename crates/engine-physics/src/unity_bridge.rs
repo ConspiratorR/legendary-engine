@@ -34,6 +34,8 @@ pub struct SecondaryCollider {
     pub parent: GameObjectHandle,
     /// Stable slot index within the parent's secondary list (0-based).
     pub slot: u32,
+    /// Primary Rigidbody ECS entity for the parent GO (phase 46 compound-lite).
+    pub parent_entity: Entity,
 }
 
 /// Priority rank for Unity multi-collider selection (phase 33–34 / 42).
@@ -109,6 +111,7 @@ fn upsert_secondary_collider(
     ecs: &mut EcsWorld,
     slot_map: &mut HashMap<(GameObjectHandle, u32), Entity>,
     parent: GameObjectHandle,
+    parent_entity: Entity,
     slot: u32,
     col: Collider,
     parent_pos: Vec3,
@@ -119,11 +122,20 @@ fn upsert_secondary_collider(
         Some(&e) => e,
         None => {
             let e = ecs.spawn();
-            ecs.add_component(e, SecondaryCollider { parent, slot });
             slot_map.insert((parent, slot), e);
             e
         }
     };
+    let tag = SecondaryCollider {
+        parent,
+        slot,
+        parent_entity,
+    };
+    if ecs.get::<SecondaryCollider>(entity).is_some() {
+        *ecs.get_mut::<SecondaryCollider>(entity).unwrap() = tag;
+    } else {
+        ecs.add_component(entity, tag);
+    }
     let mut proxy =
         CoreTransform::from_position_rotation_scale(parent_pos, parent_rot, parent_scale);
     proxy.SetPosition(parent_pos);
@@ -254,7 +266,17 @@ pub fn sync_physics_from_unity(runtime: &mut SceneRuntime, ecs: &mut EcsWorld) -
         let mut slot_map = index_secondary_entities(ecs);
         for (slot, (_, col)) in colliders.iter().skip(1).enumerate() {
             let slot_u = slot as u32;
-            upsert_secondary_collider(ecs, &mut slot_map, go, slot_u, col.clone(), pos, rot, scale);
+            upsert_secondary_collider(
+                ecs,
+                &mut slot_map,
+                go,
+                entity,
+                slot_u,
+                col.clone(),
+                pos,
+                rot,
+                scale,
+            );
             live_secondary.insert((go, slot_u));
         }
         synced += 1;
@@ -359,7 +381,85 @@ pub fn unity_physics_fixed_step(runtime: &mut SceneRuntime, ecs: &mut EcsWorld, 
         pw.step(ecs);
         ecs.insert_resource(pw);
     }
+    // Phase 46: compound-lite — secondary solid contacts support parent body.
+    apply_secondary_contact_support(ecs);
     sync_physics_to_unity(runtime, ecs);
+}
+
+/// Phase 46 compound-lite: cancel parent Dynamic velocity into non-sensor
+/// secondary contacts (support). Full compound COM/impulse remains deferred.
+///
+/// Skips same-GameObject pairs (primary↔secondary) — those are not support.
+pub fn apply_secondary_contact_support(ecs: &mut EcsWorld) {
+    let collisions: Vec<(u32, u32, crate::collider::CollisionInfo)> = ecs
+        .get_resource::<PhysicsWorld>()
+        .map(|p| {
+            p.collisions
+                .iter()
+                .map(|&(a, b, ref info)| (a, b, info.clone()))
+                .collect()
+        })
+        .unwrap_or_default();
+    if collisions.is_empty() {
+        return;
+    }
+
+    for (idx_a, idx_b, info) in collisions {
+        let pairs = [
+            (idx_a, idx_b, info.normal, true, info.depth),
+            (idx_b, idx_a, info.normal, false, info.depth),
+        ];
+        for (sec_idx, other_idx, normal, sec_is_a, depth) in pairs {
+            let Some(tag) = ecs.get_by_index::<SecondaryCollider>(sec_idx) else {
+                continue;
+            };
+            if other_idx == tag.parent_entity.index() {
+                continue;
+            }
+            if let Some(ot) = ecs.get_by_index::<SecondaryCollider>(other_idx)
+                && ot.parent == tag.parent
+            {
+                continue;
+            }
+            let sec_sensor = ecs
+                .get_by_index::<Collider>(sec_idx)
+                .is_some_and(|c| c.is_sensor);
+            let other_sensor = ecs
+                .get_by_index::<Collider>(other_idx)
+                .is_some_and(|c| c.is_sensor);
+            if sec_sensor || other_sensor {
+                continue;
+            }
+            let parent_e = tag.parent_entity;
+            let n = if sec_is_a { -normal } else { normal };
+            if n.length_squared() < f32::EPSILON {
+                continue;
+            }
+            let n = n.normalize();
+            let Some(body) = ecs.get::<RigidBody>(parent_e) else {
+                continue;
+            };
+            if body.body_type != crate::body::BodyType::Dynamic {
+                continue;
+            }
+            let v = body.linear_velocity;
+            let vn = v.dot(n);
+            if vn >= 0.0 {
+                continue;
+            }
+            if let Some(body) = ecs.get_mut::<RigidBody>(parent_e) {
+                body.linear_velocity = v - n * vn;
+            }
+            // Positional support: lift parent along contact normal to reduce sink
+            // from gravity integrating before this post-step hook (compound-lite).
+            let corr = depth.clamp(0.0, 0.08);
+            if corr > 1e-4
+                && let Some(t) = ecs.get_mut::<CoreTransform>(parent_e)
+            {
+                t.SetPosition(t.Position() + n * corr);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1782,5 +1882,98 @@ mod tests {
         assert!(bare.GetComponent::<SphereCollider>(h).is_some());
         assert!(bare.GetComponent::<BoxCollider>(h).is_some());
         assert!(bare.GetComponent::<CapsuleCollider>(h).is_some());
+    }
+
+    /// Phase 46 — secondary feet contact supports parent Dynamic body (compound-lite).
+    #[test]
+    fn test_secondary_contact_supports_parent_dynamic() {
+        let mut runtime = SceneRuntime::new();
+
+        // Static floor: top surface at y=0.
+        let floor = runtime.world.CreateGameObject("Floor");
+        runtime
+            .world
+            .SetLocalPosition(floor, Vec3::new(0.0, -0.5, 0.0));
+        runtime.world.AddComponent(
+            floor,
+            UnityRb {
+                use_gravity: false,
+                is_kinematic: true,
+                mass: 1.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            floor,
+            engine_core::components::BoxCollider {
+                center: Vec3::ZERO,
+                size: Vec3::new(20.0, 1.0, 20.0),
+                is_trigger: false,
+            },
+        );
+
+        // Multi: primary sphere high; thin feet box as secondary — no primary↔feet overlap.
+        // Start with feet penetrating the floor so broadphase/narrowphase see contact.
+        let multi = runtime.world.CreateGameObject("Walker");
+        runtime
+            .world
+            .SetLocalPosition(multi, Vec3::new(0.0, 0.48, 0.0));
+        runtime.world.AddComponent(
+            multi,
+            UnityRb {
+                use_gravity: true,
+                mass: 2.0,
+                ..Default::default()
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::SphereCollider {
+                center: Vec3::new(0.0, 0.4, 0.0),
+                radius: 0.2,
+                is_trigger: false,
+            },
+        );
+        runtime.world.AddComponent(
+            multi,
+            engine_core::components::BoxCollider {
+                center: Vec3::new(0.0, -0.45, 0.0),
+                size: Vec3::new(1.0, 0.2, 1.0),
+                is_trigger: false,
+            },
+        );
+
+        let mut ecs = EcsWorld::new();
+        ecs.insert_resource(PhysicsWorld::default());
+        ecs.insert_resource(engine_core::time::Time::default());
+
+        for _ in 0..80 {
+            sync_physics_from_unity(&mut runtime, &mut ecs);
+            {
+                let mut pw = ecs.remove_resource::<PhysicsWorld>().unwrap();
+                pw.delta_time = 0.02;
+                pw.step(&mut ecs);
+                ecs.insert_resource(pw);
+            }
+            apply_secondary_contact_support(&mut ecs);
+            sync_physics_to_unity(&mut runtime, &ecs);
+        }
+
+        let go = runtime.world.Find("Walker").expect("Walker");
+        let y = runtime
+            .world
+            .GetTransform(go)
+            .expect("transform")
+            .Position()
+            .y;
+        // Contact support: keep parent near feet contact (~0.48), not free-fall to ~0.
+        assert!(
+            y > 0.35,
+            "secondary feet should support parent Dynamic; Walker y={y}"
+        );
+        assert!(
+            y < 0.75,
+            "parent should settle near feet contact, not float; Walker y={y}"
+        );
     }
 }
