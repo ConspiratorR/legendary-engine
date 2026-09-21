@@ -144,17 +144,9 @@ fn main() {
     };
     println!("After load: hero_x={hero_x0:.3} ball_y={ball_y0:.3}");
 
-    // ── Simulate ──
+    // ── Simulate (plugin FixedUpdate only; no manual double-step) ──
     for frame in 0..40 {
         app.run_with_lifecycle(0.02);
-        // Deterministic extra physics bridge step (plugin FixedUpdate may also run).
-        {
-            let ecs = app.world_mut();
-            if let Some(mut rt) = ecs.remove_resource::<SceneRuntime>() {
-                engine_physics::unity_physics_fixed_step(&mut rt, ecs, 0.02);
-                ecs.insert_resource(rt);
-            }
-        }
         if frame == 19 || frame == 39 {
             let (hx, by) = {
                 let rt = app.world_mut().get_resource::<SceneRuntime>().unwrap();
